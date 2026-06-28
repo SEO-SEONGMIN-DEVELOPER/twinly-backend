@@ -1,6 +1,13 @@
+# intelij
 .idea
 
+# claude
 .omc
 CLAUDE.md
 
+# env
 .env
+
+# build output
+.gradle
+build
