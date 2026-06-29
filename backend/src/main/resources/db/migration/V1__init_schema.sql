@@ -3,7 +3,8 @@ CREATE TYPE GENDER AS ENUM (
     'FEMALE'
 );
 
-/* 암호화 대상: name, affiliation_number, birth_date, height, phone_number, email */
+CREATE TYPE ONBOARDING_STATUS_TYPE AS ENUM ();
+
 CREATE TABLE users (
     id                        BIGINT GENERATED ALWAYS AS IDENTITY,
     nickname                  TEXT,
@@ -16,6 +17,7 @@ CREATE TABLE users (
     height                    NUMERIC(4, 1),
     phone_number              TEXT,
     email                     TEXT,
+    onboarding_status         ONBOARDING_STATUS_TYPE,
     withdrawal_requested_at   TIMESTAMPTZ,
     deleted_at                TIMESTAMPTZ,
     created_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -27,7 +29,7 @@ CREATE TABLE users (
 
 CREATE TABLE questions (
     id          BIGINT GENERATED ALWAYS AS IDENTITY,
-    item        TEXT,
+    item        TEXT NOT NULL,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     CONSTRAINT pk_questions PRIMARY KEY (id)
@@ -36,8 +38,8 @@ CREATE TABLE questions (
 CREATE TABLE question_answers (
     id                  BIGINT GENERATED ALWAYS AS IDENTITY,
     question_id         BIGINT NOT NULL,
-    answer_option       TEXT,
-    label               TEXT,
+    answer_option       TEXT NOT NULL,
+    label               TEXT NOT NULL,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     CONSTRAINT pk_question_answers PRIMARY KEY (id),
@@ -69,7 +71,7 @@ CREATE TABLE matches (
     CONSTRAINT fk_matches_user_a_id FOREIGN KEY (user_a_id) REFERENCES users (id),
     CONSTRAINT fk_matches_user_b_id FOREIGN KEY (user_b_id) REFERENCES users (id),
     CONSTRAINT uk_matches_user_a_id_user_b_id UNIQUE (user_a_id, user_b_id),
-    CONSTRAINT ck_mathces_user_order CHECK(user_a_id < user_b_id)
+    CONSTRAINT ck_matches_user_order CHECK(user_a_id < user_b_id)
 );
 
 CREATE TABLE chats (
@@ -77,8 +79,8 @@ CREATE TABLE chats (
     match_id            BIGINT NOT NULL,
     sender_user_id      BIGINT NOT NULL,
     receiver_user_id    BIGINT NOT NULL,
-    message             TEXT,
-    sent_at             TIMESTAMPTZ,
+    message             TEXT NOT NULL,
+    sent_at             TIMESTAMPTZ NOT NULL,
     is_read             BOOLEAN NOT NULL DEFAULT FALSE,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
 
@@ -100,14 +102,14 @@ CREATE TABLE blocks (
     CONSTRAINT fk_blocks_blocker_user_id FOREIGN KEY (blocker_user_id) REFERENCES users (id),
     CONSTRAINT fk_blocks_blocked_user_id FOREIGN KEY (blocked_user_id) REFERENCES users (id),
     CONSTRAINT uk_blocks_blocker_user_id_blocked_user_id UNIQUE (blocker_user_id, blocked_user_id),
-    CONSTRAINT ck_blocks_prevent_self_block CHECK(blocker_user_id != blocked_user_id)
+    CONSTRAINT ck_blocks_self_block_prevention CHECK(blocker_user_id != blocked_user_id)
 );
 
 CREATE TABLE reports (
     id                  BIGINT GENERATED ALWAYS AS IDENTITY,
     reporter_user_id    BIGINT NOT NULL,
     reported_user_id    BIGINT NOT NULL,
-    reason              TEXT,
+    reason              TEXT NOT NULL,
     status              TEXT NOT NULL,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
 
@@ -116,17 +118,16 @@ CREATE TABLE reports (
     CONSTRAINT fk_reports_reported_user_id FOREIGN KEY (reported_user_id) REFERENCES users (id)
 );
 
-// type 이 있는 게 좋음
 CREATE TABLE events (
     id          BIGINT GENERATED ALWAYS AS IDENTITY,
     user_id     BIGINT NOT NULL,
     day         DATE NOT NULL,
-    content     JSONB,
+    content     JSONB NOT NULL,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
 
-    CONSTRAINT pk_behaviors PRIMARY KEY (id),
-    CONSTRAINT fk_behaviors_user_id FOREIGN KEY (user_id) REFERENCES users (id),
-    CONSTRAINT uk_behaviors_user_id_day UNIQUE (user_id, day)
+    CONSTRAINT pk_events PRIMARY KEY (id),
+    CONSTRAINT fk_events_user_id FOREIGN KEY (user_id) REFERENCES users (id),
+    CONSTRAINT uk_events_user_id_day UNIQUE (user_id, day)
 );
 
 CREATE TYPE PHOTO_TYPE AS ENUM (
@@ -138,8 +139,8 @@ CREATE TABLE photos (
     id           BIGINT GENERATED ALWAYS AS IDENTITY,
     user_id      BIGINT NOT NULL,
     type         PHOTO_TYPE NOT NULL,
-    url          TEXT,
-    uploaded_at  TIMESTAMPTZ,
+    url          TEXT NOT NULL,
+    uploaded_at  TIMESTAMPTZ NOT NULL,
     is_current   BOOLEAN NOT NULL DEFAULT TRUE,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
 
@@ -158,7 +159,7 @@ CREATE TABLE verifications (
     id           BIGINT GENERATED ALWAYS AS IDENTITY,
     user_id      BIGINT NOT NULL,
     type         VERIFICATION_TYPE NOT NULL,
-    verified_at  TIMESTAMPTZ,
+    verified_at  TIMESTAMPTZ NOT NULL,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     CONSTRAINT pk_verifications PRIMARY KEY (id),
@@ -178,8 +179,8 @@ CREATE TABLE agreements (
     id          BIGINT GENERATED ALWAYS AS IDENTITY,
     user_id     BIGINT NOT NULL,
     type        AGREEMENT_TYPE NOT NULL,
-    version     TEXT,
-    agreed_at   TIMESTAMPTZ,
+    version     TEXT NOT NULL,
+    agreed_at   TIMESTAMPTZ NOT NULL,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     CONSTRAINT pk_agreements PRIMARY KEY (id),

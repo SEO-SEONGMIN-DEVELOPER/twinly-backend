@@ -11,6 +11,7 @@ services:
       - "5432:5432"
     volumes:
       - pgdata-twinly:/var/lib/postgresql
+      - ./backend/src/main/resources/db/migration:/migration:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
