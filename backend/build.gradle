@@ -24,8 +24,13 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-flyway'
     runtimeOnly 'org.flywaydb:flyway-database-postgresql'
 
+    // lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
     // test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-webmvc-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
@@ -37,4 +42,7 @@ java {
 
 tasks.named('test') {
 	useJUnitPlatform()
+    testLogging {
+        events "passed", "skipped", "failed"
+    }
 }
