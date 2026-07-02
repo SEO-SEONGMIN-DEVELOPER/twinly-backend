@@ -1,10 +1,10 @@
 package com.nidus.twinly.anon.controller;
 
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RestController;
-import lombok.RequiredArgsConstructor;
 import com.nidus.twinly.anon.dto.AnonStartResponse;
 import com.nidus.twinly.anon.service.AnonService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequiredArgsConstructor
@@ -14,6 +14,6 @@ public class AnonController {
 
     @PostMapping("/api/v1/anon/start")
     public AnonStartResponse start() {
-        return anonService.start();
+        return AnonStartResponse.from(anonService.start());
     }
 }
