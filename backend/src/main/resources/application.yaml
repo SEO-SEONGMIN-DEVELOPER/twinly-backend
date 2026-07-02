@@ -8,3 +8,5 @@ spring:
     username: ${POSTGRES_USER}
     password: ${POSTGRES_PASSWORD}
     driver-class-name: org.postgresql.Driver
+  crypto:
+    aes-key: ${AES_KEY}

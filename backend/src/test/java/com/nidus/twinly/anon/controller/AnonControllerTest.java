@@ -1,24 +1,23 @@
 package com.nidus.twinly.anon.controller;
 
-import java.util.UUID;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.BeforeEach;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
-import org.springframework.test.web.servlet.MockMvc;
-import com.jayway.jsonpath.JsonPath;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import com.nidus.twinly.anon.dto.AnonStartResult;
+import com.nidus.twinly.anon.repository.AnonSessionRepository;
 import com.nidus.twinly.anon.service.AnonService;
-import com.nidus.twinly.anon.dto.AnonStartResponse;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+
+import java.util.UUID;
 
 import static org.mockito.Mockito.when;
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest
+@WebMvcTest(AnonController.class)
 class AnonControllerTest {
     @Autowired
     MockMvc mockMvc;
@@ -26,10 +25,13 @@ class AnonControllerTest {
     @MockitoBean
     AnonService anonService;
 
+    @MockitoBean
+    AnonSessionRepository anonSessionRepository;
+
     @BeforeEach
     void setUp() {
         when(anonService.start())
-                .thenReturn(new AnonStartResponse(UUID.randomUUID(), 3600));
+                .thenReturn(new AnonStartResult(UUID.randomUUID(), 3600));
     }
 
     @Test

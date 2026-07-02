@@ -1,13 +1,15 @@
 package com.nidus.twinly.anon.service;
 
-import java.util.UUID;
-import java.time.Instant;
-import java.time.Duration;
-import org.springframework.stereotype.Service;
-import lombok.RequiredArgsConstructor;
-import com.nidus.twinly.anon.dto.AnonStartResponse;
+import com.nidus.twinly.anon.dto.AnonStartResult;
 import com.nidus.twinly.anon.entity.AnonSession;
 import com.nidus.twinly.anon.repository.AnonSessionRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.UUID;
+
 
 @Service
 @RequiredArgsConstructor
@@ -17,11 +19,11 @@ public class AnonService {
 
     private final AnonSessionRepository anonSessionRepository;
 
-    public AnonStartResponse start() {
+    public AnonStartResult start() {
         UUID token = UUID.randomUUID();
         Instant expiresAt = Instant.now().plus(TTL);
 
-        anonSessionRepository.save(new AnonSession(null, token, expiresAt));
-        return new AnonStartResponse(token, TTL.toSeconds());
+        anonSessionRepository.save(AnonSession.create(token, expiresAt));
+        return new AnonStartResult(token, TTL.toSeconds());
     }
 }

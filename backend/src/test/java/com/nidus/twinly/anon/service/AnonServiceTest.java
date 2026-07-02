@@ -1,10 +1,10 @@
 package com.nidus.twinly.anon.service;
 
-import java.util.UUID;
-import org.junit.jupiter.api.Test;
 import com.nidus.twinly.anon.entity.AnonSession;
 import com.nidus.twinly.anon.repository.AnonSessionRepository;
-import com.nidus.twinly.anon.service.AnonService;
+import org.junit.jupiter.api.Test;
+
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
