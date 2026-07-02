@@ -11,12 +11,11 @@ CREATE TABLE anon_sessions (
     gender                    GENDER,
     affiliation               TEXT,
     affiliation_number        TEXT,
-    semester                  INT,
+    experience                INT,
     birth_date                TEXT,
     height                    TEXT,
     phone_number              TEXT,
     email                     TEXT,
-    onboarding_status         ONBOARDING_STATUS_TYPE,
 
     CONSTRAINT pk_anon_sessions PRIMARY KEY (id),
     CONSTRAINT uk_anon_sessions_token UNIQUE (token)
