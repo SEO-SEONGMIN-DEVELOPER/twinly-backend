@@ -2,8 +2,8 @@
   "version": "v1",
   "questions": [
     {
-      "id": "q1",
-      "kind": "openness",
+      "id": "1",
+      "dimension": "openness",
       "scenario": "선배가 두 가지 진로를 추천해줬어요.",
       "options": {
         "A": {
@@ -17,8 +17,8 @@
       }
     },
     {
-      "id": "q2",
-      "kind": "openness",
+      "id": "2",
+      "dimension": "openness",
       "scenario": "여행을 갈 때 선호하는 스타일은 어느 쪽인가요?",
       "options": {
         "A": {
@@ -32,8 +32,8 @@
       }
     },
     {
-      "id": "q3",
-      "kind": "openness",
+      "id": "3",
+      "dimension": "openness",
       "scenario": "친구가 평소 잘 모르는 장르(인디 영화, 재즈, 추상화 등)를 추천해줬어요.",
       "options": {
         "A": {
@@ -47,8 +47,8 @@
       }
     },
     {
-      "id": "q4",
-      "kind": "conscientiousness",
+      "id": "4",
+      "dimension": "conscientiousness",
       "scenario": "월요일 아침, 책상과 노트북 바탕화면 상태가 보통 어때요?",
       "options": {
         "A": {
@@ -62,8 +62,8 @@
       }
     },
     {
-      "id": "q5",
-      "kind": "conscientiousness",
+      "id": "5",
+      "dimension": "conscientiousness",
       "scenario": "마감이 일주일 남은 과제를 받으면 보통 어떻게 처리해요?",
       "options": {
         "A": {
@@ -77,8 +77,8 @@
       }
     },
     {
-      "id": "q6",
-      "kind": "extraversion",
+      "id": "6",
+      "dimension": "extraversion",
       "scenario": "토요일 저녁에 두 모임 초대를 동시에 받았어요. 한쪽만 갈 수 있는 시간이에요.",
       "options": {
         "A": {
@@ -92,8 +92,8 @@
       }
     },
     {
-      "id": "q7",
-      "kind": "extraversion",
+      "id": "7",
+      "dimension": "extraversion",
       "scenario": "동아리 첫 모임에 12명이 모였는데, 다들 휴대폰만 보면서 어색한 침묵이 흐르고 있어요.",
       "options": {
         "A": {
@@ -107,8 +107,8 @@
       }
     },
     {
-      "id": "q8",
-      "kind": "extraversion",
+      "id": "8",
+      "dimension": "extraversion",
       "scenario": "다음 주 일정을 정리하고 있어요.",
       "options": {
         "A": {
@@ -122,8 +122,8 @@
       }
     },
     {
-      "id": "q9",
-      "kind": "extraversion",
+      "id": "9",
+      "dimension": "extraversion",
       "scenario": "10명 정도가 모인 회식에서 누군가의 농담이 분위기를 식혀버렸어요. 어색한 침묵이 30초쯤 흐르고 있어요.",
       "options": {
         "A": {
@@ -137,8 +137,8 @@
       }
     },
     {
-      "id": "q10",
-      "kind": "agreeableness",
+      "id": "10",
+      "dimension": "agreeableness",
       "scenario": "친한 친구가 시험 망하고 풀이 죽어서 카톡을 보내왔어요.",
       "options": {
         "A": {
@@ -152,8 +152,8 @@
       }
     },
     {
-      "id": "q11",
-      "kind": "agreeableness",
+      "id": "11",
+      "dimension": "agreeableness",
       "scenario": "잘 모르는 사람과 처음 인사할 때 보통 어떻게 해요?",
       "options": {
         "A": {
@@ -167,8 +167,8 @@
       }
     },
     {
-      "id": "q12",
-      "kind": "neuroticism",
+      "id": "12",
+      "dimension": "neuroticism",
       "scenario": "내일 면접·발표 같은 중요한 일정이 있어요. 전날 밤 상태는?",
       "options": {
         "A": {
@@ -182,8 +182,8 @@
       }
     },
     {
-      "id": "q13",
-      "kind": "neuroticism",
+      "id": "13",
+      "dimension": "neuroticism",
       "scenario": "하루를 마치고 침대에 누웠을 때 머릿속이 어떤가요?",
       "options": {
         "A": {
@@ -197,8 +197,8 @@
       }
     },
     {
-      "id": "q14",
-      "kind": "lifeStyle",
+      "id": "14",
+      "dimension": "lifeStyle",
       "scenario": "주말 데이트 코스를 정하고 있어요.",
       "options": {
         "A": {
@@ -212,8 +212,8 @@
       }
     },
     {
-      "id": "q15",
-      "kind": "lifeStyle",
+      "id": "15",
+      "dimension": "lifeStyle",
       "scenario": "한 주에 술자리가 얼마나 자주 있는 편이에요?",
       "options": {
         "A": {
@@ -227,8 +227,8 @@
       }
     },
     {
-      "id": "q16",
-      "kind": "lifeStyle",
+      "id": "16",
+      "dimension": "lifeStyle",
       "scenario": "운동 습관은 어떤 편이에요?",
       "options": {
         "A": {
@@ -242,8 +242,8 @@
       }
     },
     {
-      "id": "q17",
-      "kind": "lifeStyle",
+      "id": "17",
+      "dimension": "lifeStyle",
       "scenario": "주중 평균 기상·취침 시간은 어떻게 되세요?",
       "options": {
         "A": {
@@ -257,8 +257,8 @@
       }
     },
     {
-      "id": "q18",
-      "kind": "conflictStyle",
+      "id": "18",
+      "dimension": "conflictStyle",
       "scenario": "가까운 사람과 의견이 충돌했을 때,",
       "options": {
         "A": {
@@ -272,8 +272,8 @@
       }
     },
     {
-      "id": "q19",
-      "kind": "conflictStyle",
+      "id": "19",
+      "dimension": "conflictStyle",
       "scenario": "내 의견과 상대 의견이 갈렸을 때,",
       "options": {
         "A": {
@@ -287,8 +287,8 @@
       }
     },
     {
-      "id": "q20",
-      "kind": "conflictStyle",
+      "id": "20",
+      "dimension": "conflictStyle",
       "scenario": "두 입장이 부딪힐 때 어떻게 해결하는 편이에요?",
       "options": {
         "A": {
@@ -302,8 +302,8 @@
       }
     },
     {
-      "id": "q21",
-      "kind": "communicationStyle",
+      "id": "21",
+      "dimension": "communicationStyle",
       "scenario": "카톡 메시지를 보낼 때 보통 어떤 식으로 보내세요?",
       "options": {
         "A": {
@@ -317,8 +317,8 @@
       }
     },
     {
-      "id": "q22",
-      "kind": "communicationStyle",
+      "id": "22",
+      "dimension": "communicationStyle",
       "scenario": "메시지에 이모지나 이모티콘을 얼마나 자주 쓰세요?",
       "options": {
         "A": {
@@ -332,8 +332,8 @@
       }
     },
     {
-      "id": "q23",
-      "kind": "communicationStyle",
+      "id": "23",
+      "dimension": "communicationStyle",
       "scenario": "대화할 때의 톤은 어느 쪽에 가까운가요?",
       "options": {
         "A": {

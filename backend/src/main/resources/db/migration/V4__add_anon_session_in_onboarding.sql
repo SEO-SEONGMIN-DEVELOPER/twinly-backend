@@ -1,6 +1,3 @@
-ALTER TABLE users
-    DROP COLUMN onboarding_status;
-
 CREATE TABLE anon_sessions (
     id                        BIGINT GENERATED ALWAYS AS IDENTITY,
     token                     UUID NOT NULL,
@@ -16,6 +13,7 @@ CREATE TABLE anon_sessions (
     height                    TEXT,
     phone_number              TEXT,
     email                     TEXT,
+    created_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     CONSTRAINT pk_anon_sessions PRIMARY KEY (id),
     CONSTRAINT uk_anon_sessions_token UNIQUE (token)

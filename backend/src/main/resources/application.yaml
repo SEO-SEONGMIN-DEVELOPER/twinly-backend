@@ -8,5 +8,15 @@ spring:
     username: ${POSTGRES_USER}
     password: ${POSTGRES_PASSWORD}
     driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
   crypto:
-    aes-key: ${AES_KEY}
+    aes-keys:
+      v1: ${AES_KEY_V1}
+    current-version: v1

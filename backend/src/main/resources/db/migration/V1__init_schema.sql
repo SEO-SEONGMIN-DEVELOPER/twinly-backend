@@ -15,7 +15,6 @@ CREATE TABLE users (
     height                    NUMERIC(4, 1) NOT NULL,
     phone_number              TEXT NOT NULL,
     email                     TEXT NOT NULL,
-    onboarding_status         ONBOARDING_STATUS_TYPE NOT NULL,
     withdrawal_requested_at   TIMESTAMPTZ,
     deleted_at                TIMESTAMPTZ,
     created_at                TIMESTAMPTZ NOT NULL DEFAULT now(),

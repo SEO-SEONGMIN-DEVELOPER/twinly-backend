@@ -1,10 +1,13 @@
 package com.nidus.twinly.anon.service;
 
-import com.nidus.twinly.anon.dto.AnonStartResult;
+import com.nidus.twinly.anon.dto.AnonSessionInfo;
+import com.nidus.twinly.anon.dto.result.AnonStartResult;
 import com.nidus.twinly.anon.entity.AnonSession;
 import com.nidus.twinly.anon.repository.AnonSessionRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -25,5 +28,19 @@ public class AnonService {
 
         anonSessionRepository.save(AnonSession.create(token, expiresAt));
         return new AnonStartResult(token, TTL.toSeconds());
+    }
+
+    public AnonSessionInfo resolveByToken(UUID token) {
+        AnonSession anonSession = anonSessionRepository.findByToken(token)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "유효하지 않은 세션 토큰입니다"));
+
+        if (anonSession == null) {
+
+        }
+        if (anonSession.getExpiresAt().isBefore(Instant.now())) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "만료된 토큰입니다");
+        }
+
+        return new AnonSessionInfo(anonSession.getId());
     }
 }

@@ -4,6 +4,7 @@
 # claude
 .omc
 CLAUDE.md
+.claude
 
 # env
 .env
@@ -11,3 +12,9 @@ CLAUDE.md
 # build output
 .gradle
 build
+
+# temp
+/docs/api-spec
+
+# commit
+COMMIT_MSG

@@ -1,4 +1,4 @@
-package com.nidus.twinly.anon.dto;
+package com.nidus.twinly.anon.dto.result;
 
 import java.util.UUID;
 

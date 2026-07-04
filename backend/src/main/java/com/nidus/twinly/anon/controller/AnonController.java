@@ -1,6 +1,6 @@
 package com.nidus.twinly.anon.controller;
 
-import com.nidus.twinly.anon.dto.AnonStartResponse;
+import com.nidus.twinly.anon.dto.response.AnonStartResponse;
 import com.nidus.twinly.anon.service.AnonService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;

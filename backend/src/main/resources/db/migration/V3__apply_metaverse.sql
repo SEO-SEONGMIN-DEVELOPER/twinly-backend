@@ -4,6 +4,7 @@ DROP TABLE questions;
 
 DROP TABLE events;
 
+/* 검색을 고려했을 때 아직 분리할 필요 없음 */
 CREATE TABLE lives (
     id          BIGINT GENERATED ALWAYS AS IDENTITY,
     user_id     BIGINT NOT NULL,
@@ -20,6 +21,7 @@ CREATE TYPE SCENE_TYPE AS ENUM (
     'DIALOGUE'
 );
 
+/* CHECK로 중간에 겹쳐도 안 되게 설정 */
 CREATE TABLE scenes (
     id                  BIGINT GENERATED ALWAYS AS IDENTITY,
     life_id             BIGINT NOT NULL,
@@ -46,6 +48,10 @@ CREATE TYPE DIALOGUE_LINE_TYPE AS ENUM (
     'NARRATION'
 );
 
+/*
+JSON 을 통해 자주 바뀔 수 있는 컬럼들을 키로 만들어서 넣기 (검색이 거의 없을 때)
+또는 (타입, 컨텐츠) 행으로 추가
+*/
 CREATE TABLE dialogue_lines (
     id                  BIGINT GENERATED ALWAYS AS IDENTITY,
     scene_id            BIGINT NOT NULL,

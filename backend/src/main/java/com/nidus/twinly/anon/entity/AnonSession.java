@@ -1,95 +1,81 @@
 package com.nidus.twinly.anon.entity;
 
+import com.nidus.twinly.common.crypto.EncryptedStringConverter;
 import com.nidus.twinly.common.domain.Gender;
-import org.springframework.data.annotation.Id;
-import org.springframework.data.relational.core.mapping.Table;
+import jakarta.persistence.*;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.util.UUID;
 
-@Table("anon_sessions")
-public record AnonSession(@Id Long id,
-                          UUID token,
-                          Instant expiresAt,
-                          String nickname,
-                          String familyName,
-                          String givenName,
-                          Gender gender,
-                          String affiliation,
-                          String affiliationNumber,
-                          String experience,
-                          String birthDate,
-                          String height,
-                          String phoneNumber,
-                          String email) {
+@Entity
+@Table(name = "anon_sessions")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class AnonSession {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private UUID token;
+
+    private Instant expiresAt;
+
+    private String nickname;
+
+    private String familyName;
+
+    private String givenName;
+
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    private Gender gender;
+
+    @Convert(converter = EncryptedStringConverter.class)
+    private String affiliation;
+
+    @Convert(converter = EncryptedStringConverter.class)
+    private String affiliationNumber;
+
+    @Convert(converter = EncryptedStringConverter.class)
+    private String experience;
+
+    @Convert(converter = EncryptedStringConverter.class)
+    private String birthDate;
+
+    @Convert(converter = EncryptedStringConverter.class)
+    private String height;
+
+    @Convert(converter = EncryptedStringConverter.class)
+    private String phoneNumber;
+
+    @Convert(converter = EncryptedStringConverter.class)
+    private String email;
+
+    private Instant createdAt;
 
     public static AnonSession create(UUID token, Instant expiresAt) {
-        return new AnonSession(null, token, expiresAt, null, null, null, null, null, null, null, null, null, null, null);
+        AnonSession session = new AnonSession();
+        session.token = token;
+        session.expiresAt = expiresAt;
+        session.createdAt = Instant.now();
+        return session;
     }
 
-    public AnonSession withNickname(String nickname) {
-        return new AnonSession(id, token, expiresAt, nickname, familyName, givenName,
-                gender, affiliation, affiliationNumber, experience, birthDate, height,
-                phoneNumber, email);
-    }
-
-    public AnonSession withFamilyName(String familyName) {
-        return new AnonSession(id, token, expiresAt, nickname, familyName, givenName,
-                gender, affiliation, affiliationNumber, experience, birthDate, height,
-                phoneNumber, email);
-    }
-
-    public AnonSession withGivenName(String givenName) {
-        return new AnonSession(id, token, expiresAt, nickname, familyName, givenName,
-                gender, affiliation, affiliationNumber, experience, birthDate, height,
-                phoneNumber, email);
-    }
-
-    public AnonSession withGender(Gender gender) {
-        return new AnonSession(id, token, expiresAt, nickname, familyName, givenName,
-                gender, affiliation, affiliationNumber, experience, birthDate, height,
-                phoneNumber, email);
-    }
-
-    public AnonSession withAffiliation(String affiliation) {
-        return new AnonSession(id, token, expiresAt, nickname, familyName, givenName,
-                gender, affiliation, affiliationNumber, experience, birthDate, height,
-                phoneNumber, email);
-    }
-
-    public AnonSession withAffiliationNumber(String affiliationNumber) {
-        return new AnonSession(id, token, expiresAt, nickname, familyName, givenName,
-                gender, affiliation, affiliationNumber, experience, birthDate, height,
-                phoneNumber, email);
-    }
-
-    public AnonSession withExperience(String experience) {
-        return new AnonSession(id, token, expiresAt, nickname, familyName, givenName,
-                gender, affiliation, affiliationNumber, experience, birthDate, height,
-                phoneNumber, email);
-    }
-
-    public AnonSession withBirthDate(String birthDate) {
-        return new AnonSession(id, token, expiresAt, nickname, familyName, givenName,
-                gender, affiliation, affiliationNumber, experience, birthDate, height,
-                phoneNumber, email);
-    }
-
-    public AnonSession withHeight(String height) {
-        return new AnonSession(id, token, expiresAt, nickname, familyName, givenName,
-                gender, affiliation, affiliationNumber, experience, birthDate, height,
-                phoneNumber, email);
-    }
-
-    public AnonSession withPhoneNumber(String phoneNumber) {
-        return new AnonSession(id, token, expiresAt, nickname, familyName, givenName,
-                gender, affiliation, affiliationNumber, experience, birthDate, height,
-                phoneNumber, email);
-    }
-
-    public AnonSession withEmail(String email) {
-        return new AnonSession(id, token, expiresAt, nickname, familyName, givenName,
-                gender, affiliation, affiliationNumber, experience, birthDate, height,
-                phoneNumber, email);
-    }
+    public void changeNickname(String nickname) { this.nickname = nickname; }
+    public void changeFamilyName(String familyName) { this.familyName = familyName; }
+    public void changeGivenName(String givenName) { this.givenName = givenName; }
+    public void changeGender(Gender gender) { this.gender = gender; }
+    public void changeAffiliation(String affiliation) { this.affiliation = affiliation; }
+    public void changeAffiliationNumber(String affiliationNumber) { this.affiliationNumber = affiliationNumber; }
+    public void changeExperience(String experience) { this.experience = experience; }
+    public void changeBirthDate(String birthDate) { this.birthDate = birthDate; }
+    public void changeHeight(String height) { this.height = height; }
+    public void changePhoneNumber(String phoneNumber) { this.phoneNumber = phoneNumber; }
+    public void changeEmail(String email) { this.email = email; }
 }
