@@ -28,6 +28,9 @@ dependencies {
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
 
+    // aws
+    implementation 'software.amazon.awssdk:s3:2.46.21'
+
     // test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.boot:spring-boot-webmvc-test'

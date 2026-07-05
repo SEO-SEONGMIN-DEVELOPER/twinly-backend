@@ -8,11 +8,12 @@ CREATE TABLE anon_sessions (
     gender                    GENDER,
     affiliation               TEXT,
     affiliation_number        TEXT,
-    experience                INT,
+    experience                TEXT,
     birth_date                TEXT,
     height                    TEXT,
     phone_number              TEXT,
     email                     TEXT,
+    photo_key                  TEXT,
     created_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     CONSTRAINT pk_anon_sessions PRIMARY KEY (id),

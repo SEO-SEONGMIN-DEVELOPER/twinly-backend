@@ -57,6 +57,8 @@ public class AnonSession {
     @Convert(converter = EncryptedStringConverter.class)
     private String email;
 
+    private String photoKey;
+
     private Instant createdAt;
 
     public static AnonSession create(UUID token, Instant expiresAt) {
@@ -78,4 +80,5 @@ public class AnonSession {
     public void changeHeight(String height) { this.height = height; }
     public void changePhoneNumber(String phoneNumber) { this.phoneNumber = phoneNumber; }
     public void changeEmail(String email) { this.email = email; }
+    public void changePhotoKey(String photoKey) { this.photoKey = photoKey; }
 }

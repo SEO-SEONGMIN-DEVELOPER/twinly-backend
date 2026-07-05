@@ -136,7 +136,7 @@ CREATE TABLE photos (
     id           BIGINT GENERATED ALWAYS AS IDENTITY,
     user_id      BIGINT NOT NULL,
     type         PHOTO_TYPE NOT NULL,
-    url          TEXT NOT NULL,
+    key          TEXT NOT NULL,
     uploaded_at  TIMESTAMPTZ NOT NULL,
     is_current   BOOLEAN NOT NULL DEFAULT TRUE,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),

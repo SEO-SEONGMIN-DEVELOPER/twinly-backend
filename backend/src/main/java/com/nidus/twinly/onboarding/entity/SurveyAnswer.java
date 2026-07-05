@@ -38,4 +38,8 @@ public class SurveyAnswer {
         surveyAnswer.createdAt = Instant.now();
         return surveyAnswer;
     }
+
+    public void changeOptionName(SurveyOptionName optionName) {
+        this.optionName = optionName;
+    }
 }

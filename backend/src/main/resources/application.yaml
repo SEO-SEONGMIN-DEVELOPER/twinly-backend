@@ -16,7 +16,15 @@ spring:
     properties:
       hibernate:
         format_sql: true
-  crypto:
-    aes-keys:
-      v1: ${AES_KEY_V1}
-    current-version: v1
+
+crypto:
+  aes-keys:
+    v1: ${AES_KEY_V1}
+  current-version: v1
+
+aws:
+  access-key-id: ${AWS_ACCESS_KEY_ID}
+  secret-access-key: ${AWS_SECRET_ACCESS_KEY}
+  region: ${AWS_REGION}
+  s3:
+    bucket: ${AWS_S3_BUCKET}

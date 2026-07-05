@@ -21,15 +21,16 @@ public class SurveyLoader {
 
     @PostConstruct
     public void load() throws IOException {
-        ClassPathResource resource = new ClassPathResource("survey/survey_v1.json");
+        ClassPathResource resource = new ClassPathResource("survey/survey_v1_mixed.json");
         JsonNode survey = objectMapper.readTree(resource.getInputStream());
 
         questionMap = new HashMap<>();
         for (JsonNode questionNode : survey.get("questions")) {
             SurveyQuestion question = objectMapper.treeToValue(questionNode, SurveyQuestion.class);
             questionMap.put(question.id(), question);
-            lastKey = question.id();
         }
+
+        lastKey = questionMap.size();
     }
 
     public SurveyQuestion getQuestion(Integer id) {
