@@ -1,6 +1,6 @@
 package com.nidus.twinly.onboarding.entity;
 
-import com.nidus.twinly.common.survey.PersonaDimension;
+import com.nidus.twinly.common.persona.PersonaDimension;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;

@@ -1,6 +1,6 @@
 package com.nidus.twinly.anon.service;
 
-import com.nidus.twinly.anon.dto.AnonSessionInfo;
+import com.nidus.twinly.anon.dto.header.AnonSessionInfo;
 import com.nidus.twinly.anon.dto.result.AnonStartResult;
 import com.nidus.twinly.anon.entity.AnonSession;
 import com.nidus.twinly.anon.repository.AnonSessionRepository;

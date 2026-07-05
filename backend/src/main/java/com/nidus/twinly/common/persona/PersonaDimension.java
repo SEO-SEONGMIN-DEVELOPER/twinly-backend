@@ -1,4 +1,4 @@
-package com.nidus.twinly.common.survey;
+package com.nidus.twinly.common.persona;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
@@ -10,5 +10,6 @@ public enum PersonaDimension {
     @JsonProperty("neuroticism") NEUROTICISM,
     @JsonProperty("lifeStyle") LIFE_STYLE,
     @JsonProperty("conflictStyle") CONFLICT_STYLE,
-    @JsonProperty("communicationStyle") COMMUNICATION_STYLE
+    @JsonProperty("communicationStyle") COMMUNICATION_STYLE,
+    INTERESTS
 }

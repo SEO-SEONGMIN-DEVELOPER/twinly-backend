@@ -1,5 +1,7 @@
 package com.nidus.twinly.common.survey;
 
+import com.nidus.twinly.common.persona.PersonaDimension;
+
 import java.util.Map;
 
 public record SurveyQuestion(Integer id, PersonaDimension dimension, String scenario, Map<SurveyOptionName, SurveyOption> options) {

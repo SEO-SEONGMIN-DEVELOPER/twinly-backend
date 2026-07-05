@@ -13,8 +13,5 @@ CLAUDE.md
 .gradle
 build
 
-# temp
-/docs/api-spec
-
 # commit
 COMMIT_MSG
