@@ -236,4 +236,21 @@ public class OnboardingService {
 
         return new OnboardingProfileNicknameCheckResult(isAvailable);
     }
+
+    @Transactional
+    public void profileNickname(Long anonSessionId, OnboardingProfileNicknameCommand command) {
+        if (command.nickname() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "요청 형식이 올바르지 않습니다.");
+        }
+
+        if (userRepository.existsByNickname(command.nickname())
+                || anonSessionRepository.existsByNickname(command.nickname())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 사용 중인 닉네임입니다: " + command.nickname());
+        }
+
+        AnonSession anonSession = anonSessionRepository.findById(anonSessionId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "유효하지 않은 세션입니다"));
+
+        anonSession.changeNickname(command.nickname());
+    }
 }

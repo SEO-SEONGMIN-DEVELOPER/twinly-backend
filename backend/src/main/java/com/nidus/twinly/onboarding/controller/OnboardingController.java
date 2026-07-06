@@ -72,4 +72,10 @@ public class OnboardingController {
                                                                         @RequestBody OnboardingProfileNicknameCheckRequest request) {
         return OnboardingProfileNicknameCheckResponse.from(onboardingService.profileNicknameCheck(anonSessionInfo.id(), OnboardingProfileNicknameCheckCommand.from(request)));
     }
+
+    @PostMapping("/api/v1/onboarding/profile/nickname")
+    public void profileNickname(@CurrentAnonSession AnonSessionInfo anonSessionInfo,
+                                 @RequestBody OnboardingProfileNicknameRequest request) {
+        onboardingService.profileNickname(anonSessionInfo.id(), OnboardingProfileNicknameCommand.from(request));
+    }
 }
