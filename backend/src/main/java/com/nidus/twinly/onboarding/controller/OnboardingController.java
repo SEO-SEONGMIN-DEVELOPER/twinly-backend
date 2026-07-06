@@ -59,4 +59,10 @@ public class OnboardingController {
                                                                    @RequestBody OnboardingProfilePhotoCommitRequest request) {
         return OnboardingProfilePhotoCommitResponse.from(onboardingService.profilePhotoCommit(anonSessionInfo.id(), OnboardingProfilePhotoCommitCommand.from(request)));
     }
+
+    @PostMapping("/api/v1/onboarding/height")
+    public void height(@CurrentAnonSession AnonSessionInfo anonSessionInfo,
+                       @RequestBody OnboardingHeightRequest request) {
+        onboardingService.height(anonSessionInfo.id(), OnboardingHeightCommand.from(request));
+    }
 }

@@ -212,4 +212,14 @@ public class OnboardingService {
 
         return new OnboardingProfilePhotoCommitResult(photoUrl);
     }
+
+    @Transactional
+    public void height(Long anonSessionId, OnboardingHeightCommand command) {
+        AnonSession anonSession = anonSessionRepository.findById(anonSessionId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "유효하지 않은 세션입니다"));
+
+        if (command.height() != null) {
+            anonSession.changeHeight(String.valueOf(command.height()));
+        }
+    }
 }
