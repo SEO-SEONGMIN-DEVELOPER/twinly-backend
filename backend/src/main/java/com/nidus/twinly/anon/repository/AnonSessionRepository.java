@@ -9,4 +9,6 @@ import java.util.UUID;
 public interface AnonSessionRepository extends JpaRepository<AnonSession, Long> {
 
     Optional<AnonSession> findByToken(UUID token);
+
+    boolean existsByNickname(String nickname);
 }

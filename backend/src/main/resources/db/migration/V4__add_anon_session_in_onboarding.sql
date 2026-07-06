@@ -13,9 +13,10 @@ CREATE TABLE anon_sessions (
     height                    TEXT,
     phone_number              TEXT,
     email                     TEXT,
-    photo_key                  TEXT,
+    photo_key                 TEXT,
     created_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     CONSTRAINT pk_anon_sessions PRIMARY KEY (id),
+    CONSTRAINT uk_anon_sessions_nickname UNIQUE (nickname),
     CONSTRAINT uk_anon_sessions_token UNIQUE (token)
 );

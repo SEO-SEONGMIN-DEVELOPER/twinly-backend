@@ -1,6 +1,3 @@
-/* nickname 중복 방지 검사를 위해 index 설정 */
-CREATE INDEX users_nickname ON users (nickname);
-
 /* 이름, 성 분리 */
 ALTER TABLE users
     DROP COLUMN name,

@@ -54,8 +54,12 @@ public class AnonSession {
     @Convert(converter = EncryptedStringConverter.class)
     private String phoneNumber;
 
+    private String phoneNumberHash;
+
     @Convert(converter = EncryptedStringConverter.class)
     private String email;
+
+    private String emailHash;
 
     private String photoKey;
 
@@ -79,6 +83,8 @@ public class AnonSession {
     public void changeBirthDate(String birthDate) { this.birthDate = birthDate; }
     public void changeHeight(String height) { this.height = height; }
     public void changePhoneNumber(String phoneNumber) { this.phoneNumber = phoneNumber; }
+    public void changePhoneNumberHash(String phoneNumberHash) { this.phoneNumberHash = phoneNumberHash; }
     public void changeEmail(String email) { this.email = email; }
+    public void changeEmailHash(String emailHash) { this.emailHash = emailHash; }
     public void changePhotoKey(String photoKey) { this.photoKey = photoKey; }
 }

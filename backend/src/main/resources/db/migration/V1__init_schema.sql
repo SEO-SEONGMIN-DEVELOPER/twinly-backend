@@ -21,7 +21,8 @@ CREATE TABLE users (
 
     CONSTRAINT pk_users PRIMARY KEY (id),
     CONSTRAINT uk_users_phone_number UNIQUE (phone_number),
-    CONSTRAINT uk_users_email UNIQUE (email)
+    CONSTRAINT uk_users_email UNIQUE (email),
+    CONSTRAINT uk_users_nickname UNIQUE (nickname)
 );
 
 CREATE TABLE questions (

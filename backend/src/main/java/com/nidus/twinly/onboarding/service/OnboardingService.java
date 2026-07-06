@@ -10,12 +10,14 @@ import com.nidus.twinly.common.survey.SurveyLoader;
 import com.nidus.twinly.common.survey.SurveyOptionName;
 import com.nidus.twinly.common.survey.SurveyQuestion;
 import com.nidus.twinly.onboarding.dto.command.*;
+import com.nidus.twinly.onboarding.dto.result.OnboardingProfileNicknameCheckResult;
 import com.nidus.twinly.onboarding.dto.result.OnboardingProfilePhotoCommitResult;
 import com.nidus.twinly.onboarding.dto.result.OnboardingProfilePhotoPresignResult;
 import com.nidus.twinly.onboarding.entity.PersonaElement;
 import com.nidus.twinly.onboarding.entity.SurveyAnswer;
 import com.nidus.twinly.onboarding.repository.PersonaElementRepository;
 import com.nidus.twinly.onboarding.repository.SurveyAnswerRepository;
+import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.HttpStatus;
@@ -49,6 +51,7 @@ public class OnboardingService {
     private final AnonSessionRepository anonSessionRepository;
     private final PersonaElementRepository personaElementRepository;
     private final SurveyAnswerRepository surveyAnswerRepository;
+    private final UserRepository userRepository;
 
     private final SurveyLoader surveyLoader;
 
@@ -221,5 +224,16 @@ public class OnboardingService {
         if (command.height() != null) {
             anonSession.changeHeight(String.valueOf(command.height()));
         }
+    }
+
+    public OnboardingProfileNicknameCheckResult profileNicknameCheck(Long anonSessionId, OnboardingProfileNicknameCheckCommand command) {
+        if (command.nickname() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "요청 형식이 올바르지 않습니다.");
+        }
+
+        boolean isAvailable = !userRepository.existsByNickname(command.nickname())
+                && !anonSessionRepository.existsByNickname(command.nickname());
+
+        return new OnboardingProfileNicknameCheckResult(isAvailable);
     }
 }

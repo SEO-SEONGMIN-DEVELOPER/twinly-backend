@@ -21,6 +21,7 @@ crypto:
   aes-keys:
     v1: ${AES_KEY_V1}
   current-version: v1
+  hmac-key: ${HMAC_KEY}
 
 aws:
   access-key-id: ${AWS_ACCESS_KEY_ID}

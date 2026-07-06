@@ -4,6 +4,7 @@ import com.nidus.twinly.anon.annotation.CurrentAnonSession;
 import com.nidus.twinly.anon.dto.header.AnonSessionInfo;
 import com.nidus.twinly.onboarding.dto.command.*;
 import com.nidus.twinly.onboarding.dto.request.*;
+import com.nidus.twinly.onboarding.dto.response.OnboardingProfileNicknameCheckResponse;
 import com.nidus.twinly.onboarding.dto.response.OnboardingProfilePhotoCommitResponse;
 import com.nidus.twinly.onboarding.dto.response.OnboardingProfilePhotoPresignResponse;
 import com.nidus.twinly.onboarding.service.OnboardingService;
@@ -64,5 +65,11 @@ public class OnboardingController {
     public void height(@CurrentAnonSession AnonSessionInfo anonSessionInfo,
                        @RequestBody OnboardingHeightRequest request) {
         onboardingService.height(anonSessionInfo.id(), OnboardingHeightCommand.from(request));
+    }
+
+    @PostMapping("/api/v1/onboarding/profile/nickname/check")
+    public OnboardingProfileNicknameCheckResponse profileNicknameCheck(@CurrentAnonSession AnonSessionInfo anonSessionInfo,
+                                                                        @RequestBody OnboardingProfileNicknameCheckRequest request) {
+        return OnboardingProfileNicknameCheckResponse.from(onboardingService.profileNicknameCheck(anonSessionInfo.id(), OnboardingProfileNicknameCheckCommand.from(request)));
     }
 }
