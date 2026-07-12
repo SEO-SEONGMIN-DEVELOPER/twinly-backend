@@ -1,6 +1,9 @@
 # intelij
 .idea
 
+# macOS
+.DS_Store
+
 # claude
 CLAUDE.md
 .claude
