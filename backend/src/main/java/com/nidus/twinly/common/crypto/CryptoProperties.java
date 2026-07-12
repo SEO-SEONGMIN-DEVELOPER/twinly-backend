@@ -5,5 +5,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import java.util.Map;
 
 @ConfigurationProperties(prefix = "crypto")
-public record CryptoProperties(Map<String, String> aesKeys, String currentVersion, String hmacKey) {
+public record CryptoProperties(
+        Map<String, String> aesKeys,
+        String currentVersion,
+        String hmacKey
+) {
 }

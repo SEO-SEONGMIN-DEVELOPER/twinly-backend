@@ -1,4 +1,7 @@
 package com.nidus.twinly.common.survey;
 
-public record SurveyOption(String label, String trait) {
+public record SurveyOption(
+        String label,
+        String trait
+) {
 }
