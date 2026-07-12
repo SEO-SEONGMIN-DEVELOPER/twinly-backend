@@ -1,4 +1,4 @@
-package com.nidus.twinly.config;
+package com.nidus.twinly.common.web;
 
 import com.nidus.twinly.anon.resolver.CurrentAnonSessionArgumentResolver;
 import lombok.RequiredArgsConstructor;
