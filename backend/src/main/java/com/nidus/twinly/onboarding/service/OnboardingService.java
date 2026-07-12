@@ -87,7 +87,7 @@ public class OnboardingService {
             anonSession.changeAffiliationNumber(command.affiliationNumber());
         }
         if (command.birthDate() != null) {
-            anonSession.changeBirthDate(command.birthDate());
+            anonSession.changeBirthDate(command.birthDate().toString());
         }
     }
 
@@ -157,7 +157,8 @@ public class OnboardingService {
 
         String key = "profile-photos/%d/%s".formatted(anonSessionId, UUID.randomUUID());
 
-        String presignedUrl = s3Service.presignPut(key, command.contentType(), Duration.ofSeconds(PROFILE_PHOTO_PRESIGN_EXPIRES_IN_SECONDS));
+        Duration expiresIn = Duration.ofSeconds(PROFILE_PHOTO_PRESIGN_EXPIRES_IN_SECONDS);
+        String presignedUrl = s3Service.presignPut(key, command.contentType(), expiresIn);
 
         return new OnboardingProfilePhotoPresignResult(
                 presignedUrl,
@@ -165,7 +166,7 @@ public class OnboardingService {
                 "PUT",
                 new RequiredHeaders(command.contentType()),
                 PROFILE_PHOTO_MAX_BYTES,
-                PROFILE_PHOTO_PRESIGN_EXPIRES_IN_SECONDS
+                Instant.now().plus(expiresIn)
         );
     }
 
