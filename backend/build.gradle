@@ -12,10 +12,10 @@ repositories {
 }
 
 dependencies {
-    // general
+    // General
     implementation 'org.springframework.boot:spring-boot-starter'
 
-    // web
+    // Web
     implementation 'org.springframework.boot:spring-boot-starter-web'
 
     // DB
@@ -24,15 +24,18 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-flyway'
     runtimeOnly 'org.flywaydb:flyway-database-postgresql'
 
-    // lombok
+    // Lombok
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
 
-    // aws
+    // AWS
     implementation 'software.amazon.awssdk:s3:2.46.21'
     implementation 'software.amazon.awssdk:bedrockruntime:2.46.21'
     implementation 'software.amazon.awssdk:cloudfront:2.46.21'
     implementation 'software.amazon.awssdk:ses:2.46.21'
+
+    // SOLAPI
+    implementation("com.solapi:sdk:1.1.0")
 
     // test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
