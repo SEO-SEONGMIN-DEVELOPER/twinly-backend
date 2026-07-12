@@ -39,7 +39,13 @@ public class CurrentAnonSessionArgumentResolver implements HandlerMethodArgument
         }
 
         String token = authorizationHeader.substring("Bearer ".length());
-        UUID tokenUuid = UUID.fromString(token);
+
+        UUID tokenUuid;
+        try {
+            tokenUuid = UUID.fromString(token);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "유효하지 않은 형식의 토큰입니다");
+        }
 
         return anonService.resolveByToken(tokenUuid);
     }

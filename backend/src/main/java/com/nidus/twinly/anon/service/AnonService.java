@@ -27,16 +27,14 @@ public class AnonService {
         Instant expiresAt = Instant.now().plus(TTL);
 
         anonSessionRepository.save(AnonSession.create(token, expiresAt));
-        return new AnonStartResult(token, TTL.toSeconds());
+
+        return new AnonStartResult(token, expiresAt);
     }
 
     public AnonSessionInfo resolveByToken(UUID token) {
         AnonSession anonSession = anonSessionRepository.findByToken(token)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "유효하지 않은 세션 토큰입니다"));
 
-        if (anonSession == null) {
-
-        }
         if (anonSession.getExpiresAt().isBefore(Instant.now())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "만료된 토큰입니다");
         }
