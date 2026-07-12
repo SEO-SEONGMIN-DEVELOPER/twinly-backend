@@ -1,0 +1,44 @@
+package com.nidus.twinly.aichat.entity;
+
+import com.nidus.twinly.aichat.domain.AiChatSender;
+import jakarta.persistence.*;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
+import java.time.Instant;
+
+@Entity
+@Table(name = "ai_chats")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class AiChat {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private Long anonSessionId;
+
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    private AiChatSender sender;
+
+    private String message;
+
+    private Integer turnIndex;
+
+    private Instant createdAt;
+
+    public static AiChat create(Long anonSessionId, AiChatSender sender, String message, Integer turnIndex) {
+        AiChat aiChat = new AiChat();
+        aiChat.anonSessionId = anonSessionId;
+        aiChat.sender = sender;
+        aiChat.message = message;
+        aiChat.turnIndex = turnIndex;
+        aiChat.createdAt = Instant.now();
+        return aiChat;
+    }
+}
