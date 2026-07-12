@@ -8,7 +8,6 @@ import com.nidus.twinly.anon.repository.AnonSessionPhotoRepository;
 import com.nidus.twinly.anon.repository.AnonSessionRepository;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontProperties;
 import com.nidus.twinly.common.aws.s3.S3Service;
-import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.domain.PhotoType;
 import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.common.photo.PhotoPosInfo;
@@ -79,7 +78,7 @@ public class OnboardingService {
             anonSession.changeGivenName(command.givenName());
         }
         if (command.gender() != null) {
-            anonSession.changeGender(Gender.valueOf(command.gender()));
+            anonSession.changeGender(command.gender());
         }
         if (command.affiliation() != null) {
             anonSession.changeAffiliation(command.affiliation());

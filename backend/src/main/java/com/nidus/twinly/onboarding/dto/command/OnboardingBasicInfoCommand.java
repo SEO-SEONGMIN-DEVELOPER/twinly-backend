@@ -1,14 +1,17 @@
 package com.nidus.twinly.onboarding.dto.command;
 
+import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.onboarding.dto.request.OnboardingBasicInfoRequest;
+
+import java.time.LocalDate;
 
 public record OnboardingBasicInfoCommand(
         String familyName,
         String givenName,
-        String gender,
+        Gender gender,
         String affiliation,
         String affiliationNumber,
-        String birthDate
+        LocalDate birthDate
 ) {
 
     public static OnboardingBasicInfoCommand from(OnboardingBasicInfoRequest request) {
