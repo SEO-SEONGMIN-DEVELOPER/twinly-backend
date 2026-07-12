@@ -3,9 +3,10 @@ package com.nidus.twinly.auth.dto.response;
 import com.nidus.twinly.auth.dto.result.AuthEmailSendResult;
 
 import java.time.Instant;
+import java.util.UUID;
 
 public record AuthEmailSendResponse(
-        String emailVerificationToken,
+        UUID emailVerificationToken,
         Instant expiresAt
 ) {
 
