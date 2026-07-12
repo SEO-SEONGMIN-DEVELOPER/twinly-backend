@@ -10,7 +10,6 @@ CREATE TABLE users (
     gender                    GENDER NOT NULL,
     affiliation               TEXT NOT NULL,
     affiliation_number        TEXT NOT NULL,
-    experience                TEXT NOT NULL,
     birth_date                DATE NOT NULL,
     height                    NUMERIC(4, 1) NOT NULL,
     phone_number              TEXT NOT NULL,

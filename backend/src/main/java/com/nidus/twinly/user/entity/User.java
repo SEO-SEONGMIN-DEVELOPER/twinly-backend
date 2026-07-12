@@ -40,9 +40,6 @@ public class User {
     private String affiliationNumber;
 
     @Convert(converter = EncryptedStringConverter.class)
-    private String experience;
-
-    @Convert(converter = EncryptedStringConverter.class)
     private String birthDate;
 
     @Convert(converter = EncryptedStringConverter.class)

@@ -79,9 +79,6 @@ public class OnboardingService {
         if (command.affiliationNumber() != null) {
             anonSession.changeAffiliationNumber(command.affiliationNumber());
         }
-        if (command.experience() != null) {
-            anonSession.changeExperience(command.experience());
-        }
         if (command.birthDate() != null) {
             anonSession.changeBirthDate(command.birthDate());
         }
