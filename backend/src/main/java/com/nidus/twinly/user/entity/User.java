@@ -23,8 +23,10 @@ public class User {
 
     private String nickname;
 
+    @Convert(converter = EncryptedStringConverter.class)
     private String familyName;
 
+    @Convert(converter = EncryptedStringConverter.class)
     private String givenName;
 
     @Enumerated(EnumType.STRING)
