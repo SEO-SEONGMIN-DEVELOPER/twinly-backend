@@ -37,6 +37,8 @@ CREATE TABLE questions (
     CONSTRAINT fk_questions_user_id FOREIGN KEY (user_id) REFERENCES users (id)
 );
 
+/* user_id, date index 걸기 */
+
 CREATE TABLE relationships (
     id              BIGINT GENERATED ALWAYS AS IDENTITY,
     user_id         BIGINT NOT NULL,

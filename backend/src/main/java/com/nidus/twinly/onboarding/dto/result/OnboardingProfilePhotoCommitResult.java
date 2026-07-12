@@ -1,4 +1,9 @@
 package com.nidus.twinly.onboarding.dto.result;
 
-public record OnboardingProfilePhotoCommitResult(String photoUrl) {
+import com.nidus.twinly.common.photo.PhotoPosInfo;
+
+public record OnboardingProfilePhotoCommitResult(
+        String photoUrl,
+        PhotoPosInfo position
+) {
 }

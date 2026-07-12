@@ -30,6 +30,9 @@ dependencies {
 
     // aws
     implementation 'software.amazon.awssdk:s3:2.46.21'
+    implementation 'software.amazon.awssdk:bedrockruntime:2.46.21'
+    implementation 'software.amazon.awssdk:cloudfront:2.46.21'
+    implementation 'software.amazon.awssdk:ses:2.46.21'
 
     // test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'

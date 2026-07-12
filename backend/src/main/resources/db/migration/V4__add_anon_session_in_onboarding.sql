@@ -8,15 +8,30 @@ CREATE TABLE anon_sessions (
     gender                    GENDER,
     affiliation               TEXT,
     affiliation_number        TEXT,
-    experience                TEXT,
     birth_date                TEXT,
     height                    TEXT,
     phone_number              TEXT,
     email                     TEXT,
-    photo_key                 TEXT,
     created_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     CONSTRAINT pk_anon_sessions PRIMARY KEY (id),
     CONSTRAINT uk_anon_sessions_nickname UNIQUE (nickname),
     CONSTRAINT uk_anon_sessions_token UNIQUE (token)
+);
+
+CREATE TABLE anon_session_photos (
+    id                  BIGINT GENERATED ALWAYS AS IDENTITY,
+    anon_session_id     BIGINT NOT NULL,
+    type                PHOTO_TYPE NOT NULL,
+    key                 TEXT NOT NULL,
+    x_pos               INTEGER,
+    y_pos               INTEGER,
+    width               INTEGER,
+    height              INTEGER,
+    uploaded_at         TIMESTAMPTZ NOT NULL,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    CONSTRAINT pk_anon_session_photos PRIMARY KEY (id),
+    CONSTRAINT fk_anon_session_photos_anon_session_id FOREIGN KEY (anon_session_id) REFERENCES anon_sessions (id),
+    CONSTRAINT uk_anon_session_photos_anon_session_id_type UNIQUE (anon_session_id, type)
 );

@@ -24,8 +24,22 @@ crypto:
   hmac-key: ${HMAC_KEY}
 
 aws:
-  access-key-id: ${AWS_ACCESS_KEY_ID}
-  secret-access-key: ${AWS_SECRET_ACCESS_KEY}
-  region: ${AWS_REGION}
   s3:
+    access-key-id: ${AWS_ACCESS_KEY_ID}
+    secret-access-key: ${AWS_SECRET_ACCESS_KEY}
+    region: ${AWS_REGION}
     bucket: ${AWS_S3_BUCKET}
+  bedrock:
+    access-key-id: ${BEDROCK_ACCESS_KEY_ID}
+    secret-access-key: ${BEDROCK_SECRET_ACCESS_KEY}
+    region: ${BEDROCK_REGION}
+    model-id: ${BEDROCK_MODEL_ID}
+  cloudfront:
+    domain: ${CLOUDFRONT_DOMAIN}
+    key-pair-id: ${CLOUDFRONT_KEY_PAIR_ID}
+    private-key-base64: ${CLOUDFRONT_PRIVATE_KEY_BASE64}
+  ses:
+    access-key-id: ${SES_ACCESS_KEY_ID}
+    secret-access-key: ${SES_SECRET_ACCESS_KEY}
+    region: ${SES_REGION}
+    from-address: ${SES_FROM_ADDRESS}

@@ -1,4 +1,4 @@
-package com.nidus.twinly.onboarding.entity;
+package com.nidus.twinly.anon.entity;
 
 import com.nidus.twinly.common.persona.PersonaDimension;
 import jakarta.persistence.*;
@@ -11,18 +11,16 @@ import org.hibernate.type.SqlTypes;
 import java.time.Instant;
 
 @Entity
-@Table(name = "persona_elements")
+@Table(name = "anon_session_persona_elements")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class PersonaElement {
+public class AnonSessionPersonaElement {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     private Long anonSessionId;
-
-    private Long userId;
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
@@ -32,14 +30,14 @@ public class PersonaElement {
 
     private Instant createdAt;
 
-    public static PersonaElement create(Long anonSessionId, PersonaDimension dimension, String explanation) {
-        PersonaElement personaElement = new PersonaElement();
-        personaElement.anonSessionId = anonSessionId;
-        personaElement.dimension = dimension;
-        personaElement.explanation = explanation;
-        personaElement.createdAt = Instant.now();
+    public static AnonSessionPersonaElement create(Long anonSessionId, PersonaDimension dimension, String explanation) {
+        AnonSessionPersonaElement element = new AnonSessionPersonaElement();
+        element.anonSessionId = anonSessionId;
+        element.dimension = dimension;
+        element.explanation = explanation;
+        element.createdAt = Instant.now();
 
-        return personaElement;
+        return element;
     }
 
     public void changeExplanation(String explanation) {
