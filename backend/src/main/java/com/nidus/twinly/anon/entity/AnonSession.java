@@ -60,8 +60,6 @@ public class AnonSession {
 
     private String emailHash;
 
-    private String photoKey;
-
     private Instant createdAt;
 
     public static AnonSession create(UUID token, Instant expiresAt) {
@@ -78,12 +76,10 @@ public class AnonSession {
     public void changeGender(Gender gender) { this.gender = gender; }
     public void changeAffiliation(String affiliation) { this.affiliation = affiliation; }
     public void changeAffiliationNumber(String affiliationNumber) { this.affiliationNumber = affiliationNumber; }
-    public void changeExperience(String experience) { this.experience = experience; }
     public void changeBirthDate(String birthDate) { this.birthDate = birthDate; }
     public void changeHeight(String height) { this.height = height; }
     public void changePhoneNumber(String phoneNumber) { this.phoneNumber = phoneNumber; }
     public void changePhoneNumberHash(String phoneNumberHash) { this.phoneNumberHash = phoneNumberHash; }
     public void changeEmail(String email) { this.email = email; }
     public void changeEmailHash(String emailHash) { this.emailHash = emailHash; }
-    public void changePhotoKey(String photoKey) { this.photoKey = photoKey; }
 }

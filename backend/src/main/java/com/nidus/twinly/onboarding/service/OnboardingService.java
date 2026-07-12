@@ -1,10 +1,17 @@
 package com.nidus.twinly.onboarding.service;
 
 import com.nidus.twinly.anon.entity.AnonSession;
+import com.nidus.twinly.anon.entity.AnonSessionPersonaElement;
+import com.nidus.twinly.anon.entity.AnonSessionPhoto;
+import com.nidus.twinly.anon.repository.AnonSessionPersonaElementRepository;
+import com.nidus.twinly.anon.repository.AnonSessionPhotoRepository;
 import com.nidus.twinly.anon.repository.AnonSessionRepository;
-import com.nidus.twinly.common.aws.AwsProperties;
+import com.nidus.twinly.common.aws.cloudfront.CloudFrontProperties;
+import com.nidus.twinly.common.aws.s3.S3Service;
 import com.nidus.twinly.common.domain.Gender;
+import com.nidus.twinly.common.domain.PhotoType;
 import com.nidus.twinly.common.persona.PersonaDimension;
+import com.nidus.twinly.common.photo.PhotoPosInfo;
 import com.nidus.twinly.common.presign.RequiredHeaders;
 import com.nidus.twinly.common.survey.SurveyLoader;
 import com.nidus.twinly.common.survey.SurveyOptionName;
@@ -13,9 +20,7 @@ import com.nidus.twinly.onboarding.dto.command.*;
 import com.nidus.twinly.onboarding.dto.result.OnboardingProfileNicknameCheckResult;
 import com.nidus.twinly.onboarding.dto.result.OnboardingProfilePhotoCommitResult;
 import com.nidus.twinly.onboarding.dto.result.OnboardingProfilePhotoPresignResult;
-import com.nidus.twinly.onboarding.entity.PersonaElement;
 import com.nidus.twinly.onboarding.entity.SurveyAnswer;
-import com.nidus.twinly.onboarding.repository.PersonaElementRepository;
 import com.nidus.twinly.onboarding.repository.SurveyAnswerRepository;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -24,18 +29,13 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.GetObjectRequest;
-import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
-import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
-import software.amazon.awssdk.services.s3.model.PutObjectRequest;
-import software.amazon.awssdk.services.s3.presigner.S3Presigner;
-import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
-import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
-import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
+import software.amazon.awssdk.services.cloudfront.CloudFrontUtilities;
+import software.amazon.awssdk.services.cloudfront.model.CannedSignerRequest;
 
 import java.io.IOException;
+import java.security.PrivateKey;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -48,16 +48,24 @@ public class OnboardingService {
     private static final int PROFILE_PHOTO_MAX_BYTES = 10 * 1024 * 1024;
     private static final int PROFILE_PHOTO_PRESIGN_EXPIRES_IN_SECONDS = 300;
 
+    private static final Set<String> FORBIDDEN_NICKNAME_WORDS = Set.of(
+            "admin", "관리자", "운영자", "공지"
+    );
+
+    private final S3Service s3Service;
+
     private final AnonSessionRepository anonSessionRepository;
-    private final PersonaElementRepository personaElementRepository;
+    private final AnonSessionPhotoRepository anonSessionPhotoRepository;
+    private final AnonSessionPersonaElementRepository anonSessionPersonaElementRepository;
     private final SurveyAnswerRepository surveyAnswerRepository;
     private final UserRepository userRepository;
 
     private final SurveyLoader surveyLoader;
 
-    private final AwsProperties awsProperties;
-    private final S3Presigner s3Presigner;
-    private final S3Client s3Client;
+    private final CloudFrontUtilities cloudFrontUtilities;
+    private final PrivateKey cloudFrontPrivateKey;
+    private final CloudFrontProperties cloudFrontProperties;
+
 
     @Transactional
     public void basicInfo(Long anonSessionId, OnboardingBasicInfoCommand command) {
@@ -123,8 +131,8 @@ public class OnboardingService {
 
         for (SurveyAnswer answer : answers) {
             SurveyQuestion question = surveyLoader.getQuestion(answer.getQId());
-            PersonaElement personaElement = PersonaElement.create(answer.getAnonSessionId(), question.dimension(), question.traitFor(answer.getOptionName()));
-            personaElementRepository.save(personaElement);
+            AnonSessionPersonaElement personaElement = AnonSessionPersonaElement.create(answer.getAnonSessionId(), question.dimension(), question.traitFor(answer.getOptionName()));
+            anonSessionPersonaElementRepository.save(personaElement);
         }
     }
 
@@ -135,7 +143,7 @@ public class OnboardingService {
         }
 
         for (String interest : command.interests()) {
-            personaElementRepository.save(PersonaElement.create(anonSessionId, PersonaDimension.INTERESTS, interest));
+            anonSessionPersonaElementRepository.save(AnonSessionPersonaElement.create(anonSessionId, PersonaDimension.INTERESTS, interest));
         }
     }
 
@@ -150,21 +158,10 @@ public class OnboardingService {
 
         String key = "profile-photos/%d/%s".formatted(anonSessionId, UUID.randomUUID());
 
-        PutObjectRequest putObjectRequest = PutObjectRequest.builder()
-                .bucket(awsProperties.s3().bucket())
-                .key(key)
-                .contentType(command.contentType())
-                .build();
-
-        PutObjectPresignRequest presignRequest = PutObjectPresignRequest.builder()
-                .signatureDuration(Duration.ofSeconds(PROFILE_PHOTO_PRESIGN_EXPIRES_IN_SECONDS))
-                .putObjectRequest(putObjectRequest)
-                .build();
-
-        PresignedPutObjectRequest presignedRequest = s3Presigner.presignPutObject(presignRequest);
+        String presignedUrl = s3Service.presignPut(key, command.contentType(), Duration.ofSeconds(PROFILE_PHOTO_PRESIGN_EXPIRES_IN_SECONDS));
 
         return new OnboardingProfilePhotoPresignResult(
-                presignedRequest.url().toString(),
+                presignedUrl,
                 key,
                 "PUT",
                 new RequiredHeaders(command.contentType()),
@@ -175,7 +172,7 @@ public class OnboardingService {
 
     @Transactional
     public OnboardingProfilePhotoCommitResult profilePhotoCommit(Long anonSessionId, OnboardingProfilePhotoCommitCommand command) {
-        if (command.key() == null) {
+        if (command.key() == null || command.position() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "요청 형식이 올바르지 않습니다.");
         }
 
@@ -184,33 +181,34 @@ public class OnboardingService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "본인 세션의 key가 아닙니다: " + command.key());
         }
 
-        try {
-            s3Client.headObject(HeadObjectRequest.builder()
-                    .bucket(awsProperties.s3().bucket())
-                    .key(command.key())
-                    .build());
-        } catch (NoSuchKeyException e) {
+        if (!s3Service.exists(command.key())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "업로드가 완료되지 않은 key입니다: " + command.key());
         }
 
-        AnonSession anonSession = anonSessionRepository.findById(anonSessionId)
+        anonSessionRepository.findById(anonSessionId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "유효하지 않은 세션입니다"));
 
-        anonSession.changePhotoKey(command.key());
+        PhotoPosInfo position = command.position();
+        anonSessionPhotoRepository.findByAnonSessionIdAndType(anonSessionId, PhotoType.PROFILE)
+                .ifPresentOrElse(
+                        photo -> photo.changePhoto(PhotoType.PROFILE, command.key(),
+                                position.startPos().x(), position.startPos().y(), position.width(), position.height()),
+                        () -> anonSessionPhotoRepository.save(AnonSessionPhoto.create(anonSessionId, PhotoType.PROFILE, command.key(),
+                                position.startPos().x(), position.startPos().y(), position.width(), position.height()))
+                );
 
-        GetObjectRequest getObjectRequest = GetObjectRequest.builder()
-                .bucket(awsProperties.s3().bucket())
-                .key(command.key())
+        String resourceUrl = "https://%s/%s".formatted(cloudFrontProperties.domain(), command.key());
+
+        CannedSignerRequest cannedRequest = CannedSignerRequest.builder()
+                .resourceUrl(resourceUrl)
+                .privateKey(cloudFrontPrivateKey)
+                .keyPairId(cloudFrontProperties.keyPairId())
+                .expirationDate(Instant.now().plus(Duration.ofMinutes(10)))
                 .build();
 
-        GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
-                .signatureDuration(Duration.ofMinutes(10))
-                .getObjectRequest(getObjectRequest)
-                .build();
+        String photoUrl = cloudFrontUtilities.getSignedUrlWithCannedPolicy(cannedRequest).url();
 
-        String photoUrl = s3Presigner.presignGetObject(presignRequest).url().toString();
-
-        return new OnboardingProfilePhotoCommitResult(photoUrl);
+        return new OnboardingProfilePhotoCommitResult(photoUrl, position);
     }
 
     @Transactional
@@ -224,30 +222,48 @@ public class OnboardingService {
     }
 
     public OnboardingProfileNicknameCheckResult profileNicknameCheck(Long anonSessionId, OnboardingProfileNicknameCheckCommand command) {
-        if (command.nickname() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "요청 형식이 올바르지 않습니다.");
-        }
+        String nickname = validateAndNormalizeNickname(command.nickname());
 
-        boolean isAvailable = !userRepository.existsByNickname(command.nickname())
-                && !anonSessionRepository.existsByNickname(command.nickname());
+        boolean isAvailable = !userRepository.existsByNickname(nickname)
+                && !anonSessionRepository.existsByNickname(nickname);
 
         return new OnboardingProfileNicknameCheckResult(isAvailable);
     }
 
     @Transactional
     public void profileNickname(Long anonSessionId, OnboardingProfileNicknameCommand command) {
-        if (command.nickname() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "요청 형식이 올바르지 않습니다.");
-        }
+        String nickname = validateAndNormalizeNickname(command.nickname());
 
-        if (userRepository.existsByNickname(command.nickname())
-                || anonSessionRepository.existsByNickname(command.nickname())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 사용 중인 닉네임입니다: " + command.nickname());
+        if (userRepository.existsByNickname(nickname)
+                || anonSessionRepository.existsByNickname(nickname)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 사용 중인 닉네임입니다: " + nickname);
         }
 
         AnonSession anonSession = anonSessionRepository.findById(anonSessionId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "유효하지 않은 세션입니다"));
 
-        anonSession.changeNickname(command.nickname());
+        anonSession.changeNickname(nickname);
+    }
+
+    private String validateAndNormalizeNickname(String nickname) {
+        if (nickname == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "요청 형식이 올바르지 않습니다.");
+        }
+
+        String trimmed = nickname.trim();
+
+        if (trimmed.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "닉네임은 공백일 수 없습니다.");
+        }
+
+        String normalized = trimmed.toLowerCase();
+        boolean containsForbiddenWord = FORBIDDEN_NICKNAME_WORDS.stream()
+                .anyMatch(normalized::contains);
+
+        if (containsForbiddenWord) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "사용할 수 없는 닉네임입니다.");
+        }
+
+        return trimmed;
     }
 }

@@ -137,6 +137,10 @@ CREATE TABLE photos (
     user_id      BIGINT NOT NULL,
     type         PHOTO_TYPE NOT NULL,
     key          TEXT NOT NULL,
+    x_pos        INTEGER,
+    y_pos        INTEGER,
+    width        INTEGER,
+    height       INTEGER,
     uploaded_at  TIMESTAMPTZ NOT NULL,
     is_current   BOOLEAN NOT NULL DEFAULT TRUE,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -161,6 +165,22 @@ CREATE TABLE verifications (
 
     CONSTRAINT pk_verifications PRIMARY KEY (id),
     CONSTRAINT fk_verifications_user_id FOREIGN KEY (user_id) REFERENCES users (id)
+);
+
+CREATE TABLE verification_sessions (
+    id                          BIGINT GENERATED ALWAYS AS IDENTITY,
+    type                        VERIFICATION_TYPE NOT NULL,
+    contact                     TEXT NOT NULL,
+    verification_token          UUID NOT NULL,
+    code                        TEXT NOT NULL,
+    code_expires_at             TIMESTAMPTZ NOT NULL,
+    verified_token              UUID,
+    verified_token_expires_at   TIMESTAMPTZ,
+    created_at                  TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    CONSTRAINT pk_verification_sessions PRIMARY KEY (id),
+    CONSTRAINT uk_verification_sessions_verification_token UNIQUE (verification_token),
+    CONSTRAINT uk_verification_sessions_verified_token UNIQUE (verified_token)
 );
 
 CREATE TYPE AGREEMENT_TYPE AS ENUM (
