@@ -1,0 +1,36 @@
+package com.nidus.twinly.block.controller;
+
+import com.nidus.twinly.block.dto.response.BlockListResponse;
+import com.nidus.twinly.block.service.BlockService;
+import com.nidus.twinly.user.annotation.CurrentUser;
+import com.nidus.twinly.user.dto.header.UserInfo;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequiredArgsConstructor
+public class BlockController {
+
+    private final BlockService blockService;
+
+    @PostMapping("/api/v1/block/{userId}")
+    public void block(@CurrentUser UserInfo userInfo,
+                      @PathVariable Long userId) {
+        blockService.block(userInfo.id(), userId);
+    }
+
+    @DeleteMapping("/api/v1/block/{userId}")
+    public void unblock(@CurrentUser UserInfo userInfo,
+                        @PathVariable Long userId) {
+        blockService.unblock(userInfo.id(), userId);
+    }
+
+    @GetMapping("/api/v1/block-list")
+    public BlockListResponse blockList(@CurrentUser UserInfo userInfo) {
+        return BlockListResponse.from(blockService.blockList(userInfo.id()));
+    }
+}
