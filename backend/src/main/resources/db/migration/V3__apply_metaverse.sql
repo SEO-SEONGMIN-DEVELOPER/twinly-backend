@@ -26,6 +26,8 @@ CREATE TABLE scenes (
     )
 );
 
+CREATE INDEX ix_scenes_user_id_date ON scenes (user_id, date);
+
 CREATE TABLE questions (
     id                      BIGINT GENERATED ALWAYS AS IDENTITY,
     user_id                 BIGINT NOT NULL,
@@ -37,7 +39,7 @@ CREATE TABLE questions (
     CONSTRAINT fk_questions_user_id FOREIGN KEY (user_id) REFERENCES users (id)
 );
 
-/* user_id, date index 걸기 */
+CREATE INDEX ix_questions_user_id_date ON questions (user_id, date);
 
 CREATE TABLE relationships (
     id              BIGINT GENERATED ALWAYS AS IDENTITY,
@@ -51,5 +53,5 @@ CREATE TABLE relationships (
     CONSTRAINT pk_relationships PRIMARY KEY (id),
     CONSTRAINT fk_relationships_user_id FOREIGN KEY (user_id) REFERENCES users (id),
     CONSTRAINT fk_relationships_partner_id FOREIGN KEY (partner_id) REFERENCES users (id),
-    CONSTRAINT uk_relationships_user_id_partner_id_date UNIQUE (user_id, partner_id, date)
+    CONSTRAINT uk_relationships_user_id_partner_id_date UNIQUE (user_id, date, partner_id)
 );
