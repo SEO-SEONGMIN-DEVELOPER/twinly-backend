@@ -7,11 +7,10 @@ import com.nidus.twinly.anon.repository.AnonSessionPersonaElementRepository;
 import com.nidus.twinly.anon.repository.AnonSessionPhotoRepository;
 import com.nidus.twinly.anon.repository.AnonSessionRepository;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontProperties;
-import com.nidus.twinly.common.aws.s3.S3Service;
-import com.nidus.twinly.common.domain.PhotoType;
 import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.common.photo.PhotoPosInfo;
-import com.nidus.twinly.common.presign.RequiredHeaders;
+import com.nidus.twinly.common.photo.PhotoType;
+import com.nidus.twinly.common.presign.*;
 import com.nidus.twinly.common.survey.SurveyLoader;
 import com.nidus.twinly.common.survey.SurveyOptionName;
 import com.nidus.twinly.common.survey.SurveyQuestion;
@@ -29,29 +28,23 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import software.amazon.awssdk.services.cloudfront.CloudFrontUtilities;
-import software.amazon.awssdk.services.cloudfront.model.CannedSignerRequest;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.security.PrivateKey;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import java.util.Set;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class OnboardingService {
 
-    private static final Set<String> ALLOWED_PHOTO_CONTENT_TYPES = Set.of("image/jpeg", "image/png", "image/webp");
-    private static final int PROFILE_PHOTO_MAX_BYTES = 10 * 1024 * 1024;
-    private static final int PROFILE_PHOTO_PRESIGN_EXPIRES_IN_SECONDS = 300;
-
     private static final Set<String> FORBIDDEN_NICKNAME_WORDS = Set.of(
             "admin", "관리자", "운영자", "공지"
     );
 
-    private final S3Service s3Service;
+    private final PresignService presignService;
+    private final PhotoCommitService photoCommitService;
 
     private final AnonSessionRepository anonSessionRepository;
     private final AnonSessionPhotoRepository anonSessionPhotoRepository;
@@ -93,7 +86,7 @@ public class OnboardingService {
 
     public String surveyQuestions() throws IOException {
         ClassPathResource resource = new ClassPathResource("survey/survey_v1_mixed.json");
-        String json = new String(resource.getInputStream().readAllBytes());
+        String json = new String(resource.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
 
         return json;
     }
@@ -126,7 +119,7 @@ public class OnboardingService {
 
     @Transactional
     public void saveAllSurveyAnswer(Long anonSessionId) {
-        List<SurveyAnswer> answers = surveyAnswerRepository.findByAnonSessionId(anonSessionId);
+        List<SurveyAnswer> answers = surveyAnswerRepository.findAllByAnonSessionId(anonSessionId);
 
         for (SurveyAnswer answer : answers) {
             SurveyQuestion question = surveyLoader.getQuestion(answer.getQId());
@@ -147,27 +140,9 @@ public class OnboardingService {
     }
 
     public OnboardingProfilePhotoPresignResult profilePhotoPresign(Long anonSessionId, OnboardingProfilePhotoPresignCommand command) {
-        if (command.contentType() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "요청 형식이 올바르지 않습니다.");
-        }
+        PhotoPresignResult presign = presignService.presignPhoto(anonSessionId, command.contentType(), PhotoType.PROFILE);
 
-        if (!ALLOWED_PHOTO_CONTENT_TYPES.contains(command.contentType())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "지원하지 않는 이미지 형식입니다: " + command.contentType());
-        }
-
-        String key = "profile-photos/%d/%s".formatted(anonSessionId, UUID.randomUUID());
-
-        Duration expiresIn = Duration.ofSeconds(PROFILE_PHOTO_PRESIGN_EXPIRES_IN_SECONDS);
-        String presignedUrl = s3Service.presignPut(key, command.contentType(), expiresIn);
-
-        return new OnboardingProfilePhotoPresignResult(
-                presignedUrl,
-                key,
-                "PUT",
-                new RequiredHeaders(command.contentType()),
-                PROFILE_PHOTO_MAX_BYTES,
-                Instant.now().plus(expiresIn)
-        );
+        return new OnboardingProfilePhotoPresignResult(presign.uploadUrl(), presign.key(), presign.method(), presign.requiredHeaders(), presign.maxBytes(), presign.expiresAt());
     }
 
     @Transactional
@@ -176,37 +151,16 @@ public class OnboardingService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "요청 형식이 올바르지 않습니다.");
         }
 
-        String expectedPrefix = "profile-photos/%d/".formatted(anonSessionId);
-        if (!command.key().startsWith(expectedPrefix)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "본인 세션의 key가 아닙니다: " + command.key());
-        }
-
-        if (!s3Service.exists(command.key())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "업로드가 완료되지 않은 key입니다: " + command.key());
-        }
-
-        anonSessionRepository.findById(anonSessionId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "유효하지 않은 세션입니다"));
+        String photoUrl = photoCommitService.commitProfilePhoto(anonSessionId, command.key());
 
         PhotoPosInfo position = command.position();
         anonSessionPhotoRepository.findByAnonSessionIdAndType(anonSessionId, PhotoType.PROFILE)
                 .ifPresentOrElse(
-                        photo -> photo.changePhoto(PhotoType.PROFILE, command.key(),
+                        photo -> photo.changePhoto(command.key(),
                                 position.startPos().x(), position.startPos().y(), position.width(), position.height()),
                         () -> anonSessionPhotoRepository.save(AnonSessionPhoto.create(anonSessionId, PhotoType.PROFILE, command.key(),
                                 position.startPos().x(), position.startPos().y(), position.width(), position.height()))
                 );
-
-        String resourceUrl = "https://%s/%s".formatted(cloudFrontProperties.domain(), command.key());
-
-        CannedSignerRequest cannedRequest = CannedSignerRequest.builder()
-                .resourceUrl(resourceUrl)
-                .privateKey(cloudFrontPrivateKey)
-                .keyPairId(cloudFrontProperties.keyPairId())
-                .expirationDate(Instant.now().plus(Duration.ofMinutes(10)))
-                .build();
-
-        String photoUrl = cloudFrontUtilities.getSignedUrlWithCannedPolicy(cannedRequest).url();
 
         return new OnboardingProfilePhotoCommitResult(photoUrl, position);
     }

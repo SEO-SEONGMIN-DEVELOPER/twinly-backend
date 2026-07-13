@@ -1,4 +1,4 @@
-package com.nidus.twinly.common.domain;
+package com.nidus.twinly.common.photo;
 
 public enum PhotoType {
     PROFILE,

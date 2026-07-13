@@ -146,10 +146,9 @@ CREATE TABLE photos (
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     CONSTRAINT pk_photos PRIMARY KEY (id),
-    CONSTRAINT fk_photos_user_id FOREIGN KEY (user_id) REFERENCES users (id)
+    CONSTRAINT fk_photos_user_id FOREIGN KEY (user_id) REFERENCES users (id),
+    CONSTRAINT uk_photos_user_id_type UNIQUE (user_id, type)
 );
-
-CREATE UNIQUE INDEX uk_photos_user_id_type ON photos (user_id, type) WHERE is_current = true;
 
 CREATE TYPE VERIFICATION_TYPE AS ENUM (
     'SMS',

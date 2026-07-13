@@ -46,8 +46,6 @@ ALTER TABLE reports RENAME CONSTRAINT fk_reports_reporter_user_id TO fk_reports_
 ALTER TABLE photos
     DROP COLUMN is_current CASCADE;
 
-CREATE INDEX photos_user_id_type ON photos (user_id, type);
-
 /* version이 agreements 안에 있는 게 어색. 약관 테이블을 따로 만드는 게 적합 */
 ALTER TYPE AGREEMENT_TYPE RENAME TO POLICY_TYPE;
 
