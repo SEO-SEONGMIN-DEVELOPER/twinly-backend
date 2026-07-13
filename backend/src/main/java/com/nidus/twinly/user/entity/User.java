@@ -60,4 +60,42 @@ public class User {
     private Instant deletedAt;
 
     private Instant createdAt;
+
+    public static User create(String nickname, String familyName, String givenName, Gender gender,
+                              String affiliation, String affiliationNumber, String birthDate, String height,
+                              String phoneNumber, String phoneNumberHash, String email, String emailHash) {
+        User user = new User();
+
+        user.nickname = nickname;
+        user.familyName = familyName;
+        user.givenName = givenName;
+        user.gender = gender;
+        user.affiliation = affiliation;
+        user.affiliationNumber = affiliationNumber;
+        user.birthDate = birthDate;
+        user.height = height;
+        user.phoneNumber = phoneNumber;
+        user.phoneNumberHash = phoneNumberHash;
+        user.email = email;
+        user.emailHash = emailHash;
+        user.createdAt = Instant.now();
+
+        return user;
+    }
+
+    public void changeAffiliation(String affiliation) {
+        this.affiliation = affiliation;
+    }
+
+    public void changeHeight(String height) {
+        this.height = height;
+    }
+
+    public void requestWithdrawal() {
+        this.withdrawalRequestedAt = Instant.now();
+    }
+
+    public void cancelWithdrawal() {
+        this.withdrawalRequestedAt = null;
+    }
 }

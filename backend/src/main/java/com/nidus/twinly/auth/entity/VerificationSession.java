@@ -39,6 +39,8 @@ public class VerificationSession {
 
     private Instant verifiedTokenExpiresAt;
 
+    private Instant verifiedAt;
+
     private Instant createdAt;
 
     public static VerificationSession create(VerificationType type, String contact, String code, Instant codeExpiresAt) {
@@ -57,5 +59,6 @@ public class VerificationSession {
     public void verify(Instant verifiedTokenExpiresAt) {
         this.verifiedToken = UUID.randomUUID();
         this.verifiedTokenExpiresAt = verifiedTokenExpiresAt;
+        this.verifiedAt = Instant.now();
     }
 }

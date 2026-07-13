@@ -175,6 +175,7 @@ CREATE TABLE verification_sessions (
     code_expires_at             TIMESTAMPTZ NOT NULL,
     verified_token              UUID,
     verified_token_expires_at   TIMESTAMPTZ,
+    verified_at                 TIMESTAMPTZ,
     created_at                  TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     CONSTRAINT pk_verification_sessions PRIMARY KEY (id),
