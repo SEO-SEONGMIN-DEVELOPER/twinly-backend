@@ -102,11 +102,21 @@ CREATE TABLE blocks (
     CONSTRAINT ck_blocks_self_block_prevention CHECK(blocker_user_id != blocked_user_id)
 );
 
+CREATE TYPE REPORT_REASON AS ENUM (
+    'SPAM',
+    'INAPPROPRIATE_PHOTO',
+    'FRAUD_SUSPECTED',
+    'HARASSMENT',
+    'THREAT',
+    'OTHER'
+);
+
 CREATE TABLE reports (
     id                  BIGINT GENERATED ALWAYS AS IDENTITY,
     reporter_user_id    BIGINT NOT NULL,
     reported_user_id    BIGINT NOT NULL,
-    reason              TEXT NOT NULL,
+    reason              REPORT_REASON NOT NULL,
+    detail              TEXT,
     status              TEXT NOT NULL,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
 

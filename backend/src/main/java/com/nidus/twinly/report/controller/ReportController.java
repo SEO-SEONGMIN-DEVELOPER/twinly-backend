@@ -1,0 +1,27 @@
+package com.nidus.twinly.report.controller;
+
+import com.nidus.twinly.report.dto.command.ReportCommand;
+import com.nidus.twinly.report.dto.request.ReportRequest;
+import com.nidus.twinly.report.dto.response.ReportResponse;
+import com.nidus.twinly.report.service.ReportService;
+import com.nidus.twinly.user.annotation.CurrentUser;
+import com.nidus.twinly.user.dto.header.UserInfo;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequiredArgsConstructor
+public class ReportController {
+
+    private final ReportService reportService;
+
+    @PostMapping("/api/v1/report/{userId}")
+    public ReportResponse report(@CurrentUser UserInfo userInfo,
+                                 @PathVariable Long userId,
+                                 @RequestBody ReportRequest request) {
+        return ReportResponse.from(reportService.report(userInfo.id(), userId, ReportCommand.from(request)));
+    }
+}
