@@ -78,7 +78,7 @@ CREATE TABLE devices (
 
     CONSTRAINT pk_devices PRIMARY KEY (id),
     CONSTRAINT fk_devices_user_id FOREIGN KEY (user_id) REFERENCES users (id),
-    CONSTRAINT uk_devices_user_id_device_id UNIQUE (user_id, device_id)
+    CONSTRAINT uk_devices_device_id UNIQUE (device_id)
 );
 
 CREATE INDEX ix_devices_user_id ON devices (user_id);
