@@ -46,7 +46,7 @@ public class AiChatService {
         AnonSession anonSession = anonSessionRepository.findById(anonSessionId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "유효하지 않은 세션입니다"));
 
-        List<AnonSessionPersonaElement> personaElements = anonSessionPersonaElementRepository.findByAnonSessionId(anonSessionId);
+        List<AnonSessionPersonaElement> personaElements = anonSessionPersonaElementRepository.findAllByAnonSessionId(anonSessionId);
 
         String prompt = buildPersonaPrompt(anonSession, personaElements);
         String reply = bedrockService.converse(prompt);
@@ -100,7 +100,7 @@ public class AiChatService {
             return new OnboardingAiChatMessageResult("지금까지 이야기 들려줘서 고마워!", command.turnIndex(), true);
         }
 
-        List<AnonSessionPersonaElement> personaElements = anonSessionPersonaElementRepository.findByAnonSessionId(anonSessionId);
+        List<AnonSessionPersonaElement> personaElements = anonSessionPersonaElementRepository.findAllByAnonSessionId(anonSessionId);
         String nextQuestionPrompt = buildFollowUpPrompt(anonSession, personaElements, aiQuestion.getMessage(), command.message());
         String reply = bedrockService.converse(nextQuestionPrompt);
 

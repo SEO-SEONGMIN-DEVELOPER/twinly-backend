@@ -8,7 +8,7 @@ import java.util.Optional;
 
 public interface SurveyAnswerRepository extends JpaRepository<SurveyAnswer, Long> {
 
-    List<SurveyAnswer> findByAnonSessionId(Long anonSessionId);
+    List<SurveyAnswer> findAllByAnonSessionId(Long anonSessionId);
 
     Optional<SurveyAnswer> findByAnonSessionIdAndQId(Long anonSessionId, Integer qId);
 }

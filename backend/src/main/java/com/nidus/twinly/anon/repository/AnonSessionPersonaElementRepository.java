@@ -7,5 +7,5 @@ import java.util.List;
 
 public interface AnonSessionPersonaElementRepository extends JpaRepository<AnonSessionPersonaElement, Long> {
 
-    List<AnonSessionPersonaElement> findByAnonSessionId(Long anonSessionId);
+    List<AnonSessionPersonaElement> findAllByAnonSessionId(Long anonSessionId);
 }
