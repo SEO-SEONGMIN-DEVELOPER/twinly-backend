@@ -48,3 +48,6 @@ solapi:
   api-key: ${SOLAPI_API_KEY}
   api-secret-key: ${SOLAPI_API_SECRET_KEY}
   from-number: ${SOLAPI_FROM_NUMBER}
+
+jwt:
+  secret-key: ${JWT_SECRET_KEY}
