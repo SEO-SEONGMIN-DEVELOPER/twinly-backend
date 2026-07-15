@@ -43,9 +43,6 @@ public class User {
     private String birthDate;
 
     @Convert(converter = EncryptedStringConverter.class)
-    private String height;
-
-    @Convert(converter = EncryptedStringConverter.class)
     private String phoneNumber;
 
     private String phoneNumberHash;
@@ -62,7 +59,7 @@ public class User {
     private Instant createdAt;
 
     public static User create(String nickname, String familyName, String givenName, Gender gender,
-                              String affiliation, String affiliationNumber, String birthDate, String height,
+                              String affiliation, String affiliationNumber, String birthDate,
                               String phoneNumber, String phoneNumberHash, String email, String emailHash) {
         User user = new User();
 
@@ -73,7 +70,6 @@ public class User {
         user.affiliation = affiliation;
         user.affiliationNumber = affiliationNumber;
         user.birthDate = birthDate;
-        user.height = height;
         user.phoneNumber = phoneNumber;
         user.phoneNumberHash = phoneNumberHash;
         user.email = email;
@@ -85,10 +81,6 @@ public class User {
 
     public void changeAffiliation(String affiliation) {
         this.affiliation = affiliation;
-    }
-
-    public void changeHeight(String height) {
-        this.height = height;
     }
 
     public void requestWithdrawal() {

@@ -187,7 +187,6 @@ public class AuthService {
                         anonSession.getAffiliation(),
                         anonSession.getAffiliationNumber(),
                         anonSession.getBirthDate(),
-                        anonSession.getHeight(),
                         phoneNumber,
                         phoneNumberHash,
                         email,

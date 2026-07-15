@@ -2,14 +2,14 @@
 ALTER TABLE users
     DROP COLUMN name,
     ADD COLUMN family_name TEXT NOT NULL,
-    ADD COLUMN given_name   TEXT NOT NULL;
+    ADD COLUMN given_name   TEXT NOT NULL,
+    DROP COLUMN height;
+
 
 /* 암호화 컬럼의 속성을 TEXT로 변환 */
 ALTER TABLE users
     ALTER COLUMN birth_date TYPE TEXT,
-    ALTER COLUMN birth_date SET NOT NULL,
-    ALTER COLUMN height TYPE TEXT,
-    ALTER COLUMN height SET NOT NULL;
+    ALTER COLUMN birth_date SET NOT NULL;
 
 /* chats 의 message type 컬럼 추가 */
 CREATE TYPE CHAT_MESSAGE_TYPE AS ENUM (

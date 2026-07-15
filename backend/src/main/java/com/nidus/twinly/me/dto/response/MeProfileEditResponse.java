@@ -9,11 +9,10 @@ public record MeProfileEditResponse(
         String affiliation,
         String affiliationNumber,
         String birthDate,
-        Integer height,
         String profilePhotoUrl
 ) {
 
     public static MeProfileEditResponse from(MeProfileEditResult result) {
-        return new MeProfileEditResponse(result.userId(), result.familyName(), result.givenName(), result.affiliation(), result.affiliationNumber(), result.birthDate(), result.height(), result.profilePhotoUrl());
+        return new MeProfileEditResponse(result.userId(), result.familyName(), result.givenName(), result.affiliation(), result.affiliationNumber(), result.birthDate(), result.profilePhotoUrl());
     }
 }

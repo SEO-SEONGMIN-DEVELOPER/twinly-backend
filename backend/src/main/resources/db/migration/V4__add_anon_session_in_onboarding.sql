@@ -9,7 +9,6 @@ CREATE TABLE anon_sessions (
     affiliation               TEXT,
     affiliation_number        TEXT,
     birth_date                TEXT,
-    height                    TEXT,
     phone_number              TEXT,
     email                     TEXT,
     created_at                TIMESTAMPTZ NOT NULL DEFAULT now(),

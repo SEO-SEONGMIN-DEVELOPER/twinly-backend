@@ -91,14 +91,13 @@ public class MeService {
                 user.getAffiliation(),
                 user.getAffiliationNumber(),
                 user.getBirthDate(),
-                Integer.parseInt(user.getHeight()),
                 profilePhotoUrl
         );
     }
 
     @Transactional
     public void profile(Long userId, MeProfileCommand command) {
-        if (command.affiliation() == null || command.height() == null) {
+        if (command.affiliation() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "요청 형식이 올바르지 않습니다.");
         }
 
@@ -106,7 +105,6 @@ public class MeService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 유저입니다."));
 
         user.changeAffiliation(command.affiliation());
-        user.changeHeight(String.valueOf(command.height()));
     }
 
     @Transactional

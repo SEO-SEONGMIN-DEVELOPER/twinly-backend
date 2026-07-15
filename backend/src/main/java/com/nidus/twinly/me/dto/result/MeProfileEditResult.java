@@ -7,7 +7,6 @@ public record MeProfileEditResult(
         String affiliation,
         String affiliationNumber,
         String birthDate,
-        Integer height,
         String profilePhotoUrl
 ) {
 }
