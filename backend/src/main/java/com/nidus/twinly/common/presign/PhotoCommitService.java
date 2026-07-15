@@ -15,7 +15,7 @@ public class PhotoCommitService {
     private final CloudFrontService cloudFrontService;
 
     public String commitProfilePhoto(Long ownerId, String key) {
-        String expectedPrefix = "profile-photos/%d/".formatted(ownerId);
+        String expectedPrefix = "profile/%d/".formatted(ownerId);
         if (!key.startsWith(expectedPrefix)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "본인 소유의 key가 아닙니다: " + key);
         }
