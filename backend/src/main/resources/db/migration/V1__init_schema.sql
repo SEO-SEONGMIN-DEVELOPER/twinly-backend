@@ -62,6 +62,7 @@ CREATE TABLE matches (
     id          BIGINT GENERATED ALWAYS AS IDENTITY,
     user_a_id   BIGINT NOT NULL,
     user_b_id   BIGINT NOT NULL,
+    season      INTEGER NOT NULL,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     CONSTRAINT pk_matches PRIMARY KEY (id),
