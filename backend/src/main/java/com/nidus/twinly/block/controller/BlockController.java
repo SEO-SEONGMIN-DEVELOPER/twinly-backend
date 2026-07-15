@@ -17,19 +17,19 @@ public class BlockController {
 
     private final BlockService blockService;
 
-    @PostMapping("/api/v1/block/{userId}")
+    @PostMapping("/api/v1/blocks/{userId}")
     public void block(@CurrentUser UserInfo userInfo,
                       @PathVariable Long userId) {
         blockService.block(userInfo.id(), userId);
     }
 
-    @DeleteMapping("/api/v1/block/{userId}")
+    @DeleteMapping("/api/v1/blocks/{userId}")
     public void unblock(@CurrentUser UserInfo userInfo,
                         @PathVariable Long userId) {
         blockService.unblock(userInfo.id(), userId);
     }
 
-    @GetMapping("/api/v1/block-list")
+    @GetMapping("/api/v1/blocks")
     public BlockListResponse blockList(@CurrentUser UserInfo userInfo) {
         return BlockListResponse.from(blockService.blockList(userInfo.id()));
     }

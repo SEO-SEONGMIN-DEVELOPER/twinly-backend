@@ -18,7 +18,7 @@ public class ReportController {
 
     private final ReportService reportService;
 
-    @PostMapping("/api/v1/report/{userId}")
+    @PostMapping("/api/v1/reports/{userId}")
     public ReportResponse report(@CurrentUser UserInfo userInfo,
                                  @PathVariable Long userId,
                                  @RequestBody ReportRequest request) {
