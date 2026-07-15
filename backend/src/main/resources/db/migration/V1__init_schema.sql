@@ -74,6 +74,7 @@ CREATE TABLE matches (
 
 CREATE TABLE chats (
     id                  BIGINT GENERATED ALWAYS AS IDENTITY,
+    client_msg_id       TEXT NOT NULL,
     match_id            BIGINT NOT NULL,
     sender_user_id      BIGINT NOT NULL,
     receiver_user_id    BIGINT NOT NULL,
