@@ -42,4 +42,18 @@ public class ChatRoomParticipation {
 
         return participation;
     }
+
+    public void agree() {
+        if (this.entryAgreedAt == null) {
+            this.entryAgreedAt = Instant.now();
+        }
+    }
+
+    public void hide() {
+        this.isHidden = true;
+    }
+
+    public void leave() {
+        this.leftAt = Instant.now();
+    }
 }

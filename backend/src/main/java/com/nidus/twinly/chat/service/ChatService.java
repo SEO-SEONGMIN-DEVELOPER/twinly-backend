@@ -1,6 +1,7 @@
 package com.nidus.twinly.chat.service;
 
 import com.nidus.twinly.chat.domain.ChatMessageType;
+import com.nidus.twinly.chat.dto.command.ChatReadMessagesCommand;
 import com.nidus.twinly.chat.dto.command.ChatSendMessageCommand;
 import com.nidus.twinly.chat.dto.result.*;
 import com.nidus.twinly.chat.entity.Chat;
@@ -11,6 +12,7 @@ import com.nidus.twinly.chat.repository.ChatRoomParticipationRepository;
 import com.nidus.twinly.chat.repository.ChatRoomRepository;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
 import com.nidus.twinly.common.photo.PhotoType;
+import com.nidus.twinly.common.websocket.domain.ChatSenderType;
 import com.nidus.twinly.common.websocket.dto.ChatMessageReceivedEvent;
 import com.nidus.twinly.common.websocket.registry.ChatSessionRegistry;
 import com.nidus.twinly.match.entity.Match;
@@ -46,6 +48,8 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class ChatService {
+
+    private static final int DEFAULT_MESSAGES_LIMIT = 20;
 
     @Value("${app.current-season}")
     private Integer currentSeason;
@@ -88,15 +92,15 @@ public class ChatService {
     }
 
     private Long resolvePartnerId(Match match, Long senderId) {
-        if (match.getUserAId().equals(senderId)) {
-            return match.getUserBId();
-        }
+        checkUserInMatch(match, senderId);
 
-        if (match.getUserBId().equals(senderId)) {
-            return match.getUserAId();
-        }
+        return match.getUserAId().equals(senderId) ? match.getUserBId() : match.getUserAId();
+    }
 
-        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "이 매칭의 참여자가 아닙니다.");
+    private void checkUserInMatch(Match match, Long userId) {
+        if (!match.getUserAId().equals(userId) && !match.getUserBId().equals(userId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "이 매칭의 참여자가 아닙니다.");
+        }
     }
 
     private void sendToReceiverUser(Chat chat, Long receiverUserId) {
@@ -276,5 +280,102 @@ public class ChatService {
                 room.getCloseReason(),
                 match.getSeason().equals(currentSeason)
         );
+    }
+
+    @Transactional
+    public ChatRoomDetailResult enterRoom(Long userId, Long roomId) {
+        ChatRoom room = chatRoomRepository.findById(roomId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 채팅방입니다."));
+
+        Match match = matchRepository.findById(room.getMatchId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 매칭입니다."));
+
+        checkUserInMatch(match, userId);
+
+        chatRoomParticipationRepository.findByRoomIdAndUserId(roomId, userId)
+                .ifPresentOrElse(
+                        ChatRoomParticipation::agree,
+                        () -> { throw new IllegalStateException("채팅방은 있는데 참여 정보가 없습니다: roomId=" + roomId + ", userId=" + userId); }
+                );
+
+        return roomDetail(userId, roomId);
+    }
+
+    @Transactional
+    public void hideRoom(Long userId, Long roomId) {
+        ChatRoom room = chatRoomRepository.findById(roomId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 채팅방입니다."));
+
+        Match match = matchRepository.findById(room.getMatchId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 매칭입니다."));
+
+        checkUserInMatch(match, userId);
+
+        chatRoomParticipationRepository.findByRoomIdAndUserId(roomId, userId)
+                .ifPresentOrElse(
+                        ChatRoomParticipation::hide,
+                        () -> { throw new IllegalStateException("채팅방은 있는데 참여 정보가 없습니다: roomId=" + roomId + ", userId=" + userId); }
+                );
+    }
+
+    public ChatMessagesResult messages(Long userId, Long roomId, Long cursor, Integer limit) {
+        ChatRoom room = chatRoomRepository.findById(roomId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 채팅방입니다."));
+
+        Match match = matchRepository.findById(room.getMatchId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 매칭입니다."));
+
+        checkUserInMatch(match, userId);
+
+        int effectiveLimit = limit != null ? limit : DEFAULT_MESSAGES_LIMIT;
+
+        List<Chat> chats = chatRepository.findBeforeCursorByRoomId(roomId, cursor, effectiveLimit + 1);
+
+        boolean hasMore = chats.size() > effectiveLimit;
+
+        List<Chat> pageChats = hasMore ? chats.subList(0, effectiveLimit) : chats;
+
+        List<ChatMessageItemResult> messages = pageChats.stream()
+                .map(chat -> new ChatMessageItemResult(
+                        chat.getId(),
+                        chat.getSenderUserId().equals(userId) ? ChatSenderType.ME : ChatSenderType.THEM,
+                        chat.getMessage(),
+                        chat.getSentAt()
+                ))
+                .toList();
+
+        Long nextCursor = hasMore ? pageChats.getLast().getId() : null;
+
+        return new ChatMessagesResult(roomId, messages, new ChatMessagesPageResult(nextCursor, hasMore));
+    }
+
+    @Transactional
+    public void readMessages(Long userId, Long roomId, ChatReadMessagesCommand command) {
+        ChatRoom room = chatRoomRepository.findById(roomId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 채팅방입니다."));
+
+        Match match = matchRepository.findById(room.getMatchId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 매칭입니다."));
+
+        checkUserInMatch(match, userId);
+
+        chatRepository.markAsRead(roomId, userId, command.lastMessageId());
+    }
+
+    @Transactional
+    public void leaveRoom(Long userId, Long roomId) {
+        ChatRoom room = chatRoomRepository.findById(roomId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 채팅방입니다."));
+
+        Match match = matchRepository.findById(room.getMatchId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 매칭입니다."));
+
+        checkUserInMatch(match, userId);
+
+        chatRoomParticipationRepository.findByRoomIdAndUserId(roomId, userId)
+                .ifPresentOrElse(
+                        ChatRoomParticipation::leave,
+                        () -> { throw new IllegalStateException("채팅방은 있는데 참여 정보가 없습니다: roomId=" + roomId + ", userId=" + userId); }
+                );
     }
 }

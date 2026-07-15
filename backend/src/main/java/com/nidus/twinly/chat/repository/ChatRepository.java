@@ -2,6 +2,7 @@ package com.nidus.twinly.chat.repository;
 
 import com.nidus.twinly.chat.entity.Chat;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -33,4 +34,25 @@ public interface ChatRepository extends JpaRepository<Chat, Long> {
         Long getRoomId();
         Long getCount();
     }
+
+    @Query(value = """
+        SELECT c.*
+        FROM chats c
+        WHERE c.room_id = :roomId
+          AND (:cursor IS NULL OR c.id < :cursor)
+        ORDER BY c.id DESC
+        LIMIT :limit
+        """, nativeQuery = true)
+    List<Chat> findBeforeCursorByRoomId(@Param("roomId") Long roomId, @Param("cursor") Long cursor, @Param("limit") Integer limit);
+
+    @Modifying
+    @Query(value = """
+        UPDATE chats
+        SET is_read = true
+        WHERE room_id = :roomId
+          AND receiver_user_id = :userId
+          AND id <= :lastMessageId
+          AND is_read = false
+        """, nativeQuery = true)
+    int markAsRead(@Param("roomId") Long roomId, @Param("userId") Long userId, @Param("lastMessageId") Long lastMessageId);
 }

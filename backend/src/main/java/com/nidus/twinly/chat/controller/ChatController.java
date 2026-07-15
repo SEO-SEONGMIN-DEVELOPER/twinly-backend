@@ -1,7 +1,10 @@
 package com.nidus.twinly.chat.controller;
 
+import com.nidus.twinly.chat.dto.command.ChatReadMessagesCommand;
 import com.nidus.twinly.chat.dto.command.ChatSendMessageCommand;
+import com.nidus.twinly.chat.dto.request.ChatReadMessagesRequest;
 import com.nidus.twinly.chat.dto.request.ChatSendMessageRequest;
+import com.nidus.twinly.chat.dto.response.ChatMessagesResponse;
 import com.nidus.twinly.chat.dto.response.ChatRoomDetailResponse;
 import com.nidus.twinly.chat.dto.response.ChatRoomsResponse;
 import com.nidus.twinly.chat.dto.response.ChatSendMessageResponse;
@@ -13,6 +16,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -37,5 +41,38 @@ public class ChatController {
     public ChatRoomDetailResponse roomDetail(@CurrentUser UserInfo userInfo,
                                              @PathVariable Long roomId) {
         return ChatRoomDetailResponse.from(chatService.roomDetail(userInfo.id(), roomId));
+    }
+
+    @PostMapping("/api/v1/chat/rooms/{roomId}/enter")
+    public ChatRoomDetailResponse enterRoom(@CurrentUser UserInfo userInfo,
+                                        @PathVariable Long roomId) {
+        return ChatRoomDetailResponse.from(chatService.enterRoom(userInfo.id(), roomId));
+    }
+
+    @PostMapping("/api/v1/chat/rooms/{roomId}/hide")
+    public void hideRoom(@CurrentUser UserInfo userInfo,
+                     @PathVariable Long roomId) {
+        chatService.hideRoom(userInfo.id(), roomId);
+    }
+
+    @GetMapping("/api/v1/chat/rooms/{roomId}/messages")
+    public ChatMessagesResponse messages(@CurrentUser UserInfo userInfo,
+                                         @PathVariable Long roomId,
+                                         @RequestParam(required = false) Long cursor,
+                                         @RequestParam(required = false) Integer limit) {
+        return ChatMessagesResponse.from(chatService.messages(userInfo.id(), roomId, cursor, limit));
+    }
+
+    @PostMapping("/api/v1/chat/rooms/{roomId}/read")
+    public void readMessages(@CurrentUser UserInfo userInfo,
+                     @PathVariable Long roomId,
+                     @RequestBody ChatReadMessagesRequest request) {
+        chatService.readMessages(userInfo.id(), roomId, ChatReadMessagesCommand.from(request));
+    }
+
+    @PostMapping("/api/v1/chat/rooms/{roomId}/leave")
+    public void leaveRoom(@CurrentUser UserInfo userInfo,
+                          @PathVariable Long roomId) {
+        chatService.leaveRoom(userInfo.id(), roomId);
     }
 }
