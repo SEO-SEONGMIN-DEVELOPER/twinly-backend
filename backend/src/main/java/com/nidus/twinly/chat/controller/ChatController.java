@@ -2,6 +2,7 @@ package com.nidus.twinly.chat.controller;
 
 import com.nidus.twinly.chat.dto.command.ChatSendMessageCommand;
 import com.nidus.twinly.chat.dto.request.ChatSendMessageRequest;
+import com.nidus.twinly.chat.dto.response.ChatRoomDetailResponse;
 import com.nidus.twinly.chat.dto.response.ChatRoomsResponse;
 import com.nidus.twinly.chat.dto.response.ChatSendMessageResponse;
 import com.nidus.twinly.chat.service.ChatService;
@@ -30,5 +31,11 @@ public class ChatController {
     @GetMapping("/api/v1/chat/rooms")
     public ChatRoomsResponse rooms(@CurrentUser UserInfo userInfo) {
         return ChatRoomsResponse.from(chatService.rooms(userInfo.id()));
+    }
+
+    @GetMapping("/api/v1/chat/rooms/{roomId}")
+    public ChatRoomDetailResponse roomDetail(@CurrentUser UserInfo userInfo,
+                                             @PathVariable Long roomId) {
+        return ChatRoomDetailResponse.from(chatService.roomDetail(userInfo.id(), roomId));
     }
 }

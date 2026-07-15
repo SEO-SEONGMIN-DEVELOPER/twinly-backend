@@ -15,10 +15,14 @@ import com.nidus.twinly.common.websocket.dto.ChatMessageReceivedEvent;
 import com.nidus.twinly.common.websocket.registry.ChatSessionRegistry;
 import com.nidus.twinly.match.entity.Match;
 import com.nidus.twinly.match.repository.MatchRepository;
+import com.nidus.twinly.relationship.domain.RelationshipSpecificType;
 import com.nidus.twinly.relationship.entity.Relationship;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
+import com.nidus.twinly.user.domain.DisclosureField;
+import com.nidus.twinly.user.entity.DisclosureAgreement;
 import com.nidus.twinly.user.entity.Photo;
 import com.nidus.twinly.user.entity.User;
+import com.nidus.twinly.user.repository.DisclosureAgreementRepository;
 import com.nidus.twinly.user.repository.PhotoRepository;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -57,6 +61,7 @@ public class ChatService {
     private final ChatRoomParticipationRepository chatRoomParticipationRepository;
     private final RelationshipRepository relationshipRepository;
     private final PhotoRepository photoRepository;
+    private final DisclosureAgreementRepository disclosureAgreementRepository;
 
     private final ChatSessionRegistry chatSessionRegistry;
 
@@ -215,6 +220,57 @@ public class ChatService {
                 new ChatRoomMessagesResult(
                         unreadCount.intValue(),
                         lastChat != null ? new ChatRoomLastMessageResult(lastChat.getMessage(), lastChat.getSentAt()) : null
+                ),
+                room.getClosedAt(),
+                room.getCloseReason(),
+                match.getSeason().equals(currentSeason)
+        );
+    }
+
+    public ChatRoomDetailResult roomDetail(Long userId, Long roomId) {
+        ChatRoom room = chatRoomRepository.findById(roomId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 채팅방입니다."));
+
+        Match match = matchRepository.findById(room.getMatchId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 매칭입니다."));
+
+        Long partnerId = resolvePartnerId(match, userId);
+        User partner = userRepository.findById(partnerId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 유저입니다."));
+
+        ChatRoomParticipation myParticipation = chatRoomParticipationRepository.findByRoomIdAndUserId(roomId, userId)
+                .orElse(null);
+        ChatRoomParticipation partnerParticipation = chatRoomParticipationRepository.findByRoomIdAndUserId(roomId, partnerId)
+                .orElse(null);
+
+        Photo partnerPhoto = photoRepository.findByUserIdAndType(partnerId, PhotoType.PROFILE)
+                .orElse(null);
+
+        Integer rapport = relationshipRepository.findLatestByUserIdAndPartnerId(userId, partnerId)
+                .map(Relationship::getRapport)
+                .orElse(0);
+
+        Set<DisclosureField> agreedFields = disclosureAgreementRepository.findAllByUserId(partnerId).stream()
+                .map(DisclosureAgreement::getField)
+                .collect(Collectors.toSet());
+
+        return new ChatRoomDetailResult(
+                room.getId(),
+                match.getId(),
+                new ChatRoomEntryStatusResult(
+                        myParticipation != null && myParticipation.getEntryAgreedAt() != null,
+                        partnerParticipation != null && partnerParticipation.getEntryAgreedAt() != null
+                ),
+                new ChatRoomDetailPartnerResult(
+                        partner.getId(),
+                        partner.getNickname(),
+                        partnerPhoto != null ? cloudFrontService.getSignedUrl(partnerPhoto.getKey()) : null,
+                        rapport,
+                        RelationshipSpecificType.fromRapport(rapport),
+                        new ChatRoomDetailDisclosedFieldsResult(
+                                agreedFields.contains(DisclosureField.AFFILIATION) ? partner.getAffiliation() : null,
+                                agreedFields.contains(DisclosureField.BIRTH_DATE) ? partner.getBirthDate() : null
+                        )
                 ),
                 room.getClosedAt(),
                 room.getCloseReason(),
