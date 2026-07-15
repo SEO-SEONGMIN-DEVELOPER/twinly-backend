@@ -10,6 +10,6 @@ public record ChatMessageReceivedEvent(
 ) {
 
     public static ChatMessageReceivedEvent from(Chat chat) {
-        return new ChatMessageReceivedEvent(WebSocketEventType.CHAT_MSG, chat.getMatchId(), ChatMessagePayload.from(chat));
+        return new ChatMessageReceivedEvent(WebSocketEventType.CHAT_MSG, chat.getRoomId(), ChatMessagePayload.from(chat));
     }
 }

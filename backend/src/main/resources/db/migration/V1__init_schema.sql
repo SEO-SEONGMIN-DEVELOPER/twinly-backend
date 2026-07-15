@@ -72,10 +72,22 @@ CREATE TABLE matches (
     CONSTRAINT ck_matches_user_order CHECK(user_a_id < user_b_id)
 );
 
+CREATE TABLE chat_rooms (
+    id              BIGINT GENERATED ALWAYS AS IDENTITY,
+    match_id        BIGINT NOT NULL,
+    closed_at       TIMESTAMPTZ,
+    close_reason    TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    CONSTRAINT pk_chat_rooms PRIMARY KEY (id),
+    CONSTRAINT fk_chat_rooms_match_id FOREIGN KEY (match_id) REFERENCES matches (id),
+    CONSTRAINT uk_chat_rooms_match_id UNIQUE (match_id)
+);
+
 CREATE TABLE chats (
     id                  BIGINT GENERATED ALWAYS AS IDENTITY,
     client_msg_id       TEXT NOT NULL,
-    match_id            BIGINT NOT NULL,
+    room_id             BIGINT NOT NULL,
     sender_user_id      BIGINT NOT NULL,
     receiver_user_id    BIGINT NOT NULL,
     message             TEXT NOT NULL,
@@ -84,7 +96,7 @@ CREATE TABLE chats (
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     CONSTRAINT pk_chats PRIMARY KEY (id),
-    CONSTRAINT fk_chats_match_id FOREIGN KEY (match_id) REFERENCES matches (id),
+    CONSTRAINT fk_chats_room_id FOREIGN KEY (room_id) REFERENCES chat_rooms (id),
     CONSTRAINT fk_chats_sender_user_id FOREIGN KEY (sender_user_id) REFERENCES users (id),
     CONSTRAINT fk_chats_receiver_user_id FOREIGN KEY (receiver_user_id) REFERENCES users (id)
 );

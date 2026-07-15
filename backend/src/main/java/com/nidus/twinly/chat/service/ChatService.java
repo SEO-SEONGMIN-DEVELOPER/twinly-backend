@@ -4,9 +4,11 @@ import com.nidus.twinly.chat.domain.ChatMessageType;
 import com.nidus.twinly.chat.dto.command.ChatSendMessageCommand;
 import com.nidus.twinly.chat.dto.result.*;
 import com.nidus.twinly.chat.entity.Chat;
+import com.nidus.twinly.chat.entity.ChatRoom;
 import com.nidus.twinly.chat.entity.ChatRoomParticipation;
 import com.nidus.twinly.chat.repository.ChatRepository;
 import com.nidus.twinly.chat.repository.ChatRoomParticipationRepository;
+import com.nidus.twinly.chat.repository.ChatRoomRepository;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
 import com.nidus.twinly.common.photo.PhotoType;
 import com.nidus.twinly.common.websocket.dto.ChatMessageReceivedEvent;
@@ -49,6 +51,7 @@ public class ChatService {
     private final ObjectMapper objectMapper;
 
     private final UserRepository userRepository;
+    private final ChatRoomRepository chatRoomRepository;
     private final MatchRepository matchRepository;
     private final ChatRepository chatRepository;
     private final ChatRoomParticipationRepository chatRoomParticipationRepository;
@@ -58,17 +61,20 @@ public class ChatService {
     private final ChatSessionRegistry chatSessionRegistry;
 
     @Transactional
-    public ChatSendMessageResult sendMessage(Long userId, Long matchId, ChatSendMessageCommand command) {
+    public ChatSendMessageResult sendMessage(Long userId, Long roomId, ChatSendMessageCommand command) {
         if (command.text() == null || command.clientMsgId() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "요청 형식이 올바르지 않습니다");
         }
 
-        Match match = matchRepository.findById(matchId)
+        ChatRoom room = chatRoomRepository.findById(roomId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 채팅방입니다."));
+
+        Match match = matchRepository.findById(room.getMatchId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 매칭입니다."));
 
-        Long receiverUserId = resolveReceiverId(match, userId);
+        Long receiverUserId = resolvePartnerId(match, userId);
 
-        Chat chat = Chat.create(command.clientMsgId(), matchId, userId, receiverUserId, ChatMessageType.TEXT, command.text());
+        Chat chat = Chat.create(command.clientMsgId(), roomId, userId, receiverUserId, ChatMessageType.TEXT, command.text());
         chatRepository.save(chat);
 
         sendToReceiverUser(chat, receiverUserId);
@@ -76,7 +82,7 @@ public class ChatService {
         return new ChatSendMessageResult(chat.getId(), chat.getMessage(), chat.getSentAt(), command.clientMsgId());
     }
 
-    private Long resolveReceiverId(Match match, Long senderId) {
+    private Long resolvePartnerId(Match match, Long senderId) {
         if (match.getUserAId().equals(senderId)) {
             return match.getUserBId();
         }
@@ -108,83 +114,94 @@ public class ChatService {
     public ChatRoomsResult rooms(Long userId) {
         List<Match> matches = matchRepository.findAllByUserAIdOrUserBId(userId, userId);
         List<Long> matchIds = matches.stream().map(Match::getId).toList();
+        Map<Long, Match> matchById = matches.stream()
+                .collect(Collectors.toMap(Match::getId, Function.identity()));
 
-        List<ChatRoomParticipation> participations = chatRoomParticipationRepository.findAllByMatchIdIn(matchIds);
-        Map<Long, ChatRoomParticipation> myParticipationByMatchId = participationByMatchId(participations, userId, true);
-        Map<Long, ChatRoomParticipation> partnerParticipationByMatchId = participationByMatchId(participations, userId, false);
+        List<ChatRoom> rooms = chatRoomRepository.findAllByMatchIdIn(matchIds);
+        List<Long> roomIds = rooms.stream().map(ChatRoom::getId).toList();
 
-        List<Match> visibleMatches = filterVisibleMatches(matches, myParticipationByMatchId);
-        List<Long> visibleMatchIds = visibleMatches.stream().map(Match::getId).toList();
+        List<ChatRoomParticipation> participations = chatRoomParticipationRepository.findAllByRoomIdIn(roomIds);
+        Map<Long, ChatRoomParticipation> myParticipationByRoomId = participationByRoomId(participations, userId, true);
+        Map<Long, ChatRoomParticipation> partnerParticipationByRoomId = participationByRoomId(participations, userId, false);
 
-        List<Long> partnerIds = visibleMatches.stream().map(match -> partnerIdOf(match, userId)).toList();
+        List<ChatRoom> visibleRooms = filterVisibleRooms(rooms, myParticipationByRoomId);
+        List<Long> visibleRoomIds = visibleRooms.stream().map(ChatRoom::getId).toList();
+
+        List<Long> partnerIds = visibleRooms.stream().map(room -> resolvePartnerId(matchById.get(room.getMatchId()), userId)).toList();
 
         RoomsContext context = new RoomsContext(
+                matchById,
+
                 userRepository.findAllById(partnerIds).stream()
                         .collect(Collectors.toMap(User::getId, Function.identity())),
-                myParticipationByMatchId,
-                partnerParticipationByMatchId,
+
+                myParticipationByRoomId,
+
+                partnerParticipationByRoomId,
+
                 photoRepository.findAllByUserIdInAndType(partnerIds, PhotoType.PROFILE).stream()
                         .collect(Collectors.toMap(Photo::getUserId, Function.identity())),
+
                 relationshipRepository.findLatestByUserIdAndPartnerIdIn(userId, partnerIds).stream()
                         .collect(Collectors.toMap(Relationship::getPartnerId, Function.identity())),
-                chatRepository.findLatestByMatchIdIn(visibleMatchIds).stream()
-                        .collect(Collectors.toMap(Chat::getMatchId, Function.identity())),
-                chatRepository.countUnreadByMatchIdIn(userId, visibleMatchIds).stream()
-                        .collect(Collectors.toMap(ChatRepository.UnreadCountProjection::getMatchId, ChatRepository.UnreadCountProjection::getCount))
+
+                chatRepository.findLatestByRoomIdIn(visibleRoomIds).stream()
+                        .collect(Collectors.toMap(Chat::getRoomId, Function.identity())),
+
+                chatRepository.countUnreadByRoomIdIn(userId, visibleRoomIds).stream()
+                        .collect(Collectors.toMap(ChatRepository.UnreadCountProjection::getRoomId, ChatRepository.UnreadCountProjection::getCount))
         );
 
-        List<ChatRoomResult> rooms = visibleMatches.stream()
-                .map(match -> toChatRoomResult(match, userId, context))
+        List<ChatRoomResult> roomResults = visibleRooms.stream()
+                .map(room -> toChatRoomResult(room, userId, context))
                 .toList();
 
-        return new ChatRoomsResult(rooms);
+        return new ChatRoomsResult(roomResults);
     }
 
     private record RoomsContext(
+            Map<Long, Match> matchById,
             Map<Long, User> partnerById,
-            Map<Long, ChatRoomParticipation> myParticipationByMatchId,
-            Map<Long, ChatRoomParticipation> partnerParticipationByMatchId,
+            Map<Long, ChatRoomParticipation> myParticipationByRoomId,
+            Map<Long, ChatRoomParticipation> partnerParticipationByRoomId,
             Map<Long, Photo> partnerPhotoById,
             Map<Long, Relationship> relationshipByPartnerId,
-            Map<Long, Chat> lastChatByMatchId,
-            Map<Long, Long> unreadCountByMatchId
+            Map<Long, Chat> lastChatByRoomId,
+            Map<Long, Long> unreadCountByRoomId
     ) {
     }
 
-    private Map<Long, ChatRoomParticipation> participationByMatchId(List<ChatRoomParticipation> participations, Long userId, boolean mine) {
+    private Map<Long, ChatRoomParticipation> participationByRoomId(List<ChatRoomParticipation> participations, Long userId, boolean mine) {
         return participations.stream()
                 .filter(p -> mine == p.getUserId().equals(userId))
-                .collect(Collectors.toMap(ChatRoomParticipation::getMatchId, Function.identity()));
+                .collect(Collectors.toMap(ChatRoomParticipation::getRoomId, Function.identity()));
     }
 
-    private List<Match> filterVisibleMatches(List<Match> matches, Map<Long, ChatRoomParticipation> myParticipationByMatchId) {
-        return matches.stream()
-                .filter(match -> {
-                    ChatRoomParticipation mine = myParticipationByMatchId.get(match.getId());
+    private List<ChatRoom> filterVisibleRooms(List<ChatRoom> rooms, Map<Long, ChatRoomParticipation> myParticipationByRoomId) {
+        return rooms.stream()
+                .filter(room -> {
+                    ChatRoomParticipation mine = myParticipationByRoomId.get(room.getId());
                     return mine == null || (mine.getLeftAt() == null && !mine.getIsHidden());
                 })
                 .toList();
     }
 
-    private Long partnerIdOf(Match match, Long userId) {
-        return match.getUserAId().equals(userId) ? match.getUserBId() : match.getUserAId();
-    }
-
-    private ChatRoomResult toChatRoomResult(Match match, Long userId, RoomsContext context) {
-        Long partnerId = partnerIdOf(match, userId);
+    private ChatRoomResult toChatRoomResult(ChatRoom room, Long userId, RoomsContext context) {
+        Match match = context.matchById().get(room.getMatchId());
+        Long partnerId = resolvePartnerId(match, userId);
         User partner = context.partnerById().get(partnerId);
-        ChatRoomParticipation mine = context.myParticipationByMatchId().get(match.getId());
-        ChatRoomParticipation partnerParticipation = context.partnerParticipationByMatchId().get(match.getId());
+        ChatRoomParticipation myParticipation = context.myParticipationByRoomId().get(room.getId());
+        ChatRoomParticipation partnerParticipation = context.partnerParticipationByRoomId().get(room.getId());
         Photo partnerPhoto = context.partnerPhotoById().get(partnerId);
         Relationship relationship = context.relationshipByPartnerId().get(partnerId);
-        Chat lastChat = context.lastChatByMatchId().get(match.getId());
-        Long unreadCount = context.unreadCountByMatchId().getOrDefault(match.getId(), 0L);
+        Chat lastChat = context.lastChatByRoomId().get(room.getId());
+        Long unreadCount = context.unreadCountByRoomId().getOrDefault(room.getId(), 0L);
 
         return new ChatRoomResult(
-                match.getId(),
+                room.getId(),
                 match.getId(),
                 new ChatRoomEntryStatusResult(
-                        mine != null && mine.getEntryAgreedAt() != null,
+                        myParticipation != null && myParticipation.getEntryAgreedAt() != null,
                         partnerParticipation != null && partnerParticipation.getEntryAgreedAt() != null
                 ),
                 new ChatRoomPartnerResult(
@@ -199,6 +216,8 @@ public class ChatService {
                         unreadCount.intValue(),
                         lastChat != null ? new ChatRoomLastMessageResult(lastChat.getMessage(), lastChat.getSentAt()) : null
                 ),
+                room.getClosedAt(),
+                room.getCloseReason(),
                 match.getSeason().equals(currentSeason)
         );
     }

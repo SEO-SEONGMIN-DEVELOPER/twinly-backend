@@ -22,7 +22,7 @@ public class Chat {
 
     private String clientMsgId;
 
-    private Long matchId;
+    private Long roomId;
 
     private Long senderUserId;
 
@@ -40,11 +40,11 @@ public class Chat {
 
     private Instant createdAt;
 
-    public static Chat create(String clientMsgId, Long matchId, Long senderUserId, Long receiverUserId, ChatMessageType type, String message) {
+    public static Chat create(String clientMsgId, Long roomId, Long senderUserId, Long receiverUserId, ChatMessageType type, String message) {
         Chat chat = new Chat();
 
         chat.clientMsgId = clientMsgId;
-        chat.matchId = matchId;
+        chat.roomId = roomId;
         chat.senderUserId = senderUserId;
         chat.receiverUserId = receiverUserId;
         chat.type = type;

@@ -17,7 +17,7 @@ public class ChatRoomParticipation {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private Long matchId;
+    private Long roomId;
 
     private Long userId;
 
@@ -31,10 +31,10 @@ public class ChatRoomParticipation {
 
     private Instant createdAt;
 
-    public static ChatRoomParticipation create(Long matchId, Long userId) {
+    public static ChatRoomParticipation create(Long roomId, Long userId) {
         ChatRoomParticipation participation = new ChatRoomParticipation();
 
-        participation.matchId = matchId;
+        participation.roomId = roomId;
         participation.userId = userId;
         participation.isFavorite = false;
         participation.isHidden = false;

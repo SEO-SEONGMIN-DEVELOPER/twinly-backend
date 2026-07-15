@@ -13,24 +13,24 @@ public interface ChatRepository extends JpaRepository<Chat, Long> {
         SELECT c.*
         FROM chats c
         INNER JOIN (
-            SELECT match_id, MAX(sent_at) AS max_sent_at
+            SELECT room_id, MAX(sent_at) AS max_sent_at
             FROM chats
-            WHERE match_id IN (:matchIds)
-            GROUP BY match_id
-        ) latest ON c.match_id = latest.match_id AND c.sent_at = latest.max_sent_at
+            WHERE room_id IN (:roomIds)
+            GROUP BY room_id
+        ) latest ON c.room_id = latest.room_id AND c.sent_at = latest.max_sent_at
         """, nativeQuery = true)
-    List<Chat> findLatestByMatchIdIn(@Param("matchIds") List<Long> matchIds);
+    List<Chat> findLatestByRoomIdIn(@Param("roomIds") List<Long> roomIds);
 
     @Query(value = """
-            SELECT match_id AS matchId, COUNT(*) AS count
+            SELECT room_id AS roomId, COUNT(*) AS count
             FROM chats
-            WHERE receiver_user_id = :userId AND match_id IN (:matchIds) AND is_read = false
-            GROUP BY match_id
+            WHERE receiver_user_id = :userId AND room_id IN (:roomIds) AND is_read = false
+            GROUP BY room_id
             """, nativeQuery = true)
-    List<UnreadCountProjection> countUnreadByMatchIdIn(@Param("userId") Long userId, @Param("matchIds") List<Long> matchIds);
+    List<UnreadCountProjection> countUnreadByRoomIdIn(@Param("userId") Long userId, @Param("roomIds") List<Long> roomIds);
 
     interface UnreadCountProjection {
-        Long getMatchId();
+        Long getRoomId();
         Long getCount();
     }
 }

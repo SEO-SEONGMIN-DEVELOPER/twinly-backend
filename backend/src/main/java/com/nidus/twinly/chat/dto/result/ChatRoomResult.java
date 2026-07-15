@@ -1,5 +1,7 @@
 package com.nidus.twinly.chat.dto.result;
 
+import java.time.Instant;
+
 public record ChatRoomResult(
         Long roomId,
         Long matchId,
@@ -7,6 +9,8 @@ public record ChatRoomResult(
         ChatRoomPartnerResult partner,
         String preview,
         ChatRoomMessagesResult messages,
+        Instant closedAt,
+        String closeReason,
         Boolean isCurrentSeason
 ) {
 }
