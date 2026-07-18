@@ -3,7 +3,8 @@ ALTER TABLE users
     DROP COLUMN name,
     ADD COLUMN family_name TEXT NOT NULL,
     ADD COLUMN given_name   TEXT NOT NULL,
-    DROP COLUMN height;
+    DROP COLUMN height,
+    ADD COLUMN withdrawal_scheduled_at TIMESTAMPTZ;
 
 
 /* 암호화 컬럼의 속성을 TEXT로 변환 */

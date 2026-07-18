@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS btree_gist;
+
 CREATE TYPE GENDER AS ENUM (
     'MALE',
     'FEMALE'
@@ -32,6 +34,18 @@ CREATE TABLE questions (
     CONSTRAINT pk_questions PRIMARY KEY (id)
 );
 
+CREATE TABLE seasons (
+    id          BIGINT GENERATED ALWAYS AS IDENTITY,
+    started_at  TIMESTAMPTZ NOT NULL,
+    ended_at    TIMESTAMPTZ NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    CONSTRAINT pk_seasons PRIMARY KEY (id),
+    CONSTRAINT ex_seasons_no_overlap EXCLUDE USING gist (
+        tstzrange(started_at, ended_at) WITH &&
+    )
+);
+
 CREATE TABLE question_answers (
     id                  BIGINT GENERATED ALWAYS AS IDENTITY,
     question_id         BIGINT NOT NULL,
@@ -58,16 +72,30 @@ CREATE TABLE question_provisions (
     CONSTRAINT uk_question_provisions_user_id_question_id UNIQUE (user_id, question_id)
 );
 
+CREATE TABLE season_participations (
+    id                  BIGINT GENERATED ALWAYS AS IDENTITY,
+    user_id             BIGINT NOT NULL,
+    season_id           BIGINT NOT NULL,
+    participated_in_at  TIMESTAMPTZ NOT NULL,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    CONSTRAINT pk_season_participations PRIMARY KEY (id),
+    CONSTRAINT fk_season_participations_user_id FOREIGN KEY (user_id) REFERENCES users (id),
+    CONSTRAINT fk_season_participations_season_id FOREIGN KEY (season_id) REFERENCES seasons (id),
+    CONSTRAINT uk_season_participations_user_id_season_id UNIQUE (user_id, season_id)
+);
+
 CREATE TABLE matches (
     id          BIGINT GENERATED ALWAYS AS IDENTITY,
     user_a_id   BIGINT NOT NULL,
     user_b_id   BIGINT NOT NULL,
-    season      INTEGER NOT NULL,
+    season_id   BIGINT NOT NULL,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     CONSTRAINT pk_matches PRIMARY KEY (id),
     CONSTRAINT fk_matches_user_a_id FOREIGN KEY (user_a_id) REFERENCES users (id),
     CONSTRAINT fk_matches_user_b_id FOREIGN KEY (user_b_id) REFERENCES users (id),
+    CONSTRAINT fk_matches_season_id FOREIGN KEY (season_id) REFERENCES seasons (id),
     CONSTRAINT uk_matches_user_a_id_user_b_id UNIQUE (user_a_id, user_b_id),
     CONSTRAINT ck_matches_user_order CHECK(user_a_id < user_b_id)
 );

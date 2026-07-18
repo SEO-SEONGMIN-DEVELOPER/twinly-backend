@@ -1,5 +1,9 @@
 app:
-  current-season: 1
+  current-season-id: 1
+
+logging:
+  file:
+    name: logs/app.log
 
 spring:
   config:

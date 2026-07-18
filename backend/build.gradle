@@ -15,6 +15,9 @@ dependencies {
     // General
     implementation 'org.springframework.boot:spring-boot-starter'
 
+    // Validation
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
     // Web
     implementation 'org.springframework.boot:spring-boot-starter-web'
 
