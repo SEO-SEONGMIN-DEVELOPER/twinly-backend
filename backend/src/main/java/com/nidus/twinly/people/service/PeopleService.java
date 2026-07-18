@@ -1,15 +1,14 @@
 package com.nidus.twinly.people.service;
 
 import com.nidus.twinly.activity.repository.ScenePartnerRepository;
+import com.nidus.twinly.block.repository.BlockRepository;
 import com.nidus.twinly.chat.entity.ChatRoom;
 import com.nidus.twinly.chat.repository.ChatRoomRepository;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
 import com.nidus.twinly.common.photo.PhotoType;
 import com.nidus.twinly.match.entity.Match;
 import com.nidus.twinly.match.repository.MatchRepository;
-import com.nidus.twinly.people.dto.result.PeopleItemResult;
-import com.nidus.twinly.people.dto.result.PeoplePageResult;
-import com.nidus.twinly.people.dto.result.PeopleResult;
+import com.nidus.twinly.people.dto.result.*;
 import com.nidus.twinly.people.entity.Encounter;
 import com.nidus.twinly.people.entity.EncounterPreference;
 import com.nidus.twinly.people.repository.EncounterPreferenceRepository;
@@ -18,16 +17,21 @@ import com.nidus.twinly.relationship.domain.RelationshipSpecificType;
 import com.nidus.twinly.relationship.domain.RelationshipType;
 import com.nidus.twinly.relationship.entity.Relationship;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
+import com.nidus.twinly.user.domain.DisclosureField;
+import com.nidus.twinly.user.entity.DisclosureAgreement;
 import com.nidus.twinly.user.entity.Photo;
 import com.nidus.twinly.user.entity.User;
+import com.nidus.twinly.user.repository.DisclosureAgreementRepository;
 import com.nidus.twinly.user.repository.PhotoRepository;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -45,10 +49,11 @@ public class PeopleService {
     private final ScenePartnerRepository scenePartnerRepository;
     private final EncounterRepository encounterRepository;
     private final EncounterPreferenceRepository encounterPreferenceRepository;
+    private final DisclosureAgreementRepository disclosureAgreementRepository;
+    private final BlockRepository blockRepository;
 
     private final CloudFrontService cloudFrontService;
 
-    @Transactional(readOnly = true)
     public PeopleResult people(Long userId, Long cursor, Integer limit) {
         int effectiveLimit = (limit != null && limit > 0) ? limit : DEFAULT_LIMIT;
 
@@ -117,6 +122,50 @@ public class PeopleService {
         Long nextCursor = hasMore ? partnerUserIds.get(partnerUserIds.size() - 1) : null;
 
         return new PeopleResult(people, new PeoplePageResult(nextCursor, hasMore));
+    }
+
+    public PeopleProfileResult profile(Long userId, Long partnerUserId) {
+        User partner = userRepository.findById(partnerUserId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 유저입니다."));
+
+        int intimacy = relationshipRepository.findLatestByUserIdAndPartnerUserId(userId, partnerUserId)
+                .map(Relationship::getIntimacy)
+                .orElse(0);
+
+        boolean isFavorited = encounterRepository.findByUserAIdAndUserBId(Math.min(userId, partnerUserId), Math.max(userId, partnerUserId))
+                .flatMap(encounter -> encounterPreferenceRepository.findByEncounterIdAndUserId(encounter.getId(), userId))
+                .map(EncounterPreference::getIsFavorited)
+                .orElse(false);
+
+        boolean isBlocked = blockRepository.existsByUserIdAndBlockedUserId(userId, partnerUserId);
+
+        String profilePhotoUrl = photoRepository.findByUserIdAndType(partnerUserId, PhotoType.PROFILE)
+                .map(photo -> cloudFrontService.getSignedUrl(photo.getKey()))
+                .orElse(null);
+
+        Set<DisclosureField> disclosedFields = disclosureAgreementRepository.findAllByUserId(partnerUserId).stream()
+                .map(DisclosureAgreement::getField)
+                .collect(Collectors.toSet());
+
+        PeopleProfileDisclosedFieldsResult disclosed = new PeopleProfileDisclosedFieldsResult(
+                disclosedFields.contains(DisclosureField.AFFILIATION) ? partner.getAffiliation() : null,
+                disclosedFields.contains(DisclosureField.BIRTH_DATE) ? partner.getBirthDate() : null
+        );
+
+        return new PeopleProfileResult(
+                partnerUserId,
+                partner.getFamilyName() + partner.getGivenName(),
+                profilePhotoUrl,
+                partner.getAvatarPaletteColor(),
+                intimacy,
+                RelationshipType.fromIntimacy(intimacy),
+                RelationshipSpecificType.fromIntimacy(intimacy),
+                isFavorited,
+                false,
+                disclosed,
+                partner.getDeletedAt() != null,
+                isBlocked
+        );
     }
 
     private Long partnerUserIdOf(Long userAId, Long userBId, Long userId) {

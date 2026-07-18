@@ -1,11 +1,13 @@
 package com.nidus.twinly.people.controller;
 
+import com.nidus.twinly.people.dto.response.PeopleProfileResponse;
 import com.nidus.twinly.people.dto.response.PeopleResponse;
 import com.nidus.twinly.people.service.PeopleService;
 import com.nidus.twinly.user.annotation.CurrentUser;
 import com.nidus.twinly.user.dto.header.UserInfo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -20,5 +22,11 @@ public class PeopleController {
                                     @RequestParam(required = false) Long cursor,
                                     @RequestParam(required = false) Integer limit) {
         return PeopleResponse.from(peopleService.people(userInfo.id(), cursor, limit));
+    }
+
+    @GetMapping("/api/v1/people/{userId}/profile")
+    public PeopleProfileResponse profile(@CurrentUser UserInfo userInfo,
+                                         @PathVariable("userId") Long partnerUserId) {
+        return PeopleProfileResponse.from(peopleService.profile(userInfo.id(), partnerUserId));
     }
 }

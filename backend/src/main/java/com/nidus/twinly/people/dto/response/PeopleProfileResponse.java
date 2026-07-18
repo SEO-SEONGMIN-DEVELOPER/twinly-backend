@@ -1,0 +1,39 @@
+package com.nidus.twinly.people.dto.response;
+
+import com.nidus.twinly.people.dto.result.PeopleProfileResult;
+import com.nidus.twinly.relationship.domain.RelationshipSpecificType;
+import com.nidus.twinly.relationship.domain.RelationshipType;
+import com.nidus.twinly.user.domain.AvatarPaletteColor;
+
+public record PeopleProfileResponse(
+        Long userId,
+        String userName,
+        String profilePhotoUrl,
+        AvatarPaletteColor avatarPaletteColor,
+        Integer intimacy,
+        RelationshipType relationshipType,
+        RelationshipSpecificType relationshipSpecificType,
+        Boolean isFavorited,
+        Boolean isHighlighted,
+        PeopleProfileDisclosedFieldsResponse disclosedFields,
+        Boolean isDeleted,
+        Boolean isBlocked
+) {
+
+    public static PeopleProfileResponse from(PeopleProfileResult result) {
+        return new PeopleProfileResponse(
+                result.userId(),
+                result.userName(),
+                result.profilePhotoUrl(),
+                result.avatarPaletteColor(),
+                result.intimacy(),
+                result.relationshipType(),
+                result.relationshipSpecificType(),
+                result.isFavorited(),
+                result.isHighlighted(),
+                result.disclosedFields() != null ? PeopleProfileDisclosedFieldsResponse.from(result.disclosedFields()) : null,
+                result.isDeleted(),
+                result.isBlocked()
+        );
+    }
+}
