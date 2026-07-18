@@ -1,5 +1,6 @@
 package com.nidus.twinly.common.jwt;
 
+import com.nidus.twinly.auth.dto.result.AuthTokenResult;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
@@ -22,6 +23,13 @@ public class JwtService {
 
     public JwtService(JwtProperties properties) {
         this.key = Keys.hmacShaKeyFor(Base64.getDecoder().decode(properties.secretKey()));
+    }
+
+    public AuthTokenResult generateAuthTokenResult(Long userId) {
+        Jwt accessToken = generateAccessToken(userId);
+        Jwt refreshToken = generateAccessToken(userId);
+
+        return new AuthTokenResult(accessToken.value(), accessToken.expiresAt(), refreshToken.value(), refreshToken.expiresAt());
     }
 
     public Jwt generateAccessToken(Long userId) {
