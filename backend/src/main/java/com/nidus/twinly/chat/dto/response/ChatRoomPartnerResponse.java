@@ -6,11 +6,11 @@ public record ChatRoomPartnerResponse(
         Long userId,
         String userName,
         String profilePhotoUrl,
-        Integer rapport,
+        Integer intimacy,
         Boolean isDeleted
 ) {
 
     public static ChatRoomPartnerResponse from(ChatRoomPartnerResult result) {
-        return new ChatRoomPartnerResponse(result.userId(), result.userName(), result.profilePhotoUrl(), result.rapport(), result.isDeleted());
+        return new ChatRoomPartnerResponse(result.userId(), result.userName(), result.profilePhotoUrl(), result.intimacy(), result.isDeleted());
     }
 }

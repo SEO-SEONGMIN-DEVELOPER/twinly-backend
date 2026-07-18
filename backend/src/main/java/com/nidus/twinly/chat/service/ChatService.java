@@ -51,8 +51,8 @@ public class ChatService {
 
     private static final int DEFAULT_MESSAGES_LIMIT = 20;
 
-    @Value("${app.current-season}")
-    private Integer currentSeason;
+    @Value("${app.current-season-id}")
+    private Long currentSeasonId;
 
     private final CloudFrontService cloudFrontService;
 
@@ -151,8 +151,8 @@ public class ChatService {
                 photoRepository.findAllByUserIdInAndType(partnerIds, PhotoType.PROFILE).stream()
                         .collect(Collectors.toMap(Photo::getUserId, Function.identity())),
 
-                relationshipRepository.findLatestByUserIdAndPartnerIdIn(userId, partnerIds).stream()
-                        .collect(Collectors.toMap(Relationship::getPartnerId, Function.identity())),
+                relationshipRepository.findLatestByUserIdAndPartnerUserIdIn(userId, partnerIds).stream()
+                        .collect(Collectors.toMap(Relationship::getPartnerUserId, Function.identity())),
 
                 chatRepository.findLatestByRoomIdIn(visibleRoomIds).stream()
                         .collect(Collectors.toMap(Chat::getRoomId, Function.identity())),
@@ -217,7 +217,7 @@ public class ChatService {
                         partner.getId(),
                         partner.getNickname(),
                         partnerPhoto != null ? cloudFrontService.getSignedUrl(partnerPhoto.getKey()) : null,
-                        relationship != null ? relationship.getRapport() : 0,
+                        relationship != null ? relationship.getIntimacy() : 0,
                         partner.getDeletedAt() != null
                 ),
                 lastChat != null ? lastChat.getMessage() : null,
@@ -227,7 +227,7 @@ public class ChatService {
                 ),
                 room.getClosedAt(),
                 room.getCloseReason(),
-                match.getSeason().equals(currentSeason)
+                match.getSeasonId().equals(currentSeasonId)
         );
     }
 
@@ -250,8 +250,8 @@ public class ChatService {
         Photo partnerPhoto = photoRepository.findByUserIdAndType(partnerId, PhotoType.PROFILE)
                 .orElse(null);
 
-        Integer rapport = relationshipRepository.findLatestByUserIdAndPartnerId(userId, partnerId)
-                .map(Relationship::getRapport)
+        Integer intimacy = relationshipRepository.findLatestByUserIdAndPartnerUserId(userId, partnerId)
+                .map(Relationship::getIntimacy)
                 .orElse(0);
 
         Set<DisclosureField> agreedFields = disclosureAgreementRepository.findAllByUserId(partnerId).stream()
@@ -269,8 +269,8 @@ public class ChatService {
                         partner.getId(),
                         partner.getNickname(),
                         partnerPhoto != null ? cloudFrontService.getSignedUrl(partnerPhoto.getKey()) : null,
-                        rapport,
-                        RelationshipSpecificType.fromRapport(rapport),
+                        intimacy,
+                        RelationshipSpecificType.fromIntimacy(intimacy),
                         new ChatRoomDetailDisclosedFieldsResult(
                                 agreedFields.contains(DisclosureField.AFFILIATION) ? partner.getAffiliation() : null,
                                 agreedFields.contains(DisclosureField.BIRTH_DATE) ? partner.getBirthDate() : null
@@ -278,7 +278,7 @@ public class ChatService {
                 ),
                 room.getClosedAt(),
                 room.getCloseReason(),
-                match.getSeason().equals(currentSeason)
+                match.getSeasonId().equals(currentSeasonId)
         );
     }
 

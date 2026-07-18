@@ -6,7 +6,7 @@ public record ChatRoomDetailPartnerResult(
         Long userId,
         String userName,
         String profilePhotoUrl,
-        Integer rapport,
+        Integer intimacy,
         RelationshipSpecificType relationshipSpecificType,
         ChatRoomDetailDisclosedFieldsResult disclosedFields
 ) {

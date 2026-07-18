@@ -1,8 +1,10 @@
 package com.nidus.twinly.chat.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.nidus.twinly.chat.dto.result.ChatMessagesPageResult;
 
 public record ChatMessagesPageResponse(
+        @JsonFormat(shape = JsonFormat.Shape.STRING)
         Long nextCursor,
         Boolean hasMore
 ) {

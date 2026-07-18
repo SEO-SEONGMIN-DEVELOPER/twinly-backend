@@ -7,7 +7,7 @@ public record ChatRoomDetailPartnerResponse(
         Long userId,
         String userName,
         String profilePhotoUrl,
-        Integer rapport,
+        Integer intimacy,
         RelationshipSpecificType relationshipSpecificType,
         ChatRoomDetailDisclosedFieldsResponse disclosedFields
 ) {
@@ -17,7 +17,7 @@ public record ChatRoomDetailPartnerResponse(
                 result.userId(),
                 result.userName(),
                 result.profilePhotoUrl(),
-                result.rapport(),
+                result.intimacy(),
                 result.relationshipSpecificType(),
                 ChatRoomDetailDisclosedFieldsResponse.from(result.disclosedFields())
         );

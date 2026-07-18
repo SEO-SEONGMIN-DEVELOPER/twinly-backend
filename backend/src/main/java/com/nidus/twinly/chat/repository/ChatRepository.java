@@ -55,4 +55,12 @@ public interface ChatRepository extends JpaRepository<Chat, Long> {
           AND is_read = false
         """, nativeQuery = true)
     int markAsRead(@Param("roomId") Long roomId, @Param("userId") Long userId, @Param("lastMessageId") Long lastMessageId);
+
+    @Query(value = """
+        SELECT COUNT(DISTINCT room_id) 
+        FROM chats 
+        WHERE receiver_user_id = :userId 
+            AND is_read = false
+        """, nativeQuery = true)
+    int countUnreadRoomsByUserId(@Param("userId") Long userId);
 }

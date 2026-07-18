@@ -4,7 +4,7 @@ public record ChatRoomPartnerResult(
         Long userId,
         String userName,
         String profilePhotoUrl,
-        Integer rapport,
+        Integer intimacy,
         Boolean isDeleted
 ) {
 }
