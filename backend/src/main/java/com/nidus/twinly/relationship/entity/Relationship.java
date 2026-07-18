@@ -1,5 +1,6 @@
 package com.nidus.twinly.relationship.entity;
 
+import org.hibernate.annotations.DynamicUpdate;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -9,6 +10,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 
 @Entity
+@DynamicUpdate
 @Table(name = "relationships")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -22,9 +24,9 @@ public class Relationship {
 
     private LocalDate date;
 
-    private Long partnerId;
+    private Long partnerUserId;
 
-    private Integer rapport;
+    private Integer intimacy;
 
     private String partnerModel;
 

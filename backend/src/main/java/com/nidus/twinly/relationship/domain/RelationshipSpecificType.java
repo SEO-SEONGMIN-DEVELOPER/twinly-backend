@@ -5,10 +5,10 @@ public enum RelationshipSpecificType {
     RELATIONSHIP_SPECIFIC_TYPE_2,
     RELATIONSHIP_SPECIFIC_TYPE_3;
 
-    public static RelationshipSpecificType fromRapport(int rapport) {
-        if (rapport < 30) {
+    public static RelationshipSpecificType fromIntimacy(int intimacy) {
+        if (intimacy < 30) {
             return RELATIONSHIP_SPECIFIC_TYPE_1;
-        } else if (rapport < 70) {
+        } else if (intimacy < 70) {
             return RELATIONSHIP_SPECIFIC_TYPE_2;
         } else {
             return RELATIONSHIP_SPECIFIC_TYPE_3;
