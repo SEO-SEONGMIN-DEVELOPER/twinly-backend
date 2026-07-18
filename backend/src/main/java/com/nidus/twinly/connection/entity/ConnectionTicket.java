@@ -1,5 +1,6 @@
 package com.nidus.twinly.connection.entity;
 
+import org.hibernate.annotations.DynamicUpdate;
 import com.nidus.twinly.connection.domain.ConnectionType;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -12,6 +13,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
+@DynamicUpdate
 @Table(name = "connection_tickets")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

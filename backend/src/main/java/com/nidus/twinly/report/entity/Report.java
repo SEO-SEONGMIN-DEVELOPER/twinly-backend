@@ -1,5 +1,6 @@
 package com.nidus.twinly.report.entity;
 
+import org.hibernate.annotations.DynamicUpdate;
 import com.nidus.twinly.report.domain.ReportReason;
 import com.nidus.twinly.report.domain.ReportStatus;
 import jakarta.persistence.*;
@@ -12,6 +13,7 @@ import org.hibernate.type.SqlTypes;
 import java.time.Instant;
 
 @Entity
+@DynamicUpdate
 @Table(name = "reports")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

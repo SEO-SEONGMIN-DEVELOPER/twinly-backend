@@ -1,5 +1,6 @@
 package com.nidus.twinly.device.entity;
 
+import org.hibernate.annotations.DynamicUpdate;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -9,6 +10,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
+@DynamicUpdate
 @Table(name = "devices")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

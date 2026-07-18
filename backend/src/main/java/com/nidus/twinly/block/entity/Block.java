@@ -1,5 +1,6 @@
 package com.nidus.twinly.block.entity;
 
+import org.hibernate.annotations.DynamicUpdate;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -8,6 +9,7 @@ import lombok.NoArgsConstructor;
 import java.time.Instant;
 
 @Entity
+@DynamicUpdate
 @Table(name = "blocks")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

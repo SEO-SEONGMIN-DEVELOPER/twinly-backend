@@ -1,5 +1,6 @@
 package com.nidus.twinly.match.entity;
 
+import org.hibernate.annotations.DynamicUpdate;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -8,6 +9,7 @@ import lombok.NoArgsConstructor;
 import java.time.Instant;
 
 @Entity
+@DynamicUpdate
 @Table(name = "matches")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -23,7 +25,7 @@ public class Match {
     @Column(name = "user_b_id")
     private Long userBId;
 
-    private Integer season;
+    private Long seasonId;
 
     private Instant createdAt;
 }
