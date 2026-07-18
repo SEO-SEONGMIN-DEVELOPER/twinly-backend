@@ -4,7 +4,8 @@ import jakarta.validation.constraints.NotNull;
 
 import java.util.UUID;
 
-public record AuthLoginRequest(
-        @NotNull UUID smsVerifiedToken
+public record VerifiedTokenRequest(
+        @NotNull UUID smsVerifiedToken,
+        @NotNull UUID emailVerifiedToken
 ) {
 }

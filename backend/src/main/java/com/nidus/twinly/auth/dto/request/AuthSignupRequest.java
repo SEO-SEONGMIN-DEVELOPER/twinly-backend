@@ -1,8 +1,9 @@
 package com.nidus.twinly.auth.dto.request;
 
-import com.nidus.twinly.auth.domain.VerifiedToken;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 
 public record AuthSignupRequest(
-        VerifiedToken verifiedToken
+        @NotNull @Valid VerifiedTokenRequest verifiedToken
 ) {
 }
