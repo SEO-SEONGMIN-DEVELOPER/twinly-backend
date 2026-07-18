@@ -2,7 +2,7 @@ package com.nidus.twinly.onboarding.controller;
 
 import com.nidus.twinly.aichat.service.AiChatService;
 import com.nidus.twinly.anon.annotation.CurrentAnonSession;
-import com.nidus.twinly.anon.dto.header.AnonSessionInfo;
+import com.nidus.twinly.anon.dto.snapshot.AnonSessionSnapshot;
 import com.nidus.twinly.onboarding.dto.command.*;
 import com.nidus.twinly.onboarding.dto.request.*;
 import com.nidus.twinly.onboarding.dto.response.OnboardingAiChatMessageResponse;
@@ -29,9 +29,9 @@ public class OnboardingController {
     private final AiChatService aiChatService;
 
     @PostMapping("/api/v1/onboarding/basic-info")
-    public void basicInfo(@CurrentAnonSession AnonSessionInfo anonSessionInfo,
+    public void basicInfo(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
                           @RequestBody OnboardingBasicInfoRequest request) {
-        onboardingService.basicInfo(anonSessionInfo.id(), OnboardingBasicInfoCommand.from(request));
+        onboardingService.basicInfo(anonSessionSnapshot, OnboardingBasicInfoCommand.from(request));
     }
 
     @GetMapping("/api/v1/onboarding/survey-questions")
@@ -42,49 +42,49 @@ public class OnboardingController {
     }
 
     @PostMapping("/api/v1/onboarding/survey-answer")
-    public void surveyAnswer(@CurrentAnonSession AnonSessionInfo anonSessionInfo,
+    public void surveyAnswer(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
                               @RequestBody OnboardingSurveyAnswerRequest request) {
-        onboardingService.surveyAnswer(anonSessionInfo.id(), OnboardingSurveyAnswerCommand.from(request));
+        onboardingService.surveyAnswer(anonSessionSnapshot, OnboardingSurveyAnswerCommand.from(request));
     }
 
     @PostMapping("/api/v1/onboarding/interests")
-    public void interests(@CurrentAnonSession AnonSessionInfo anonSessionInfo,
+    public void interests(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
                            @RequestBody OnboardingInterestsRequest request) {
-        onboardingService.interests(anonSessionInfo.id(), OnboardingInterestsCommand.from(request));
+        onboardingService.interests(anonSessionSnapshot, OnboardingInterestsCommand.from(request));
     }
 
     @PostMapping("/api/v1/onboarding/profile/photo/presign")
-    public OnboardingProfilePhotoPresignResponse profilePhotoPresign(@CurrentAnonSession AnonSessionInfo anonSessionInfo,
+    public OnboardingProfilePhotoPresignResponse profilePhotoPresign(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
                                                                      @RequestBody OnboardingProfilePhotoPresignRequest request) {
-        return OnboardingProfilePhotoPresignResponse.from(onboardingService.profilePhotoPresign(anonSessionInfo.id(), OnboardingProfilePhotoPresignCommand.from(request)));
+        return OnboardingProfilePhotoPresignResponse.from(onboardingService.profilePhotoPresign(anonSessionSnapshot, OnboardingProfilePhotoPresignCommand.from(request)));
     }
 
     @PostMapping("/api/v1/onboarding/profile/photo/commit")
-    public OnboardingProfilePhotoCommitResponse profilePhotoCommit(@CurrentAnonSession AnonSessionInfo anonSessionInfo,
+    public OnboardingProfilePhotoCommitResponse profilePhotoCommit(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
                                                                    @RequestBody OnboardingProfilePhotoCommitRequest request) {
-        return OnboardingProfilePhotoCommitResponse.from(onboardingService.profilePhotoCommit(anonSessionInfo.id(), OnboardingProfilePhotoCommitCommand.from(request)));
+        return OnboardingProfilePhotoCommitResponse.from(onboardingService.profilePhotoCommit(anonSessionSnapshot, OnboardingProfilePhotoCommitCommand.from(request)));
     }
 
     @PostMapping("/api/v1/onboarding/profile/nickname/check")
-    public OnboardingProfileNicknameCheckResponse profileNicknameCheck(@CurrentAnonSession AnonSessionInfo anonSessionInfo,
+    public OnboardingProfileNicknameCheckResponse profileNicknameCheck(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
                                                                        @RequestBody OnboardingProfileNicknameCheckRequest request) {
-        return OnboardingProfileNicknameCheckResponse.from(onboardingService.profileNicknameCheck(anonSessionInfo.id(), OnboardingProfileNicknameCheckCommand.from(request)));
+        return OnboardingProfileNicknameCheckResponse.from(onboardingService.profileNicknameCheck(anonSessionSnapshot, OnboardingProfileNicknameCheckCommand.from(request)));
     }
 
     @PostMapping("/api/v1/onboarding/profile/nickname")
-    public void profileNickname(@CurrentAnonSession AnonSessionInfo anonSessionInfo,
+    public void profileNickname(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
                                  @RequestBody OnboardingProfileNicknameRequest request) {
-        onboardingService.profileNickname(anonSessionInfo.id(), OnboardingProfileNicknameCommand.from(request));
+        onboardingService.profileNickname(anonSessionSnapshot, OnboardingProfileNicknameCommand.from(request));
     }
 
     @PostMapping("/api/v1/onboarding/ai-chat/start")
-    public OnboardingAiChatStartResponse aiChatStart(@CurrentAnonSession AnonSessionInfo anonSessionInfo) {
-        return OnboardingAiChatStartResponse.from(aiChatService.aiChatStart(anonSessionInfo.id()));
+    public OnboardingAiChatStartResponse aiChatStart(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot) {
+        return OnboardingAiChatStartResponse.from(aiChatService.aiChatStart(anonSessionSnapshot));
     }
 
     @PostMapping("/api/v1/onboarding/ai-chat/message")
-    public OnboardingAiChatMessageResponse aiChatMessage(@CurrentAnonSession AnonSessionInfo anonSessionInfo,
+    public OnboardingAiChatMessageResponse aiChatMessage(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
                                                          @RequestBody OnboardingAiChatMessageRequest request) {
-        return OnboardingAiChatMessageResponse.from(aiChatService.aiChatMessage(anonSessionInfo.id(), OnboardingAiChatMessageCommand.from(request)));
+        return OnboardingAiChatMessageResponse.from(aiChatService.aiChatMessage(anonSessionSnapshot, OnboardingAiChatMessageCommand.from(request)));
     }
 }

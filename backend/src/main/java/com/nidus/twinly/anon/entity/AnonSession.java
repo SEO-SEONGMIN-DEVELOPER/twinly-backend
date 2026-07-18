@@ -1,5 +1,6 @@
 package com.nidus.twinly.anon.entity;
 
+import org.hibernate.annotations.DynamicUpdate;
 import com.nidus.twinly.common.crypto.EncryptedStringConverter;
 import com.nidus.twinly.common.domain.Gender;
 import jakarta.persistence.*;
@@ -13,6 +14,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
+@DynamicUpdate
 @Table(name = "anon_sessions")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

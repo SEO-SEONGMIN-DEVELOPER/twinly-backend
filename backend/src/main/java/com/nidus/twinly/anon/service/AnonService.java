@@ -1,7 +1,7 @@
 package com.nidus.twinly.anon.service;
 
-import com.nidus.twinly.anon.dto.header.AnonSessionInfo;
 import com.nidus.twinly.anon.dto.result.AnonStartResult;
+import com.nidus.twinly.anon.dto.snapshot.AnonSessionSnapshot;
 import com.nidus.twinly.anon.entity.AnonSession;
 import com.nidus.twinly.anon.repository.AnonSessionRepository;
 import lombok.RequiredArgsConstructor;
@@ -31,7 +31,7 @@ public class AnonService {
         return new AnonStartResult(token, expiresAt);
     }
 
-    public AnonSessionInfo resolveByToken(UUID token) {
+    public AnonSessionSnapshot resolveByToken(UUID token) {
         AnonSession anonSession = anonSessionRepository.findByToken(token)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "유효하지 않은 세션 토큰입니다"));
 
@@ -39,6 +39,6 @@ public class AnonService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "만료된 토큰입니다");
         }
 
-        return new AnonSessionInfo(anonSession.getId());
+        return AnonSessionSnapshot.from(anonSession);
     }
 }

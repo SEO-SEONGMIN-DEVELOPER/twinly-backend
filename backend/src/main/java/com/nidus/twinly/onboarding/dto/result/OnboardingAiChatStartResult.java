@@ -1,7 +1,7 @@
 package com.nidus.twinly.onboarding.dto.result;
 
 public record OnboardingAiChatStartResult(
-        String reply,
+        String message,
         Integer turnIndex,
         Boolean isEnd
 ) {

@@ -1,5 +1,6 @@
 package com.nidus.twinly.anon.entity;
 
+import org.hibernate.annotations.DynamicUpdate;
 import com.nidus.twinly.common.photo.PhotoType;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -11,6 +12,7 @@ import org.hibernate.type.SqlTypes;
 import java.time.Instant;
 
 @Entity
+@DynamicUpdate
 @Table(name = "anon_session_photos")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

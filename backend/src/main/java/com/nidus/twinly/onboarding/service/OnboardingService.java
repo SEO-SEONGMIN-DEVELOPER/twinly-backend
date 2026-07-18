@@ -1,5 +1,6 @@
 package com.nidus.twinly.onboarding.service;
 
+import com.nidus.twinly.anon.dto.snapshot.AnonSessionSnapshot;
 import com.nidus.twinly.anon.entity.AnonSession;
 import com.nidus.twinly.anon.entity.AnonSessionPersonaElement;
 import com.nidus.twinly.anon.entity.AnonSessionPhoto;
@@ -60,7 +61,8 @@ public class OnboardingService {
 
 
     @Transactional
-    public void basicInfo(Long anonSessionId, OnboardingBasicInfoCommand command) {
+    public void basicInfo(AnonSessionSnapshot anonSessionSnapshot, OnboardingBasicInfoCommand command) {
+        Long anonSessionId = anonSessionSnapshot.id();
         AnonSession anonSession = anonSessionRepository.findById(anonSessionId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "유효하지 않은 세션입니다"));
 
@@ -92,7 +94,8 @@ public class OnboardingService {
     }
 
     @Transactional
-    public void surveyAnswer(Long anonSessionId, OnboardingSurveyAnswerCommand command) {
+    public void surveyAnswer(AnonSessionSnapshot anonSessionSnapshot, OnboardingSurveyAnswerCommand command) {
+        Long anonSessionId = anonSessionSnapshot.id();
         if (command.answer() == null || command.answer().qId() == null || command.answer().optionName() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "요청 형식이 올바르지 않습니다");
         }
@@ -129,7 +132,8 @@ public class OnboardingService {
     }
 
     @Transactional
-    public void interests(Long anonSessionId, OnboardingInterestsCommand command) {
+    public void interests(AnonSessionSnapshot anonSessionSnapshot, OnboardingInterestsCommand command) {
+        Long anonSessionId = anonSessionSnapshot.id();
         if (command.interests() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "요청 형식이 올바르지 않습니다.");
         }
@@ -139,14 +143,16 @@ public class OnboardingService {
         }
     }
 
-    public OnboardingProfilePhotoPresignResult profilePhotoPresign(Long anonSessionId, OnboardingProfilePhotoPresignCommand command) {
+    public OnboardingProfilePhotoPresignResult profilePhotoPresign(AnonSessionSnapshot anonSessionSnapshot, OnboardingProfilePhotoPresignCommand command) {
+        Long anonSessionId = anonSessionSnapshot.id();
         PhotoPresignResult presign = presignService.presignPhoto(anonSessionId, command.contentType(), PhotoType.PROFILE);
 
         return new OnboardingProfilePhotoPresignResult(presign.uploadUrl(), presign.key(), presign.method(), presign.requiredHeaders(), presign.maxBytes(), presign.expiresAt());
     }
 
     @Transactional
-    public OnboardingProfilePhotoCommitResult profilePhotoCommit(Long anonSessionId, OnboardingProfilePhotoCommitCommand command) {
+    public OnboardingProfilePhotoCommitResult profilePhotoCommit(AnonSessionSnapshot anonSessionSnapshot, OnboardingProfilePhotoCommitCommand command) {
+        Long anonSessionId = anonSessionSnapshot.id();
         if (command.key() == null || command.position() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "요청 형식이 올바르지 않습니다.");
         }
@@ -165,7 +171,7 @@ public class OnboardingService {
         return new OnboardingProfilePhotoCommitResult(photoUrl, position);
     }
 
-    public OnboardingProfileNicknameCheckResult profileNicknameCheck(Long anonSessionId, OnboardingProfileNicknameCheckCommand command) {
+    public OnboardingProfileNicknameCheckResult profileNicknameCheck(AnonSessionSnapshot anonSessionSnapshot, OnboardingProfileNicknameCheckCommand command) {
         String nickname = validateAndNormalizeNickname(command.nickname());
 
         boolean isAvailable = !userRepository.existsByNickname(nickname)
@@ -175,7 +181,8 @@ public class OnboardingService {
     }
 
     @Transactional
-    public void profileNickname(Long anonSessionId, OnboardingProfileNicknameCommand command) {
+    public void profileNickname(AnonSessionSnapshot anonSessionSnapshot, OnboardingProfileNicknameCommand command) {
+        Long anonSessionId = anonSessionSnapshot.id();
         String nickname = validateAndNormalizeNickname(command.nickname());
 
         if (userRepository.existsByNickname(nickname)

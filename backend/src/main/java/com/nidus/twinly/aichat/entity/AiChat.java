@@ -1,5 +1,6 @@
 package com.nidus.twinly.aichat.entity;
 
+import org.hibernate.annotations.DynamicUpdate;
 import com.nidus.twinly.aichat.domain.AiChatSender;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -11,6 +12,7 @@ import org.hibernate.type.SqlTypes;
 import java.time.Instant;
 
 @Entity
+@DynamicUpdate
 @Table(name = "ai_chats")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

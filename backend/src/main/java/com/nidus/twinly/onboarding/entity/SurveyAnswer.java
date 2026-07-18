@@ -1,5 +1,6 @@
 package com.nidus.twinly.onboarding.entity;
 
+import org.hibernate.annotations.DynamicUpdate;
 import com.nidus.twinly.common.survey.SurveyOptionName;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -11,6 +12,7 @@ import org.hibernate.type.SqlTypes;
 import java.time.Instant;
 
 @Entity
+@DynamicUpdate
 @Table(name = "survey_answers")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
