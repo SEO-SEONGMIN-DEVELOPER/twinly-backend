@@ -1,8 +1,8 @@
 package com.nidus.twinly.me.dto.response;
 
-import com.nidus.twinly.me.dto.result.MeProfileEditResult;
+import com.nidus.twinly.me.dto.result.MeProfileEditViewResult;
 
-public record MeProfileEditResponse(
+public record MeProfileEditViewResponse(
         Long userId,
         String familyName,
         String givenName,
@@ -12,7 +12,7 @@ public record MeProfileEditResponse(
         String profilePhotoUrl
 ) {
 
-    public static MeProfileEditResponse from(MeProfileEditResult result) {
-        return new MeProfileEditResponse(result.userId(), result.familyName(), result.givenName(), result.affiliation(), result.affiliationNumber(), result.birthDate(), result.profilePhotoUrl());
+    public static MeProfileEditViewResponse from(MeProfileEditViewResult result) {
+        return new MeProfileEditViewResponse(result.userId(), result.familyName(), result.givenName(), result.affiliation(), result.affiliationNumber(), result.birthDate(), result.profilePhotoUrl());
     }
 }

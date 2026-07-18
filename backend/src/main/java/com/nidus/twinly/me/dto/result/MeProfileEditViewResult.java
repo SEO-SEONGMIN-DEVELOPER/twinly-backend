@@ -1,6 +1,6 @@
 package com.nidus.twinly.me.dto.result;
 
-public record MeProfileEditResult(
+public record MeProfileEditViewResult(
         Long userId,
         String familyName,
         String givenName,

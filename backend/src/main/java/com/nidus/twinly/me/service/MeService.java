@@ -1,6 +1,7 @@
 package com.nidus.twinly.me.service;
 
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
+import com.nidus.twinly.common.crypto.BlindIndexHasher;
 import com.nidus.twinly.common.photo.PhotoPosInfo;
 import com.nidus.twinly.common.photo.PhotoType;
 import com.nidus.twinly.common.presign.PhotoCommitService;
@@ -9,7 +10,7 @@ import com.nidus.twinly.common.presign.PresignService;
 import com.nidus.twinly.me.dto.command.MeProfileCommand;
 import com.nidus.twinly.me.dto.command.MeProfilePhotoCommitCommand;
 import com.nidus.twinly.me.dto.command.MeProfilePhotoPresignCommand;
-import com.nidus.twinly.me.dto.result.MeProfileEditResult;
+import com.nidus.twinly.me.dto.result.MeProfileEditViewResult;
 import com.nidus.twinly.me.dto.result.MeProfilePhotoCommitResult;
 import com.nidus.twinly.me.dto.result.MeProfilePhotoPresignResult;
 import com.nidus.twinly.me.dto.result.MeWithdrawResult;
@@ -26,6 +27,11 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.Duration;
 import java.time.Instant;
 
+/*
+ * [멘토링 피드백 반영 완료]
+ * JPA에서 업데이트된 정보가 분실되는 상황 발생 -> 그 컬럼만 바꾸게 SQL 짜기
+ */
+
 @Service
 @RequiredArgsConstructor
 public class MeService {
@@ -35,6 +41,8 @@ public class MeService {
     private final PresignService presignService;
     private final PhotoCommitService photoCommitService;
     private final CloudFrontService cloudFrontService;
+
+    private final BlindIndexHasher blindIndexHasher;
 
     private final PhotoRepository photoRepository;
     private final UserRepository userRepository;
@@ -69,14 +77,16 @@ public class MeService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 유저입니다."));
 
-        user.requestWithdrawal();
+        if (user.getWithdrawalRequestedAt() != null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 탈퇴 신청이 된 상태입니다.");
+        }
 
-        Instant recoverableUntil = user.getWithdrawalRequestedAt().plus(WITHDRAWAL_RECOVERABLE_PERIOD);
+        user.requestWithdrawal(WITHDRAWAL_RECOVERABLE_PERIOD);
 
-        return new MeWithdrawResult(true, recoverableUntil);
+        return new MeWithdrawResult(user.getWithdrawalScheduledAt());
     }
 
-    public MeProfileEditResult profileEdit(Long userId) {
+    public MeProfileEditViewResult profileEditView(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 유저입니다."));
 
@@ -84,7 +94,7 @@ public class MeService {
                 .map(photo -> cloudFrontService.getSignedUrl(photo.getKey()))
                 .orElse(null);
 
-        return new MeProfileEditResult(
+        return new MeProfileEditViewResult(
                 user.getId(),
                 user.getFamilyName(),
                 user.getGivenName(),
@@ -104,7 +114,7 @@ public class MeService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 유저입니다."));
 
-        user.changeAffiliation(command.affiliation());
+        user.changeAffiliation(command.affiliation(), blindIndexHasher.hash(command.affiliation()));
     }
 
     @Transactional
@@ -113,11 +123,11 @@ public class MeService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 유저입니다."));
 
         if (user.getWithdrawalRequestedAt() == null) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "탈퇴 신청 상태가 아닙니다.");
+            return;
         }
 
         if (user.getWithdrawalRequestedAt().plus(WITHDRAWAL_RECOVERABLE_PERIOD).isBefore(Instant.now())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "복구 가능 기간이 지났습니다.");
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, "복구 가능 기간이 지났습니다.");
         }
 
         user.cancelWithdrawal();

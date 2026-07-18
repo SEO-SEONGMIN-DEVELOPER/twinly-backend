@@ -6,7 +6,7 @@ import com.nidus.twinly.me.dto.command.MeProfilePhotoPresignCommand;
 import com.nidus.twinly.me.dto.request.MeProfileRequest;
 import com.nidus.twinly.me.dto.request.MeProfilePhotoCommitRequest;
 import com.nidus.twinly.me.dto.request.MeProfilePhotoPresignRequest;
-import com.nidus.twinly.me.dto.response.MeProfileEditResponse;
+import com.nidus.twinly.me.dto.response.MeProfileEditViewResponse;
 import com.nidus.twinly.me.dto.response.MeProfilePhotoCommitResponse;
 import com.nidus.twinly.me.dto.response.MeProfilePhotoPresignResponse;
 import com.nidus.twinly.me.dto.response.MeWithdrawResponse;
@@ -44,9 +44,9 @@ public class MeController {
         return MeWithdrawResponse.from(meService.withdraw(userInfo.id()));
     }
 
-    @GetMapping("/api/v1/me/profile-edit")
-    public MeProfileEditResponse profileEdit(@CurrentUser UserInfo userInfo) {
-        return MeProfileEditResponse.from(meService.profileEdit(userInfo.id()));
+    @GetMapping("/api/v1/me/profile-edit-view")
+    public MeProfileEditViewResponse profileEditView(@CurrentUser UserInfo userInfo) {
+        return MeProfileEditViewResponse.from(meService.profileEditView(userInfo.id()));
     }
 
     @PatchMapping("/api/v1/me/profile")
