@@ -35,4 +35,8 @@ public class EncounterPreference {
         preference.createdAt = Instant.now();
         return preference;
     }
+
+    public void changeIsFavorited(boolean isFavorited) {
+        this.isFavorited = isFavorited;
+    }
 }

@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -44,4 +45,8 @@ public interface RelationshipRepository extends JpaRepository<Relationship, Long
     List<Long> findPartnerUserIdsByUserId(@Param("userId") Long userId,
                                           @Param("cursor") Long cursor,
                                           @Param("limit") Integer limit);
+
+    List<Relationship> findAllByUserIdAndPartnerUserIdAndDateBetweenOrderByDateAsc(Long userId, Long partnerUserId, LocalDate from, LocalDate to);
+
+    List<Relationship> findAllByUserIdAndPartnerUserIdOrderByDateAsc(Long userId, Long partnerUserId);
 }

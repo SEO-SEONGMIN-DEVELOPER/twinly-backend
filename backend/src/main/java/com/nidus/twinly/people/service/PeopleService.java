@@ -1,6 +1,14 @@
 package com.nidus.twinly.people.service;
 
+import com.nidus.twinly.activity.domain.SceneType;
+import com.nidus.twinly.activity.dto.result.ActivityBubbleLineResult;
+import com.nidus.twinly.activity.dto.result.ActivityLineResult;
+import com.nidus.twinly.activity.dto.result.ActivityNarrationLineResult;
+import com.nidus.twinly.activity.dto.result.ActivitySpeakerResult;
+import com.nidus.twinly.activity.entity.Scene;
+import com.nidus.twinly.activity.entity.ScenePartner;
 import com.nidus.twinly.activity.repository.ScenePartnerRepository;
+import com.nidus.twinly.activity.repository.SceneRepository;
 import com.nidus.twinly.block.repository.BlockRepository;
 import com.nidus.twinly.chat.entity.ChatRoom;
 import com.nidus.twinly.chat.repository.ChatRoomRepository;
@@ -9,6 +17,7 @@ import com.nidus.twinly.common.photo.PhotoType;
 import com.nidus.twinly.match.entity.Match;
 import com.nidus.twinly.match.repository.MatchRepository;
 import com.nidus.twinly.people.dto.result.*;
+import com.nidus.twinly.people.domain.IntimacyResolution;
 import com.nidus.twinly.people.entity.Encounter;
 import com.nidus.twinly.people.entity.EncounterPreference;
 import com.nidus.twinly.people.repository.EncounterPreferenceRepository;
@@ -28,7 +37,14 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -47,12 +63,14 @@ public class PeopleService {
     private final MatchRepository matchRepository;
     private final ChatRoomRepository chatRoomRepository;
     private final ScenePartnerRepository scenePartnerRepository;
+    private final SceneRepository sceneRepository;
     private final EncounterRepository encounterRepository;
     private final EncounterPreferenceRepository encounterPreferenceRepository;
     private final DisclosureAgreementRepository disclosureAgreementRepository;
     private final BlockRepository blockRepository;
 
     private final CloudFrontService cloudFrontService;
+    private final ObjectMapper objectMapper;
 
     public PeopleResult people(Long userId, Long cursor, Integer limit) {
         int effectiveLimit = (limit != null && limit > 0) ? limit : DEFAULT_LIMIT;
@@ -124,6 +142,10 @@ public class PeopleService {
         return new PeopleResult(people, new PeoplePageResult(nextCursor, hasMore));
     }
 
+    private Long partnerUserIdOf(Long userAId, Long userBId, Long userId) {
+        return userAId.equals(userId) ? userBId : userAId;
+    }
+
     public PeopleProfileResult profile(Long userId, Long partnerUserId) {
         User partner = userRepository.findById(partnerUserId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 유저입니다."));
@@ -168,7 +190,217 @@ public class PeopleService {
         );
     }
 
-    private Long partnerUserIdOf(Long userAId, Long userBId, Long userId) {
-        return userAId.equals(userId) ? userBId : userAId;
+    public void favorites(Long userId, Long partnerUserId) {
+        Encounter encounter = encounterRepository.findByUserAIdAndUserBId(Math.min(userId, partnerUserId), Math.max(userId, partnerUserId))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "만난 적 없는 상대입니다."));
+
+        EncounterPreference preference = encounterPreferenceRepository.findByEncounterIdAndUserId(encounter.getId(), userId)
+                .orElseGet(() -> EncounterPreference.create(encounter.getId(), userId));
+
+        preference.changeIsFavorited(true);
+        encounterPreferenceRepository.save(preference);
+    }
+
+    public void deleteFavorites(Long userId, Long partnerUserId) {
+        Encounter encounter = encounterRepository.findByUserAIdAndUserBId(Math.min(userId, partnerUserId), Math.max(userId, partnerUserId))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "만난 적 없는 상대입니다."));
+
+        encounterPreferenceRepository.findByEncounterIdAndUserId(encounter.getId(), userId)
+                .ifPresent(preference -> {
+                    preference.changeIsFavorited(false);
+                    encounterPreferenceRepository.save(preference);
+                });
+    }
+
+    public PeopleIntimacySeriesResult intimacySeries(Long userId, Long partnerUserId, LocalDate from, LocalDate to, IntimacyResolution resolution, Integer maxPoints) {
+        List<Relationship> relationships = relationshipRepository
+                .findAllByUserIdAndPartnerUserIdAndDateBetweenOrderByDateAsc(userId, partnerUserId, from, to);
+
+        List<PeopleIntimacySeriesItemResult> series = downsample(bucketByResolution(relationships, resolution, from), maxPoints);
+
+        int currentIntimacy = relationshipRepository.findLatestByUserIdAndPartnerUserId(userId, partnerUserId)
+                .map(Relationship::getIntimacy)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "관계 없는 상대입니다."));
+
+        return new PeopleIntimacySeriesResult(currentIntimacy, series);
+    }
+
+    private List<PeopleIntimacySeriesItemResult> bucketByResolution(List<Relationship> relationships, IntimacyResolution resolution, LocalDate from) {
+        if (resolution == IntimacyResolution.week) {
+            Map<LocalDate, List<Relationship>> byWeek = relationships.stream()
+                    .collect(Collectors.groupingBy(
+                            relationship -> from.plusDays(ChronoUnit.DAYS.between(from, relationship.getDate()) / 7 * 7),
+                            LinkedHashMap::new,
+                            Collectors.toList()));
+
+            return byWeek.entrySet().stream()
+                    .map(entry -> new PeopleIntimacySeriesItemResult(
+                            entry.getKey(),
+                            entry.getValue().get(0).getIntimacy()))
+                    .toList();
+        }
+
+        return relationships.stream()
+                .map(relationship -> new PeopleIntimacySeriesItemResult(relationship.getDate(), relationship.getIntimacy()))
+                .toList();
+    }
+
+    private List<PeopleIntimacySeriesItemResult> downsample(List<PeopleIntimacySeriesItemResult> series, Integer maxPoints) {
+        if (series.size() <= maxPoints) {
+            return series;
+        }
+
+        List<PeopleIntimacySeriesItemResult> sampled = new ArrayList<>(maxPoints);
+        double step = (double) series.size() / maxPoints;
+        for (int i = 0; i < maxPoints; i++) {
+            int index = Math.min((int) Math.floor((i + 1) * step) - 1, series.size() - 1);
+            sampled.add(series.get(index));
+        }
+        return sampled;
+    }
+
+    public PeopleEventsResult events(Long userId, Long partnerUserId, LocalDate cursor, Integer limit) {
+        User partner = userRepository.findById(partnerUserId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 유저입니다."));
+
+        int intimacy = relationshipRepository.findLatestByUserIdAndPartnerUserId(userId, partnerUserId)
+                .map(Relationship::getIntimacy)
+                .orElse(0);
+
+        String profilePhotoUrl = photoRepository.findByUserIdAndType(partnerUserId, PhotoType.PROFILE)
+                .map(photo -> cloudFrontService.getSignedUrl(photo.getKey()))
+                .orElse(null);
+
+        PeopleEventsPartnerResult partnerResult = new PeopleEventsPartnerResult(
+                partnerUserId,
+                partner.getFamilyName() + partner.getGivenName(),
+                profilePhotoUrl,
+                partner.getAvatarPaletteColor(),
+                intimacy,
+                RelationshipSpecificType.fromIntimacy(intimacy)
+        );
+
+        int effectiveLimit = (limit != null && limit > 0) ? limit : DEFAULT_LIMIT;
+
+        List<LocalDate> fetchedDates = sceneRepository.findDistinctDatesFromCursorByUserIdAndWithPartnerUserId(userId, partnerUserId, cursor, effectiveLimit + 1);
+        boolean hasMore = fetchedDates.size() > effectiveLimit;
+        List<LocalDate> pageDates = hasMore ? fetchedDates.subList(0, effectiveLimit) : fetchedDates;
+
+        Map<LocalDate, List<Scene>> scenesByDate = pageDates.isEmpty()
+                ? Map.of()
+                : sceneRepository.findAllByUserIdAndWithPartnerUserIdAndDateIn(userId, partnerUserId, pageDates).stream()
+                        .collect(Collectors.groupingBy(Scene::getDate, LinkedHashMap::new, Collectors.toList()));
+
+        Map<LocalDate, Integer> deltaByDate = new HashMap<>();
+        Map<LocalDate, String> changeByDate = new HashMap<>();
+        Relationship previous = null;
+        for (Relationship current : relationshipRepository.findAllByUserIdAndPartnerUserIdOrderByDateAsc(userId, partnerUserId)) {
+            if (previous != null) {
+                deltaByDate.put(current.getDate(), current.getIntimacy() - previous.getIntimacy());
+
+                RelationshipSpecificType previousType = RelationshipSpecificType.fromIntimacy(previous.getIntimacy());
+                RelationshipSpecificType currentType = RelationshipSpecificType.fromIntimacy(current.getIntimacy());
+                if (currentType != previousType) {
+                    changeByDate.put(current.getDate(), currentType.name());
+                }
+            }
+            previous = current;
+        }
+
+        List<PeopleEventsItemResult> events = pageDates.stream()
+                .map(date -> {
+                    Scene firstScene = scenesByDate.get(date).get(0);
+                    return new PeopleEventsItemResult(
+                            date,
+                            changeByDate.get(date),
+                            deltaByDate.get(date),
+                            firstScene.getPlace(),
+                            preview(firstScene)
+                    );
+                })
+                .toList();
+
+        LocalDate nextCursor = hasMore ? pageDates.get(pageDates.size() - 1) : null;
+
+        return new PeopleEventsResult(partnerResult, events, new PeopleEventsPageResult(nextCursor, hasMore));
+    }
+
+    private String preview(Scene scene) {
+        if (scene.getType() == SceneType.ACTION) {
+            return scene.getNarration();
+        }
+
+        List<ActivityLineResult> lines = parseLines(scene.getLines());
+        if (lines.isEmpty()) {
+            return null;
+        }
+
+        return switch (lines.get(0)) {
+            case ActivityNarrationLineResult narration -> narration.text();
+            case ActivityBubbleLineResult bubble -> bubble.text();
+        };
+    }
+
+    private List<ActivityLineResult> parseLines(String linesJson) {
+        if (linesJson == null) {
+            return List.of();
+        }
+
+        return objectMapper.readValue(linesJson, new TypeReference<List<ActivityLineResult>>() {
+        });
+    }
+
+    public PeopleEventResult event(Long userId, Long partnerUserId, LocalDate date) {
+        List<Scene> myScenes = sceneRepository.findAllByUserIdAndDate(userId, date);
+
+        List<Long> sceneIds = myScenes.stream().map(Scene::getId).toList();
+        List<ScenePartner> scenePartners = scenePartnerRepository.findAllBySceneIdIn(sceneIds);
+        Map<Long, List<Long>> partnerUserIdsBySceneId = scenePartners.stream()
+                .collect(Collectors.groupingBy(ScenePartner::getSceneId, Collectors.mapping(ScenePartner::getUserId, Collectors.toList())));
+
+        List<Scene> scenes = myScenes.stream()
+                .filter(scene -> partnerUserIdsBySceneId.getOrDefault(scene.getId(), List.of()).contains(partnerUserId))
+                .toList();
+
+        List<Long> speakerUserIds = scenePartners.stream().map(ScenePartner::getUserId).distinct().toList();
+        Map<Long, User> userById = userRepository.findAllById(speakerUserIds).stream()
+                .collect(Collectors.toMap(User::getId, Function.identity()));
+
+        List<PeopleEventSceneResult> sceneResults = scenes.stream()
+                .map(scene -> toSceneResult(scene, partnerUserIdsBySceneId.getOrDefault(scene.getId(), List.of()), userById))
+                .toList();
+
+        String version = scenes.isEmpty() ? null : scenes.get(0).getVersion();
+
+        return new PeopleEventResult(date, partnerUserId, version, sceneResults);
+    }
+
+    private PeopleEventSceneResult toSceneResult(Scene scene, List<Long> partnerUserIds, Map<Long, User> userById) {
+        List<ActivitySpeakerResult> with = partnerUserIds.stream()
+                .map(partnerUserId -> {
+                    User user = userById.get(partnerUserId);
+                    return new ActivitySpeakerResult(partnerUserId, user != null ? user.getFamilyName() + user.getGivenName() : null);
+                })
+                .toList();
+
+        return switch (scene.getType()) {
+            case ACTION -> new PeopleEventActionSceneResult(
+                    "action",
+                    scene.getStartsAt(),
+                    scene.getEndsAt(),
+                    scene.getPlace(),
+                    with,
+                    scene.getNarration(),
+                    scene.getMind()
+            );
+            case DIALOGUE -> new PeopleEventDialogueSceneResult(
+                    "dialogue",
+                    scene.getStartsAt(),
+                    scene.getEndsAt(),
+                    scene.getPlace(),
+                    with,
+                    parseLines(scene.getLines())
+            );
+        };
     }
 }
