@@ -29,7 +29,6 @@ import java.util.stream.Collectors;
 public class ActivityService {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
-    private static final String CURRENT_VERSION = "v1";
 
     @Value("${app.current-season-id}")
     private Long currentSeasonId;
@@ -65,7 +64,7 @@ public class ActivityService {
                 userId,
                 currentSeasonId,
                 date,
-                CURRENT_VERSION,
+                scenes.isEmpty() ? null : scenes.get(0).getVersion(),
                 Instant.now(),
                 sceneResults,
                 questionResults
@@ -96,7 +95,7 @@ public class ActivityService {
                     endsAt,
                     scene.getPlace(),
                     with,
-                    parseDialogues(scene.getDialogues())
+                    parseLines(scene.getLines())
             );
         };
     }
@@ -111,12 +110,12 @@ public class ActivityService {
         return localDateTime.atZone(KST).toInstant();
     }
 
-    private List<ActivityDialogueResult> parseDialogues(String dialoguesJson) {
-        if (dialoguesJson == null) {
+    private List<ActivityLineResult> parseLines(String linesJson) {
+        if (linesJson == null) {
             return List.of();
         }
 
-        return objectMapper.readValue(dialoguesJson, new TypeReference<List<ActivityDialogueResult>>() {
+        return objectMapper.readValue(linesJson, new TypeReference<List<ActivityLineResult>>() {
         });
     }
 

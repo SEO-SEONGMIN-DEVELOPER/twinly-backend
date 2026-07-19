@@ -20,7 +20,7 @@ CREATE TABLE scenes (
     type                SCENE_TYPE NOT NULL,
     narration           TEXT,
     mind                TEXT,
-    dialogues           JSON,
+    lines               JSON,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     CONSTRAINT pk_scenes PRIMARY KEY (id),

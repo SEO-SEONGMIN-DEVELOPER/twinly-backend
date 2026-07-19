@@ -1,16 +1,16 @@
 package com.nidus.twinly.activity.dto.response;
 
-import com.nidus.twinly.activity.dto.result.ActivityBubbleDialogueResult;
+import com.nidus.twinly.activity.dto.result.ActivityBubbleLineResult;
 
-public record ActivityBubbleDialogueResponse(
+public record ActivityBubbleLineResponse(
         String t,
         ActivitySpeakerResponse speaker,
         String action,
         String text
-) implements ActivityDialogueResponse {
+) implements ActivityLineResponse {
 
-    public static ActivityBubbleDialogueResponse from(ActivityBubbleDialogueResult result) {
-        return new ActivityBubbleDialogueResponse(
+    public static ActivityBubbleLineResponse from(ActivityBubbleLineResult result) {
+        return new ActivityBubbleLineResponse(
                 result.t(),
                 ActivitySpeakerResponse.from(result.speaker()),
                 result.action(),

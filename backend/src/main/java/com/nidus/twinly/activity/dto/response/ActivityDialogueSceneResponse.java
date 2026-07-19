@@ -11,7 +11,7 @@ public record ActivityDialogueSceneResponse(
         Instant endsAt,
         String place,
         List<ActivitySpeakerResponse> with,
-        List<ActivityDialogueResponse> dialogues
+        List<ActivityLineResponse> lines
 ) implements ActivitySceneResponse {
 
     public static ActivityDialogueSceneResponse from(ActivityDialogueSceneResult result) {
@@ -21,7 +21,7 @@ public record ActivityDialogueSceneResponse(
                 result.endsAt(),
                 result.place(),
                 result.with().stream().map(ActivitySpeakerResponse::from).toList(),
-                result.dialogues().stream().map(ActivityDialogueResponse::from).toList()
+                result.lines().stream().map(ActivityLineResponse::from).toList()
         );
     }
 }

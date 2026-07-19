@@ -45,7 +45,7 @@ public class Scene {
     private String mind;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    private String dialogues;
+    private String lines;
 
     private Instant createdAt;
 }

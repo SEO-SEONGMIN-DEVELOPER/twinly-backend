@@ -9,6 +9,6 @@ public record ActivityDialogueSceneResult(
         Instant endsAt,
         String place,
         List<ActivitySpeakerResult> with,
-        List<ActivityDialogueResult> dialogues
+        List<ActivityLineResult> lines
 ) implements ActivitySceneResult {
 }

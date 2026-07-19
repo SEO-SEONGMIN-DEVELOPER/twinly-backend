@@ -1,9 +1,9 @@
 package com.nidus.twinly.activity.dto.result;
 
-public record ActivityBubbleDialogueResult(
+public record ActivityBubbleLineResult(
         String t,
         ActivitySpeakerResult speaker,
         String action,
         String text
-) implements ActivityDialogueResult {
+) implements ActivityLineResult {
 }

@@ -1,7 +1,7 @@
 package com.nidus.twinly.activity.dto.result;
 
-public record ActivityNarrationDialogueResult(
+public record ActivityNarrationLineResult(
         String t,
         String text
-) implements ActivityDialogueResult {
+) implements ActivityLineResult {
 }
