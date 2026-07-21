@@ -1,11 +1,13 @@
 package com.nidus.twinly.people.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.nidus.twinly.people.dto.result.PeopleItemResult;
 import com.nidus.twinly.relationship.domain.RelationshipSpecificType;
 import com.nidus.twinly.relationship.domain.RelationshipType;
 import com.nidus.twinly.user.domain.AvatarPaletteColor;
 
 public record PeopleItemResponse(
+        @JsonFormat(shape = JsonFormat.Shape.STRING)
         Long userId,
         String userName,
         String profilePhotoUrl,
@@ -14,6 +16,7 @@ public record PeopleItemResponse(
         RelationshipType relationshipType,
         RelationshipSpecificType relationshipSpecificType,
         Integer sceneElementCount,
+        @JsonFormat(shape = JsonFormat.Shape.STRING)
         Long chatRoomId,
         Boolean isFavorited,
         Boolean isHighlighted

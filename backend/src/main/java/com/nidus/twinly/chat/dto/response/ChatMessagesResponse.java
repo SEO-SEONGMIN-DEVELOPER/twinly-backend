@@ -1,10 +1,12 @@
 package com.nidus.twinly.chat.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.nidus.twinly.chat.dto.result.ChatMessagesResult;
 
 import java.util.List;
 
 public record ChatMessagesResponse(
+        @JsonFormat(shape = JsonFormat.Shape.STRING)
         Long roomId,
         List<ChatMessageItemResponse> messages,
         ChatMessagesPageResponse page

@@ -1,11 +1,14 @@
 package com.nidus.twinly.chat.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.nidus.twinly.chat.dto.result.ChatRoomResult;
 
 import java.time.Instant;
 
 public record ChatRoomResponse(
+        @JsonFormat(shape = JsonFormat.Shape.STRING)
         Long roomId,
+        @JsonFormat(shape = JsonFormat.Shape.STRING)
         Long matchId,
         ChatRoomEntryStatusResponse entryStatus,
         ChatRoomPartnerResponse partner,

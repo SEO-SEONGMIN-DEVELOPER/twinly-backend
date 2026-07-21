@@ -1,8 +1,10 @@
 package com.nidus.twinly.activity.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.nidus.twinly.activity.dto.result.ActivitySpeakerResult;
 
 public record ActivitySpeakerResponse(
+        @JsonFormat(shape = JsonFormat.Shape.STRING)
         Long userId,
         String userName
 ) {

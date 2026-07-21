@@ -1,10 +1,12 @@
 package com.nidus.twinly.chat.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.nidus.twinly.chat.dto.result.ChatSendMessageResult;
 
 import java.time.Instant;
 
 public record ChatSendMessageResponse(
+        @JsonFormat(shape = JsonFormat.Shape.STRING)
         Long messageId,
         String text,
         Instant sentAt,

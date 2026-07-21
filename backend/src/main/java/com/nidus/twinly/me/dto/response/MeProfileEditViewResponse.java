@@ -1,8 +1,10 @@
 package com.nidus.twinly.me.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.nidus.twinly.me.dto.result.MeProfileEditViewResult;
 
 public record MeProfileEditViewResponse(
+        @JsonFormat(shape = JsonFormat.Shape.STRING)
         Long userId,
         String familyName,
         String givenName,
