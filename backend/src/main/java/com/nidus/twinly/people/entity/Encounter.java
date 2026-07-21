@@ -19,8 +19,10 @@ public class Encounter {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "user_a_id")
     private Long userAId;
 
+    @Column(name = "user_b_id")
     private Long userBId;
 
     private Instant createdAt;

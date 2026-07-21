@@ -7,15 +7,49 @@ import com.nidus.twinly.common.photo.PhotoType;
 import com.nidus.twinly.common.presign.PhotoCommitService;
 import com.nidus.twinly.common.presign.PhotoPresignResult;
 import com.nidus.twinly.common.presign.PresignService;
+import com.nidus.twinly.legal.entity.Agreement;
+import com.nidus.twinly.legal.entity.Policy;
+import com.nidus.twinly.legal.entity.PolicyName;
+import com.nidus.twinly.legal.repository.AgreementRepository;
+import com.nidus.twinly.legal.repository.PolicyNameRepository;
+import com.nidus.twinly.legal.repository.PolicyRepository;
+import com.nidus.twinly.legal.service.PolicyCatalog;
+import com.nidus.twinly.legal.service.PolicyCatalog.PolicyKey;
+import com.nidus.twinly.me.dto.command.MeAppNotificationsReadAllCommand;
+import com.nidus.twinly.me.dto.command.MeChangeProfileVisibilityCommand;
+import com.nidus.twinly.me.dto.command.MeChangePushNotificationsCommand;
+import com.nidus.twinly.me.dto.command.MeGrantConsentsCommand;
 import com.nidus.twinly.me.dto.command.MeProfileCommand;
 import com.nidus.twinly.me.dto.command.MeProfilePhotoCommitCommand;
 import com.nidus.twinly.me.dto.command.MeProfilePhotoPresignCommand;
+import com.nidus.twinly.me.dto.command.MeRevokeConsentsCommand;
+import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsChatTargetResult;
+import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsItemResult;
+import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsProfileTargetResult;
+import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsResult;
+import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsTargetResult;
+import com.nidus.twinly.me.dto.result.MeAppNotificationsUnreadCountResult;
+import com.nidus.twinly.me.dto.result.MeConsentsItemResult;
+import com.nidus.twinly.me.dto.result.MeConsentsResult;
+import com.nidus.twinly.me.dto.result.MePushNotificationsResult;
+import com.nidus.twinly.me.dto.result.MePushNotificationsSettingsResult;
 import com.nidus.twinly.me.dto.result.MeProfileEditViewResult;
 import com.nidus.twinly.me.dto.result.MeProfilePhotoCommitResult;
 import com.nidus.twinly.me.dto.result.MeProfilePhotoPresignResult;
+import com.nidus.twinly.me.dto.result.MeProfileVisibilityResult;
 import com.nidus.twinly.me.dto.result.MeWithdrawResult;
+import com.nidus.twinly.notification.domain.AppNotificationFeedType;
+import com.nidus.twinly.notification.domain.NotificationChannel;
+import com.nidus.twinly.notification.domain.NotificationType;
+import com.nidus.twinly.notification.entity.AppNotificationFeed;
+import com.nidus.twinly.notification.entity.NotificationSetting;
+import com.nidus.twinly.notification.repository.AppNotificationFeedRepository;
+import com.nidus.twinly.notification.repository.NotificationSettingRepository;
+import com.nidus.twinly.user.domain.DisclosureField;
+import com.nidus.twinly.user.entity.DisclosureAgreement;
 import com.nidus.twinly.user.entity.Photo;
 import com.nidus.twinly.user.entity.User;
+import com.nidus.twinly.user.repository.DisclosureAgreementRepository;
 import com.nidus.twinly.user.repository.PhotoRepository;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +60,11 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /*
  * [멘토링 피드백 반영 완료]
@@ -37,6 +76,7 @@ import java.time.Instant;
 public class MeService {
 
     private static final Duration WITHDRAWAL_RECOVERABLE_PERIOD = Duration.ofDays(15);
+    private static final int DEFAULT_APP_NOTIFICATIONS_LIMIT = 20;
 
     private final PresignService presignService;
     private final PhotoCommitService photoCommitService;
@@ -46,6 +86,14 @@ public class MeService {
 
     private final PhotoRepository photoRepository;
     private final UserRepository userRepository;
+    private final PolicyNameRepository policyNameRepository;
+    private final PolicyRepository policyRepository;
+    private final AgreementRepository agreementRepository;
+    private final NotificationSettingRepository notificationSettingRepository;
+    private final DisclosureAgreementRepository disclosureAgreementRepository;
+    private final AppNotificationFeedRepository appNotificationFeedRepository;
+
+    private final PolicyCatalog policyCatalog;
 
     public MeProfilePhotoPresignResult profilePhotoPresign(Long userId, MeProfilePhotoPresignCommand command) {
         PhotoPresignResult presign = presignService.presignPhoto(userId, command.contentType(), PhotoType.PROFILE);
@@ -54,10 +102,6 @@ public class MeService {
     }
 
     public MeProfilePhotoCommitResult profilePhotoCommit(Long userId, MeProfilePhotoCommitCommand command) {
-        if (command.key() == null || command.position() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "요청 형식이 올바르지 않습니다.");
-        }
-
         String photoUrl = photoCommitService.commitProfilePhoto(userId, command.key());
 
         PhotoPosInfo position = command.position();
@@ -107,10 +151,6 @@ public class MeService {
 
     @Transactional
     public void profile(Long userId, MeProfileCommand command) {
-        if (command.affiliation() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "요청 형식이 올바르지 않습니다.");
-        }
-
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 유저입니다."));
 
@@ -131,5 +171,180 @@ public class MeService {
         }
 
         user.cancelWithdrawal();
+    }
+
+    public MeConsentsResult consents(Long userId) {
+        List<PolicyName> policyNames = policyNameRepository.findAllByIsDeprecatedFalse();
+        List<Long> policyNameIds = policyNames.stream().map(PolicyName::getId).toList();
+
+        Instant now = Instant.now();
+        Map<Long, Policy> currentByPolicyNameId = policyRepository.findAllByPolicyNameIdIn(policyNameIds).stream()
+                .filter(policy -> policy.getEffectiveAt() != null && !policy.getEffectiveAt().isAfter(now))
+                .collect(Collectors.toMap(
+                        Policy::getPolicyNameId,
+                        Function.identity(),
+                        (a, b) -> a.getEffectiveAt().isAfter(b.getEffectiveAt()) ? a : b));
+
+        Map<Long, Agreement> agreementByPolicyId = agreementRepository.findAllByUserIdAndRevokedAtIsNull(userId).stream()
+                .collect(Collectors.toMap(
+                        Agreement::getPolicyId,
+                        Function.identity(),
+                        (a, b) -> a.getAgreedAt().isAfter(b.getAgreedAt()) ? a : b));
+
+        List<MeConsentsItemResult> consents = policyNames.stream()
+                .map(policyName -> {
+                    Policy current = currentByPolicyNameId.get(policyName.getId());
+                    Agreement agreement = current != null ? agreementByPolicyId.get(current.getId()) : null;
+                    return new MeConsentsItemResult(
+                            policyName.getId(),
+                            policyName.getName(),
+                            current != null ? current.getVersion() : null,
+                            current != null ? current.getUrl() : null,
+                            current != null ? current.getIsRequired() : null,
+                            agreement != null,
+                            agreement != null ? agreement.getAgreedAt() : null);
+                })
+                .toList();
+
+        return new MeConsentsResult(consents);
+    }
+
+    @Transactional
+    public void grantConsents(Long userId, MeGrantConsentsCommand command) {
+        List<Long> policyNameIds = command.grants().stream().map(grant -> grant.policyId()).toList();
+
+        Map<PolicyKey, Policy> policyByKey = policyCatalog.loadByKey(policyNameIds);
+
+        Set<Long> alreadyAgreedPolicyIds = agreementRepository.findAllByUserIdAndRevokedAtIsNull(userId).stream()
+                .map(Agreement::getPolicyId)
+                .collect(Collectors.toSet());
+
+        Instant now = Instant.now();
+        List<Agreement> agreements = command.grants().stream()
+                .map(grant -> {
+                    Policy policy = policyByKey.get(new PolicyKey(grant.policyId(), grant.version()));
+                    if (policy == null) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "존재하지 않는 정책 또는 버전입니다.");
+                    }
+                    return policy;
+                })
+                .filter(policy -> !alreadyAgreedPolicyIds.contains(policy.getId()))
+                .map(policy -> Agreement.create(userId, policy.getId(), now))
+                .toList();
+
+        agreementRepository.saveAll(agreements);
+    }
+
+    @Transactional
+    public void revokeConsents(Long userId, MeRevokeConsentsCommand command) {
+        List<Long> policyNameIds = command.grants().stream().map(grant -> grant.policyId()).toList();
+
+        Map<PolicyKey, Policy> policyByKey = policyCatalog.loadByKey(policyNameIds);
+
+        List<Policy> policies = command.grants().stream()
+                .map(grant -> policyByKey.get(new PolicyKey(grant.policyId(), grant.version())))
+                .filter(policy -> policy != null)
+                .toList();
+
+        if (policies.stream().anyMatch(policy -> Boolean.TRUE.equals(policy.getIsRequired()))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "필수 정책은 철회할 수 없습니다.");
+        }
+
+        List<Long> policyIdsToRevoke = policies.stream().map(Policy::getId).toList();
+        if (!policyIdsToRevoke.isEmpty()) {
+            agreementRepository.revokeWithPreviousVersionsByUserIdAndPolicyIdIn(userId, policyIdsToRevoke);
+        }
+    }
+
+    public MePushNotificationsResult pushNotifications(Long userId) {
+        Map<NotificationType, Boolean> enabledByType = notificationSettingRepository
+                .findAllByUserIdAndChannel(userId, NotificationChannel.PUSH).stream()
+                .collect(Collectors.toMap(NotificationSetting::getType, NotificationSetting::getEnabled));
+
+        MePushNotificationsSettingsResult settings = new MePushNotificationsSettingsResult(
+                enabledByType.getOrDefault(NotificationType.EVENT, true),
+                enabledByType.getOrDefault(NotificationType.CHAT, true),
+                enabledByType.getOrDefault(NotificationType.MARKETING, true));
+
+        return new MePushNotificationsResult(settings);
+    }
+
+    @Transactional
+    public void changePushNotifications(Long userId, NotificationType type, MeChangePushNotificationsCommand command) {
+        notificationSettingRepository.findByUserIdAndChannelAndType(userId, NotificationChannel.PUSH, type)
+                .ifPresentOrElse(
+                        notificationSetting -> notificationSetting.changeEnabled(command.isEnabled()),
+                        () -> notificationSettingRepository.save(
+                                NotificationSetting.create(userId, NotificationChannel.PUSH, type, command.isEnabled()))
+                );
+    }
+
+    public MeProfileVisibilityResult profileVisibility(Long userId) {
+        Set<DisclosureField> disclosedFields = disclosureAgreementRepository.findAllByUserId(userId).stream()
+                .map(DisclosureAgreement::getField)
+                .collect(Collectors.toSet());
+
+        return new MeProfileVisibilityResult(
+                disclosedFields.contains(DisclosureField.AFFILIATION),
+                disclosedFields.contains(DisclosureField.AFFILIATION_NUMBER));
+    }
+
+    @Transactional
+    public void changeProfileVisibility(Long userId, DisclosureField type, MeChangeProfileVisibilityCommand command) {
+        if (command.isVisible()) {
+            if (!disclosureAgreementRepository.existsByUserIdAndField(userId, type)) {
+                disclosureAgreementRepository.save(DisclosureAgreement.create(userId, type));
+            }
+            return;
+        }
+
+        disclosureAgreementRepository.deleteByUserIdAndField(userId, type);
+    }
+
+    public MeAppNotificationsFeedsResult appNotificationsFeeds(Long userId, Boolean unreadOnly, AppNotificationFeedType type, Integer limit) {
+        int effectiveLimit = (limit != null && limit > 0) ? limit : DEFAULT_APP_NOTIFICATIONS_LIMIT;
+
+        List<MeAppNotificationsFeedsItemResult> appNotificationFeeds = appNotificationFeedRepository
+                .findAllByUserIdAndFilter(userId, Boolean.TRUE.equals(unreadOnly), type != null ? type.name() : null, effectiveLimit).stream()
+                .map(feed -> new MeAppNotificationsFeedsItemResult(
+                        feed.getId(),
+                        feed.getType(),
+                        feed.getTitle(),
+                        feed.getBody(),
+                        toTargetResult(feed),
+                        feed.getReadAt() != null,
+                        feed.getCreatedAt()
+                ))
+                .toList();
+
+        return new MeAppNotificationsFeedsResult(appNotificationFeedRepository.countByUserIdAndReadAtIsNull(userId), appNotificationFeeds);
+    }
+    
+    public MeAppNotificationsUnreadCountResult appNotificationsUnreadCount(Long userId) {
+        return new MeAppNotificationsUnreadCountResult(appNotificationFeedRepository.countByUserIdAndReadAtIsNull(userId));
+    }
+
+    private MeAppNotificationsFeedsTargetResult toTargetResult(AppNotificationFeed feed) {
+        return switch (feed.getTargetKind()) {
+            case PROFILE -> new MeAppNotificationsFeedsProfileTargetResult("profile", feed.getTargetUserId());
+            case CHAT -> new MeAppNotificationsFeedsChatTargetResult("chat", feed.getTargetChatRoomId());
+        };
+    }
+
+    @Transactional
+    public void appNotificationsRead(Long userId, Long appNotificationId) {
+        AppNotificationFeed feed = appNotificationFeedRepository.findByIdAndUserId(appNotificationId, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 알림입니다."));
+
+        if (feed.getReadAt() != null) {
+            return;
+        }
+
+        feed.markRead();
+    }
+
+    @Transactional
+    public void appNotificationsReadAll(Long userId, MeAppNotificationsReadAllCommand command) {
+        appNotificationFeedRepository.markAllReadByUserIdAndIdLessThanEqual(userId, command.lastAppNotificationId());
     }
 }

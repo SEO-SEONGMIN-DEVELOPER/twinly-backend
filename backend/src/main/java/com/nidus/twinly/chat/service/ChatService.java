@@ -71,10 +71,6 @@ public class ChatService {
 
     @Transactional
     public ChatSendMessageResult sendMessage(Long userId, Long roomId, ChatSendMessageCommand command) {
-        if (command.text() == null || command.clientMsgId() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "요청 형식이 올바르지 않습니다");
-        }
-
         ChatRoom room = chatRoomRepository.findById(roomId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 채팅방입니다."));
 
@@ -273,7 +269,7 @@ public class ChatService {
                         RelationshipSpecificType.fromIntimacy(intimacy),
                         new ChatRoomDetailDisclosedFieldsResult(
                                 agreedFields.contains(DisclosureField.AFFILIATION) ? partner.getAffiliation() : null,
-                                agreedFields.contains(DisclosureField.BIRTH_DATE) ? partner.getBirthDate() : null
+                                agreedFields.contains(DisclosureField.AFFILIATION_NUMBER) ? partner.getAffiliationNumber() : null
                         )
                 ),
                 room.getClosedAt(),

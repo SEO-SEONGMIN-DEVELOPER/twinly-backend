@@ -34,11 +34,12 @@ public class DisclosureAgreement {
 
     public static DisclosureAgreement create(Long userId, DisclosureField field) {
         DisclosureAgreement agreement = new DisclosureAgreement();
+        Instant now = Instant.now();
 
         agreement.userId = userId;
         agreement.field = field;
-        agreement.agreedAt = Instant.now();
-        agreement.createdAt = Instant.now();
+        agreement.agreedAt = now;
+        agreement.createdAt = now;
 
         return agreement;
     }

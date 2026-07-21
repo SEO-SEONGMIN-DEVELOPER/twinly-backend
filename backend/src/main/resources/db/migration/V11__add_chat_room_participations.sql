@@ -3,7 +3,7 @@ CREATE TABLE chat_room_participations (
     room_id             BIGINT NOT NULL,
     user_id             BIGINT NOT NULL,
     entry_agreed_at     TIMESTAMPTZ,
-    is_favorite         BOOLEAN NOT NULL DEFAULT FALSE,
+    is_favorited        BOOLEAN NOT NULL DEFAULT FALSE,
     is_hidden           BOOLEAN NOT NULL DEFAULT FALSE,
     left_at             TIMESTAMPTZ,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),

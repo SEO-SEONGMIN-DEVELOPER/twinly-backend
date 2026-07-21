@@ -4,10 +4,10 @@ import com.nidus.twinly.chat.dto.result.ChatRoomDetailDisclosedFieldsResult;
 
 public record ChatRoomDetailDisclosedFieldsResponse(
         String affiliation,
-        String birthDate
+        String affiliationNumber
 ) {
 
     public static ChatRoomDetailDisclosedFieldsResponse from(ChatRoomDetailDisclosedFieldsResult result) {
-        return new ChatRoomDetailDisclosedFieldsResponse(result.affiliation(), result.birthDate());
+        return new ChatRoomDetailDisclosedFieldsResponse(result.affiliation(), result.affiliationNumber());
     }
 }

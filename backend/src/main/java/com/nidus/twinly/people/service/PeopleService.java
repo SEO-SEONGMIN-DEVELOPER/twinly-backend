@@ -171,7 +171,7 @@ public class PeopleService {
 
         PeopleProfileDisclosedFieldsResult disclosed = new PeopleProfileDisclosedFieldsResult(
                 disclosedFields.contains(DisclosureField.AFFILIATION) ? partner.getAffiliation() : null,
-                disclosedFields.contains(DisclosureField.BIRTH_DATE) ? partner.getBirthDate() : null
+                disclosedFields.contains(DisclosureField.AFFILIATION_NUMBER) ? partner.getAffiliationNumber() : null
         );
 
         return new PeopleProfileResult(
@@ -226,7 +226,7 @@ public class PeopleService {
     }
 
     private List<PeopleIntimacySeriesItemResult> bucketByResolution(List<Relationship> relationships, IntimacyResolution resolution, LocalDate from) {
-        if (resolution == IntimacyResolution.week) {
+        if (resolution == IntimacyResolution.WEEK) {
             Map<LocalDate, List<Relationship>> byWeek = relationships.stream()
                     .collect(Collectors.groupingBy(
                             relationship -> from.plusDays(ChronoUnit.DAYS.between(from, relationship.getDate()) / 7 * 7),

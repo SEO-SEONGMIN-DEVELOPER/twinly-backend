@@ -3,7 +3,7 @@ package com.nidus.twinly.main.service;
 import com.nidus.twinly.chat.repository.ChatRepository;
 import com.nidus.twinly.main.dto.result.MainTabResult;
 import com.nidus.twinly.main.dto.result.MainTabSeasonResult;
-import com.nidus.twinly.notification.repository.NotificationRepository;
+import com.nidus.twinly.notification.repository.AppNotificationFeedRepository;
 import com.nidus.twinly.season.entity.Season;
 import com.nidus.twinly.season.repository.SeasonRepository;
 import lombok.RequiredArgsConstructor;
@@ -22,7 +22,7 @@ public class MainService {
 
     private final SeasonRepository seasonRepository;
     private final ChatRepository chatRepository;
-    private final NotificationRepository notificationRepository;
+    private final AppNotificationFeedRepository appNotificationFeedRepository;
 
     public MainTabResult mainTab(Long userId) {
         Season season = seasonRepository.findById(currentSeasonId)
@@ -38,7 +38,7 @@ public class MainService {
         return new MainTabResult(
                 seasonResult,
                 chatRepository.countUnreadRoomsByUserId(userId),
-                notificationRepository.countUnreadByUserId(userId)
+                appNotificationFeedRepository.countByUserIdAndReadAtIsNull(userId)
         );
     }
 }

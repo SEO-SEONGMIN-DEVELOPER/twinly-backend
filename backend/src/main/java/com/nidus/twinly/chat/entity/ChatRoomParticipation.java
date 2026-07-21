@@ -25,7 +25,7 @@ public class ChatRoomParticipation {
 
     private Instant entryAgreedAt;
 
-    private Boolean isFavorite;
+    private Boolean isFavorited;
 
     private Boolean isHidden;
 
@@ -38,7 +38,7 @@ public class ChatRoomParticipation {
 
         participation.roomId = roomId;
         participation.userId = userId;
-        participation.isFavorite = false;
+        participation.isFavorited = false;
         participation.isHidden = false;
         participation.createdAt = Instant.now();
 
