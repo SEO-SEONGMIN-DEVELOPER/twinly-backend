@@ -1,9 +1,12 @@
 package com.nidus.twinly.common.photo;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
+
 public record PhotoPosInfo(
-        StartPos startPos,
-        Integer width,
-        Integer height
+        @NotNull @Valid StartPos startPos,
+        @NotNull Integer width,
+        @NotNull Integer height
 ) {
-    public record StartPos(Integer x, Integer y) {}
+    public record StartPos(@NotNull Integer x, @NotNull Integer y) {}
 }

@@ -72,14 +72,6 @@ public class AiChatService {
     public OnboardingAiChatMessageResult aiChatMessage(AnonSessionSnapshot anonSessionSnapshot, OnboardingAiChatMessageCommand command) {
         Long anonSessionId = anonSessionSnapshot.id();
 
-        if (command.message() == null || command.turnIndex() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "요청 형식이 올바르지 않습니다.");
-        }
-
-        if (command.message().isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "빈 문자열입니다.");
-        }
-
         AiChat aiQuestion = aiChatRepository.findByAnonSessionIdAndTurnIndexAndSender(anonSessionId, command.turnIndex(), AiChatSender.AI)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "해당 턴의 AI 질문이 존재하지 않습니다: " + command.turnIndex()));
 

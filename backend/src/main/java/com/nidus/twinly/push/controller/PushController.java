@@ -1,5 +1,6 @@
 package com.nidus.twinly.push.controller;
 
+import jakarta.validation.Valid;
 import com.nidus.twinly.push.dto.command.PushTokenRegisterCommand;
 import com.nidus.twinly.push.dto.command.PushTokenRevokeCommand;
 import com.nidus.twinly.push.dto.request.PushTokenRegisterRequest;
@@ -21,13 +22,13 @@ public class PushController {
 
     @PostMapping("/api/v1/push/token")
     public void register(@CurrentUser UserInfo userInfo,
-                      @RequestBody PushTokenRegisterRequest request) {
+                      @Valid @RequestBody PushTokenRegisterRequest request) {
         pushService.register(userInfo.id(), PushTokenRegisterCommand.from(request));
     }
 
     @DeleteMapping("/api/v1/push/token")
     public void revoke(@CurrentUser UserInfo userInfo,
-                       @RequestBody PushTokenRevokeRequest request) {
+                       @Valid @RequestBody PushTokenRevokeRequest request) {
         pushService.revoke(userInfo.id(), PushTokenRevokeCommand.from(request));
     }
 }

@@ -23,10 +23,6 @@ public class ReportService {
 
     @Transactional
     public ReportResult report(Long userId, Long reportedUserId, ReportCommand command) {
-        if (command.reason() == null || command.detail() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "요청 형식이 올바르지 않습니다.");
-        }
-
         if (userId.equals(reportedUserId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "자기 자신을 신고할 수 없습니다.");
         }

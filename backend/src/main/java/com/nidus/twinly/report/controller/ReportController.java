@@ -1,5 +1,6 @@
 package com.nidus.twinly.report.controller;
 
+import jakarta.validation.Valid;
 import com.nidus.twinly.report.dto.command.ReportCommand;
 import com.nidus.twinly.report.dto.request.ReportRequest;
 import com.nidus.twinly.report.dto.response.ReportResponse;
@@ -21,7 +22,7 @@ public class ReportController {
     @PostMapping("/api/v1/reports/{userId}")
     public ReportResponse report(@CurrentUser UserInfo userInfo,
                                  @PathVariable Long userId,
-                                 @RequestBody ReportRequest request) {
+                                 @Valid @RequestBody ReportRequest request) {
         return ReportResponse.from(reportService.report(userInfo.id(), userId, ReportCommand.from(request)));
     }
 }

@@ -1,8 +1,9 @@
 package com.nidus.twinly.onboarding.dto.request;
 
+import jakarta.validation.constraints.NotNull;
 import java.util.List;
 
 public record OnboardingInterestsRequest(
-        List<String> interests
+        @NotNull List<String> interests
 ) {
 }

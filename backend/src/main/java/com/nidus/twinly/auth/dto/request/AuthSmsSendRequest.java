@@ -1,8 +1,8 @@
 package com.nidus.twinly.auth.dto.request;
 
-import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 
 public record AuthSmsSendRequest(
-        @NotBlank String phone
+        @NotNull String phone
 ) {
 }

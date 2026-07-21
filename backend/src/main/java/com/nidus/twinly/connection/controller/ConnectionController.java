@@ -1,5 +1,6 @@
 package com.nidus.twinly.connection.controller;
 
+import jakarta.validation.Valid;
 import com.nidus.twinly.connection.dto.command.ConnectionTokenCommand;
 import com.nidus.twinly.connection.dto.request.ConnectionTokenRequest;
 import com.nidus.twinly.connection.dto.response.ConnectionTokenResponse;
@@ -19,7 +20,7 @@ public class ConnectionController {
 
     @PostMapping("/api/v1/connection-token")
     public ConnectionTokenResponse token(@CurrentUser UserInfo userInfo,
-                                         @RequestBody ConnectionTokenRequest request) {
+                                         @Valid @RequestBody ConnectionTokenRequest request) {
         return ConnectionTokenResponse.from(connectionService.token(userInfo.id(), ConnectionTokenCommand.from(request)));
     }
 }

@@ -1,7 +1,9 @@
 package com.nidus.twinly.common.survey;
 
+import jakarta.validation.constraints.NotNull;
+
 public record SurveyAnswerInput(
-        Integer qId,
-        SurveyOptionName optionName
+        @NotNull Integer qId,
+        @NotNull SurveyOptionName optionName
 ) {
 }

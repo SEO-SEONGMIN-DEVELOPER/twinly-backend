@@ -1,5 +1,6 @@
 package com.nidus.twinly.chat.controller;
 
+import jakarta.validation.Valid;
 import com.nidus.twinly.chat.dto.command.ChatReadMessagesCommand;
 import com.nidus.twinly.chat.dto.command.ChatSendMessageCommand;
 import com.nidus.twinly.chat.dto.request.ChatReadMessagesRequest;
@@ -28,7 +29,7 @@ public class ChatController {
     @PostMapping("/api/v1/chat/rooms/{roomId}/messages")
     public ChatSendMessageResponse sendMessage(@CurrentUser UserInfo userInfo,
                                                @PathVariable Long roomId,
-                                               @RequestBody ChatSendMessageRequest request) {
+                                               @Valid @RequestBody ChatSendMessageRequest request) {
         return ChatSendMessageResponse.from(chatService.sendMessage(userInfo.id(), roomId, ChatSendMessageCommand.from(request)));
     }
 
@@ -66,7 +67,7 @@ public class ChatController {
     @PostMapping("/api/v1/chat/rooms/{roomId}/read")
     public void readMessages(@CurrentUser UserInfo userInfo,
                      @PathVariable Long roomId,
-                     @RequestBody ChatReadMessagesRequest request) {
+                     @Valid @RequestBody ChatReadMessagesRequest request) {
         chatService.readMessages(userInfo.id(), roomId, ChatReadMessagesCommand.from(request));
     }
 
