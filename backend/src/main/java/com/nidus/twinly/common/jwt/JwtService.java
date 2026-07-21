@@ -27,7 +27,7 @@ public class JwtService {
 
     public AuthTokenResult generateAuthTokenResult(Long userId) {
         Jwt accessToken = generateAccessToken(userId);
-        Jwt refreshToken = generateAccessToken(userId);
+        Jwt refreshToken = generateRefreshToken(userId);
 
         return new AuthTokenResult(accessToken.value(), accessToken.expiresAt(), refreshToken.value(), refreshToken.expiresAt());
     }

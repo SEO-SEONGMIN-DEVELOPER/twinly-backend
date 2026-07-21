@@ -73,4 +73,9 @@ public class AuthController {
     public AuthRefreshResponse refresh(@Valid @RequestBody AuthRefreshRequest request) {
         return AuthRefreshResponse.from(authService.refresh(AuthRefreshCommand.from(request)));
     }
+
+    @PostMapping("/api/v1/auth/logout")
+    public void logout(@Valid @RequestBody AuthLogoutRequest request) {
+        authService.logout(AuthLogoutCommand.from(request));
+    }
 }

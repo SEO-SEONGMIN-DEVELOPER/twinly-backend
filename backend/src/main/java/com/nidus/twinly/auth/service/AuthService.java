@@ -2,9 +2,15 @@ package com.nidus.twinly.auth.service;
 
 import com.nidus.twinly.anon.dto.snapshot.AnonSessionSnapshot;
 import com.nidus.twinly.anon.entity.AnonSession;
+import com.nidus.twinly.anon.entity.AnonSessionAgreement;
 import com.nidus.twinly.anon.entity.AnonSessionPhoto;
+import com.nidus.twinly.anon.repository.AnonSessionAgreementRepository;
 import com.nidus.twinly.anon.repository.AnonSessionPhotoRepository;
 import com.nidus.twinly.anon.repository.AnonSessionRepository;
+import com.nidus.twinly.auth.entity.RefreshToken;
+import com.nidus.twinly.auth.repository.RefreshTokenRepository;
+import com.nidus.twinly.legal.entity.Agreement;
+import com.nidus.twinly.legal.repository.AgreementRepository;
 import com.nidus.twinly.auth.dto.command.*;
 import com.nidus.twinly.auth.dto.result.*;
 import com.nidus.twinly.auth.entity.VerificationSession;
@@ -53,6 +59,9 @@ public class AuthService {
     private final AnonSessionRepository anonSessionRepository;
     private final UserRepository userRepository;
     private final AnonSessionPhotoRepository anonSessionPhotoRepository;
+    private final AnonSessionAgreementRepository anonSessionAgreementRepository;
+    private final RefreshTokenRepository refreshTokenRepository;
+    private final AgreementRepository agreementRepository;
     private final PhotoRepository photoRepository;
     private final VerificationRepository verificationRepository;
 
@@ -226,10 +235,24 @@ public class AuthService {
 
         anonSessionPhotoRepository.deleteAll(anonSessionPhotos);
 
+        List<AnonSessionAgreement> anonSessionAgreements = anonSessionAgreementRepository.findAllByAnonSessionId(anonSessionId);
+
+        anonSessionAgreements.stream()
+                .filter(anonSessionAgreement -> anonSessionAgreement.getRevokedAt() == null)
+                .forEach(anonSessionAgreement -> agreementRepository.save(
+                        Agreement.create(
+                                user.getId(),
+                                anonSessionAgreement.getPolicyId(),
+                                anonSessionAgreement.getAgreedAt()
+                        )
+                ));
+
+        anonSessionAgreementRepository.deleteAll(anonSessionAgreements);
+
         verificationRepository.save(Verification.create(user.getId(), VerificationType.SMS, smsSession.getVerifiedAt()));
         verificationRepository.save(Verification.create(user.getId(), VerificationType.EMAIL, emailSession.getVerifiedAt()));
 
-        return jwtService.generateAuthTokenResult(user.getId());
+        return issueAuthToken(user.getId());
     }
 
     private VerificationSession verifySession(VerificationType type, UUID verifiedToken) {
@@ -252,9 +275,10 @@ public class AuthService {
         User user = userRepository.findByPhoneNumberHash(phoneNumberHash)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "가입되지 않은 전화번호입니다."));
 
-        return jwtService.generateAuthTokenResult(user.getId());
+        return issueAuthToken(user.getId());
     }
 
+    @Transactional
     public AuthTokenResult refresh(AuthRefreshCommand command) {
         Long userId;
         try {
@@ -263,6 +287,28 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "유효하지 않은 리프레시 토큰입니다.", e);
         }
 
-        return jwtService.generateAuthTokenResult(userId);
+        RefreshToken refreshToken = refreshTokenRepository.findByTokenHash(blindIndexHasher.hash(command.refreshToken()))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "이미 무효화된 리프레시 토큰입니다."));
+
+        if (!refreshToken.getUserId().equals(userId)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "유효하지 않은 리프레시 토큰입니다.");
+        }
+
+        refreshTokenRepository.delete(refreshToken);
+
+        return issueAuthToken(userId);
+    }
+
+    @Transactional
+    public void logout(AuthLogoutCommand command) {
+        refreshTokenRepository.deleteByTokenHash(blindIndexHasher.hash(command.refreshToken()));
+    }
+
+    private AuthTokenResult issueAuthToken(Long userId) {
+        AuthTokenResult tokens = jwtService.generateAuthTokenResult(userId);
+
+        refreshTokenRepository.save(RefreshToken.create(userId, blindIndexHasher.hash(tokens.refreshToken()), tokens.refreshExpiresAt()));
+
+        return tokens;
     }
 }
