@@ -1,0 +1,1 @@
+ALTER TABLE agreements ADD COLUMN revoked_at TIMESTAMPTZ;

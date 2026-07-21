@@ -48,18 +48,27 @@ ALTER TABLE photos
     DROP COLUMN is_current CASCADE;
 
 /* version이 agreements 안에 있는 게 어색. 약관 테이블을 따로 만드는 게 적합 */
-ALTER TYPE AGREEMENT_TYPE RENAME TO POLICY_TYPE;
+CREATE TABLE policy_names (
+    id              BIGINT GENERATED ALWAYS AS IDENTITY,
+    name            TEXT NOT NULL,
+    is_deprecated   BOOLEAN NOT NULL DEFAULT FALSE,
+
+    CONSTRAINT pk_policy_names PRIMARY KEY (id)
+);
 
 CREATE TABLE policies (
-   id           BIGINT GENERATED ALWAYS AS IDENTITY,
-   type         POLICY_TYPE NOT NULL,
-   version      TEXT NOT NULL,
-   content      TEXT NOT NULL,
-   effective_at TIMESTAMPTZ,
-   created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    id               BIGINT GENERATED ALWAYS AS IDENTITY,
+    policy_name_id   BIGINT NOT NULL,
+    version          INTEGER NOT NULL,
+    content          TEXT NOT NULL,
+    url              TEXT NOT NULL,
+    is_required      BOOLEAN NOT NULL DEFAULT TRUE,
+    effective_at     TIMESTAMPTZ,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
 
    CONSTRAINT pk_policies PRIMARY KEY (id),
-   CONSTRAINT uk_policies_type_version UNIQUE (type, version)
+   CONSTRAINT fk_policies_policy_name_id FOREIGN KEY (policy_name_id) REFERENCES policy_names (id),
+   CONSTRAINT uk_policies_policy_name_id_version UNIQUE (policy_name_id, version)
 );
 
 ALTER TABLE agreements
@@ -67,6 +76,9 @@ ALTER TABLE agreements
     DROP COLUMN version,
     ADD COLUMN policy_id BIGINT NOT NULL,
     ADD CONSTRAINT fk_agreements_policy_id FOREIGN KEY (policy_id) REFERENCES policies (id);
+
+/* agreements.type 컬럼 제거 후 미사용 enum 타입 삭제 */
+DROP TYPE AGREEMENT_TYPE;
 
 /* user별 디바이스 정보, 푸시 토큰 컬럼 추가 */
 CREATE TABLE devices (

@@ -2,19 +2,25 @@ package com.nidus.twinly.onboarding.service;
 
 import com.nidus.twinly.anon.dto.snapshot.AnonSessionSnapshot;
 import com.nidus.twinly.anon.entity.AnonSession;
+import com.nidus.twinly.anon.entity.AnonSessionAgreement;
 import com.nidus.twinly.anon.entity.AnonSessionPersonaElement;
 import com.nidus.twinly.anon.entity.AnonSessionPhoto;
+import com.nidus.twinly.anon.repository.AnonSessionAgreementRepository;
 import com.nidus.twinly.anon.repository.AnonSessionPersonaElementRepository;
 import com.nidus.twinly.anon.repository.AnonSessionPhotoRepository;
 import com.nidus.twinly.anon.repository.AnonSessionRepository;
-import com.nidus.twinly.common.aws.cloudfront.CloudFrontProperties;
 import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.common.photo.PhotoPosInfo;
 import com.nidus.twinly.common.photo.PhotoType;
-import com.nidus.twinly.common.presign.*;
+import com.nidus.twinly.common.presign.PhotoCommitService;
+import com.nidus.twinly.common.presign.PhotoPresignResult;
+import com.nidus.twinly.common.presign.PresignService;
 import com.nidus.twinly.common.survey.SurveyLoader;
 import com.nidus.twinly.common.survey.SurveyOptionName;
 import com.nidus.twinly.common.survey.SurveyQuestion;
+import com.nidus.twinly.legal.entity.Policy;
+import com.nidus.twinly.legal.service.PolicyCatalog;
+import com.nidus.twinly.legal.service.PolicyCatalog.PolicyKey;
 import com.nidus.twinly.onboarding.dto.command.*;
 import com.nidus.twinly.onboarding.dto.result.OnboardingProfileNicknameCheckResult;
 import com.nidus.twinly.onboarding.dto.result.OnboardingProfilePhotoCommitResult;
@@ -28,13 +34,14 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-import software.amazon.awssdk.services.cloudfront.CloudFrontUtilities;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.security.PrivateKey;
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -50,15 +57,12 @@ public class OnboardingService {
     private final AnonSessionRepository anonSessionRepository;
     private final AnonSessionPhotoRepository anonSessionPhotoRepository;
     private final AnonSessionPersonaElementRepository anonSessionPersonaElementRepository;
+    private final AnonSessionAgreementRepository anonSessionAgreementRepository;
+    private final PolicyCatalog policyCatalog;
     private final SurveyAnswerRepository surveyAnswerRepository;
     private final UserRepository userRepository;
 
     private final SurveyLoader surveyLoader;
-
-    private final CloudFrontUtilities cloudFrontUtilities;
-    private final PrivateKey cloudFrontPrivateKey;
-    private final CloudFrontProperties cloudFrontProperties;
-
 
     @Transactional
     public void basicInfo(AnonSessionSnapshot anonSessionSnapshot, OnboardingBasicInfoCommand command) {
@@ -66,24 +70,12 @@ public class OnboardingService {
         AnonSession anonSession = anonSessionRepository.findById(anonSessionId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "유효하지 않은 세션입니다"));
 
-        if (command.familyName() != null) {
-            anonSession.changeFamilyName(command.familyName());
-        }
-        if (command.givenName() != null) {
-            anonSession.changeGivenName(command.givenName());
-        }
-        if (command.gender() != null) {
-            anonSession.changeGender(command.gender());
-        }
-        if (command.affiliation() != null) {
-            anonSession.changeAffiliation(command.affiliation());
-        }
-        if (command.affiliationNumber() != null) {
-            anonSession.changeAffiliationNumber(command.affiliationNumber());
-        }
-        if (command.birthDate() != null) {
-            anonSession.changeBirthDate(command.birthDate().toString());
-        }
+        anonSession.changeFamilyName(command.familyName());
+        anonSession.changeGivenName(command.givenName());
+        anonSession.changeGender(command.gender());
+        anonSession.changeAffiliation(command.affiliation());
+        anonSession.changeAffiliationNumber(command.affiliationNumber());
+        anonSession.changeBirthDate(command.birthDate().toString());
     }
 
     public String surveyQuestions() throws IOException {
@@ -96,10 +88,6 @@ public class OnboardingService {
     @Transactional
     public void surveyAnswer(AnonSessionSnapshot anonSessionSnapshot, OnboardingSurveyAnswerCommand command) {
         Long anonSessionId = anonSessionSnapshot.id();
-        if (command.answer() == null || command.answer().qId() == null || command.answer().optionName() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "요청 형식이 올바르지 않습니다");
-        }
-
         Integer qId = command.answer().qId();
         SurveyOptionName answerValue = command.answer().optionName();
 
@@ -134,10 +122,6 @@ public class OnboardingService {
     @Transactional
     public void interests(AnonSessionSnapshot anonSessionSnapshot, OnboardingInterestsCommand command) {
         Long anonSessionId = anonSessionSnapshot.id();
-        if (command.interests() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "요청 형식이 올바르지 않습니다.");
-        }
-
         for (String interest : command.interests()) {
             anonSessionPersonaElementRepository.save(AnonSessionPersonaElement.create(anonSessionId, PersonaDimension.INTERESTS, interest));
         }
@@ -153,10 +137,6 @@ public class OnboardingService {
     @Transactional
     public OnboardingProfilePhotoCommitResult profilePhotoCommit(AnonSessionSnapshot anonSessionSnapshot, OnboardingProfilePhotoCommitCommand command) {
         Long anonSessionId = anonSessionSnapshot.id();
-        if (command.key() == null || command.position() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "요청 형식이 올바르지 않습니다.");
-        }
-
         String photoUrl = photoCommitService.commitProfilePhoto(anonSessionId, command.key());
 
         PhotoPosInfo position = command.position();
@@ -196,16 +176,59 @@ public class OnboardingService {
         anonSession.changeNickname(nickname);
     }
 
+    @Transactional
+    public void grantConsents(AnonSessionSnapshot anonSessionSnapshot, OnboardingGrantConsentsCommand command) {
+        Long anonSessionId = anonSessionSnapshot.id();
+
+        List<Long> policyNameIds = command.grants().stream().map(grant -> grant.policyId()).toList();
+
+        Map<PolicyKey, Policy> policyByKey = policyCatalog.loadByKey(policyNameIds);
+
+        Set<Long> alreadyAgreedPolicyIds = anonSessionAgreementRepository.findAllByAnonSessionIdAndRevokedAtIsNull(anonSessionId).stream()
+                .map(AnonSessionAgreement::getPolicyId)
+                .collect(Collectors.toSet());
+
+        Instant now = Instant.now();
+        List<AnonSessionAgreement> agreements = command.grants().stream()
+                .map(grant -> {
+                    Policy policy = policyByKey.get(new PolicyKey(grant.policyId(), grant.version()));
+                    if (policy == null) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "존재하지 않는 정책 또는 버전입니다.");
+                    }
+                    return policy;
+                })
+                .filter(policy -> !alreadyAgreedPolicyIds.contains(policy.getId()))
+                .map(policy -> AnonSessionAgreement.create(anonSessionId, policy.getId(), now))
+                .toList();
+
+        anonSessionAgreementRepository.saveAll(agreements);
+    }
+
+    @Transactional
+    public void revokeConsents(AnonSessionSnapshot anonSessionSnapshot, OnboardingRevokeConsentsCommand command) {
+        Long anonSessionId = anonSessionSnapshot.id();
+
+        List<Long> policyNameIds = command.grants().stream().map(grant -> grant.policyId()).toList();
+
+        Map<PolicyKey, Policy> policyByKey = policyCatalog.loadByKey(policyNameIds);
+
+        List<Policy> policies = command.grants().stream()
+                .map(grant -> policyByKey.get(new PolicyKey(grant.policyId(), grant.version())))
+                .filter(policy -> policy != null)
+                .toList();
+
+        if (policies.stream().anyMatch(policy -> Boolean.TRUE.equals(policy.getIsRequired()))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "필수 정책은 철회할 수 없습니다.");
+        }
+
+        List<Long> policyIdsToRevoke = policies.stream().map(Policy::getId).toList();
+        if (!policyIdsToRevoke.isEmpty()) {
+            anonSessionAgreementRepository.revokeWithPreviousVersionsByAnonSessionIdAndPolicyIdIn(anonSessionId, policyIdsToRevoke);
+        }
+    }
+
     private String validateAndNormalizeNickname(String nickname) {
-        if (nickname == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "요청 형식이 올바르지 않습니다.");
-        }
-
         String trimmed = nickname.trim();
-
-        if (trimmed.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "닉네임은 공백일 수 없습니다.");
-        }
 
         String normalized = trimmed.toLowerCase();
         boolean containsForbiddenWord = FORBIDDEN_NICKNAME_WORDS.stream()
