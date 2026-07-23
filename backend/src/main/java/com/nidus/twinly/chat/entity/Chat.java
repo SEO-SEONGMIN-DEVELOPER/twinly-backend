@@ -38,8 +38,6 @@ public class Chat {
 
     private Instant sentAt;
 
-    private Boolean isRead;
-
     private Instant createdAt;
 
     public static Chat create(String clientMsgId, Long roomId, Long senderUserId, Long receiverUserId, ChatMessageType type, String message) {
@@ -52,7 +50,6 @@ public class Chat {
         chat.type = type;
         chat.message = message;
         chat.sentAt = Instant.now();
-        chat.isRead = false;
         chat.createdAt = Instant.now();
 
         return chat;

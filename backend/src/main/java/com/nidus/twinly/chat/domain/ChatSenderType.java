@@ -1,7 +1,10 @@
-package com.nidus.twinly.common.websocket.domain;
+package com.nidus.twinly.chat.domain;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 public enum ChatSenderType {
-    ME,
-    THEM,
-    SYSTEM
+
+    @JsonProperty("me") ME,
+    @JsonProperty("them") THEM,
+    @JsonProperty("system") SYSTEM
 }

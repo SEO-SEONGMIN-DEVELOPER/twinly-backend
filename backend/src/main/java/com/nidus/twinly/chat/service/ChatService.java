@@ -1,6 +1,7 @@
 package com.nidus.twinly.chat.service;
 
 import com.nidus.twinly.chat.domain.ChatMessageType;
+import com.nidus.twinly.chat.domain.ChatSenderType;
 import com.nidus.twinly.chat.dto.command.ChatReadMessagesCommand;
 import com.nidus.twinly.chat.dto.command.ChatSendMessageCommand;
 import com.nidus.twinly.chat.dto.result.*;
@@ -12,9 +13,11 @@ import com.nidus.twinly.chat.repository.ChatRoomParticipationRepository;
 import com.nidus.twinly.chat.repository.ChatRoomRepository;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
 import com.nidus.twinly.common.photo.PhotoType;
-import com.nidus.twinly.common.websocket.domain.ChatSenderType;
-import com.nidus.twinly.common.websocket.dto.ChatMessageReceivedEvent;
-import com.nidus.twinly.common.websocket.registry.ChatSessionRegistry;
+import com.nidus.twinly.common.websocket.domain.WebSocketBodyType;
+import com.nidus.twinly.chat.dto.websocket.ChatChangedPayload;
+import com.nidus.twinly.chat.dto.websocket.ChatMessageCreatedPayload;
+import com.nidus.twinly.chat.dto.websocket.ChatMessagePayload;
+import com.nidus.twinly.common.websocket.dto.WebSocketResponseBody;
 import com.nidus.twinly.match.entity.Match;
 import com.nidus.twinly.match.repository.MatchRepository;
 import com.nidus.twinly.relationship.domain.RelationshipSpecificType;
@@ -31,15 +34,16 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-import org.springframework.web.socket.TextMessage;
-import org.springframework.web.socket.WebSocketSession;
-import tools.jackson.databind.ObjectMapper;
+import org.springframework.web.util.UriUtils;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -56,8 +60,6 @@ public class ChatService {
 
     private final CloudFrontService cloudFrontService;
 
-    private final ObjectMapper objectMapper;
-
     private final UserRepository userRepository;
     private final ChatRoomRepository chatRoomRepository;
     private final MatchRepository matchRepository;
@@ -67,7 +69,7 @@ public class ChatService {
     private final PhotoRepository photoRepository;
     private final DisclosureAgreementRepository disclosureAgreementRepository;
 
-    private final ChatSessionRegistry chatSessionRegistry;
+    private final SimpMessagingTemplate messagingTemplate;
 
     @Transactional
     public ChatSendMessageResult sendMessage(Long userId, Long roomId, ChatSendMessageCommand command) {
@@ -79,10 +81,21 @@ public class ChatService {
 
         Long receiverUserId = resolvePartnerId(match, userId);
 
+        Optional<Chat> existing = chatRepository.findBySenderUserIdAndClientMsgId(userId, command.clientMsgId());
+        if (existing.isPresent()) {
+            Chat sentChat = existing.get();
+
+            if (!sentChat.getRoomId().equals(roomId) || !sentChat.getMessage().equals(command.text())) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 다른 내용으로 사용된 clientMsgId입니다.");
+            }
+
+            return new ChatSendMessageResult(sentChat.getId(), sentChat.getMessage(), sentChat.getSentAt(), sentChat.getClientMsgId());
+        }
+
         Chat chat = Chat.create(command.clientMsgId(), roomId, userId, receiverUserId, ChatMessageType.TEXT, command.text());
         chatRepository.save(chat);
 
-        sendToReceiverUser(chat, receiverUserId);
+        sendChatMessageCreated(chat, List.of(userId, receiverUserId));
 
         return new ChatSendMessageResult(chat.getId(), chat.getMessage(), chat.getSentAt(), command.clientMsgId());
     }
@@ -99,21 +112,40 @@ public class ChatService {
         }
     }
 
-    private void sendToReceiverUser(Chat chat, Long receiverUserId) {
-        Set<WebSocketSession> receiverSessions = chatSessionRegistry.get(receiverUserId);
+    private void sendChatMessageCreated(Chat chat, List<Long> participantUserIds) {
+        String encodedRoomId = encodePathSegment(String.valueOf(chat.getRoomId()));
 
-        for (WebSocketSession session : receiverSessions) {
-            if (!session.isOpen()) {
-                continue;
-            }
+        for (Long participantUserId : participantUserIds) {
+            ChatSenderType senderType = chat.getSenderUserId().equals(participantUserId)
+                    ? ChatSenderType.ME
+                    : ChatSenderType.THEM;
 
-            try {
-                String payload = objectMapper.writeValueAsString(ChatMessageReceivedEvent.from(chat));
-                session.sendMessage(new TextMessage(payload));
-            } catch (Exception e) {
-                log.warn("메시지 실시간 전달 실패: receiverId={}", receiverUserId, e);
-            }
+            ChatMessagePayload message = new ChatMessagePayload(
+                    chat.getId(),
+                    senderType,
+                    chat.getMessage(),
+                    chat.getSentAt(),
+                    senderType == ChatSenderType.ME ? chat.getClientMsgId() : null);
+
+            messagingTemplate.convertAndSendToUser(
+                    String.valueOf(participantUserId),
+                    "/queue/chat/rooms/" + encodedRoomId,
+                    WebSocketResponseBody.event(WebSocketBodyType.CHAT_MESSAGE_CREATED,
+                            new ChatMessageCreatedPayload(chat.getRoomId(), message)));
         }
+    }
+
+    private void sendChatChanged(Long roomId, List<Long> participantUserIds) {
+        for (Long participantUserId : participantUserIds) {
+            messagingTemplate.convertAndSendToUser(
+                    String.valueOf(participantUserId),
+                    "/queue/chat/index",
+                    WebSocketResponseBody.event(WebSocketBodyType.CHAT_CHANGED, new ChatChangedPayload(roomId)));
+        }
+    }
+
+    private String encodePathSegment(String value) {
+        return UriUtils.encodePathSegment(value, StandardCharsets.UTF_8);
     }
 
     public ChatRoomsResult rooms(Long userId) {
@@ -346,7 +378,7 @@ public class ChatService {
     }
 
     @Transactional
-    public void readMessages(Long userId, Long roomId, ChatReadMessagesCommand command) {
+    public ChatReadMessagesResult readMessages(Long userId, Long roomId, ChatReadMessagesCommand command) {
         ChatRoom room = chatRoomRepository.findById(roomId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 채팅방입니다."));
 
@@ -355,7 +387,19 @@ public class ChatService {
 
         checkUserInMatch(match, userId);
 
-        chatRepository.markAsRead(roomId, userId, command.lastMessageId());
+        if (!chatRepository.existsByIdAndRoomId(command.lastMessageId(), roomId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "해당 방에 존재하지 않는 메시지입니다.");
+        }
+
+        ChatRoomParticipation participation = chatRoomParticipationRepository.findByRoomIdAndUserId(roomId, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "참여 정보가 없습니다."));
+        Long before = participation.getLastReadMessageId();
+
+        chatRoomParticipationRepository.advanceReadPointer(roomId, userId, command.lastMessageId());
+
+        Long confirmed = (before == null || before < command.lastMessageId()) ? command.lastMessageId() : before;
+
+        return new ChatReadMessagesResult(roomId, confirmed);
     }
 
     @Transactional

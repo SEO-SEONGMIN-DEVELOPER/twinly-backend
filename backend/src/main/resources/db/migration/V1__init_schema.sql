@@ -126,7 +126,8 @@ CREATE TABLE chats (
     CONSTRAINT pk_chats PRIMARY KEY (id),
     CONSTRAINT fk_chats_room_id FOREIGN KEY (room_id) REFERENCES chat_rooms (id),
     CONSTRAINT fk_chats_sender_user_id FOREIGN KEY (sender_user_id) REFERENCES users (id),
-    CONSTRAINT fk_chats_receiver_user_id FOREIGN KEY (receiver_user_id) REFERENCES users (id)
+    CONSTRAINT fk_chats_receiver_user_id FOREIGN KEY (receiver_user_id) REFERENCES users (id),
+    CONSTRAINT uk_chats_sender_user_id_client_msg_id UNIQUE (sender_user_id, client_msg_id)
 );
 
 CREATE INDEX ix_chats_sender_user_id_receiver_user_id ON chats (sender_user_id, receiver_user_id);

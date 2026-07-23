@@ -2,7 +2,7 @@ package com.nidus.twinly.chat.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.nidus.twinly.chat.dto.result.ChatMessageItemResult;
-import com.nidus.twinly.common.websocket.domain.ChatSenderType;
+import com.nidus.twinly.chat.domain.ChatSenderType;
 
 import java.time.Instant;
 

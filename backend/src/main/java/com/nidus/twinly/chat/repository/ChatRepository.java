@@ -7,8 +7,11 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface ChatRepository extends JpaRepository<Chat, Long> {
+
+    Optional<Chat> findBySenderUserIdAndClientMsgId(Long senderUserId, String clientMsgId);
 
     @Query(value = """
         SELECT c.*
@@ -23,10 +26,13 @@ public interface ChatRepository extends JpaRepository<Chat, Long> {
     List<Chat> findLatestByRoomIdIn(@Param("roomIds") List<Long> roomIds);
 
     @Query(value = """
-            SELECT room_id AS roomId, COUNT(*) AS count
-            FROM chats
-            WHERE receiver_user_id = :userId AND room_id IN (:roomIds) AND is_read = false
-            GROUP BY room_id
+            SELECT c.room_id AS roomId, COUNT(*) AS count
+            FROM chats c
+            JOIN chat_room_participations p ON p.room_id = c.room_id AND p.user_id = :userId
+            WHERE c.receiver_user_id = :userId
+              AND c.room_id IN (:roomIds)
+              AND (p.last_read_message_id IS NULL OR c.id > p.last_read_message_id)
+            GROUP BY c.room_id
             """, nativeQuery = true)
     List<UnreadCountProjection> countUnreadByRoomIdIn(@Param("userId") Long userId, @Param("roomIds") List<Long> roomIds);
 
@@ -45,22 +51,14 @@ public interface ChatRepository extends JpaRepository<Chat, Long> {
         """, nativeQuery = true)
     List<Chat> findBeforeCursorByRoomId(@Param("roomId") Long roomId, @Param("cursor") Long cursor, @Param("limit") Integer limit);
 
-    @Modifying
-    @Query(value = """
-        UPDATE chats
-        SET is_read = true
-        WHERE room_id = :roomId
-          AND receiver_user_id = :userId
-          AND id <= :lastMessageId
-          AND is_read = false
-        """, nativeQuery = true)
-    int markAsRead(@Param("roomId") Long roomId, @Param("userId") Long userId, @Param("lastMessageId") Long lastMessageId);
+    boolean existsByIdAndRoomId(Long id, Long roomId);
 
     @Query(value = """
-        SELECT COUNT(DISTINCT room_id) 
-        FROM chats 
-        WHERE receiver_user_id = :userId 
-            AND is_read = false
+        SELECT COUNT(DISTINCT c.room_id)
+        FROM chats c
+        JOIN chat_room_participations p ON p.room_id = c.room_id AND p.user_id = :userId
+        WHERE c.receiver_user_id = :userId
+          AND (p.last_read_message_id IS NULL OR c.id > p.last_read_message_id)
         """, nativeQuery = true)
     int countUnreadRoomsByUserId(@Param("userId") Long userId);
 }

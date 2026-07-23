@@ -31,6 +31,8 @@ public class ChatRoomParticipation {
 
     private Instant leftAt;
 
+    private Long lastReadMessageId;
+
     private Instant createdAt;
 
     public static ChatRoomParticipation create(Long roomId, Long userId) {

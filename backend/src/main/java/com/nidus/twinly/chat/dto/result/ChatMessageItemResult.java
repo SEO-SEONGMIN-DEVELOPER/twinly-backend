@@ -1,6 +1,6 @@
 package com.nidus.twinly.chat.dto.result;
 
-import com.nidus.twinly.common.websocket.domain.ChatSenderType;
+import com.nidus.twinly.chat.domain.ChatSenderType;
 
 import java.time.Instant;
 
