@@ -15,5 +15,8 @@ CLAUDE.md
 .gradle
 build
 
+# logs
+logs
+
 # commit
 COMMIT_MSG
