@@ -13,11 +13,7 @@ import com.nidus.twinly.chat.repository.ChatRoomParticipationRepository;
 import com.nidus.twinly.chat.repository.ChatRoomRepository;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
 import com.nidus.twinly.common.photo.PhotoType;
-import com.nidus.twinly.common.websocket.domain.WebSocketBodyType;
-import com.nidus.twinly.chat.dto.websocket.ChatChangedPayload;
-import com.nidus.twinly.chat.dto.websocket.ChatMessageCreatedPayload;
-import com.nidus.twinly.chat.dto.websocket.ChatMessagePayload;
-import com.nidus.twinly.common.websocket.dto.WebSocketResponseBody;
+import com.nidus.twinly.chat.event.ChatMessageCreatedEvent;
 import com.nidus.twinly.match.entity.Match;
 import com.nidus.twinly.match.repository.MatchRepository;
 import com.nidus.twinly.relationship.domain.RelationshipSpecificType;
@@ -34,13 +30,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-import org.springframework.web.util.UriUtils;
 
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -69,7 +63,7 @@ public class ChatService {
     private final PhotoRepository photoRepository;
     private final DisclosureAgreementRepository disclosureAgreementRepository;
 
-    private final SimpMessagingTemplate messagingTemplate;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public ChatSendMessageResult sendMessage(Long userId, Long roomId, ChatSendMessageCommand command) {
@@ -95,7 +89,7 @@ public class ChatService {
         Chat chat = Chat.create(command.clientMsgId(), roomId, userId, receiverUserId, ChatMessageType.TEXT, command.text());
         chatRepository.save(chat);
 
-        sendChatMessageCreated(chat, List.of(userId, receiverUserId));
+        eventPublisher.publishEvent(new ChatMessageCreatedEvent(chat, List.of(userId, receiverUserId)));
 
         return new ChatSendMessageResult(chat.getId(), chat.getMessage(), chat.getSentAt(), command.clientMsgId());
     }
@@ -110,42 +104,6 @@ public class ChatService {
         if (!match.getUserAId().equals(userId) && !match.getUserBId().equals(userId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "이 매칭의 참여자가 아닙니다.");
         }
-    }
-
-    private void sendChatMessageCreated(Chat chat, List<Long> participantUserIds) {
-        String encodedRoomId = encodePathSegment(String.valueOf(chat.getRoomId()));
-
-        for (Long participantUserId : participantUserIds) {
-            ChatSenderType senderType = chat.getSenderUserId().equals(participantUserId)
-                    ? ChatSenderType.ME
-                    : ChatSenderType.THEM;
-
-            ChatMessagePayload message = new ChatMessagePayload(
-                    chat.getId(),
-                    senderType,
-                    chat.getMessage(),
-                    chat.getSentAt(),
-                    senderType == ChatSenderType.ME ? chat.getClientMsgId() : null);
-
-            messagingTemplate.convertAndSendToUser(
-                    String.valueOf(participantUserId),
-                    "/queue/chat/rooms/" + encodedRoomId,
-                    WebSocketResponseBody.event(WebSocketBodyType.CHAT_MESSAGE_CREATED,
-                            new ChatMessageCreatedPayload(chat.getRoomId(), message)));
-        }
-    }
-
-    private void sendChatChanged(Long roomId, List<Long> participantUserIds) {
-        for (Long participantUserId : participantUserIds) {
-            messagingTemplate.convertAndSendToUser(
-                    String.valueOf(participantUserId),
-                    "/queue/chat/index",
-                    WebSocketResponseBody.event(WebSocketBodyType.CHAT_CHANGED, new ChatChangedPayload(roomId)));
-        }
-    }
-
-    private String encodePathSegment(String value) {
-        return UriUtils.encodePathSegment(value, StandardCharsets.UTF_8);
     }
 
     public ChatRoomsResult rooms(Long userId) {
