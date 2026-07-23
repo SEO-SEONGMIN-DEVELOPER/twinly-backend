@@ -1,6 +1,8 @@
 package com.nidus.twinly.connection.service;
 
+import com.nidus.twinly.connection.domain.ConnectionType;
 import com.nidus.twinly.connection.dto.command.ConnectionTokenCommand;
+import com.nidus.twinly.connection.dto.result.ConnectionTicketResolveResult;
 import com.nidus.twinly.connection.dto.result.ConnectionTokenResult;
 import com.nidus.twinly.connection.entity.ConnectionTicket;
 import com.nidus.twinly.connection.repository.ConnectionTicketRepository;
@@ -32,13 +34,21 @@ public class ConnectionService {
     }
 
     @Transactional
-    public Optional<Long> resolveTicket(UUID ticket) {
-        return connectionTicketRepository.findByTicket(ticket)
-                .filter(t -> t.getUsedAt() == null)
-                .filter(t -> t.getExpiresAt().isAfter(Instant.now()))
-                .map(t -> {
-                    t.use();
-                    return t.getUserId();
-                });
+    public ConnectionTicketResolveResult resolveTicket(UUID ticket, ConnectionType requiredConnectionType) {
+        ConnectionTicket connectionTicket = connectionTicketRepository.findByTicket(ticket).orElse(null);
+
+        if (connectionTicket == null) {
+            return ConnectionTicketResolveResult.invalid();
+        }
+
+        if (connectionTicket.getConnectionType() != requiredConnectionType) {
+            return ConnectionTicketResolveResult.scopeMismatch();
+        }
+
+        if (connectionTicketRepository.consume(ticket) == 0) {
+            return ConnectionTicketResolveResult.invalid();
+        }
+
+        return ConnectionTicketResolveResult.authorized(connectionTicket.getUserId());
     }
 }

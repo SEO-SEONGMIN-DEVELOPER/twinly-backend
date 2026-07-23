@@ -1,24 +1,25 @@
 package com.nidus.twinly.common.websocket.interceptor;
 
+import com.nidus.twinly.connection.domain.ConnectionTicketStatus;
+import com.nidus.twinly.connection.domain.ConnectionType;
+import com.nidus.twinly.connection.dto.result.ConnectionTicketResolveResult;
 import com.nidus.twinly.connection.service.ConnectionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
-import org.springframework.stereotype.Component;
 import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.server.HandshakeInterceptor;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 
-@Component
 @RequiredArgsConstructor
 public class ConnectionTicketHandshakeInterceptor implements HandshakeInterceptor {
 
     private final ConnectionService connectionService;
+    private final ConnectionType requiredConnectionType;
 
     @Override
     public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response,
@@ -29,13 +30,19 @@ public class ConnectionTicketHandshakeInterceptor implements HandshakeIntercepto
             return false;
         }
 
-        Optional<Long> userId = connectionService.resolveTicket(ticket);
-        if (userId.isEmpty()) {
+        ConnectionTicketResolveResult result = connectionService.resolveTicket(ticket, requiredConnectionType);
+
+        if (result.status() == ConnectionTicketStatus.SCOPE_MISMATCH) {
+            response.setStatusCode(HttpStatus.FORBIDDEN);
+            return false;
+        }
+
+        if (result.status() != ConnectionTicketStatus.AUTHORIZED) {
             response.setStatusCode(HttpStatus.UNAUTHORIZED);
             return false;
         }
 
-        attributes.put("userId", userId.get());
+        attributes.put("userId", result.userId());
         return true;
     }
 

@@ -48,8 +48,4 @@ public class ConnectionTicket {
 
         return connectionTicket;
     }
-
-    public void use() {
-        this.usedAt = Instant.now();
-    }
 }
