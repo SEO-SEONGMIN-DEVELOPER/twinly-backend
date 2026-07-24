@@ -123,9 +123,8 @@ public class PeopleService {
 
                     return new PeopleItemResult(
                             partnerUserId,
-                            user != null ? user.getFamilyName() + user.getGivenName() : null,
+                            user != null ? user.getGivenName() : null,
                             photoUrlByPartnerUserId.get(partnerUserId),
-                            user != null ? user.getAvatarPaletteColor() : null,
                             intimacy,
                             RelationshipType.fromIntimacy(intimacy),
                             RelationshipSpecificType.fromIntimacy(intimacy),
@@ -178,7 +177,6 @@ public class PeopleService {
                 partnerUserId,
                 partner.getFamilyName() + partner.getGivenName(),
                 profilePhotoUrl,
-                partner.getAvatarPaletteColor(),
                 intimacy,
                 RelationshipType.fromIntimacy(intimacy),
                 RelationshipSpecificType.fromIntimacy(intimacy),
@@ -275,7 +273,6 @@ public class PeopleService {
                 partnerUserId,
                 partner.getFamilyName() + partner.getGivenName(),
                 profilePhotoUrl,
-                partner.getAvatarPaletteColor(),
                 intimacy,
                 RelationshipSpecificType.fromIntimacy(intimacy)
         );
@@ -402,5 +399,12 @@ public class PeopleService {
                     parseLines(scene.getLines())
             );
         };
+    }
+
+    public PeopleLearnedFactsResult learnedFacts(Long userId, Long partnerUserId) {
+        Relationship relationship = relationshipRepository.findLatestByUserIdAndPartnerUserId(userId, partnerUserId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "관계 없는 상대입니다."));
+
+        return new PeopleLearnedFactsResult(relationship.getPartnerModel());
     }
 }
