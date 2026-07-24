@@ -6,5 +6,6 @@ public enum CommandErrorCode {
     INVALID_MESSAGE_CURSOR,
     ROOM_NOT_FOUND,
     NOT_A_PARTICIPANT,
+    TEXT_SIZE_LIMIT_EXCEEDED,
     INTERNAL
 }

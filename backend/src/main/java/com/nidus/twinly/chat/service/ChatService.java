@@ -35,6 +35,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -48,6 +49,7 @@ import java.util.stream.Collectors;
 public class ChatService {
 
     private static final int DEFAULT_MESSAGES_LIMIT = 20;
+    private static final int MAX_TEXT_BYTES = 4 * 1024;
 
     @Value("${app.current-season-id}")
     private Long currentSeasonId;
@@ -67,6 +69,10 @@ public class ChatService {
 
     @Transactional
     public ChatSendMessageResult sendMessage(Long userId, Long roomId, ChatSendMessageCommand command) {
+        if (command.text().getBytes(StandardCharsets.UTF_8).length > MAX_TEXT_BYTES) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "메시지 길이 상한을 초과했습니다.");
+        }
+
         ChatRoom room = chatRoomRepository.findById(roomId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 채팅방입니다."));
 

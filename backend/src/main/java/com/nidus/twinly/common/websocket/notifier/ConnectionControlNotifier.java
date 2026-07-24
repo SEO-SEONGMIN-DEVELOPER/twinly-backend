@@ -19,7 +19,7 @@ public class ConnectionControlNotifier {
     private final SimpUserRegistry simpUserRegistry;
 
     public void notifyDraining(ConnectionDrainingReason reason, Long retryAfterMs) {
-        WebSocketResponseBody body = WebSocketResponseBody.event(
+        WebSocketResponseBody body = WebSocketResponseBody.control(
                 WebSocketBodyType.CONNECTION_DRAINING,
                 new ConnectionDrainingPayload(reason, retryAfterMs));
 

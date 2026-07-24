@@ -6,6 +6,7 @@ import com.nidus.twinly.chat.dto.result.ChatReadMessagesResult;
 import com.nidus.twinly.chat.dto.result.ChatSendMessageResult;
 import com.nidus.twinly.chat.service.ChatService;
 import com.nidus.twinly.chat.domain.CommandErrorCode;
+import com.nidus.twinly.common.websocket.domain.WebSocketBodyKind;
 import com.nidus.twinly.common.websocket.domain.WebSocketBodyType;
 import com.nidus.twinly.chat.dto.websocket.ChatMessageCommittedPayload;
 import com.nidus.twinly.chat.dto.websocket.ChatMessageRejectedPayload;
@@ -39,6 +40,8 @@ public class ChatWebSocketController {
     @MessageMapping("/chat/messages")
     public void sendMessage(Principal principal,
                             @Valid @Payload WebSocketRequestBody<ChatMessageSendPayload> body) {
+        assertCommandEnvelope(body, WebSocketBodyType.CHAT_MESSAGE_SEND);
+
         Long userId = ((WebSocketUserPrincipal) principal).userId();
         ChatMessageSendPayload payload = body.payload();
 
@@ -61,6 +64,8 @@ public class ChatWebSocketController {
     @MessageMapping("/chat/read")
     public void readMessages(Principal principal,
                              @Valid @Payload WebSocketRequestBody<ChatReadAdvancePayload> body) {
+        assertCommandEnvelope(body, WebSocketBodyType.CHAT_READ_ADVANCE);
+
         Long userId = ((WebSocketUserPrincipal) principal).userId();
         ChatReadAdvancePayload payload = body.payload();
 
@@ -80,6 +85,14 @@ public class ChatWebSocketController {
         }
     }
 
+    private void assertCommandEnvelope(WebSocketRequestBody<?> body, WebSocketBodyType expectedType) {
+        if (body.v() == null || body.v() != 1
+                || !WebSocketBodyKind.COMMAND.equals(body.kind())
+                || body.type() != expectedType) {
+            throw new IllegalArgumentException("허용되지 않은 COMMAND Body입니다.");
+        }
+    }
+
     private void sendToCommands(Long userId, WebSocketResponseBody body) {
         messagingTemplate.convertAndSendToUser(String.valueOf(userId), COMMANDS_DESTINATION, body);
     }
@@ -87,6 +100,7 @@ public class ChatWebSocketController {
     private CommandError toCommandError(ResponseStatusException e) {
         CommandErrorCode code = switch (e.getStatusCode().value()) {
             case 409 -> CommandErrorCode.CLIENT_MSG_ID_CONFLICT;
+            case 422 -> CommandErrorCode.TEXT_SIZE_LIMIT_EXCEEDED;
             case 400 -> CommandErrorCode.INVALID_MESSAGE_CURSOR;
             case 403 -> CommandErrorCode.NOT_A_PARTICIPANT;
             case 404 -> CommandErrorCode.ROOM_NOT_FOUND;

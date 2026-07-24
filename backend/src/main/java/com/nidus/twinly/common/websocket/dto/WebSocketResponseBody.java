@@ -1,7 +1,10 @@
 package com.nidus.twinly.common.websocket.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.nidus.twinly.common.websocket.domain.WebSocketBodyKind;
 import com.nidus.twinly.common.websocket.domain.WebSocketBodyType;
+import com.nidus.twinly.common.websocket.serializer.KstInstantSerializer;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -13,19 +16,22 @@ public record WebSocketResponseBody(
         WebSocketBodyType type,
         String eventId,
         String commandId,
+        @JsonSerialize(using = KstInstantSerializer.class)
         Instant occurredAt,
         Object payload
 ) {
 
     private static final int VERSION = 1;
-    private static final String KIND_EVENT = "event";
-    private static final String KIND_COMMAND_RESULT = "command-result";
 
     public static WebSocketResponseBody event(WebSocketBodyType type, Object payload) {
-        return new WebSocketResponseBody(VERSION, KIND_EVENT, type, UUID.randomUUID().toString(), null, Instant.now(), payload);
+        return new WebSocketResponseBody(VERSION, WebSocketBodyKind.EVENT, type, UUID.randomUUID().toString(), null, Instant.now(), payload);
+    }
+
+    public static WebSocketResponseBody control(WebSocketBodyType type, Object payload) {
+        return new WebSocketResponseBody(VERSION, WebSocketBodyKind.CONTROL, type, null, null, null, payload);
     }
 
     public static WebSocketResponseBody commandResult(String commandId, WebSocketBodyType type, Object payload) {
-        return new WebSocketResponseBody(VERSION, KIND_COMMAND_RESULT, type, null, commandId, Instant.now(), payload);
+        return new WebSocketResponseBody(VERSION, WebSocketBodyKind.COMMAND_RESULT, type, null, commandId, Instant.now(), payload);
     }
 }
