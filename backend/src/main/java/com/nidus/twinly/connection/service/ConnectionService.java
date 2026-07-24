@@ -19,7 +19,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ConnectionService {
 
-    private static final Duration TICKET_TTL = Duration.ofSeconds(30);
+    private static final Duration TICKET_TTL = Duration.ofSeconds(60);
 
     private final ConnectionTicketRepository connectionTicketRepository;
 
