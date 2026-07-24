@@ -1,5 +1,8 @@
 package com.nidus.twinly.me.service;
 
+import com.nidus.twinly.activity.domain.QuestionType;
+import com.nidus.twinly.activity.entity.Question;
+import com.nidus.twinly.activity.repository.QuestionRepository;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
 import com.nidus.twinly.common.crypto.BlindIndexHasher;
 import com.nidus.twinly.common.photo.PhotoPosInfo;
@@ -15,10 +18,13 @@ import com.nidus.twinly.legal.repository.PolicyNameRepository;
 import com.nidus.twinly.legal.repository.PolicyRepository;
 import com.nidus.twinly.legal.service.PolicyCatalog;
 import com.nidus.twinly.legal.service.PolicyCatalog.PolicyKey;
+import com.nidus.twinly.me.domain.HesitationDuration;
+import com.nidus.twinly.me.domain.HesitationStatus;
 import com.nidus.twinly.me.dto.command.MeAppNotificationsReadAllCommand;
 import com.nidus.twinly.me.dto.command.MeChangeProfileVisibilityCommand;
 import com.nidus.twinly.me.dto.command.MeChangePushNotificationsCommand;
 import com.nidus.twinly.me.dto.command.MeGrantConsentsCommand;
+import com.nidus.twinly.me.dto.command.MeHesitationsAnswerCommand;
 import com.nidus.twinly.me.dto.command.MeProfileCommand;
 import com.nidus.twinly.me.dto.command.MeProfilePhotoCommitCommand;
 import com.nidus.twinly.me.dto.command.MeProfilePhotoPresignCommand;
@@ -31,12 +37,16 @@ import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsTargetResult;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsUnreadCountResult;
 import com.nidus.twinly.me.dto.result.MeConsentsItemResult;
 import com.nidus.twinly.me.dto.result.MeConsentsResult;
+import com.nidus.twinly.me.dto.result.MeHesitationsResult;
 import com.nidus.twinly.me.dto.result.MePushNotificationsResult;
 import com.nidus.twinly.me.dto.result.MePushNotificationsSettingsResult;
 import com.nidus.twinly.me.dto.result.MeProfileEditViewResult;
 import com.nidus.twinly.me.dto.result.MeProfilePhotoCommitResult;
 import com.nidus.twinly.me.dto.result.MeProfilePhotoPresignResult;
 import com.nidus.twinly.me.dto.result.MeProfileVisibilityResult;
+import com.nidus.twinly.me.dto.result.MeStatusReportResult;
+import com.nidus.twinly.me.dto.result.MeStatusResult;
+import com.nidus.twinly.me.dto.result.MeStatusWithdrawalResult;
 import com.nidus.twinly.me.dto.result.MeWithdrawResult;
 import com.nidus.twinly.notification.domain.AppNotificationFeedType;
 import com.nidus.twinly.notification.domain.NotificationChannel;
@@ -45,6 +55,9 @@ import com.nidus.twinly.notification.entity.AppNotificationFeed;
 import com.nidus.twinly.notification.entity.NotificationSetting;
 import com.nidus.twinly.notification.repository.AppNotificationFeedRepository;
 import com.nidus.twinly.notification.repository.NotificationSettingRepository;
+import com.nidus.twinly.report.domain.ReportStatus;
+import com.nidus.twinly.report.entity.Report;
+import com.nidus.twinly.report.repository.ReportRepository;
 import com.nidus.twinly.user.domain.DisclosureField;
 import com.nidus.twinly.user.entity.DisclosureAgreement;
 import com.nidus.twinly.user.entity.Photo;
@@ -60,10 +73,13 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /*
@@ -77,6 +93,7 @@ public class MeService {
 
     private static final Duration WITHDRAWAL_RECOVERABLE_PERIOD = Duration.ofDays(15);
     private static final int DEFAULT_APP_NOTIFICATIONS_LIMIT = 20;
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private final PresignService presignService;
     private final PhotoCommitService photoCommitService;
@@ -92,6 +109,8 @@ public class MeService {
     private final NotificationSettingRepository notificationSettingRepository;
     private final DisclosureAgreementRepository disclosureAgreementRepository;
     private final AppNotificationFeedRepository appNotificationFeedRepository;
+    private final ReportRepository reportRepository;
+    private final QuestionRepository questionRepository;
 
     private final PolicyCatalog policyCatalog;
 
@@ -346,5 +365,77 @@ public class MeService {
     @Transactional
     public void appNotificationsReadAll(Long userId, MeAppNotificationsReadAllCommand command) {
         appNotificationFeedRepository.markAllReadByUserIdAndIdLessThanEqual(userId, command.lastAppNotificationId());
+    }
+
+    public MeStatusResult status(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 유저입니다."));
+
+        MeStatusWithdrawalResult withdrawal = new MeStatusWithdrawalResult(
+                user.getWithdrawalRequestedAt() != null,
+                user.getWithdrawalScheduledAt()
+        );
+
+        List<Report> reports = reportRepository.findAllByReportedUserIdAndStatusNot(userId, ReportStatus.REJECTED);
+        List<String> reasons = reports.stream()
+                .map(report -> report.getReason().name())
+                .distinct()
+                .toList();
+
+        return new MeStatusResult(
+                withdrawal,
+                new MeStatusReportResult(!reports.isEmpty(), reasons)
+        );
+    }
+
+    public MeHesitationsResult hesitations(Long userId, HesitationDuration duration, HesitationStatus status) {
+        LocalDate today = LocalDate.now(KST);
+
+        List<Question> candidates = switch (duration) {
+            case TODAY -> questionRepository.findAllByUserIdAndTypeAndIsSkippedFalseAndDate(userId, QuestionType.PERSONA, today);
+            case ALL -> questionRepository.findAllByUserIdAndTypeAndIsSkippedFalse(userId, QuestionType.PERSONA);
+        };
+
+        Predicate<Question> statusFilter = switch (status) {
+            case ANSWERED -> question -> question.getAnsweredAt() != null;
+            case UNANSWERED -> question -> question.getAnsweredAt() == null;
+            case ALL -> question -> true;
+        };
+
+        List<Long> hesitationIds = candidates.stream()
+                .filter(statusFilter)
+                .map(Question::getId)
+                .toList();
+
+        return new MeHesitationsResult(today, hesitationIds);
+    }
+
+    @Transactional
+    public void hesitationsAnswer(Long userId, Long hesitationId, MeHesitationsAnswerCommand command) {
+        Question question = questionRepository.findById(hesitationId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 망설임입니다."));
+
+        if (!question.getUserId().equals(userId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "본인의 망설임이 아닙니다.");
+        }
+
+        if (question.getAnsweredAt() != null || Boolean.TRUE.equals(question.getIsSkipped())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 처리된 망설임입니다.");
+        }
+
+        if (Boolean.TRUE.equals(command.skipped())) {
+            question.skip();
+            return;
+        }
+
+        if (command.answer() == null || command.answer().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, "답변 내용이 없습니다.");
+        }
+
+        if (!question.getOptions().contains(command.answer())) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, "선택지에 없는 답변입니다.");
+        }
+
+        question.answer(command.answer());
     }
 }

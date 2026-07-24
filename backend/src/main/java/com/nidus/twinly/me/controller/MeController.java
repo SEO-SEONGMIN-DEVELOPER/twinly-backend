@@ -1,9 +1,13 @@
 package com.nidus.twinly.me.controller;
 
+import com.nidus.twinly.common.web.RequestId;
+import com.nidus.twinly.me.domain.HesitationDuration;
+import com.nidus.twinly.me.domain.HesitationStatus;
 import com.nidus.twinly.me.dto.command.MeAppNotificationsReadAllCommand;
 import com.nidus.twinly.me.dto.command.MeChangeProfileVisibilityCommand;
 import com.nidus.twinly.me.dto.command.MeChangePushNotificationsCommand;
 import com.nidus.twinly.me.dto.command.MeGrantConsentsCommand;
+import com.nidus.twinly.me.dto.command.MeHesitationsAnswerCommand;
 import com.nidus.twinly.me.dto.command.MeProfileCommand;
 import com.nidus.twinly.me.dto.command.MeProfilePhotoCommitCommand;
 import com.nidus.twinly.me.dto.command.MeProfilePhotoPresignCommand;
@@ -12,6 +16,7 @@ import com.nidus.twinly.me.dto.request.MeAppNotificationsReadAllRequest;
 import com.nidus.twinly.me.dto.request.MeChangeProfileVisibilityRequest;
 import com.nidus.twinly.me.dto.request.MeChangePushNotificationsRequest;
 import com.nidus.twinly.me.dto.request.MeGrantConsentsRequest;
+import com.nidus.twinly.me.dto.request.MeHesitationsAnswerRequest;
 import com.nidus.twinly.me.dto.request.MeProfileRequest;
 import com.nidus.twinly.me.dto.request.MeProfilePhotoCommitRequest;
 import com.nidus.twinly.me.dto.request.MeProfilePhotoPresignRequest;
@@ -19,11 +24,13 @@ import com.nidus.twinly.me.dto.request.MeRevokeConsentsRequest;
 import com.nidus.twinly.me.dto.response.MeAppNotificationsFeedsResponse;
 import com.nidus.twinly.me.dto.response.MeAppNotificationsUnreadCountResponse;
 import com.nidus.twinly.me.dto.response.MeConsentsResponse;
+import com.nidus.twinly.me.dto.response.MeHesitationsResponse;
 import com.nidus.twinly.me.dto.response.MePushNotificationsResponse;
 import com.nidus.twinly.me.dto.response.MeProfileEditViewResponse;
 import com.nidus.twinly.me.dto.response.MeProfilePhotoCommitResponse;
 import com.nidus.twinly.me.dto.response.MeProfilePhotoPresignResponse;
 import com.nidus.twinly.me.dto.response.MeProfileVisibilityResponse;
+import com.nidus.twinly.me.dto.response.MeStatusResponse;
 import com.nidus.twinly.me.dto.response.MeWithdrawResponse;
 import com.nidus.twinly.me.service.MeService;
 import com.nidus.twinly.notification.domain.AppNotificationFeedType;
@@ -132,8 +139,8 @@ public class MeController {
 
     @PostMapping("/api/v1/me/app-notifications/{appNotificationId}/read")
     public void appNotificationsRead(@CurrentUser UserInfo userInfo,
-                                     @PathVariable Long appNotificationId) {
-        meService.appNotificationsRead(userInfo.id(), appNotificationId);
+                                     @PathVariable String appNotificationId) {
+        meService.appNotificationsRead(userInfo.id(), RequestId.toLong(appNotificationId, "appNotificationId"));
     }
 
     @PostMapping("/api/v1/me/app-notifications/read-all")
@@ -145,5 +152,24 @@ public class MeController {
     @GetMapping("/api/v1/me/app-notifications/unread-count")
     public MeAppNotificationsUnreadCountResponse appNotificationsUnreadCount(@CurrentUser UserInfo userInfo) {
         return MeAppNotificationsUnreadCountResponse.from(meService.appNotificationsUnreadCount(userInfo.id()));
+    }
+
+    @GetMapping("/api/v1/me/status")
+    public MeStatusResponse status(@CurrentUser UserInfo userInfo) {
+        return MeStatusResponse.from(meService.status(userInfo.id()));
+    }
+
+    @GetMapping("/api/v1/me/hesitations")
+    public MeHesitationsResponse hesitations(@CurrentUser UserInfo userInfo,
+                                             @RequestParam HesitationDuration duration,
+                                             @RequestParam HesitationStatus status) {
+        return MeHesitationsResponse.from(meService.hesitations(userInfo.id(), duration, status));
+    }
+
+    @PostMapping("/api/v1/me/hesitations/{hesitationId}/answer")
+    public void hesitationsAnswer(@CurrentUser UserInfo userInfo,
+                                  @PathVariable String hesitationId,
+                                  @Valid @RequestBody MeHesitationsAnswerRequest request) {
+        meService.hesitationsAnswer(userInfo.id(), RequestId.toLong(hesitationId, "hesitationId"), MeHesitationsAnswerCommand.from(request));
     }
 }

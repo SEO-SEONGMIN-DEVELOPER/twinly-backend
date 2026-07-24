@@ -1,0 +1,3 @@
+ALTER TABLE questions
+    ADD COLUMN answered_at TIMESTAMPTZ,
+    ADD COLUMN is_skipped  BOOLEAN NOT NULL DEFAULT FALSE;

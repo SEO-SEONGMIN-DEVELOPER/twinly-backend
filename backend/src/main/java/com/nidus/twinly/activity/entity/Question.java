@@ -41,5 +41,18 @@ public class Question {
 
     private String choice;
 
+    private Instant answeredAt;
+
+    private Boolean isSkipped;
+
     private Instant createdAt;
+
+    public void answer(String choice) {
+        this.choice = choice;
+        this.answeredAt = Instant.now();
+    }
+
+    public void skip() {
+        this.isSkipped = true;
+    }
 }
