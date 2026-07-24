@@ -1,6 +1,6 @@
 package com.nidus.twinly.block.dto.result;
 
-public record BlockListItem(
+public record BlockListItemResult(
         Long blockedUserId,
         String blockedUserName
 ) {

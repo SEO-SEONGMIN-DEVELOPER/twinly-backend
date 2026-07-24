@@ -1,6 +1,6 @@
 package com.nidus.twinly.block.service;
 
-import com.nidus.twinly.block.dto.result.BlockListItem;
+import com.nidus.twinly.block.dto.result.BlockListItemResult;
 import com.nidus.twinly.block.dto.result.BlockListResult;
 import com.nidus.twinly.block.entity.Block;
 import com.nidus.twinly.block.repository.BlockRepository;
@@ -52,7 +52,7 @@ public class BlockService {
         Map<Long, User> usersById = userRepository.findAllById(blockedUserIds).stream()
                 .collect(Collectors.toMap(User::getId, Function.identity()));
 
-        List<BlockListItem> items = blocks.stream()
+        List<BlockListItemResult> items = blocks.stream()
                 .map(block -> {
                     User user = usersById.get(block.getBlockedUserId());
 
@@ -60,7 +60,7 @@ public class BlockService {
                             ? user.getFamilyName() + user.getGivenName()
                             : "탈퇴한 사용자";
 
-                    return new BlockListItem(block.getBlockedUserId(), name);
+                    return new BlockListItemResult(block.getBlockedUserId(), name);
                 })
                 .toList();
 
