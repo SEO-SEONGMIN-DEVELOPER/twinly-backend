@@ -10,18 +10,17 @@ import com.nidus.twinly.onboarding.dto.response.OnboardingAiChatStartResponse;
 import com.nidus.twinly.onboarding.dto.response.OnboardingProfileNicknameCheckResponse;
 import com.nidus.twinly.onboarding.dto.response.OnboardingProfilePhotoCommitResponse;
 import com.nidus.twinly.onboarding.dto.response.OnboardingProfilePhotoPresignResponse;
+import com.nidus.twinly.onboarding.dto.response.OnboardingSurveyQuestionResponse;
 import com.nidus.twinly.onboarding.service.OnboardingService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.io.IOException;
+import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
@@ -37,10 +36,10 @@ public class OnboardingController {
     }
 
     @GetMapping("/api/v1/onboarding/survey-questions")
-    public ResponseEntity<String> surveyQuestions() throws IOException {
-        return ResponseEntity.ok()
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(onboardingService.surveyQuestions());
+    public List<OnboardingSurveyQuestionResponse> surveyQuestions() {
+        return onboardingService.surveyQuestions().stream()
+                .map(OnboardingSurveyQuestionResponse::from)
+                .toList();
     }
 
     @PostMapping("/api/v1/onboarding/survey-answer")

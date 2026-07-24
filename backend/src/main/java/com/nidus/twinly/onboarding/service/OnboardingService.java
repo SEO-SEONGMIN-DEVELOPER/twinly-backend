@@ -29,14 +29,11 @@ import com.nidus.twinly.onboarding.entity.SurveyAnswer;
 import com.nidus.twinly.onboarding.repository.SurveyAnswerRepository;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -78,11 +75,8 @@ public class OnboardingService {
         anonSession.changeBirthDate(command.birthDate().toString());
     }
 
-    public String surveyQuestions() throws IOException {
-        ClassPathResource resource = new ClassPathResource("survey/survey_v1_mixed.json");
-        String json = new String(resource.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-
-        return json;
+    public List<SurveyQuestion> surveyQuestions() {
+        return surveyLoader.getAllQuestions();
     }
 
     @Transactional
