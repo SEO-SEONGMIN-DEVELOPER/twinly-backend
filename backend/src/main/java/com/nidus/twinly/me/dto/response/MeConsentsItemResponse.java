@@ -9,6 +9,7 @@ public record MeConsentsItemResponse(
         @JsonFormat(shape = JsonFormat.Shape.STRING)
         Long policyId,
         String title,
+        @JsonFormat(shape = JsonFormat.Shape.STRING)
         Integer version,
         String url,
         Boolean isRequired,

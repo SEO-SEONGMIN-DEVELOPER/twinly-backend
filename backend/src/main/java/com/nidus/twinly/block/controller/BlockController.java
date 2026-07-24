@@ -2,6 +2,7 @@ package com.nidus.twinly.block.controller;
 
 import com.nidus.twinly.block.dto.response.BlockListResponse;
 import com.nidus.twinly.block.service.BlockService;
+import com.nidus.twinly.common.web.RequestId;
 import com.nidus.twinly.user.annotation.CurrentUser;
 import com.nidus.twinly.user.dto.header.UserInfo;
 import lombok.RequiredArgsConstructor;
@@ -19,14 +20,14 @@ public class BlockController {
 
     @PostMapping("/api/v1/blocks/{userId}")
     public void block(@CurrentUser UserInfo userInfo,
-                      @PathVariable Long userId) {
-        blockService.block(userInfo.id(), userId);
+                      @PathVariable String userId) {
+        blockService.block(userInfo.id(), RequestId.toLong(userId, "userId"));
     }
 
     @DeleteMapping("/api/v1/blocks/{userId}")
     public void unblock(@CurrentUser UserInfo userInfo,
-                        @PathVariable Long userId) {
-        blockService.unblock(userInfo.id(), userId);
+                        @PathVariable String userId) {
+        blockService.unblock(userInfo.id(), RequestId.toLong(userId, "userId"));
     }
 
     @GetMapping("/api/v1/blocks")
