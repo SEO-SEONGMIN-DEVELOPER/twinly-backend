@@ -24,6 +24,10 @@ spring:
       hibernate:
         format_sql: true
 
+springdoc:
+  swagger-ui:
+    enabled: false
+
 crypto:
   aes-keys:
     v1: ${AES_KEY_V1}
