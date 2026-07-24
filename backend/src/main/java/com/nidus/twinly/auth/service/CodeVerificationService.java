@@ -29,7 +29,7 @@ public class CodeVerificationService implements VerificationService {
         }
 
         if (!session.getCode().equals(command.value())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "인증번호가 일치하지 않습니다.");
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, "인증번호가 일치하지 않습니다.");
         }
 
         Instant verifiedTokenExpiresAt = Instant.now().plus(VERIFIED_TOKEN_EXPIRES_MINUTES, ChronoUnit.MINUTES);

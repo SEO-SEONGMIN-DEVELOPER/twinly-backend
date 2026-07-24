@@ -13,7 +13,9 @@ import com.nidus.twinly.legal.entity.Agreement;
 import com.nidus.twinly.legal.repository.AgreementRepository;
 import com.nidus.twinly.auth.dto.command.*;
 import com.nidus.twinly.auth.dto.result.*;
+import com.nidus.twinly.auth.entity.AnonSessionVerificationSession;
 import com.nidus.twinly.auth.entity.VerificationSession;
+import com.nidus.twinly.auth.repository.AnonSessionVerificationSessionRepository;
 import com.nidus.twinly.auth.repository.VerificationSessionRepository;
 import com.nidus.twinly.common.aws.ses.SesService;
 import com.nidus.twinly.common.crypto.BlindIndexHasher;
@@ -56,6 +58,7 @@ public class AuthService {
     private final VerificationService verificationService;
 
     private final VerificationSessionRepository verificationSessionRepository;
+    private final AnonSessionVerificationSessionRepository anonSessionVerificationSessionRepository;
     private final AnonSessionRepository anonSessionRepository;
     private final UserRepository userRepository;
     private final AnonSessionPhotoRepository anonSessionPhotoRepository;
@@ -68,12 +71,12 @@ public class AuthService {
     private final BlindIndexHasher blindIndexHasher;
 
     @Transactional
-    public AuthEmailSendResult onboardingEmailSend(AuthEmailSendCommand command) {
+    public AuthEmailSendResult onboardingEmailSend(AnonSessionSnapshot anonSessionSnapshot, AuthEmailSendCommand command) {
         String code = generateCode();
         Instant codeExpiresAt = Instant.now().plus(CODE_EXPIRES_MINUTES, ChronoUnit.MINUTES);
 
-        VerificationSession session = VerificationSession.create(VerificationType.EMAIL, command.email(), code, codeExpiresAt);
-        verificationSessionRepository.save(session);
+        AnonSessionVerificationSession session = upsertVerificationSession(
+                anonSessionSnapshot.id(), VerificationType.EMAIL, command.email(), code, codeExpiresAt);
 
         sesService.send(
                 command.email(),
@@ -85,19 +88,17 @@ public class AuthService {
     }
 
     @Transactional
-    public AuthEmailVerifyResult onboardingEmailVerify(AuthEmailVerifyCommand command) {
-        VerificationSession session = verificationService.verify(command, VerificationType.EMAIL);
-
-        return new AuthEmailVerifyResult(session.getVerifiedToken(), session.getVerifiedTokenExpiresAt());
+    public void onboardingEmailVerify(AnonSessionSnapshot anonSessionSnapshot, AuthEmailVerifyCommand command) {
+        verifyAnonSession(anonSessionSnapshot.id(), command, VerificationType.EMAIL);
     }
 
     @Transactional
-    public AuthSmsSendResult onboardingSmsSend(AuthSmsSendCommand command) {
+    public AuthSmsSendResult onboardingSmsSend(AnonSessionSnapshot anonSessionSnapshot, AuthSmsSendCommand command) {
         String code = generateCode();
         Instant codeExpiresAt = Instant.now().plus(CODE_EXPIRES_MINUTES, ChronoUnit.MINUTES);
 
-        VerificationSession session = VerificationSession.create(VerificationType.SMS, command.phone(), code, codeExpiresAt);
-        verificationSessionRepository.save(session);
+        AnonSessionVerificationSession session = upsertVerificationSession(
+                anonSessionSnapshot.id(), VerificationType.SMS, command.phone(), code, codeExpiresAt);
 
         solapiService.send(
                 command.phone(),
@@ -108,10 +109,8 @@ public class AuthService {
     }
 
     @Transactional
-    public AuthSmsVerifyResult onboardingSmsVerify(AuthSmsVerifyCommand command) {
-        VerificationSession session = verificationService.verify(command, VerificationType.SMS);
-
-        return new AuthSmsVerifyResult(session.getVerifiedToken(), session.getVerifiedTokenExpiresAt());
+    public void onboardingSmsVerify(AnonSessionSnapshot anonSessionSnapshot, AuthSmsVerifyCommand command) {
+        verifyAnonSession(anonSessionSnapshot.id(), command, VerificationType.SMS);
     }
 
     @Transactional
@@ -174,11 +173,45 @@ public class AuthService {
         return String.format("%06d", number);
     }
 
+    private AnonSessionVerificationSession upsertVerificationSession(
+            Long anonSessionId, VerificationType type, String contact, String code, Instant codeExpiresAt) {
+        AnonSessionVerificationSession session = anonSessionVerificationSessionRepository
+                .findByAnonSessionIdAndType(anonSessionId, type)
+                .orElse(null);
+
+        if (session == null) {
+            session = AnonSessionVerificationSession.create(type, anonSessionId, contact, code, codeExpiresAt);
+            anonSessionVerificationSessionRepository.save(session);
+        } else {
+            session.refresh(contact, code, codeExpiresAt);
+        }
+
+        return session;
+    }
+
+    private void verifyAnonSession(Long anonSessionId, VerifyCommand command, VerificationType type) {
+        AnonSessionVerificationSession session = anonSessionVerificationSessionRepository
+                .findByAnonSessionIdAndType(anonSessionId, type)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "유효하지 않은 인증 요청입니다."));
+
+        if (!session.getVerificationToken().equals(command.verificationToken())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "유효하지 않은 인증 요청입니다.");
+        }
+        if (session.getCodeExpiresAt().isBefore(Instant.now())) {
+            throw new ResponseStatusException(HttpStatus.GONE, "인증번호가 만료되었습니다.");
+        }
+        if (!session.getCode().equals(command.value())) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, "인증번호가 일치하지 않습니다.");
+        }
+
+        session.verify();
+    }
+
     @Transactional
-    public AuthTokenResult signup(AnonSessionSnapshot anonSessionSnapshot, AuthSignupCommand command) {
+    public AuthTokenResult signup(AnonSessionSnapshot anonSessionSnapshot) {
         Long anonSessionId = anonSessionSnapshot.id();
-        VerificationSession smsSession = verifySession(VerificationType.SMS, command.verifiedToken().smsVerifiedToken());
-        VerificationSession emailSession = verifySession( VerificationType.EMAIL, command.verifiedToken().emailVerifiedToken());
+        AnonSessionVerificationSession smsSession = requireVerified(anonSessionId, VerificationType.SMS);
+        AnonSessionVerificationSession emailSession = requireVerified(anonSessionId, VerificationType.EMAIL);
 
         AnonSession anonSession = anonSessionRepository.findById(anonSessionId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "유효하지 않은 세션입니다."));
@@ -217,6 +250,7 @@ public class AuthService {
         );
 
         anonSessionRepository.delete(anonSession);
+        anonSessionVerificationSessionRepository.deleteByAnonSessionId(anonSessionId);
 
         List<AnonSessionPhoto> anonSessionPhotos = anonSessionPhotoRepository.findAllByAnonSessionId(anonSessionId);
 
@@ -264,6 +298,12 @@ public class AuthService {
         }
 
         return session;
+    }
+
+    private AnonSessionVerificationSession requireVerified(Long anonSessionId, VerificationType type) {
+        return anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(anonSessionId, type)
+                .filter(session -> session.getVerifiedAt() != null)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, type + " 인증이 완료되지 않았습니다."));
     }
 
     @Transactional

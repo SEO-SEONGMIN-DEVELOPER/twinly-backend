@@ -19,23 +19,27 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/api/v1/auth/onboarding/email/send")
-    public AuthEmailSendResponse onboardingEmailSend(@Valid @RequestBody AuthEmailSendRequest request) {
-        return AuthEmailSendResponse.from(authService.onboardingEmailSend(AuthEmailSendCommand.from(request)));
+    public AuthEmailSendResponse onboardingEmailSend(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
+                                                     @Valid @RequestBody AuthEmailSendRequest request) {
+        return AuthEmailSendResponse.from(authService.onboardingEmailSend(anonSessionSnapshot, AuthEmailSendCommand.from(request)));
     }
 
     @PostMapping("/api/v1/auth/onboarding/email/verify")
-    public AuthEmailVerifyResponse onboardingEmailVerify(@Valid @RequestBody AuthEmailVerifyRequest request) {
-        return AuthEmailVerifyResponse.from(authService.onboardingEmailVerify(AuthEmailVerifyCommand.from(request)));
+    public void onboardingEmailVerify(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
+                                      @Valid @RequestBody AuthEmailVerifyRequest request) {
+        authService.onboardingEmailVerify(anonSessionSnapshot, AuthEmailVerifyCommand.from(request));
     }
 
     @PostMapping("/api/v1/auth/onboarding/sms/send")
-    public AuthSmsSendResponse onboardingSmsSend(@Valid @RequestBody AuthSmsSendRequest request) {
-        return AuthSmsSendResponse.from(authService.onboardingSmsSend(AuthSmsSendCommand.from(request)));
+    public AuthSmsSendResponse onboardingSmsSend(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
+                                                 @Valid @RequestBody AuthSmsSendRequest request) {
+        return AuthSmsSendResponse.from(authService.onboardingSmsSend(anonSessionSnapshot, AuthSmsSendCommand.from(request)));
     }
 
     @PostMapping("/api/v1/auth/onboarding/sms/verify")
-    public AuthSmsVerifyResponse onboardingSmsVerify(@Valid @RequestBody AuthSmsVerifyRequest request) {
-        return AuthSmsVerifyResponse.from(authService.onboardingSmsVerify(AuthSmsVerifyCommand.from(request)));
+    public void onboardingSmsVerify(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
+                                    @Valid @RequestBody AuthSmsVerifyRequest request) {
+        authService.onboardingSmsVerify(anonSessionSnapshot, AuthSmsVerifyCommand.from(request));
     }
 
     @PostMapping("/api/v1/auth/email/send")
@@ -59,9 +63,8 @@ public class AuthController {
     }
 
     @PostMapping("/api/v1/auth/signup")
-    public AuthSignupResponse signup(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
-                                      @Valid @RequestBody AuthSignupRequest request) {
-        return AuthSignupResponse.from(authService.signup(anonSessionSnapshot, AuthSignupCommand.from(request)));
+    public AuthSignupResponse signup(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot) {
+        return AuthSignupResponse.from(authService.signup(anonSessionSnapshot));
     }
 
     @PostMapping("/api/v1/auth/login")
