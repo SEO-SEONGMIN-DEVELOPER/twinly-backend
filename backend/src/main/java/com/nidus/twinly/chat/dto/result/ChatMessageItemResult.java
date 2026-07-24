@@ -8,6 +8,7 @@ public record ChatMessageItemResult(
         Long messageId,
         ChatSenderType senderType,
         String text,
-        Instant sentAt
+        Instant sentAt,
+        String clientMsgId
 ) {
 }

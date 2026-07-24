@@ -70,7 +70,7 @@ public class ChatService {
     @Transactional
     public ChatSendMessageResult sendMessage(Long userId, Long roomId, ChatSendMessageCommand command) {
         if (command.text().getBytes(StandardCharsets.UTF_8).length > MAX_TEXT_BYTES) {
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "메시지 길이 상한을 초과했습니다.");
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, "메시지 길이 상한을 초과했습니다.");
         }
 
         ChatRoom room = chatRoomRepository.findById(roomId)
@@ -332,7 +332,8 @@ public class ChatService {
                         chat.getId(),
                         chat.getSenderUserId().equals(userId) ? ChatSenderType.ME : ChatSenderType.THEM,
                         chat.getMessage(),
-                        chat.getSentAt()
+                        chat.getSentAt(),
+                        chat.getClientMsgId()
                 ))
                 .toList();
 
@@ -351,7 +352,7 @@ public class ChatService {
 
         checkUserInMatch(match, userId);
 
-        if (!chatRepository.existsByIdAndRoomId(command.lastMessageId(), roomId)) {
+        if (!chatRepository.existsByIdAndRoomId(command.lastMsgId(), roomId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "해당 방에 존재하지 않는 메시지입니다.");
         }
 
@@ -359,9 +360,9 @@ public class ChatService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "참여 정보가 없습니다."));
         Long before = participation.getLastReadMessageId();
 
-        chatRoomParticipationRepository.advanceReadPointer(roomId, userId, command.lastMessageId());
+        chatRoomParticipationRepository.advanceReadPointer(roomId, userId, command.lastMsgId());
 
-        Long confirmed = (before == null || before < command.lastMessageId()) ? command.lastMessageId() : before;
+        Long confirmed = (before == null || before < command.lastMsgId()) ? command.lastMsgId() : before;
 
         return new ChatReadMessagesResult(roomId, confirmed);
     }
