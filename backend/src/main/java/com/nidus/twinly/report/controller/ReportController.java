@@ -1,7 +1,10 @@
 package com.nidus.twinly.report.controller;
 
 import jakarta.validation.Valid;
+import com.nidus.twinly.common.web.RequestId;
+import com.nidus.twinly.report.dto.command.ReportAiUtteranceCommand;
 import com.nidus.twinly.report.dto.command.ReportCommand;
+import com.nidus.twinly.report.dto.request.ReportAiUtteranceRequest;
 import com.nidus.twinly.report.dto.request.ReportRequest;
 import com.nidus.twinly.report.dto.response.ReportResponse;
 import com.nidus.twinly.report.service.ReportService;
@@ -21,8 +24,14 @@ public class ReportController {
 
     @PostMapping("/api/v1/reports/{userId}")
     public ReportResponse report(@CurrentUser UserInfo userInfo,
-                                 @PathVariable Long userId,
+                                 @PathVariable String userId,
                                  @Valid @RequestBody ReportRequest request) {
-        return ReportResponse.from(reportService.report(userInfo.id(), userId, ReportCommand.from(request)));
+        return ReportResponse.from(reportService.report(userInfo.id(), RequestId.toLong(userId, "userId"), ReportCommand.from(request)));
+    }
+
+    @PostMapping("/api/v1/reports/ai-utterance")
+    public void aiUtterance(@CurrentUser UserInfo userInfo,
+                            @Valid @RequestBody ReportAiUtteranceRequest request) {
+        reportService.aiUtterance(userInfo.id(), ReportAiUtteranceCommand.from(request));
     }
 }
