@@ -17,11 +17,10 @@ import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.web.util.UriUtils;
 
 import java.nio.charset.StandardCharsets;
-import java.util.List;
 
 @Component
 @RequiredArgsConstructor
-public class ChatRealtimeNotifier {
+public class ChatNotifier {
 
     private final SimpMessagingTemplate messagingTemplate;
 
