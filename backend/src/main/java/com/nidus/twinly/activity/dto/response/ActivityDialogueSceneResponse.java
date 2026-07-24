@@ -1,11 +1,14 @@
 package com.nidus.twinly.activity.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.nidus.twinly.activity.dto.result.ActivityDialogueSceneResult;
 
 import java.time.Instant;
 import java.util.List;
 
 public record ActivityDialogueSceneResponse(
+        @JsonFormat(shape = JsonFormat.Shape.STRING)
+        Long sceneId,
         String type,
         Instant startsAt,
         Instant endsAt,
@@ -16,6 +19,7 @@ public record ActivityDialogueSceneResponse(
 
     public static ActivityDialogueSceneResponse from(ActivityDialogueSceneResult result) {
         return new ActivityDialogueSceneResponse(
+                result.sceneId(),
                 result.type(),
                 result.startsAt(),
                 result.endsAt(),

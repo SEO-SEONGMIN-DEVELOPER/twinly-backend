@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.List;
 
 public record ActivityActionSceneResult(
+        Long sceneId,
         String type,
         Instant startsAt,
         Instant endsAt,

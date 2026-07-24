@@ -81,6 +81,7 @@ public class ActivityService {
 
         return switch (scene.getType()) {
             case ACTION -> new ActivityActionSceneResult(
+                    scene.getId(),
                     "action",
                     startsAt,
                     endsAt,
@@ -90,6 +91,7 @@ public class ActivityService {
                     scene.getMind()
             );
             case DIALOGUE -> new ActivityDialogueSceneResult(
+                    scene.getId(),
                     "dialogue",
                     startsAt,
                     endsAt,
