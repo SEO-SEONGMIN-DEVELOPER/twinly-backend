@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.ControllerAdvice;
 public class GlobalWebSocketExceptionHandler {
 
     @MessageExceptionHandler
-    public void handleUnexpected(Throwable e) {
-        log.warn("처리하지 못한 WebSocket 메시지", e);
+    public void handleUnexpected(Exception e) {
+        log.warn("[Websocket Error]: ", e);
     }
 }

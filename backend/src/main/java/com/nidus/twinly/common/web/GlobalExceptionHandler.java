@@ -26,10 +26,17 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<ErrorResponse> handleResponseStatusException(ResponseStatusException e) {
         if (e.getStatusCode().is5xxServerError()) {
-            log.error("서버 오류가 발생했습니다.", e);
+            log.error("502 Error]: ", e);
         }
         return ResponseEntity
                 .status(e.getStatusCode())
                 .body(new ErrorResponse(e.getReason()));
+    }
+
+    @ExceptionHandler(Exception.class)
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    public ErrorResponse handleUnexpected(Exception e) {
+        log.error("[500 Error]: ", e);
+        return new ErrorResponse("일시적인 서버 오류가 발생했습니다.");
     }
 }
