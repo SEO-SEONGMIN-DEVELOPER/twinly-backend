@@ -34,7 +34,7 @@ public class AnonSessionAgreement {
         agreement.anonSessionId = anonSessionId;
         agreement.policyId = policyId;
         agreement.agreedAt = agreedAt;
-        agreement.createdAt = agreedAt;
+        agreement.createdAt = Instant.now();
         return agreement;
     }
 }

@@ -34,7 +34,7 @@ public class Agreement {
         agreement.userId = userId;
         agreement.policyId = policyId;
         agreement.agreedAt = agreedAt;
-        agreement.createdAt = agreedAt;
+        agreement.createdAt = Instant.now();
         return agreement;
     }
 }
