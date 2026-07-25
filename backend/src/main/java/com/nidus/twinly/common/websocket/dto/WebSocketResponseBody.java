@@ -1,10 +1,8 @@
 package com.nidus.twinly.common.websocket.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.nidus.twinly.common.websocket.domain.WebSocketBodyKind;
 import com.nidus.twinly.common.websocket.domain.WebSocketBodyType;
-import com.nidus.twinly.common.websocket.serializer.KstInstantSerializer;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -16,7 +14,6 @@ public record WebSocketResponseBody(
         WebSocketBodyType type,
         String eventId,
         String commandId,
-        @JsonSerialize(using = KstInstantSerializer.class)
         Instant occurredAt,
         Object payload
 ) {

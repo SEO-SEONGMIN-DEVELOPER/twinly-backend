@@ -8,6 +8,9 @@ import com.nidus.twinly.connection.service.ConnectionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.messaging.converter.DefaultContentTypeResolver;
+import org.springframework.messaging.converter.JacksonJsonMessageConverter;
+import org.springframework.messaging.converter.MessageConverter;
 import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.scheduling.TaskScheduler;
@@ -16,7 +19,11 @@ import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBr
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 import org.springframework.web.socket.config.annotation.WebSocketTransportRegistration;
+import org.springframework.util.MimeTypeUtils;
 import org.springframework.web.socket.server.standard.ServletServerContainerFactoryBean;
+import tools.jackson.databind.json.JsonMapper;
+
+import java.util.List;
 
 @Configuration
 @EnableWebSocketMessageBroker
@@ -28,10 +35,23 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final ConnectionService connectionService;
     private final WebSocketFrameValidationInterceptor frameValidationInterceptor;
+    private final JsonMapper jsonMapper;
 
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
         registration.interceptors(frameValidationInterceptor);
+    }
+
+    @Override
+    public boolean configureMessageConverters(List<MessageConverter> messageConverters) {
+        DefaultContentTypeResolver contentTypeResolver = new DefaultContentTypeResolver();
+        contentTypeResolver.setDefaultMimeType(MimeTypeUtils.APPLICATION_JSON);
+
+        JacksonJsonMessageConverter jacksonConverter = new JacksonJsonMessageConverter(jsonMapper);
+        jacksonConverter.setContentTypeResolver(contentTypeResolver);
+
+        messageConverters.add(jacksonConverter);
+        return false;
     }
 
     @Override
