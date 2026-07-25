@@ -22,6 +22,8 @@ import com.nidus.twinly.common.crypto.BlindIndexHasher;
 import com.nidus.twinly.common.domain.VerificationType;
 import com.nidus.twinly.common.jwt.JwtService;
 import com.nidus.twinly.common.solapi.SolapiService;
+import com.nidus.twinly.common.web.BusinessException;
+import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.user.entity.Photo;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.entity.Verification;
@@ -30,10 +32,8 @@ import com.nidus.twinly.user.repository.UserRepository;
 import com.nidus.twinly.user.repository.VerificationRepository;
 import io.jsonwebtoken.JwtException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.security.SecureRandom;
 import java.time.Instant;
@@ -116,7 +116,7 @@ public class AuthService {
     @Transactional
     public AuthEmailSendResult emailSend(AuthEmailSendCommand command) {
         if (!userRepository.existsByEmailHash(blindIndexHasher.hash(command.email()))) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "가입되지 않은 이메일입니다.");
+            throw new BusinessException(ErrorCode.EMAIL_NOT_REGISTERED);
         }
 
         String code = generateCode();
@@ -144,7 +144,7 @@ public class AuthService {
     @Transactional
     public AuthSmsSendResult smsSend(AuthSmsSendCommand command) {
         if (!userRepository.existsByPhoneNumberHash(blindIndexHasher.hash(command.phone()))) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "가입되지 않은 전화번호입니다.");
+            throw new BusinessException(ErrorCode.PHONE_NOT_REGISTERED);
         }
 
         String code = generateCode();
@@ -192,16 +192,16 @@ public class AuthService {
     private void verifyAnonSession(Long anonSessionId, VerifyCommand command, VerificationType type) {
         AnonSessionVerificationSession session = anonSessionVerificationSessionRepository
                 .findByAnonSessionIdAndType(anonSessionId, type)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "유효하지 않은 인증 요청입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.VERIFICATION_NOT_FOUND));
 
         if (!session.getVerificationToken().equals(command.verificationToken())) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "유효하지 않은 인증 요청입니다.");
+            throw new BusinessException(ErrorCode.VERIFICATION_NOT_FOUND);
         }
         if (session.getCodeExpiresAt().isBefore(Instant.now())) {
-            throw new ResponseStatusException(HttpStatus.GONE, "인증번호가 만료되었습니다.");
+            throw new BusinessException(ErrorCode.VERIFICATION_CODE_EXPIRED);
         }
         if (!session.getCode().equals(command.value())) {
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, "인증번호가 일치하지 않습니다.");
+            throw new BusinessException(ErrorCode.VERIFICATION_CODE_MISMATCH);
         }
 
         session.verify();
@@ -214,7 +214,7 @@ public class AuthService {
         AnonSessionVerificationSession emailSession = requireVerified(anonSessionId, VerificationType.EMAIL);
 
         AnonSession anonSession = anonSessionRepository.findById(anonSessionId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "유효하지 않은 세션입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.SIGNUP_SESSION_NOT_FOUND));
 
         String phoneNumber = smsSession.getContact();
         String phoneNumberHash = blindIndexHasher.hash(phoneNumber);
@@ -222,11 +222,11 @@ public class AuthService {
         String emailHash = blindIndexHasher.hash(email);
 
         if (userRepository.existsByPhoneNumberHash(phoneNumberHash)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 가입된 전화번호입니다.");
+            throw new BusinessException(ErrorCode.PHONE_ALREADY_REGISTERED);
         }
 
         if (userRepository.existsByEmailHash(emailHash)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 가입된 이메일입니다.");
+            throw new BusinessException(ErrorCode.EMAIL_ALREADY_REGISTERED);
         }
 
         String familyNameHash = blindIndexHasher.hash(anonSession.getFamilyName());
@@ -291,10 +291,10 @@ public class AuthService {
 
     private VerificationSession verifySession(VerificationType type, UUID verifiedToken) {
         VerificationSession session = verificationSessionRepository.findByTypeAndVerifiedToken(type, verifiedToken)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "유효하지 않은 인증 요청입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.VERIFICATION_NOT_FOUND));
 
         if (session.getVerifiedTokenExpiresAt().isBefore(Instant.now())) {
-            throw new ResponseStatusException(HttpStatus.GONE, "인증이 만료되었습니다.");
+            throw new BusinessException(ErrorCode.VERIFICATION_EXPIRED);
         }
 
         return session;
@@ -303,7 +303,7 @@ public class AuthService {
     private AnonSessionVerificationSession requireVerified(Long anonSessionId, VerificationType type) {
         return anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(anonSessionId, type)
                 .filter(session -> session.getVerifiedAt() != null)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, type + " 인증이 완료되지 않았습니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.VERIFICATION_NOT_COMPLETED, type + " 인증이 완료되지 않았습니다."));
     }
 
     @Transactional
@@ -313,7 +313,7 @@ public class AuthService {
         String phoneNumberHash = blindIndexHasher.hash(smsSession.getContact());
 
         User user = userRepository.findByPhoneNumberHash(phoneNumberHash)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "가입되지 않은 전화번호입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.PHONE_NOT_REGISTERED));
 
         return issueAuthToken(user.getId());
     }
@@ -324,14 +324,14 @@ public class AuthService {
         try {
             userId = jwtService.parseRefreshTokenUserId(command.refreshToken());
         } catch (JwtException e) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "유효하지 않은 리프레시 토큰입니다.", e);
+            throw new BusinessException(ErrorCode.INVALID_REFRESH_TOKEN, e);
         }
 
         RefreshToken refreshToken = refreshTokenRepository.findByTokenHash(blindIndexHasher.hash(command.refreshToken()))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "이미 무효화된 리프레시 토큰입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.REFRESH_TOKEN_ALREADY_REVOKED));
 
         if (!refreshToken.getUserId().equals(userId)) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "유효하지 않은 리프레시 토큰입니다.");
+            throw new BusinessException(ErrorCode.INVALID_REFRESH_TOKEN);
         }
 
         refreshTokenRepository.delete(refreshToken);

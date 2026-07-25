@@ -2,16 +2,16 @@ package com.nidus.twinly.anon.resolver;
 
 import com.nidus.twinly.anon.annotation.CurrentAnonSession;
 import com.nidus.twinly.anon.service.AnonService;
+import com.nidus.twinly.common.web.BusinessException;
+import com.nidus.twinly.common.web.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.bind.support.WebDataBinderFactory;
 import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.method.support.ModelAndViewContainer;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.UUID;
 
@@ -35,7 +35,7 @@ public class CurrentAnonSessionArgumentResolver implements HandlerMethodArgument
         String authorizationHeader = webRequest.getHeader(HttpHeaders.AUTHORIZATION);
 
         if (authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "익명 세션 토큰이 없습니다");
+            throw new BusinessException(ErrorCode.UNAUTHORIZED);
         }
 
         String token = authorizationHeader.substring("Bearer ".length());
@@ -44,7 +44,7 @@ public class CurrentAnonSessionArgumentResolver implements HandlerMethodArgument
         try {
             tokenUuid = UUID.fromString(token);
         } catch (IllegalArgumentException e) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "유효하지 않은 형식의 토큰입니다");
+            throw new BusinessException(ErrorCode.INVALID_TOKEN);
         }
 
         return anonService.resolveByToken(tokenUuid);

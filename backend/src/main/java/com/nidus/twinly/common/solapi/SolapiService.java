@@ -5,10 +5,10 @@ import com.solapi.sdk.message.exception.SolapiMessageNotReceivedException;
 import com.solapi.sdk.message.exception.SolapiUnknownException;
 import com.solapi.sdk.message.model.Message;
 import com.solapi.sdk.message.service.DefaultMessageService;
+import com.nidus.twinly.common.web.BusinessException;
+import com.nidus.twinly.common.web.ErrorCode;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @RequiredArgsConstructor
@@ -26,7 +26,7 @@ public class SolapiService {
         try {
             defaultMessageService.send(message);
         } catch (SolapiEmptyResponseException | SolapiMessageNotReceivedException | SolapiUnknownException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "SMS 발송에 실패했습니다.", e);
+            throw new BusinessException(ErrorCode.SMS_SEND_FAILED, e);
         }
     }
 }

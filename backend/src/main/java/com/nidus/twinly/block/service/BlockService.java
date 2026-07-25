@@ -4,13 +4,13 @@ import com.nidus.twinly.block.dto.result.BlockListItemResult;
 import com.nidus.twinly.block.dto.result.BlockListResult;
 import com.nidus.twinly.block.entity.Block;
 import com.nidus.twinly.block.repository.BlockRepository;
+import com.nidus.twinly.common.web.BusinessException;
+import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
@@ -27,7 +27,7 @@ public class BlockService {
     @Transactional
     public void block(Long userId, Long blockedUserId) {
         if (userId.equals(blockedUserId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "자기 자신을 차단할 수 없습니다.");
+            throw new BusinessException(ErrorCode.CANNOT_BLOCK_SELF);
         }
 
         if (blockRepository.existsByUserIdAndBlockedUserId(userId, blockedUserId)) {

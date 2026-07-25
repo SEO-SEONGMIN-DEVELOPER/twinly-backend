@@ -6,6 +6,7 @@ import com.nidus.twinly.chat.dto.result.ChatReadMessagesResult;
 import com.nidus.twinly.chat.dto.result.ChatSendMessageResult;
 import com.nidus.twinly.chat.service.ChatService;
 import com.nidus.twinly.chat.domain.CommandErrorCode;
+import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.websocket.domain.WebSocketBodyKind;
 import com.nidus.twinly.common.websocket.domain.WebSocketBodyType;
 import com.nidus.twinly.chat.dto.websocket.ChatMessageCommittedPayload;
@@ -24,7 +25,6 @@ import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.security.Principal;
 
@@ -53,11 +53,11 @@ public class ChatWebSocketController {
                     body.commandId(),
                     WebSocketBodyType.CHAT_MESSAGE_COMMITTED,
                     new ChatMessageCommittedPayload(payload.roomId(), result.messageId(), result.clientMsgId(), result.text(), result.sentAt())));
-        } catch (ResponseStatusException e) {
+        } catch (BusinessException e) {
             sendToCommands(userId, WebSocketResponseBody.commandResult(
                     body.commandId(),
                     WebSocketBodyType.CHAT_MESSAGE_REJECTED,
-                    new ChatMessageRejectedPayload(payload.roomId(), payload.clientMsgId(), toCommandError(e))));
+                    new ChatMessageRejectedPayload(payload.roomId(), payload.clientMsgId(), toCommandError(e, CommandErrorCode.TEXT_SIZE_LIMIT_EXCEEDED))));
         }
     }
 
@@ -77,11 +77,11 @@ public class ChatWebSocketController {
                     body.commandId(),
                     WebSocketBodyType.CHAT_READ_COMMITTED,
                     new ChatReadCommittedPayload(result.roomId(), result.lastMessageId())));
-        } catch (ResponseStatusException e) {
+        } catch (BusinessException e) {
             sendToCommands(userId, WebSocketResponseBody.commandResult(
                     body.commandId(),
                     WebSocketBodyType.CHAT_READ_REJECTED,
-                    new ChatReadRejectedPayload(payload.roomId(), payload.lastMsgId(), toCommandError(e))));
+                    new ChatReadRejectedPayload(payload.roomId(), payload.lastMsgId(), toCommandError(e, CommandErrorCode.INVALID_MESSAGE_CURSOR))));
         }
     }
 
@@ -97,16 +97,15 @@ public class ChatWebSocketController {
         messagingTemplate.convertAndSendToUser(String.valueOf(userId), COMMANDS_DESTINATION, body);
     }
 
-    private CommandError toCommandError(ResponseStatusException e) {
-        CommandErrorCode code = switch (e.getStatusCode().value()) {
+    private CommandError toCommandError(BusinessException e, CommandErrorCode unprocessableCode) {
+        CommandErrorCode code = switch (e.getErrorCode().getStatus().value()) {
             case 409 -> CommandErrorCode.CLIENT_MSG_ID_CONFLICT;
-            case 422 -> CommandErrorCode.TEXT_SIZE_LIMIT_EXCEEDED;
-            case 400 -> CommandErrorCode.INVALID_MESSAGE_CURSOR;
+            case 422 -> unprocessableCode;
             case 403 -> CommandErrorCode.NOT_A_PARTICIPANT;
             case 404 -> CommandErrorCode.ROOM_NOT_FOUND;
             default -> CommandErrorCode.INTERNAL;
         };
 
-        return new CommandError(code, e.getReason(), false);
+        return new CommandError(code, e.getMessage(), false);
     }
 }

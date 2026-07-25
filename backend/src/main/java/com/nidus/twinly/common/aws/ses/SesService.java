@@ -1,9 +1,9 @@
 package com.nidus.twinly.common.aws.ses;
 
+import com.nidus.twinly.common.web.BusinessException;
+import com.nidus.twinly.common.web.ErrorCode;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.ses.SesClient;
 import software.amazon.awssdk.services.ses.model.*;
@@ -33,7 +33,7 @@ public class SesService {
         try {
             sesClient.sendEmail(request);
         } catch (SdkException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "이메일 발송에 실패했습니다.", e);
+            throw new BusinessException(ErrorCode.EMAIL_SEND_FAILED, e);
         }
     }
 }

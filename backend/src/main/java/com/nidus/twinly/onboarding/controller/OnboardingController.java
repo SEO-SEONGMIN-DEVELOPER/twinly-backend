@@ -12,6 +12,8 @@ import com.nidus.twinly.onboarding.dto.response.OnboardingProfilePhotoCommitResp
 import com.nidus.twinly.onboarding.dto.response.OnboardingProfilePhotoPresignResponse;
 import com.nidus.twinly.onboarding.dto.response.OnboardingSurveyQuestionResponse;
 import com.nidus.twinly.onboarding.service.OnboardingService;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -29,6 +31,7 @@ public class OnboardingController {
     private final OnboardingService onboardingService;
     private final AiChatService aiChatService;
 
+    @ApiResponse(responseCode = "401", description = "INVALID_ANON_SESSION")
     @PostMapping("/api/v1/onboarding/basic-info")
     public void basicInfo(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
                           @Valid @RequestBody OnboardingBasicInfoRequest request) {
@@ -42,6 +45,7 @@ public class OnboardingController {
                 .toList();
     }
 
+    @ApiResponse(responseCode = "404", description = "SURVEY_QUESTION_NOT_FOUND")
     @PostMapping("/api/v1/onboarding/survey-answer")
     public void surveyAnswer(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
                               @Valid @RequestBody OnboardingSurveyAnswerRequest request) {
@@ -66,12 +70,18 @@ public class OnboardingController {
         return OnboardingProfilePhotoCommitResponse.from(onboardingService.profilePhotoCommit(anonSessionSnapshot, OnboardingProfilePhotoCommitCommand.from(request)));
     }
 
+    @ApiResponse(responseCode = "422", description = "INVALID_NICKNAME")
     @PostMapping("/api/v1/onboarding/profile/nickname/check")
     public OnboardingProfileNicknameCheckResponse profileNicknameCheck(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
                                                                        @Valid @RequestBody OnboardingProfileNicknameCheckRequest request) {
         return OnboardingProfileNicknameCheckResponse.from(onboardingService.profileNicknameCheck(anonSessionSnapshot, OnboardingProfileNicknameCheckCommand.from(request)));
     }
 
+    @ApiResponses({
+            @ApiResponse(responseCode = "401", description = "INVALID_ANON_SESSION"),
+            @ApiResponse(responseCode = "409", description = "NICKNAME_ALREADY_USED"),
+            @ApiResponse(responseCode = "422", description = "INVALID_NICKNAME")
+    })
     @PostMapping("/api/v1/onboarding/profile/nickname")
     public void profileNickname(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
                                  @Valid @RequestBody OnboardingProfileNicknameRequest request) {
@@ -89,12 +99,14 @@ public class OnboardingController {
         return OnboardingAiChatMessageResponse.from(aiChatService.aiChatMessage(anonSessionSnapshot, OnboardingAiChatMessageCommand.from(request)));
     }
 
+    @ApiResponse(responseCode = "404", description = "POLICY_NOT_FOUND")
     @PostMapping("/api/v1/onboarding/consents")
     public void grantConsents(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
                               @Valid @RequestBody OnboardingGrantConsentsRequest request) {
         onboardingService.grantConsents(anonSessionSnapshot, OnboardingGrantConsentsCommand.from(request));
     }
 
+    @ApiResponse(responseCode = "403", description = "REQUIRED_POLICY_REVOKE_DENIED")
     @DeleteMapping("/api/v1/onboarding/consents")
     public void revokeConsents(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
                                @Valid @RequestBody OnboardingRevokeConsentsRequest request) {

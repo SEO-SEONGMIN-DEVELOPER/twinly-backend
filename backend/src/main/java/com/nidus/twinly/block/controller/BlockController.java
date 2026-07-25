@@ -5,6 +5,7 @@ import com.nidus.twinly.block.service.BlockService;
 import com.nidus.twinly.common.web.RequestId;
 import com.nidus.twinly.user.annotation.CurrentUser;
 import com.nidus.twinly.user.dto.header.UserInfo;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,6 +19,7 @@ public class BlockController {
 
     private final BlockService blockService;
 
+    @ApiResponse(responseCode = "422", description = "CANNOT_BLOCK_SELF")
     @PostMapping("/api/v1/blocks/{userId}")
     public void block(@CurrentUser UserInfo userInfo,
                       @PathVariable String userId) {

@@ -1,14 +1,14 @@
 package com.nidus.twinly.user.service;
 
 import com.nidus.twinly.common.jwt.JwtService;
+import com.nidus.twinly.common.web.BusinessException;
+import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.user.dto.header.UserInfo;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.UserRepository;
 import io.jsonwebtoken.JwtException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @RequiredArgsConstructor
@@ -22,14 +22,14 @@ public class UserService {
         try {
             userId = jwtService.parseAccessTokenUserId(token);
         } catch (JwtException e) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "유효하지 않은 토큰입니다", e);
+            throw new BusinessException(ErrorCode.INVALID_TOKEN, e);
         }
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "존재하지 않는 유저입니다"));
+                .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_TOKEN));
 
         if (user.getDeletedAt() != null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "탈퇴한 유저입니다");
+            throw new BusinessException(ErrorCode.WITHDRAWN_USER);
         }
 
         return new UserInfo(user.getId());

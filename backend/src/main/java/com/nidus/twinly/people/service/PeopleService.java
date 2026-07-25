@@ -14,6 +14,8 @@ import com.nidus.twinly.chat.entity.ChatRoom;
 import com.nidus.twinly.chat.repository.ChatRoomRepository;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
 import com.nidus.twinly.common.photo.PhotoType;
+import com.nidus.twinly.common.web.BusinessException;
+import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.match.entity.Match;
 import com.nidus.twinly.match.repository.MatchRepository;
 import com.nidus.twinly.people.dto.result.*;
@@ -34,13 +36,14 @@ import com.nidus.twinly.user.repository.DisclosureAgreementRepository;
 import com.nidus.twinly.user.repository.PhotoRepository;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -56,6 +59,7 @@ import java.util.stream.Collectors;
 public class PeopleService {
 
     private static final int DEFAULT_LIMIT = 20;
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private final RelationshipRepository relationshipRepository;
     private final UserRepository userRepository;
@@ -147,7 +151,7 @@ public class PeopleService {
 
     public PeopleProfileResult profile(Long userId, Long partnerUserId) {
         User partner = userRepository.findById(partnerUserId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 유저입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
         int intimacy = relationshipRepository.findLatestByUserIdAndPartnerUserId(userId, partnerUserId)
                 .map(Relationship::getIntimacy)
@@ -190,7 +194,7 @@ public class PeopleService {
 
     public void favorites(Long userId, Long partnerUserId) {
         Encounter encounter = encounterRepository.findByUserAIdAndUserBId(Math.min(userId, partnerUserId), Math.max(userId, partnerUserId))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "만난 적 없는 상대입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.ENCOUNTER_NOT_FOUND));
 
         EncounterPreference preference = encounterPreferenceRepository.findByEncounterIdAndUserId(encounter.getId(), userId)
                 .orElseGet(() -> EncounterPreference.create(encounter.getId(), userId));
@@ -201,7 +205,7 @@ public class PeopleService {
 
     public void deleteFavorites(Long userId, Long partnerUserId) {
         Encounter encounter = encounterRepository.findByUserAIdAndUserBId(Math.min(userId, partnerUserId), Math.max(userId, partnerUserId))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "만난 적 없는 상대입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.ENCOUNTER_NOT_FOUND));
 
         encounterPreferenceRepository.findByEncounterIdAndUserId(encounter.getId(), userId)
                 .ifPresent(preference -> {
@@ -218,7 +222,7 @@ public class PeopleService {
 
         int currentIntimacy = relationshipRepository.findLatestByUserIdAndPartnerUserId(userId, partnerUserId)
                 .map(Relationship::getIntimacy)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "관계 없는 상대입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.RELATIONSHIP_NOT_FOUND));
 
         return new PeopleIntimacySeriesResult(currentIntimacy, series);
     }
@@ -259,7 +263,7 @@ public class PeopleService {
 
     public PeopleEventsResult events(Long userId, Long partnerUserId, LocalDate cursor, Integer limit) {
         User partner = userRepository.findById(partnerUserId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 유저입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
         int intimacy = relationshipRepository.findLatestByUserIdAndPartnerUserId(userId, partnerUserId)
                 .map(Relationship::getIntimacy)
@@ -380,11 +384,14 @@ public class PeopleService {
                 })
                 .toList();
 
+        Instant startsAt = toKstInstant(scene.getStartsAt());
+        Instant endsAt = toKstInstant(scene.getEndsAt());
+
         return switch (scene.getType()) {
             case ACTION -> new PeopleEventActionSceneResult(
                     "action",
-                    scene.getStartsAt(),
-                    scene.getEndsAt(),
+                    startsAt,
+                    endsAt,
                     scene.getPlace(),
                     with,
                     scene.getNarration(),
@@ -392,8 +399,8 @@ public class PeopleService {
             );
             case DIALOGUE -> new PeopleEventDialogueSceneResult(
                     "dialogue",
-                    scene.getStartsAt(),
-                    scene.getEndsAt(),
+                    startsAt,
+                    endsAt,
                     scene.getPlace(),
                     with,
                     parseLines(scene.getLines())
@@ -401,9 +408,13 @@ public class PeopleService {
         };
     }
 
+    private Instant toKstInstant(LocalDateTime localDateTime) {
+        return localDateTime.atZone(KST).toInstant();
+    }
+
     public PeopleLearnedFactsResult learnedFacts(Long userId, Long partnerUserId) {
         Relationship relationship = relationshipRepository.findLatestByUserIdAndPartnerUserId(userId, partnerUserId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "관계 없는 상대입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.RELATIONSHIP_NOT_FOUND));
 
         return new PeopleLearnedFactsResult(relationship.getPartnerModel());
     }

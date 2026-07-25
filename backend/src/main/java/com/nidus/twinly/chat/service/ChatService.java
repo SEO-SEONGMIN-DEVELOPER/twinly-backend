@@ -13,6 +13,8 @@ import com.nidus.twinly.chat.repository.ChatRoomParticipationRepository;
 import com.nidus.twinly.chat.repository.ChatRoomRepository;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
 import com.nidus.twinly.common.photo.PhotoType;
+import com.nidus.twinly.common.web.BusinessException;
+import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.chat.event.ChatMessageCreatedEvent;
 import com.nidus.twinly.match.entity.Match;
 import com.nidus.twinly.match.repository.MatchRepository;
@@ -29,11 +31,9 @@ import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatus;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -70,14 +70,14 @@ public class ChatService {
     @Transactional
     public ChatSendMessageResult sendMessage(Long userId, Long roomId, ChatSendMessageCommand command) {
         if (command.text().getBytes(StandardCharsets.UTF_8).length > MAX_TEXT_BYTES) {
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, "메시지 길이 상한을 초과했습니다.");
+            throw new BusinessException(ErrorCode.MESSAGE_LENGTH_EXCEEDED);
         }
 
         ChatRoom room = chatRoomRepository.findById(roomId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 채팅방입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.ROOM_NOT_FOUND));
 
         Match match = matchRepository.findById(room.getMatchId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 매칭입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.MATCH_NOT_FOUND));
 
         Long receiverUserId = resolvePartnerId(match, userId);
 
@@ -86,7 +86,7 @@ public class ChatService {
             Chat sentChat = existing.get();
 
             if (!sentChat.getRoomId().equals(roomId) || !sentChat.getMessage().equals(command.text())) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 다른 내용으로 사용된 clientMsgId입니다.");
+                throw new BusinessException(ErrorCode.CLIENT_MSG_ID_CONFLICT);
             }
 
             return new ChatSendMessageResult(sentChat.getId(), sentChat.getMessage(), sentChat.getSentAt(), sentChat.getClientMsgId());
@@ -108,7 +108,7 @@ public class ChatService {
 
     private void checkUserInMatch(Match match, Long userId) {
         if (!match.getUserAId().equals(userId) && !match.getUserBId().equals(userId)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "이 매칭의 참여자가 아닙니다.");
+            throw new BusinessException(ErrorCode.NOT_MATCH_PARTICIPANT);
         }
     }
 
@@ -225,14 +225,14 @@ public class ChatService {
 
     public ChatRoomDetailResult roomDetail(Long userId, Long roomId) {
         ChatRoom room = chatRoomRepository.findById(roomId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 채팅방입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.ROOM_NOT_FOUND));
 
         Match match = matchRepository.findById(room.getMatchId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 매칭입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.MATCH_NOT_FOUND));
 
         Long partnerId = resolvePartnerId(match, userId);
         User partner = userRepository.findById(partnerId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 유저입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
         ChatRoomParticipation myParticipation = chatRoomParticipationRepository.findByRoomIdAndUserId(roomId, userId)
                 .orElse(null);
@@ -277,10 +277,10 @@ public class ChatService {
     @Transactional
     public ChatRoomDetailResult enterRoom(Long userId, Long roomId) {
         ChatRoom room = chatRoomRepository.findById(roomId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 채팅방입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.ROOM_NOT_FOUND));
 
         Match match = matchRepository.findById(room.getMatchId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 매칭입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.MATCH_NOT_FOUND));
 
         checkUserInMatch(match, userId);
 
@@ -296,10 +296,10 @@ public class ChatService {
     @Transactional
     public void hideRoom(Long userId, Long roomId) {
         ChatRoom room = chatRoomRepository.findById(roomId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 채팅방입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.ROOM_NOT_FOUND));
 
         Match match = matchRepository.findById(room.getMatchId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 매칭입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.MATCH_NOT_FOUND));
 
         checkUserInMatch(match, userId);
 
@@ -312,10 +312,10 @@ public class ChatService {
 
     public ChatMessagesResult messages(Long userId, Long roomId, Long cursor, Integer limit) {
         ChatRoom room = chatRoomRepository.findById(roomId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 채팅방입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.ROOM_NOT_FOUND));
 
         Match match = matchRepository.findById(room.getMatchId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 매칭입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.MATCH_NOT_FOUND));
 
         checkUserInMatch(match, userId);
 
@@ -345,19 +345,19 @@ public class ChatService {
     @Transactional
     public ChatReadMessagesResult readMessages(Long userId, Long roomId, ChatReadMessagesCommand command) {
         ChatRoom room = chatRoomRepository.findById(roomId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 채팅방입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.ROOM_NOT_FOUND));
 
         Match match = matchRepository.findById(room.getMatchId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 매칭입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.MATCH_NOT_FOUND));
 
         checkUserInMatch(match, userId);
 
         if (!chatRepository.existsByIdAndRoomId(command.lastMsgId(), roomId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "해당 방에 존재하지 않는 메시지입니다.");
+            throw new BusinessException(ErrorCode.MESSAGE_NOT_IN_ROOM);
         }
 
         ChatRoomParticipation participation = chatRoomParticipationRepository.findByRoomIdAndUserId(roomId, userId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "참여 정보가 없습니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.CHAT_PARTICIPATION_NOT_FOUND));
         Long before = participation.getLastReadMessageId();
 
         chatRoomParticipationRepository.advanceReadPointer(roomId, userId, command.lastMsgId());
@@ -370,10 +370,10 @@ public class ChatService {
     @Transactional
     public void leaveRoom(Long userId, Long roomId) {
         ChatRoom room = chatRoomRepository.findById(roomId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 채팅방입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.ROOM_NOT_FOUND));
 
         Match match = matchRepository.findById(room.getMatchId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 매칭입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.MATCH_NOT_FOUND));
 
         checkUserInMatch(match, userId);
 

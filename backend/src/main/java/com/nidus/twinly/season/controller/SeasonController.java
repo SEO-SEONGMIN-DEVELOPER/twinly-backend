@@ -4,6 +4,7 @@ import com.nidus.twinly.season.dto.response.SeasonParticipationResponse;
 import com.nidus.twinly.season.service.SeasonService;
 import com.nidus.twinly.user.annotation.CurrentUser;
 import com.nidus.twinly.user.dto.header.UserInfo;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -15,6 +16,7 @@ public class SeasonController {
 
     private final SeasonService seasonService;
 
+    @ApiResponse(responseCode = "422", description = "SEASON_NOT_JOINABLE")
     @PostMapping("/api/v1/season/participations")
     public void participateIn(@CurrentUser UserInfo userInfo) {
         seasonService.participateIn(userInfo.id());

@@ -1,5 +1,7 @@
 package com.nidus.twinly.season.service;
 
+import com.nidus.twinly.common.web.BusinessException;
+import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.season.dto.result.SeasonParticipationResult;
 import com.nidus.twinly.season.entity.Season;
 import com.nidus.twinly.season.entity.SeasonParticipation;
@@ -7,10 +9,8 @@ import com.nidus.twinly.season.repository.SeasonParticipationRepository;
 import com.nidus.twinly.season.repository.SeasonRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 
@@ -32,7 +32,7 @@ public class SeasonService {
         Instant now = Instant.now();
 
         if (now.isBefore(season.getStartedAt()) || now.isAfter(season.getEndedAt())) {
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, "지금은 시즌 참가 기간이 아닙니다.");
+            throw new BusinessException(ErrorCode.SEASON_NOT_JOINABLE);
         }
 
         if (seasonParticipationRepository.existsByUserIdAndSeasonId(userId, currentSeasonId)) {

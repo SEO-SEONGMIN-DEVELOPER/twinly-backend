@@ -2,10 +2,10 @@ package com.nidus.twinly.common.presign;
 
 import com.nidus.twinly.common.aws.s3.S3Service;
 import com.nidus.twinly.common.photo.PhotoType;
+import com.nidus.twinly.common.web.BusinessException;
+import com.nidus.twinly.common.web.ErrorCode;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -24,11 +24,11 @@ public class PresignService {
 
     public PhotoPresignResult presignPhoto(Long ownerId, String contentType, PhotoType type) {
         if (contentType == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "요청 형식이 올바르지 않습니다.");
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
         }
 
         if (!ALLOWED_PHOTO_CONTENT_TYPES.contains(contentType)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "지원하지 않는 이미지 형식입니다: " + contentType);
+            throw new BusinessException(ErrorCode.UNSUPPORTED_IMAGE_TYPE, "지원하지 않는 이미지 형식입니다: " + contentType);
         }
 
         String key = "%s/%d/%s".formatted(type.name().toLowerCase(), ownerId, UUID.randomUUID());

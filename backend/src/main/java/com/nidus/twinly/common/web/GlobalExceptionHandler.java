@@ -19,38 +19,49 @@ import org.springframework.web.server.ResponseStatusException;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(BusinessException.class)
+    public ResponseEntity<ErrorResponse> handleBusinessException(BusinessException e) {
+        ErrorCode errorCode = e.getErrorCode();
+        if (errorCode.getStatus().is5xxServerError()) {
+            log.error("[5xx Error]: ", e);
+        }
+        return ResponseEntity
+                .status(errorCode.getStatus())
+                .body(ErrorResponse.of(errorCode, e.getMessage()));
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ErrorResponse handleValidationException(MethodArgumentNotValidException e) {
-        return new ErrorResponse("요청 형식이 올바르지 않습니다.");
+        return ErrorResponse.of(ErrorCode.INVALID_REQUEST);
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ErrorResponse handleNotReadable(HttpMessageNotReadableException e) {
-        return new ErrorResponse("요청 형식이 올바르지 않습니다.");
+        return ErrorResponse.of(ErrorCode.INVALID_REQUEST);
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ErrorResponse handleTypeMismatch(MethodArgumentTypeMismatchException e) {
-        return new ErrorResponse("요청 형식이 올바르지 않습니다.");
+        return ErrorResponse.of(ErrorCode.INVALID_REQUEST);
     }
 
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<ErrorResponse> handleResponseStatusException(ResponseStatusException e) {
         if (e.getStatusCode().is5xxServerError()) {
-            log.error("502 Error]: ", e);
+            log.error("[5xx Error]: ", e);
         }
         return ResponseEntity
                 .status(e.getStatusCode())
-                .body(new ErrorResponse(e.getReason()));
+                .body(new ErrorResponse(null, e.getReason()));
     }
 
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ErrorResponse handleUnexpected(Exception e) {
         log.error("[500 Error]: ", e);
-        return new ErrorResponse("일시적인 서버 오류가 발생했습니다.");
+        return ErrorResponse.of(ErrorCode.INTERNAL_ERROR);
     }
 }

@@ -38,6 +38,8 @@ import com.nidus.twinly.notification.domain.NotificationType;
 import com.nidus.twinly.user.annotation.CurrentUser;
 import com.nidus.twinly.user.domain.DisclosureField;
 import com.nidus.twinly.user.dto.header.UserInfo;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -67,22 +69,32 @@ public class MeController {
         return MeProfilePhotoCommitResponse.from(meService.profilePhotoCommit(userInfo.id(), MeProfilePhotoCommitCommand.from(request)));
     }
 
+    @ApiResponses({
+            @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND"),
+            @ApiResponse(responseCode = "409", description = "WITHDRAWAL_ALREADY_REQUESTED")
+    })
     @DeleteMapping("/api/v1/me")
     public MeWithdrawResponse withdraw(@CurrentUser UserInfo userInfo) {
         return MeWithdrawResponse.from(meService.withdraw(userInfo.id()));
     }
 
+    @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND")
     @GetMapping("/api/v1/me/profile-edit-view")
     public MeProfileEditViewResponse profileEditView(@CurrentUser UserInfo userInfo) {
         return MeProfileEditViewResponse.from(meService.profileEditView(userInfo.id()));
     }
 
+    @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND")
     @PatchMapping("/api/v1/me/profile")
     public void profile(@CurrentUser UserInfo userInfo,
                         @Valid @RequestBody MeProfileRequest request) {
         meService.profile(userInfo.id(), MeProfileCommand.from(request));
     }
 
+    @ApiResponses({
+            @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND"),
+            @ApiResponse(responseCode = "422", description = "WITHDRAWAL_RECOVERY_EXPIRED")
+    })
     @PostMapping("/api/v1/me/restore")
     public void restore(@CurrentUser UserInfo userInfo) {
         meService.restore(userInfo.id());
@@ -93,12 +105,14 @@ public class MeController {
         return MeConsentsResponse.from(meService.consents(userInfo.id()));
     }
 
+    @ApiResponse(responseCode = "404", description = "POLICY_NOT_FOUND")
     @PostMapping("/api/v1/me/consents")
     public void grantConsents(@CurrentUser UserInfo userInfo,
                               @Valid @RequestBody MeGrantConsentsRequest request) {
         meService.grantConsents(userInfo.id(), MeGrantConsentsCommand.from(request));
     }
 
+    @ApiResponse(responseCode = "403", description = "REQUIRED_POLICY_REVOKE_DENIED")
     @DeleteMapping("/api/v1/me/consents")
     public void revokeConsents(@CurrentUser UserInfo userInfo,
                                @Valid @RequestBody MeRevokeConsentsRequest request) {
@@ -137,6 +151,7 @@ public class MeController {
         return MeAppNotificationsFeedsResponse.from(meService.appNotificationsFeeds(userInfo.id(), unreadOnly, type, limit));
     }
 
+    @ApiResponse(responseCode = "404", description = "APP_NOTIFICATION_NOT_FOUND")
     @PostMapping("/api/v1/me/app-notifications/{appNotificationId}/read")
     public void appNotificationsRead(@CurrentUser UserInfo userInfo,
                                      @PathVariable String appNotificationId) {
@@ -154,6 +169,7 @@ public class MeController {
         return MeAppNotificationsUnreadCountResponse.from(meService.appNotificationsUnreadCount(userInfo.id()));
     }
 
+    @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND")
     @GetMapping("/api/v1/me/status")
     public MeStatusResponse status(@CurrentUser UserInfo userInfo) {
         return MeStatusResponse.from(meService.status(userInfo.id()));
@@ -166,6 +182,12 @@ public class MeController {
         return MeHesitationsResponse.from(meService.hesitations(userInfo.id(), duration, status));
     }
 
+    @ApiResponses({
+            @ApiResponse(responseCode = "403", description = "NOT_HESITATION_OWNER"),
+            @ApiResponse(responseCode = "404", description = "HESITATION_NOT_FOUND"),
+            @ApiResponse(responseCode = "409", description = "HESITATION_ALREADY_HANDLED"),
+            @ApiResponse(responseCode = "422", description = "HESITATION_ANSWER_EMPTY, HESITATION_ANSWER_NOT_IN_OPTIONS")
+    })
     @PostMapping("/api/v1/me/hesitations/{hesitationId}/answer")
     public void hesitationsAnswer(@CurrentUser UserInfo userInfo,
                                   @PathVariable String hesitationId,

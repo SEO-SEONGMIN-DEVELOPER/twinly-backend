@@ -8,5 +8,5 @@ import java.util.List;
 
 public interface ReportRepository extends JpaRepository<Report, Long> {
 
-    List<Report> findAllByReportedUserIdAndStatusNot(Long reportedUserId, ReportStatus status);
+    List<Report> findAllByReportedUserIdAndStatus(Long reportedUserId, ReportStatus status);
 }

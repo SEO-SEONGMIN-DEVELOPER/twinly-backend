@@ -8,14 +8,14 @@ import com.nidus.twinly.anon.entity.AnonSessionPersonaElement;
 import com.nidus.twinly.anon.repository.AnonSessionPersonaElementRepository;
 import com.nidus.twinly.common.aws.bedrock.BedrockService;
 import com.nidus.twinly.common.persona.PersonaDimension;
+import com.nidus.twinly.common.web.BusinessException;
+import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.onboarding.dto.command.OnboardingAiChatMessageCommand;
 import com.nidus.twinly.onboarding.dto.result.OnboardingAiChatMessageResult;
 import com.nidus.twinly.onboarding.dto.result.OnboardingAiChatStartResult;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -73,7 +73,7 @@ public class AiChatService {
         Long anonSessionId = anonSessionSnapshot.id();
 
         AiChat aiQuestion = aiChatRepository.findByAnonSessionIdAndTurnIndexAndSender(anonSessionId, command.turnIndex(), AiChatSender.AI)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "해당 턴의 AI 질문이 존재하지 않습니다: " + command.turnIndex()));
+                .orElseThrow(() -> new BusinessException(ErrorCode.AI_QUESTION_NOT_FOUND, "해당 턴의 AI 질문이 존재하지 않습니다: " + command.turnIndex()));
 
         aiChatRepository.save(AiChat.create(anonSessionId, AiChatSender.USER, command.message(), command.turnIndex()));
 
