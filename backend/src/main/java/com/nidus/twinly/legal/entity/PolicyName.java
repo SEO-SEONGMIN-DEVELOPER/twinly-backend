@@ -19,5 +19,7 @@ public class PolicyName {
 
     private String name;
 
+    private String identifier;
+
     private Boolean isDeprecated;
 }

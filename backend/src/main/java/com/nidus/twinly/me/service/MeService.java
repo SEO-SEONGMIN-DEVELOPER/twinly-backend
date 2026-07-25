@@ -10,6 +10,8 @@ import com.nidus.twinly.common.photo.PhotoType;
 import com.nidus.twinly.common.presign.PhotoCommitService;
 import com.nidus.twinly.common.presign.PhotoPresignResult;
 import com.nidus.twinly.common.presign.PresignService;
+import com.nidus.twinly.common.web.BusinessException;
+import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.legal.entity.Agreement;
 import com.nidus.twinly.legal.entity.Policy;
 import com.nidus.twinly.legal.entity.PolicyName;
@@ -66,10 +68,8 @@ import com.nidus.twinly.user.repository.DisclosureAgreementRepository;
 import com.nidus.twinly.user.repository.PhotoRepository;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -138,10 +138,10 @@ public class MeService {
     @Transactional
     public MeWithdrawResult withdraw(Long userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 유저입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
         if (user.getWithdrawalRequestedAt() != null) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 탈퇴 신청이 된 상태입니다.");
+            throw new BusinessException(ErrorCode.WITHDRAWAL_ALREADY_REQUESTED);
         }
 
         user.requestWithdrawal(WITHDRAWAL_RECOVERABLE_PERIOD);
@@ -151,7 +151,7 @@ public class MeService {
 
     public MeProfileEditViewResult profileEditView(Long userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 유저입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
         String profilePhotoUrl = photoRepository.findByUserIdAndType(userId, PhotoType.PROFILE)
                 .map(photo -> cloudFrontService.getSignedUrl(photo.getKey()))
@@ -171,7 +171,7 @@ public class MeService {
     @Transactional
     public void profile(Long userId, MeProfileCommand command) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 유저입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
         user.changeAffiliation(command.affiliation(), blindIndexHasher.hash(command.affiliation()));
     }
@@ -179,14 +179,14 @@ public class MeService {
     @Transactional
     public void restore(Long userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 유저입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
         if (user.getWithdrawalRequestedAt() == null) {
             return;
         }
 
         if (user.getWithdrawalRequestedAt().plus(WITHDRAWAL_RECOVERABLE_PERIOD).isBefore(Instant.now())) {
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, "복구 가능 기간이 지났습니다.");
+            throw new BusinessException(ErrorCode.WITHDRAWAL_RECOVERY_EXPIRED);
         }
 
         user.cancelWithdrawal();
@@ -215,7 +215,7 @@ public class MeService {
                     Policy current = currentByPolicyNameId.get(policyName.getId());
                     Agreement agreement = current != null ? agreementByPolicyId.get(current.getId()) : null;
                     return new MeConsentsItemResult(
-                            policyName.getId(),
+                            policyName.getIdentifier(),
                             policyName.getName(),
                             current != null ? current.getVersion() : null,
                             current != null ? current.getUrl() : null,
@@ -230,9 +230,9 @@ public class MeService {
 
     @Transactional
     public void grantConsents(Long userId, MeGrantConsentsCommand command) {
-        List<Long> policyNameIds = command.grants().stream().map(grant -> grant.policyId()).toList();
+        List<String> policyNameIdentifiers = command.grants().stream().map(grant -> grant.policyId()).toList();
 
-        Map<PolicyKey, Policy> policyByKey = policyCatalog.loadByKey(policyNameIds);
+        Map<PolicyKey, Policy> policyByKey = policyCatalog.loadByKey(policyNameIdentifiers);
 
         Set<Long> alreadyAgreedPolicyIds = agreementRepository.findAllByUserIdAndRevokedAtIsNull(userId).stream()
                 .map(Agreement::getPolicyId)
@@ -243,7 +243,7 @@ public class MeService {
                 .map(grant -> {
                     Policy policy = policyByKey.get(new PolicyKey(grant.policyId(), grant.version()));
                     if (policy == null) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "존재하지 않는 정책 또는 버전입니다.");
+                        throw new BusinessException(ErrorCode.POLICY_NOT_FOUND);
                     }
                     return policy;
                 })
@@ -256,9 +256,9 @@ public class MeService {
 
     @Transactional
     public void revokeConsents(Long userId, MeRevokeConsentsCommand command) {
-        List<Long> policyNameIds = command.grants().stream().map(grant -> grant.policyId()).toList();
+        List<String> policyNameIdentifiers = command.grants().stream().map(grant -> grant.policyId()).toList();
 
-        Map<PolicyKey, Policy> policyByKey = policyCatalog.loadByKey(policyNameIds);
+        Map<PolicyKey, Policy> policyByKey = policyCatalog.loadByKey(policyNameIdentifiers);
 
         List<Policy> policies = command.grants().stream()
                 .map(grant -> policyByKey.get(new PolicyKey(grant.policyId(), grant.version())))
@@ -266,7 +266,7 @@ public class MeService {
                 .toList();
 
         if (policies.stream().anyMatch(policy -> Boolean.TRUE.equals(policy.getIsRequired()))) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "필수 정책은 철회할 수 없습니다.");
+            throw new BusinessException(ErrorCode.REQUIRED_POLICY_REVOKE_DENIED);
         }
 
         List<Long> policyIdsToRevoke = policies.stream().map(Policy::getId).toList();
@@ -353,7 +353,7 @@ public class MeService {
     @Transactional
     public void appNotificationsRead(Long userId, Long appNotificationId) {
         AppNotificationFeed feed = appNotificationFeedRepository.findByIdAndUserId(appNotificationId, userId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 알림입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.APP_NOTIFICATION_NOT_FOUND));
 
         if (feed.getReadAt() != null) {
             return;
@@ -369,14 +369,14 @@ public class MeService {
 
     public MeStatusResult status(Long userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 유저입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
         MeStatusWithdrawalResult withdrawal = new MeStatusWithdrawalResult(
                 user.getWithdrawalRequestedAt() != null,
                 user.getWithdrawalScheduledAt()
         );
 
-        List<Report> reports = reportRepository.findAllByReportedUserIdAndStatusNot(userId, ReportStatus.REJECTED);
+        List<Report> reports = reportRepository.findAllByReportedUserIdAndStatus(userId, ReportStatus.RESOLVED);
         List<String> reasons = reports.stream()
                 .map(report -> report.getReason().name())
                 .distinct()
@@ -407,20 +407,21 @@ public class MeService {
                 .map(Question::getId)
                 .toList();
 
-        return new MeHesitationsResult(today, hesitationIds);
+        LocalDate date = duration == HesitationDuration.TODAY ? today : null;
+        return new MeHesitationsResult(date, hesitationIds);
     }
 
     @Transactional
     public void hesitationsAnswer(Long userId, Long hesitationId, MeHesitationsAnswerCommand command) {
         Question question = questionRepository.findById(hesitationId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 망설임입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.HESITATION_NOT_FOUND));
 
         if (!question.getUserId().equals(userId)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "본인의 망설임이 아닙니다.");
+            throw new BusinessException(ErrorCode.NOT_HESITATION_OWNER);
         }
 
         if (question.getAnsweredAt() != null || Boolean.TRUE.equals(question.getIsSkipped())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 처리된 망설임입니다.");
+            throw new BusinessException(ErrorCode.HESITATION_ALREADY_HANDLED);
         }
 
         if (Boolean.TRUE.equals(command.skipped())) {
@@ -429,11 +430,11 @@ public class MeService {
         }
 
         if (command.answer() == null || command.answer().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, "답변 내용이 없습니다.");
+            throw new BusinessException(ErrorCode.HESITATION_ANSWER_EMPTY);
         }
 
         if (!question.getOptions().contains(command.answer())) {
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, "선택지에 없는 답변입니다.");
+            throw new BusinessException(ErrorCode.HESITATION_ANSWER_NOT_IN_OPTIONS);
         }
 
         question.answer(command.answer());

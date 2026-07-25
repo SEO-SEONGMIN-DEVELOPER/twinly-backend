@@ -51,6 +51,7 @@ ALTER TABLE photos
 CREATE TABLE policy_names (
     id              BIGINT GENERATED ALWAYS AS IDENTITY,
     name            TEXT NOT NULL,
+    identifier      TEXT NOT NULL,
     is_deprecated   BOOLEAN NOT NULL DEFAULT FALSE,
 
     CONSTRAINT pk_policy_names PRIMARY KEY (id)

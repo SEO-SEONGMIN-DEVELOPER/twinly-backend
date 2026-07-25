@@ -3,7 +3,7 @@ package com.nidus.twinly.me.dto.command;
 import com.nidus.twinly.me.dto.request.MeGrantConsentsItemRequest;
 
 public record MeGrantConsentsItemCommand(
-        Long policyId,
+        String policyId,
         Integer version
 ) {
 

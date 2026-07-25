@@ -38,7 +38,7 @@ public class LegalService {
                 .map(policyName -> {
                     Policy latest = latestByPolicyNameId.get(policyName.getId());
                     return new LegalPoliciesItemResult(
-                            policyName.getId(),
+                            policyName.getIdentifier(),
                             policyName.getName(),
                             latest != null ? latest.getVersion() : null,
                             latest != null ? latest.getUrl() : null,

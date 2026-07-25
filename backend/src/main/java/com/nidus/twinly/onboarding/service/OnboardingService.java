@@ -18,6 +18,8 @@ import com.nidus.twinly.common.presign.PresignService;
 import com.nidus.twinly.common.survey.SurveyLoader;
 import com.nidus.twinly.common.survey.SurveyOptionName;
 import com.nidus.twinly.common.survey.SurveyQuestion;
+import com.nidus.twinly.common.web.BusinessException;
+import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.legal.entity.Policy;
 import com.nidus.twinly.legal.service.PolicyCatalog;
 import com.nidus.twinly.legal.service.PolicyCatalog.PolicyKey;
@@ -29,10 +31,8 @@ import com.nidus.twinly.onboarding.entity.SurveyAnswer;
 import com.nidus.twinly.onboarding.repository.SurveyAnswerRepository;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.List;
@@ -65,7 +65,7 @@ public class OnboardingService {
     public void basicInfo(AnonSessionSnapshot anonSessionSnapshot, OnboardingBasicInfoCommand command) {
         Long anonSessionId = anonSessionSnapshot.id();
         AnonSession anonSession = anonSessionRepository.findById(anonSessionId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "유효하지 않은 세션입니다"));
+                .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_ANON_SESSION));
 
         anonSession.changeFamilyName(command.familyName());
         anonSession.changeGivenName(command.givenName());
@@ -88,7 +88,7 @@ public class OnboardingService {
         SurveyQuestion question = surveyLoader.getQuestion(qId);
 
         if (question == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "존재하지 않는 질문입니다: " + qId);
+            throw new BusinessException(ErrorCode.SURVEY_QUESTION_NOT_FOUND, "존재하지 않는 질문입니다: " + qId);
         }
 
         surveyAnswerRepository.findByAnonSessionIdAndQId(anonSessionId, qId)
@@ -161,11 +161,11 @@ public class OnboardingService {
 
         if (userRepository.existsByNickname(nickname)
                 || anonSessionRepository.existsByNickname(nickname)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 사용 중인 닉네임입니다: " + nickname);
+            throw new BusinessException(ErrorCode.NICKNAME_ALREADY_USED, "이미 사용 중인 닉네임입니다: " + nickname);
         }
 
         AnonSession anonSession = anonSessionRepository.findById(anonSessionId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "유효하지 않은 세션입니다"));
+                .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_ANON_SESSION));
 
         anonSession.changeNickname(nickname);
     }
@@ -174,9 +174,9 @@ public class OnboardingService {
     public void grantConsents(AnonSessionSnapshot anonSessionSnapshot, OnboardingGrantConsentsCommand command) {
         Long anonSessionId = anonSessionSnapshot.id();
 
-        List<Long> policyNameIds = command.grants().stream().map(grant -> grant.policyId()).toList();
+        List<String> policyNameIdentifiers = command.grants().stream().map(grant -> grant.policyId()).toList();
 
-        Map<PolicyKey, Policy> policyByKey = policyCatalog.loadByKey(policyNameIds);
+        Map<PolicyKey, Policy> policyByKey = policyCatalog.loadByKey(policyNameIdentifiers);
 
         Set<Long> alreadyAgreedPolicyIds = anonSessionAgreementRepository.findAllByAnonSessionIdAndRevokedAtIsNull(anonSessionId).stream()
                 .map(AnonSessionAgreement::getPolicyId)
@@ -187,7 +187,7 @@ public class OnboardingService {
                 .map(grant -> {
                     Policy policy = policyByKey.get(new PolicyKey(grant.policyId(), grant.version()));
                     if (policy == null) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "존재하지 않는 정책 또는 버전입니다.");
+                        throw new BusinessException(ErrorCode.POLICY_NOT_FOUND);
                     }
                     return policy;
                 })
@@ -202,9 +202,9 @@ public class OnboardingService {
     public void revokeConsents(AnonSessionSnapshot anonSessionSnapshot, OnboardingRevokeConsentsCommand command) {
         Long anonSessionId = anonSessionSnapshot.id();
 
-        List<Long> policyNameIds = command.grants().stream().map(grant -> grant.policyId()).toList();
+        List<String> policyNameIdentifiers = command.grants().stream().map(grant -> grant.policyId()).toList();
 
-        Map<PolicyKey, Policy> policyByKey = policyCatalog.loadByKey(policyNameIds);
+        Map<PolicyKey, Policy> policyByKey = policyCatalog.loadByKey(policyNameIdentifiers);
 
         List<Policy> policies = command.grants().stream()
                 .map(grant -> policyByKey.get(new PolicyKey(grant.policyId(), grant.version())))
@@ -212,7 +212,7 @@ public class OnboardingService {
                 .toList();
 
         if (policies.stream().anyMatch(policy -> Boolean.TRUE.equals(policy.getIsRequired()))) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "필수 정책은 철회할 수 없습니다.");
+            throw new BusinessException(ErrorCode.REQUIRED_POLICY_REVOKE_DENIED);
         }
 
         List<Long> policyIdsToRevoke = policies.stream().map(Policy::getId).toList();
@@ -229,7 +229,7 @@ public class OnboardingService {
                 .anyMatch(normalized::contains);
 
         if (containsForbiddenWord) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "사용할 수 없는 닉네임입니다.");
+            throw new BusinessException(ErrorCode.INVALID_NICKNAME);
         }
 
         return trimmed;

@@ -3,7 +3,7 @@ package com.nidus.twinly.onboarding.dto.command;
 import com.nidus.twinly.onboarding.dto.request.OnboardingGrantConsentsItemRequest;
 
 public record OnboardingGrantConsentsItemCommand(
-        Long policyId,
+        String policyId,
         Integer version
 ) {
 

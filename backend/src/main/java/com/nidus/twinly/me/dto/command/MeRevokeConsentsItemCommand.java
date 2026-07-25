@@ -3,7 +3,7 @@ package com.nidus.twinly.me.dto.command;
 import com.nidus.twinly.me.dto.request.MeRevokeConsentsItemRequest;
 
 public record MeRevokeConsentsItemCommand(
-        Long policyId,
+        String policyId,
         Integer version
 ) {
 

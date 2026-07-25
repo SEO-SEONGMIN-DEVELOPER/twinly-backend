@@ -1,11 +1,10 @@
 package com.nidus.twinly.onboarding.dto.request;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
 public record OnboardingRevokeConsentsItemRequest(
-        @JsonFormat(shape = JsonFormat.Shape.STRING)
-        @NotNull Long policyId,
+        @NotBlank String policyId,
         @NotNull Integer version
 ) {
 }

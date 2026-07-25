@@ -3,7 +3,7 @@ package com.nidus.twinly.me.dto.result;
 import java.time.Instant;
 
 public record MeConsentsItemResult(
-        Long policyId,
+        String policyId,
         String title,
         Integer version,
         String url,

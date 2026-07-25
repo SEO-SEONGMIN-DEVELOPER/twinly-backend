@@ -1,11 +1,11 @@
 package com.nidus.twinly.me.dto.request;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
 public record MeGrantConsentsItemRequest(
-        @JsonFormat(shape = JsonFormat.Shape.STRING)
-        @NotNull Long policyId,
+        @NotBlank String policyId,
         @JsonFormat(shape = JsonFormat.Shape.STRING)
         @NotNull Integer version
 ) {
