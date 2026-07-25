@@ -4,13 +4,13 @@ import com.nidus.twinly.activity.dto.response.ActivityLineResponse;
 import com.nidus.twinly.activity.dto.response.ActivitySpeakerResponse;
 import com.nidus.twinly.people.dto.result.PeopleEventDialogueSceneResult;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 public record PeopleEventDialogueSceneResponse(
         String type,
-        LocalDateTime startsAt,
-        LocalDateTime endsAt,
+        Instant startsAt,
+        Instant endsAt,
         String place,
         List<ActivitySpeakerResponse> with,
         List<ActivityLineResponse> lines

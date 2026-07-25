@@ -2,11 +2,13 @@ package com.nidus.twinly.chat.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.nidus.twinly.chat.dto.result.ChatRoomPartnerResult;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 public record ChatRoomPartnerResponse(
         @JsonFormat(shape = JsonFormat.Shape.STRING)
         Long userId,
         String userName,
+        @Schema(nullable = true)
         String profilePhotoUrl,
         Integer intimacy,
         Boolean isDeleted

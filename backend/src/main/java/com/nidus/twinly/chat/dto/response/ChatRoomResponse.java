@@ -2,6 +2,7 @@ package com.nidus.twinly.chat.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.nidus.twinly.chat.dto.result.ChatRoomResult;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.Instant;
 
@@ -12,9 +13,12 @@ public record ChatRoomResponse(
         Long matchId,
         ChatRoomEntryStatusResponse entryStatus,
         ChatRoomPartnerResponse partner,
+        @Schema(nullable = true)
         String preview,
         ChatRoomMessagesResponse messages,
+        @Schema(nullable = true)
         Instant closedAt,
+        @Schema(nullable = true)
         String closeReason,
         Boolean isCurrentSeason
 ) {

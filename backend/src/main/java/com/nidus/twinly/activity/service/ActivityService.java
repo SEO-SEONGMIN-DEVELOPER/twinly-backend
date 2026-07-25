@@ -122,10 +122,12 @@ public class ActivityService {
     }
 
     private ActivityQuestionResult toQuestionResult(Question question) {
+        Instant time = toKstInstant(question.getDate().atTime(question.getTime()));
+
         return new ActivityQuestionResult(
                 question.getId(),
                 question.getType().name(),
-                question.getTime(),
+                time,
                 question.getText(),
                 question.getOptions()
         );

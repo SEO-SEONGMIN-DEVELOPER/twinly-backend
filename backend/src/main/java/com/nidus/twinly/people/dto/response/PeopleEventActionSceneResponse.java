@@ -3,13 +3,13 @@ package com.nidus.twinly.people.dto.response;
 import com.nidus.twinly.activity.dto.response.ActivitySpeakerResponse;
 import com.nidus.twinly.people.dto.result.PeopleEventActionSceneResult;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 public record PeopleEventActionSceneResponse(
         String type,
-        LocalDateTime startsAt,
-        LocalDateTime endsAt,
+        Instant startsAt,
+        Instant endsAt,
         String place,
         List<ActivitySpeakerResponse> with,
         String narration,

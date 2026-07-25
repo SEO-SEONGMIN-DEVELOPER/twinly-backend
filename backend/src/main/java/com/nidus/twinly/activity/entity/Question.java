@@ -29,6 +29,7 @@ public class Question {
 
     private LocalDate date;
 
+    @Column(nullable = false)
     private LocalTime time;
 
     @Enumerated(EnumType.STRING)

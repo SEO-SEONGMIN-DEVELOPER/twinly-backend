@@ -2,6 +2,7 @@ package com.nidus.twinly.activity.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.nidus.twinly.activity.dto.result.ActivityResult;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -13,6 +14,7 @@ public record ActivityResponse(
         @JsonFormat(shape = JsonFormat.Shape.STRING)
         Long seasonId,
         LocalDate date,
+        @Schema(nullable = true)
         String version,
         Instant serverNow,
         List<ActivitySceneResponse> scenes,

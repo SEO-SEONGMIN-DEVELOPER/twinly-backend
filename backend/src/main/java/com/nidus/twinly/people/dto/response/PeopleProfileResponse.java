@@ -4,11 +4,13 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import com.nidus.twinly.people.dto.result.PeopleProfileResult;
 import com.nidus.twinly.relationship.domain.RelationshipSpecificType;
 import com.nidus.twinly.relationship.domain.RelationshipType;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 public record PeopleProfileResponse(
         @JsonFormat(shape = JsonFormat.Shape.STRING)
         Long userId,
         String userName,
+        @Schema(nullable = true)
         String profilePhotoUrl,
         Integer intimacy,
         RelationshipType relationshipType,

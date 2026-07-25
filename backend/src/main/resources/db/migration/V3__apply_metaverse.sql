@@ -55,7 +55,7 @@ CREATE TABLE questions (
     id                      BIGINT GENERATED ALWAYS AS IDENTITY,
     user_id                 BIGINT NOT NULL,
     date                    DATE NOT NULL,
-    time                    TIME,
+    time                    TIME NOT NULL,
     type                    QUESTION_TYPE NOT NULL,
     text                    TEXT NOT NULL,
     options                 TEXT[] NOT NULL,

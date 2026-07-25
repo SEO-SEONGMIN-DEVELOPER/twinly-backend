@@ -2,6 +2,7 @@ package com.nidus.twinly.me.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.nidus.twinly.me.dto.result.MeProfileEditViewResult;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 public record MeProfileEditViewResponse(
         @JsonFormat(shape = JsonFormat.Shape.STRING)
@@ -11,6 +12,7 @@ public record MeProfileEditViewResponse(
         String affiliation,
         String affiliationNumber,
         String birthDate,
+        @Schema(nullable = true)
         String profilePhotoUrl
 ) {
 
