@@ -26,6 +26,10 @@ dependencies {
     // API docs - springdoc
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3")
 
+    // AsyncAPI docs (WebSocket/STOMP) - springwolf
+    implementation 'io.github.springwolf:springwolf-stomp:2.6.0'
+    runtimeOnly 'io.github.springwolf:springwolf-ui:2.6.0'
+
     // Web
     implementation 'org.springframework.boot:spring-boot-starter-web'
 

@@ -19,6 +19,9 @@ import com.nidus.twinly.chat.dto.websocket.CommandError;
 import com.nidus.twinly.common.websocket.dto.WebSocketRequestBody;
 import com.nidus.twinly.common.websocket.dto.WebSocketResponseBody;
 import com.nidus.twinly.common.websocket.handshake.WebSocketUserPrincipal;
+import io.github.springwolf.bindings.stomp.annotations.StompAsyncOperationBinding;
+import io.github.springwolf.core.asyncapi.annotations.AsyncOperation;
+import io.github.springwolf.core.asyncapi.annotations.AsyncPublisher;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.handler.annotation.MessageMapping;
@@ -33,6 +36,7 @@ import java.security.Principal;
 public class ChatWebSocketController {
 
     private static final String COMMANDS_DESTINATION = "/queue/chat/commands";
+    private static final String OUTBOUND_CHANNEL = "/user/queue/chat/commands";
 
     private final ChatService chatService;
     private final SimpMessagingTemplate messagingTemplate;
@@ -49,15 +53,11 @@ public class ChatWebSocketController {
             ChatSendMessageResult result = chatService.sendMessage(userId, payload.roomId(),
                     new ChatSendMessageCommand(payload.text(), payload.clientMsgId()));
 
-            sendToCommands(userId, WebSocketResponseBody.commandResult(
-                    body.commandId(),
-                    WebSocketBodyType.CHAT_MESSAGE_COMMITTED,
-                    new ChatMessageCommittedPayload(payload.roomId(), result.messageId(), result.clientMsgId(), result.text(), result.sentAt())));
+            publishMessageCommitted(userId, body.commandId(),
+                    new ChatMessageCommittedPayload(payload.roomId(), result.messageId(), result.clientMsgId(), result.text(), result.sentAt()));
         } catch (BusinessException e) {
-            sendToCommands(userId, WebSocketResponseBody.commandResult(
-                    body.commandId(),
-                    WebSocketBodyType.CHAT_MESSAGE_REJECTED,
-                    new ChatMessageRejectedPayload(payload.roomId(), payload.clientMsgId(), toCommandError(e, CommandErrorCode.TEXT_SIZE_LIMIT_EXCEEDED))));
+            publishMessageRejected(userId, body.commandId(),
+                    new ChatMessageRejectedPayload(payload.roomId(), payload.clientMsgId(), toCommandError(e, CommandErrorCode.TEXT_SIZE_LIMIT_EXCEEDED)));
         }
     }
 
@@ -73,16 +73,52 @@ public class ChatWebSocketController {
             ChatReadMessagesResult result = chatService.readMessages(userId, payload.roomId(),
                     new ChatReadMessagesCommand(payload.lastMsgId()));
 
-            sendToCommands(userId, WebSocketResponseBody.commandResult(
-                    body.commandId(),
-                    WebSocketBodyType.CHAT_READ_COMMITTED,
-                    new ChatReadCommittedPayload(result.roomId(), result.lastMessageId())));
+            publishReadCommitted(userId, body.commandId(),
+                    new ChatReadCommittedPayload(result.roomId(), result.lastMessageId()));
         } catch (BusinessException e) {
-            sendToCommands(userId, WebSocketResponseBody.commandResult(
-                    body.commandId(),
-                    WebSocketBodyType.CHAT_READ_REJECTED,
-                    new ChatReadRejectedPayload(payload.roomId(), payload.lastMsgId(), toCommandError(e, CommandErrorCode.INVALID_MESSAGE_CURSOR))));
+            publishReadRejected(userId, body.commandId(),
+                    new ChatReadRejectedPayload(payload.roomId(), payload.lastMsgId(), toCommandError(e, CommandErrorCode.INVALID_MESSAGE_CURSOR)));
         }
+    }
+
+    @AsyncPublisher(operation = @AsyncOperation(
+            channelName = OUTBOUND_CHANNEL,
+            description = "채팅 메시지 전송 성공(커밋)",
+            payloadType = ChatMessageCommittedPayload.class
+    ))
+    @StompAsyncOperationBinding
+    public void publishMessageCommitted(Long userId, String commandId, ChatMessageCommittedPayload payload) {
+        sendToCommands(userId, WebSocketResponseBody.commandResult(commandId, WebSocketBodyType.CHAT_MESSAGE_COMMITTED, payload));
+    }
+
+    @AsyncPublisher(operation = @AsyncOperation(
+            channelName = OUTBOUND_CHANNEL,
+            description = "채팅 메시지 전송 실패(거절)",
+            payloadType = ChatMessageRejectedPayload.class
+    ))
+    @StompAsyncOperationBinding
+    public void publishMessageRejected(Long userId, String commandId, ChatMessageRejectedPayload payload) {
+        sendToCommands(userId, WebSocketResponseBody.commandResult(commandId, WebSocketBodyType.CHAT_MESSAGE_REJECTED, payload));
+    }
+
+    @AsyncPublisher(operation = @AsyncOperation(
+            channelName = OUTBOUND_CHANNEL,
+            description = "읽음 처리 성공(커밋)",
+            payloadType = ChatReadCommittedPayload.class
+    ))
+    @StompAsyncOperationBinding
+    public void publishReadCommitted(Long userId, String commandId, ChatReadCommittedPayload payload) {
+        sendToCommands(userId, WebSocketResponseBody.commandResult(commandId, WebSocketBodyType.CHAT_READ_COMMITTED, payload));
+    }
+
+    @AsyncPublisher(operation = @AsyncOperation(
+            channelName = OUTBOUND_CHANNEL,
+            description = "읽음 처리 실패(거절)",
+            payloadType = ChatReadRejectedPayload.class
+    ))
+    @StompAsyncOperationBinding
+    public void publishReadRejected(Long userId, String commandId, ChatReadRejectedPayload payload) {
+        sendToCommands(userId, WebSocketResponseBody.commandResult(commandId, WebSocketBodyType.CHAT_READ_REJECTED, payload));
     }
 
     private void assertCommandEnvelope(WebSocketRequestBody<?> body, WebSocketBodyType expectedType) {

@@ -28,6 +28,23 @@ springdoc:
   swagger-ui:
     enabled: false
 
+springwolf:
+  enabled: true
+  docket:
+    base-package: com.nidus.twinly
+    info:
+      title: Twinly WebSocket API
+      version: 1.0.0
+    servers:
+      stomp:
+        protocol: stomp
+        host: localhost:8080/ws/v1/
+  plugin:
+    stomp:
+      endpoint:
+        app: /app
+        user: /user
+
 crypto:
   aes-keys:
     v1: ${AES_KEY_V1}
