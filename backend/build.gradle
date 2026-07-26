@@ -18,6 +18,9 @@ dependencies {
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.boot:spring-boot-webmvc-test'
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
+    testImplementation 'org.testcontainers:testcontainers-mysql'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
     // Validation
@@ -68,8 +71,24 @@ java {
 }
 
 tasks.named('test') {
-	useJUnitPlatform()
+	useJUnitPlatform {
+		excludeTags 'integration'   // 단위/슬라이스만 (빠름, Docker 불필요)
+	}
     testLogging {
         events "passed", "skipped", "failed"
     }
+}
+
+tasks.register('integrationTest', Test) {
+	description = '통합 테스트 (Testcontainers, Docker 필요)'
+	group = 'verification'
+	useJUnitPlatform {
+		includeTags 'integration'
+	}
+	testClassesDirs = sourceSets.test.output.classesDirs
+	classpath = sourceSets.test.runtimeClasspath
+	shouldRunAfter tasks.named('test')
+	testLogging {
+		events "passed", "skipped", "failed"
+	}
 }
