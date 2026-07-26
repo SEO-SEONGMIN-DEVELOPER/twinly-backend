@@ -3,15 +3,15 @@ package com.nidus.twinly.activity.dto.response;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.nidus.twinly.activity.dto.result.ActivityActionSceneResult;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 public record ActivityActionSceneResponse(
         @JsonFormat(shape = JsonFormat.Shape.STRING)
         Long sceneId,
         String type,
-        Instant startsAt,
-        Instant endsAt,
+        OffsetDateTime startsAt,
+        OffsetDateTime endsAt,
         String place,
         List<ActivitySpeakerResponse> with,
         String narration,

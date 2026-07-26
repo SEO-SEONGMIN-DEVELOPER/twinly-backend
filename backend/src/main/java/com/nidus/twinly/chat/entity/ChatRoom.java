@@ -23,6 +23,7 @@ public class ChatRoom {
 
     private Instant closedAt;
 
+    @Column(columnDefinition = "TEXT")
     private String closeReason;
 
     private Instant createdAt;

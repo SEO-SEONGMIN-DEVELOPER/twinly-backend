@@ -6,8 +6,6 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -33,13 +31,14 @@ public class Question {
     private LocalTime time;
 
     @Enumerated(EnumType.STRING)
-    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     private QuestionType type;
 
+    @Column(columnDefinition = "TEXT")
     private String text;
 
     private List<String> options;
 
+    @Column(columnDefinition = "TEXT")
     private String choice;
 
     private Instant answeredAt;

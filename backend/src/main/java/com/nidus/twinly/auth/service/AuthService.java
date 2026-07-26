@@ -3,8 +3,10 @@ package com.nidus.twinly.auth.service;
 import com.nidus.twinly.anon.dto.snapshot.AnonSessionSnapshot;
 import com.nidus.twinly.anon.entity.AnonSession;
 import com.nidus.twinly.anon.entity.AnonSessionAgreement;
+import com.nidus.twinly.anon.entity.AnonSessionPersonaElement;
 import com.nidus.twinly.anon.entity.AnonSessionPhoto;
 import com.nidus.twinly.anon.repository.AnonSessionAgreementRepository;
+import com.nidus.twinly.anon.repository.AnonSessionPersonaElementRepository;
 import com.nidus.twinly.anon.repository.AnonSessionPhotoRepository;
 import com.nidus.twinly.anon.repository.AnonSessionRepository;
 import com.nidus.twinly.auth.entity.RefreshToken;
@@ -24,9 +26,11 @@ import com.nidus.twinly.common.jwt.JwtService;
 import com.nidus.twinly.common.solapi.SolapiService;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
+import com.nidus.twinly.user.entity.PersonaElement;
 import com.nidus.twinly.user.entity.Photo;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.entity.Verification;
+import com.nidus.twinly.user.repository.PersonaElementRepository;
 import com.nidus.twinly.user.repository.PhotoRepository;
 import com.nidus.twinly.user.repository.UserRepository;
 import com.nidus.twinly.user.repository.VerificationRepository;
@@ -63,9 +67,11 @@ public class AuthService {
     private final UserRepository userRepository;
     private final AnonSessionPhotoRepository anonSessionPhotoRepository;
     private final AnonSessionAgreementRepository anonSessionAgreementRepository;
+    private final AnonSessionPersonaElementRepository anonSessionPersonaElementRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final AgreementRepository agreementRepository;
     private final PhotoRepository photoRepository;
+    private final PersonaElementRepository personaElementRepository;
     private final VerificationRepository verificationRepository;
 
     private final BlindIndexHasher blindIndexHasher;
@@ -282,6 +288,19 @@ public class AuthService {
                 ));
 
         anonSessionAgreementRepository.deleteAll(anonSessionAgreements);
+
+        List<AnonSessionPersonaElement> anonSessionPersonaElements = anonSessionPersonaElementRepository.findAllByAnonSessionId(anonSessionId);
+
+        anonSessionPersonaElements.forEach(anonSessionPersonaElement -> personaElementRepository.save(
+                PersonaElement.create(
+                        user.getId(),
+                        anonSessionPersonaElement.getDimension(),
+                        anonSessionPersonaElement.getExplanation(),
+                        anonSessionPersonaElement.getCreatedAt()
+                )
+        ));
+
+        anonSessionPersonaElementRepository.deleteAll(anonSessionPersonaElements);
 
         verificationRepository.save(Verification.create(user.getId(), VerificationType.SMS, smsSession.getVerifiedAt()));
         verificationRepository.save(Verification.create(user.getId(), VerificationType.EMAIL, emailSession.getVerifiedAt()));

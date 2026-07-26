@@ -8,8 +8,6 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -25,49 +23,62 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(columnDefinition = "TEXT")
     private String nickname;
 
     @Enumerated(EnumType.STRING)
-    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     private AvatarPaletteColor avatarPaletteColor;
 
     @Convert(converter = EncryptedStringConverter.class)
+    @Column(columnDefinition = "TEXT")
     private String familyName;
 
+    @Column(columnDefinition = "TEXT")
     private String familyNameHash;
 
     @Convert(converter = EncryptedStringConverter.class)
+    @Column(columnDefinition = "TEXT")
     private String givenName;
 
+    @Column(columnDefinition = "TEXT")
     private String givenNameHash;
 
     @Enumerated(EnumType.STRING)
-    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     private Gender gender;
 
     @Convert(converter = EncryptedStringConverter.class)
+    @Column(columnDefinition = "TEXT")
     private String affiliation;
 
+    @Column(columnDefinition = "TEXT")
     private String affiliationHash;
 
     @Convert(converter = EncryptedStringConverter.class)
+    @Column(columnDefinition = "TEXT")
     private String affiliationNumber;
 
+    @Column(columnDefinition = "TEXT")
     private String affiliationNumberHash;
 
     @Convert(converter = EncryptedStringConverter.class)
+    @Column(columnDefinition = "TEXT")
     private String birthDate;
 
+    @Column(columnDefinition = "TEXT")
     private String birthDateHash;
 
     @Convert(converter = EncryptedStringConverter.class)
+    @Column(columnDefinition = "TEXT")
     private String phoneNumber;
 
+    @Column(columnDefinition = "TEXT")
     private String phoneNumberHash;
 
     @Convert(converter = EncryptedStringConverter.class)
+    @Column(columnDefinition = "TEXT")
     private String email;
 
+    @Column(columnDefinition = "TEXT")
     private String emailHash;
 
     private Instant withdrawalRequestedAt;

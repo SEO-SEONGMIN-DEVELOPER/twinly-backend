@@ -28,8 +28,10 @@ public class Scene {
 
     private LocalDate date;
 
+    @Column(columnDefinition = "TEXT")
     private String version;
 
+    @Column(columnDefinition = "TEXT")
     private String place;
 
     private LocalDateTime startsAt;
@@ -37,11 +39,12 @@ public class Scene {
     private LocalDateTime endsAt;
 
     @Enumerated(EnumType.STRING)
-    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     private SceneType type;
 
+    @Column(columnDefinition = "TEXT")
     private String narration;
 
+    @Column(columnDefinition = "TEXT")
     private String mind;
 
     @JdbcTypeCode(SqlTypes.JSON)

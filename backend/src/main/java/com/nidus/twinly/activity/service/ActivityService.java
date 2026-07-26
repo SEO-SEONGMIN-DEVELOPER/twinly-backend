@@ -7,6 +7,7 @@ import com.nidus.twinly.activity.entity.ScenePartner;
 import com.nidus.twinly.activity.repository.QuestionRepository;
 import com.nidus.twinly.activity.repository.ScenePartnerRepository;
 import com.nidus.twinly.activity.repository.SceneRepository;
+import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,8 +18,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -27,8 +27,6 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class ActivityService {
-
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     @Value("${app.current-season-id}")
     private Long currentSeasonId;
@@ -76,8 +74,8 @@ public class ActivityService {
                 .map(partnerUserId -> toSpeakerResult(partnerUserId, partnerUserById))
                 .toList();
 
-        Instant startsAt = toKstInstant(scene.getStartsAt());
-        Instant endsAt = toKstInstant(scene.getEndsAt());
+        OffsetDateTime startsAt = KstTimes.toKstOffsetDateTime(scene.getStartsAt());
+        OffsetDateTime endsAt = KstTimes.toKstOffsetDateTime(scene.getEndsAt());
 
         return switch (scene.getType()) {
             case ACTION -> new ActivityActionSceneResult(
@@ -108,10 +106,6 @@ public class ActivityService {
         return new ActivitySpeakerResult(partnerUserId, userName);
     }
 
-    private Instant toKstInstant(LocalDateTime localDateTime) {
-        return localDateTime.atZone(KST).toInstant();
-    }
-
     private List<ActivityLineResult> parseLines(String linesJson) {
         if (linesJson == null) {
             return List.of();
@@ -122,7 +116,7 @@ public class ActivityService {
     }
 
     private ActivityQuestionResult toQuestionResult(Question question) {
-        Instant time = toKstInstant(question.getDate().atTime(question.getTime()));
+        OffsetDateTime time = KstTimes.toKstOffsetDateTime(question.getDate().atTime(question.getTime()));
 
         return new ActivityQuestionResult(
                 question.getId(),

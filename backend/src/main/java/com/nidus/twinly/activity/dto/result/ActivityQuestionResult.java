@@ -1,12 +1,12 @@
 package com.nidus.twinly.activity.dto.result;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 public record ActivityQuestionResult(
         Long id,
         String type,
-        Instant time,
+        OffsetDateTime time,
         String text,
         List<String> options
 ) {

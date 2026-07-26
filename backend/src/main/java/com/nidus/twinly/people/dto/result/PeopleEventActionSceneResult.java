@@ -2,13 +2,13 @@ package com.nidus.twinly.people.dto.result;
 
 import com.nidus.twinly.activity.dto.result.ActivitySpeakerResult;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 public record PeopleEventActionSceneResult(
         String type,
-        Instant startsAt,
-        Instant endsAt,
+        OffsetDateTime startsAt,
+        OffsetDateTime endsAt,
         String place,
         List<ActivitySpeakerResult> with,
         String narration,

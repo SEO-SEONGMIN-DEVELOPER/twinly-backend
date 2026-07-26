@@ -1,22 +1,24 @@
 services:
-  postgres-twinly:
-    image: postgres:18.4
-    container_name: pg-container-twinly
+  mysql-twinly:
+    image: mysql:8.4
+    container_name: mysql-container-twinly
     restart: unless-stopped
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_0900_as_cs"]
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DB}
     ports:
-      - "5432:5432"
+      - "3306:3306"
     volumes:
-      - pgdata-twinly:/var/lib/postgresql
+      - mysqldata-twinly:/var/lib/mysql
       - ./backend/src/main/resources/db/migration:/migration:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$${MYSQL_ROOT_PASSWORD} --silent"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 20s
 volumes:
-  pgdata-twinly:
+  mysqldata-twinly:

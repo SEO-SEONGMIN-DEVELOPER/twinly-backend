@@ -28,6 +28,7 @@ public class Relationship {
 
     private Integer intimacy;
 
+    @Column(columnDefinition = "TEXT")
     private String partnerModel;
 
     private Instant createdAt;

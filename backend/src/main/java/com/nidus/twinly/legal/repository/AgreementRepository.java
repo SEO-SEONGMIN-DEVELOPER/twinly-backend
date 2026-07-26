@@ -15,7 +15,7 @@ public interface AgreementRepository extends JpaRepository<Agreement, Long> {
     @Modifying
     @Query(value = """
             UPDATE agreements
-            SET revoked_at = now()
+            SET revoked_at = UTC_TIMESTAMP(6)
             WHERE user_id = :userId
               AND revoked_at IS NULL
               AND policy_id IN (

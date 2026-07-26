@@ -20,7 +20,7 @@ public interface AppNotificationFeedRepository extends JpaRepository<AppNotifica
             FROM app_notification_feeds f
             WHERE f.user_id = :userId
               AND (:unreadOnly = FALSE OR f.read_at IS NULL)
-              AND (:type IS NULL OR f.type = CAST(:type AS APP_NOTIFICATION_FEED_TYPE))
+              AND (:type IS NULL OR f.type = :type)
             ORDER BY f.created_at DESC, f.id DESC
             LIMIT :limit
             """, nativeQuery = true)
@@ -32,7 +32,7 @@ public interface AppNotificationFeedRepository extends JpaRepository<AppNotifica
     @Modifying
     @Query(value = """
             UPDATE app_notification_feeds
-            SET read_at = now()
+            SET read_at = UTC_TIMESTAMP(6)
             WHERE user_id = :userId
               AND id <= :lastAppNotificationId
               AND read_at IS NULL

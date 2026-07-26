@@ -3,14 +3,14 @@ package com.nidus.twinly.activity.dto.response;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.nidus.twinly.activity.dto.result.ActivityQuestionResult;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 public record ActivityQuestionResponse(
         @JsonFormat(shape = JsonFormat.Shape.STRING)
         Long id,
         String type,
-        Instant time,
+        OffsetDateTime time,
         String text,
         List<String> options
 ) {

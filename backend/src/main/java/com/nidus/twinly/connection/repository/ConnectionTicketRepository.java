@@ -16,10 +16,10 @@ public interface ConnectionTicketRepository extends JpaRepository<ConnectionTick
     @Modifying
     @Query(value = """
             UPDATE connection_tickets
-            SET used_at = now()
+            SET used_at = UTC_TIMESTAMP(6)
             WHERE ticket = :ticket
               AND used_at IS NULL
-              AND expires_at > now()
+              AND expires_at > UTC_TIMESTAMP(6)
             """, nativeQuery = true)
     int consume(@Param("ticket") UUID ticket);
 }

@@ -21,6 +21,7 @@ public class RefreshToken {
 
     private Long userId;
 
+    @Column(columnDefinition = "TEXT")
     private String tokenHash;
 
     private Instant expiresAt;

@@ -1,4 +1,4 @@
-package com.nidus.twinly.anon.entity;
+package com.nidus.twinly.user.entity;
 
 import org.hibernate.annotations.DynamicUpdate;
 import com.nidus.twinly.common.persona.PersonaDimension;
@@ -11,16 +11,16 @@ import java.time.Instant;
 
 @Entity
 @DynamicUpdate
-@Table(name = "anon_session_persona_elements")
+@Table(name = "persona_elements")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class AnonSessionPersonaElement {
+public class PersonaElement {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private Long anonSessionId;
+    private Long userId;
 
     @Enumerated(EnumType.STRING)
     private PersonaDimension dimension;
@@ -30,17 +30,13 @@ public class AnonSessionPersonaElement {
 
     private Instant createdAt;
 
-    public static AnonSessionPersonaElement create(Long anonSessionId, PersonaDimension dimension, String explanation) {
-        AnonSessionPersonaElement element = new AnonSessionPersonaElement();
-        element.anonSessionId = anonSessionId;
+    public static PersonaElement create(Long userId, PersonaDimension dimension, String explanation, Instant createdAt) {
+        PersonaElement element = new PersonaElement();
+        element.userId = userId;
         element.dimension = dimension;
         element.explanation = explanation;
-        element.createdAt = Instant.now();
+        element.createdAt = createdAt;
 
         return element;
-    }
-
-    public void changeExplanation(String explanation) {
-        this.explanation = explanation;
     }
 }

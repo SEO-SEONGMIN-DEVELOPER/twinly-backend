@@ -23,8 +23,10 @@ public class Policy {
 
     private Integer version;
 
+    @Column(columnDefinition = "TEXT")
     private String content;
 
+    @Column(columnDefinition = "TEXT")
     private String url;
 
     private Boolean isRequired;

@@ -17,7 +17,7 @@ public interface AnonSessionAgreementRepository extends JpaRepository<AnonSessio
     @Modifying
     @Query(value = """
             UPDATE anon_session_agreements
-            SET revoked_at = now()
+            SET revoked_at = UTC_TIMESTAMP(6)
             WHERE anon_session_id = :anonSessionId
               AND revoked_at IS NULL
               AND policy_id IN (

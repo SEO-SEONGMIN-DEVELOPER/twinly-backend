@@ -17,8 +17,10 @@ public class PolicyName {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(columnDefinition = "TEXT")
     private String name;
 
+    @Column(columnDefinition = "TEXT")
     private String identifier;
 
     private Boolean isDeprecated;

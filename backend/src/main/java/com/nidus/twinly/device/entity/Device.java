@@ -24,8 +24,10 @@ public class Device {
 
     private UUID deviceId;
 
+    @Column(columnDefinition = "TEXT")
     private String deviceModel;
 
+    @Column(columnDefinition = "TEXT")
     private String pushToken;
 
     private Instant createdAt;

@@ -14,6 +14,7 @@ import com.nidus.twinly.chat.entity.ChatRoom;
 import com.nidus.twinly.chat.repository.ChatRoomRepository;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
 import com.nidus.twinly.common.photo.PhotoType;
+import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.match.entity.Match;
@@ -40,10 +41,8 @@ import org.springframework.stereotype.Service;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
-import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -59,7 +58,6 @@ import java.util.stream.Collectors;
 public class PeopleService {
 
     private static final int DEFAULT_LIMIT = 20;
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private final RelationshipRepository relationshipRepository;
     private final UserRepository userRepository;
@@ -384,8 +382,8 @@ public class PeopleService {
                 })
                 .toList();
 
-        Instant startsAt = toKstInstant(scene.getStartsAt());
-        Instant endsAt = toKstInstant(scene.getEndsAt());
+        OffsetDateTime startsAt = KstTimes.toKstOffsetDateTime(scene.getStartsAt());
+        OffsetDateTime endsAt = KstTimes.toKstOffsetDateTime(scene.getEndsAt());
 
         return switch (scene.getType()) {
             case ACTION -> new PeopleEventActionSceneResult(
@@ -406,10 +404,6 @@ public class PeopleService {
                     parseLines(scene.getLines())
             );
         };
-    }
-
-    private Instant toKstInstant(LocalDateTime localDateTime) {
-        return localDateTime.atZone(KST).toInstant();
     }
 
     public PeopleLearnedFactsResult learnedFacts(Long userId, Long partnerUserId) {
