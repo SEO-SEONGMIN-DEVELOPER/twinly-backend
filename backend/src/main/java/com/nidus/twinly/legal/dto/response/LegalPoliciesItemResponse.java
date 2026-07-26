@@ -1,10 +1,12 @@
 package com.nidus.twinly.legal.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.nidus.twinly.legal.dto.result.LegalPoliciesItemResult;
 
 public record LegalPoliciesItemResponse(
         String policyId,
         String title,
+        @JsonFormat(shape = JsonFormat.Shape.STRING)
         Integer version,
         String url,
         Boolean isRequired
