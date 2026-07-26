@@ -1,0 +1,560 @@
+{
+  "asyncapi": "3.0.0",
+  "info": {
+    "title": "Twinly WebSocket API",
+    "version": "1.0.0",
+    "x-generator": "springwolf"
+  },
+  "defaultContentType": "application/json",
+  "servers": {
+    "stomp": {
+      "host": "localhost:8080/ws/v1/",
+      "protocol": "stomp"
+    }
+  },
+  "channels": {
+    "_app_chat_messages": {
+      "address": "/app/chat/messages",
+      "messages": {
+        "com.nidus.twinly.common.websocket.dto.WebSocketRequestBodyCom.nidus.twinly.chat.dto.websocket.ChatMessageSendPayload": {
+          "$ref": "#/components/messages/com.nidus.twinly.common.websocket.dto.WebSocketRequestBodyCom.nidus.twinly.chat.dto.websocket.ChatMessageSendPayload"
+        }
+      },
+      "bindings": {
+        "stomp": { }
+      }
+    },
+    "_app_chat_read": {
+      "address": "/app/chat/read",
+      "messages": {
+        "com.nidus.twinly.common.websocket.dto.WebSocketRequestBodyCom.nidus.twinly.chat.dto.websocket.ChatReadAdvancePayload": {
+          "$ref": "#/components/messages/com.nidus.twinly.common.websocket.dto.WebSocketRequestBodyCom.nidus.twinly.chat.dto.websocket.ChatReadAdvancePayload"
+        }
+      },
+      "bindings": {
+        "stomp": { }
+      }
+    },
+    "_user_queue_chat_commands": {
+      "address": "/user/queue/chat/commands",
+      "messages": {
+        "com.nidus.twinly.chat.dto.websocket.ChatMessageCommittedPayload": {
+          "$ref": "#/components/messages/com.nidus.twinly.chat.dto.websocket.ChatMessageCommittedPayload"
+        },
+        "com.nidus.twinly.chat.dto.websocket.ChatMessageRejectedPayload": {
+          "$ref": "#/components/messages/com.nidus.twinly.chat.dto.websocket.ChatMessageRejectedPayload"
+        },
+        "com.nidus.twinly.chat.dto.websocket.ChatReadCommittedPayload": {
+          "$ref": "#/components/messages/com.nidus.twinly.chat.dto.websocket.ChatReadCommittedPayload"
+        },
+        "com.nidus.twinly.chat.dto.websocket.ChatReadRejectedPayload": {
+          "$ref": "#/components/messages/com.nidus.twinly.chat.dto.websocket.ChatReadRejectedPayload"
+        }
+      },
+      "bindings": { }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HeadersNotDocumented": {
+        "title": "HeadersNotDocumented",
+        "type": "object",
+        "properties": { },
+        "description": "There can be headers, but they are not explicitly documented.",
+        "examples": [
+          { }
+        ]
+      },
+      "SpringStompDefaultHeaders": {
+        "title": "SpringStompDefaultHeaders",
+        "type": "object",
+        "properties": { },
+        "examples": [
+          { }
+        ]
+      },
+      "com.nidus.twinly.chat.dto.websocket.ChatMessageCommittedPayload": {
+        "title": "ChatMessageCommittedPayload",
+        "type": "object",
+        "properties": {
+          "clientMsgId": {
+            "type": "string"
+          },
+          "messageId": {
+            "type": "string"
+          },
+          "roomId": {
+            "type": "string"
+          },
+          "sentAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "examples": [
+          {
+            "clientMsgId": "string",
+            "messageId": "string",
+            "roomId": "string",
+            "sentAt": "2015-07-20T15:49:04-07:00",
+            "text": "string"
+          }
+        ]
+      },
+      "com.nidus.twinly.chat.dto.websocket.ChatMessageRejectedPayload": {
+        "title": "ChatMessageRejectedPayload",
+        "type": "object",
+        "properties": {
+          "clientMsgId": {
+            "type": "string"
+          },
+          "error": {
+            "$ref": "#/components/schemas/com.nidus.twinly.chat.dto.websocket.CommandError"
+          },
+          "roomId": {
+            "type": "string"
+          }
+        },
+        "examples": [
+          {
+            "clientMsgId": "string",
+            "error": {
+              "code": "CLIENT_MSG_ID_CONFLICT",
+              "message": "string",
+              "retryable": true
+            },
+            "roomId": "string"
+          }
+        ]
+      },
+      "com.nidus.twinly.chat.dto.websocket.ChatMessageSendPayload": {
+        "title": "ChatMessageSendPayload",
+        "type": "object",
+        "properties": {
+          "clientMsgId": {
+            "type": "string"
+          },
+          "roomId": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "examples": [
+          {
+            "clientMsgId": "string",
+            "roomId": "string",
+            "text": "string"
+          }
+        ],
+        "required": [
+          "clientMsgId",
+          "roomId",
+          "text"
+        ]
+      },
+      "com.nidus.twinly.chat.dto.websocket.ChatReadAdvancePayload": {
+        "title": "ChatReadAdvancePayload",
+        "type": "object",
+        "properties": {
+          "lastMsgId": {
+            "type": "string"
+          },
+          "roomId": {
+            "type": "string"
+          }
+        },
+        "examples": [
+          {
+            "lastMsgId": "string",
+            "roomId": "string"
+          }
+        ],
+        "required": [
+          "lastMsgId",
+          "roomId"
+        ]
+      },
+      "com.nidus.twinly.chat.dto.websocket.ChatReadCommittedPayload": {
+        "title": "ChatReadCommittedPayload",
+        "type": "object",
+        "properties": {
+          "lastMsgId": {
+            "type": "string"
+          },
+          "roomId": {
+            "type": "string"
+          }
+        },
+        "examples": [
+          {
+            "lastMsgId": "string",
+            "roomId": "string"
+          }
+        ]
+      },
+      "com.nidus.twinly.chat.dto.websocket.ChatReadRejectedPayload": {
+        "title": "ChatReadRejectedPayload",
+        "type": "object",
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/com.nidus.twinly.chat.dto.websocket.CommandError"
+          },
+          "lastMsgId": {
+            "type": "string"
+          },
+          "roomId": {
+            "type": "string"
+          }
+        },
+        "examples": [
+          {
+            "error": {
+              "code": "CLIENT_MSG_ID_CONFLICT",
+              "message": "string",
+              "retryable": true
+            },
+            "lastMsgId": "string",
+            "roomId": "string"
+          }
+        ]
+      },
+      "com.nidus.twinly.chat.dto.websocket.CommandError": {
+        "title": "CommandError",
+        "type": "object",
+        "properties": {
+          "code": {
+            "title": "CommandErrorCode",
+            "type": "string",
+            "enum": [
+              "CLIENT_MSG_ID_CONFLICT",
+              "INVALID_MESSAGE_CURSOR",
+              "ROOM_NOT_FOUND",
+              "NOT_A_PARTICIPANT",
+              "TEXT_SIZE_LIMIT_EXCEEDED",
+              "INTERNAL"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "retryable": {
+            "type": "boolean"
+          }
+        },
+        "examples": [
+          {
+            "code": "CLIENT_MSG_ID_CONFLICT",
+            "message": "string",
+            "retryable": true
+          }
+        ]
+      },
+      "com.nidus.twinly.common.websocket.dto.WebSocketRequestBodyCom.nidus.twinly.chat.dto.websocket.ChatMessageSendPayload": {
+        "title": "WebSocketRequestBody",
+        "type": "object",
+        "properties": {
+          "commandId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/com.nidus.twinly.chat.dto.websocket.ChatMessageSendPayload"
+          },
+          "type": {
+            "title": "WebSocketBodyType",
+            "type": "string",
+            "enum": [
+              "chat.message.send",
+              "chat.read.advance",
+              "chat.message.created",
+              "chat.message.committed",
+              "chat.message.rejected",
+              "chat.read.committed",
+              "chat.read.rejected",
+              "chat.changed",
+              "season.changed",
+              "connection.draining"
+            ]
+          },
+          "v": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "examples": [
+          {
+            "commandId": "string",
+            "kind": "string",
+            "payload": {
+              "clientMsgId": "string",
+              "roomId": "string",
+              "text": "string"
+            },
+            "type": "chat.message.send",
+            "v": 0
+          }
+        ],
+        "required": [
+          "commandId",
+          "kind",
+          "payload",
+          "type",
+          "v"
+        ]
+      },
+      "com.nidus.twinly.common.websocket.dto.WebSocketRequestBodyCom.nidus.twinly.chat.dto.websocket.ChatReadAdvancePayload": {
+        "title": "WebSocketRequestBody",
+        "type": "object",
+        "properties": {
+          "commandId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/com.nidus.twinly.chat.dto.websocket.ChatReadAdvancePayload"
+          },
+          "type": {
+            "title": "WebSocketBodyType",
+            "type": "string",
+            "enum": [
+              "chat.message.send",
+              "chat.read.advance",
+              "chat.message.created",
+              "chat.message.committed",
+              "chat.message.rejected",
+              "chat.read.committed",
+              "chat.read.rejected",
+              "chat.changed",
+              "season.changed",
+              "connection.draining"
+            ]
+          },
+          "v": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "examples": [
+          {
+            "commandId": "string",
+            "kind": "string",
+            "payload": {
+              "lastMsgId": "string",
+              "roomId": "string"
+            },
+            "type": "chat.message.send",
+            "v": 0
+          }
+        ],
+        "required": [
+          "commandId",
+          "kind",
+          "payload",
+          "type",
+          "v"
+        ]
+      }
+    },
+    "messages": {
+      "com.nidus.twinly.chat.dto.websocket.ChatMessageCommittedPayload": {
+        "headers": {
+          "$ref": "#/components/schemas/HeadersNotDocumented"
+        },
+        "payload": {
+          "schemaFormat": "application/vnd.aai.asyncapi+json;version=3.0.0",
+          "schema": {
+            "$ref": "#/components/schemas/com.nidus.twinly.chat.dto.websocket.ChatMessageCommittedPayload"
+          }
+        },
+        "name": "com.nidus.twinly.chat.dto.websocket.ChatMessageCommittedPayload",
+        "title": "ChatMessageCommittedPayload",
+        "bindings": {
+          "stomp": { }
+        }
+      },
+      "com.nidus.twinly.chat.dto.websocket.ChatMessageRejectedPayload": {
+        "headers": {
+          "$ref": "#/components/schemas/HeadersNotDocumented"
+        },
+        "payload": {
+          "schemaFormat": "application/vnd.aai.asyncapi+json;version=3.0.0",
+          "schema": {
+            "$ref": "#/components/schemas/com.nidus.twinly.chat.dto.websocket.ChatMessageRejectedPayload"
+          }
+        },
+        "name": "com.nidus.twinly.chat.dto.websocket.ChatMessageRejectedPayload",
+        "title": "ChatMessageRejectedPayload",
+        "bindings": {
+          "stomp": { }
+        }
+      },
+      "com.nidus.twinly.chat.dto.websocket.ChatReadCommittedPayload": {
+        "headers": {
+          "$ref": "#/components/schemas/HeadersNotDocumented"
+        },
+        "payload": {
+          "schemaFormat": "application/vnd.aai.asyncapi+json;version=3.0.0",
+          "schema": {
+            "$ref": "#/components/schemas/com.nidus.twinly.chat.dto.websocket.ChatReadCommittedPayload"
+          }
+        },
+        "name": "com.nidus.twinly.chat.dto.websocket.ChatReadCommittedPayload",
+        "title": "ChatReadCommittedPayload",
+        "bindings": {
+          "stomp": { }
+        }
+      },
+      "com.nidus.twinly.chat.dto.websocket.ChatReadRejectedPayload": {
+        "headers": {
+          "$ref": "#/components/schemas/HeadersNotDocumented"
+        },
+        "payload": {
+          "schemaFormat": "application/vnd.aai.asyncapi+json;version=3.0.0",
+          "schema": {
+            "$ref": "#/components/schemas/com.nidus.twinly.chat.dto.websocket.ChatReadRejectedPayload"
+          }
+        },
+        "name": "com.nidus.twinly.chat.dto.websocket.ChatReadRejectedPayload",
+        "title": "ChatReadRejectedPayload",
+        "bindings": {
+          "stomp": { }
+        }
+      },
+      "com.nidus.twinly.common.websocket.dto.WebSocketRequestBodyCom.nidus.twinly.chat.dto.websocket.ChatMessageSendPayload": {
+        "headers": {
+          "$ref": "#/components/schemas/SpringStompDefaultHeaders"
+        },
+        "payload": {
+          "schemaFormat": "application/vnd.aai.asyncapi+json;version=3.0.0",
+          "schema": {
+            "$ref": "#/components/schemas/com.nidus.twinly.common.websocket.dto.WebSocketRequestBodyCom.nidus.twinly.chat.dto.websocket.ChatMessageSendPayload"
+          }
+        },
+        "name": "com.nidus.twinly.common.websocket.dto.WebSocketRequestBodyCom.nidus.twinly.chat.dto.websocket.ChatMessageSendPayload",
+        "title": "WebSocketRequestBodyChatMessageSendPayload",
+        "bindings": {
+          "stomp": { }
+        }
+      },
+      "com.nidus.twinly.common.websocket.dto.WebSocketRequestBodyCom.nidus.twinly.chat.dto.websocket.ChatReadAdvancePayload": {
+        "headers": {
+          "$ref": "#/components/schemas/SpringStompDefaultHeaders"
+        },
+        "payload": {
+          "schemaFormat": "application/vnd.aai.asyncapi+json;version=3.0.0",
+          "schema": {
+            "$ref": "#/components/schemas/com.nidus.twinly.common.websocket.dto.WebSocketRequestBodyCom.nidus.twinly.chat.dto.websocket.ChatReadAdvancePayload"
+          }
+        },
+        "name": "com.nidus.twinly.common.websocket.dto.WebSocketRequestBodyCom.nidus.twinly.chat.dto.websocket.ChatReadAdvancePayload",
+        "title": "WebSocketRequestBodyChatReadAdvancePayload",
+        "bindings": {
+          "stomp": { }
+        }
+      }
+    }
+  },
+  "operations": {
+    "_app_chat_messages_receive_sendMessage": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/_app_chat_messages"
+      },
+      "bindings": {
+        "stomp": { }
+      },
+      "messages": [
+        {
+          "$ref": "#/channels/_app_chat_messages/messages/com.nidus.twinly.common.websocket.dto.WebSocketRequestBodyCom.nidus.twinly.chat.dto.websocket.ChatMessageSendPayload"
+        }
+      ]
+    },
+    "_app_chat_read_receive_readMessages": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/_app_chat_read"
+      },
+      "bindings": {
+        "stomp": { }
+      },
+      "messages": [
+        {
+          "$ref": "#/channels/_app_chat_read/messages/com.nidus.twinly.common.websocket.dto.WebSocketRequestBodyCom.nidus.twinly.chat.dto.websocket.ChatReadAdvancePayload"
+        }
+      ]
+    },
+    "_user_queue_chat_commands_send_publishMessageCommitted": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/_user_queue_chat_commands"
+      },
+      "title": "_user_queue_chat_commands_send",
+      "description": "채팅 메시지 전송 성공(커밋)",
+      "bindings": {
+        "stomp": { }
+      },
+      "messages": [
+        {
+          "$ref": "#/channels/_user_queue_chat_commands/messages/com.nidus.twinly.chat.dto.websocket.ChatMessageCommittedPayload"
+        }
+      ]
+    },
+    "_user_queue_chat_commands_send_publishMessageRejected": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/_user_queue_chat_commands"
+      },
+      "title": "_user_queue_chat_commands_send",
+      "description": "채팅 메시지 전송 실패(거절)",
+      "bindings": {
+        "stomp": { }
+      },
+      "messages": [
+        {
+          "$ref": "#/channels/_user_queue_chat_commands/messages/com.nidus.twinly.chat.dto.websocket.ChatMessageRejectedPayload"
+        }
+      ]
+    },
+    "_user_queue_chat_commands_send_publishReadCommitted": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/_user_queue_chat_commands"
+      },
+      "title": "_user_queue_chat_commands_send",
+      "description": "읽음 처리 성공(커밋)",
+      "bindings": {
+        "stomp": { }
+      },
+      "messages": [
+        {
+          "$ref": "#/channels/_user_queue_chat_commands/messages/com.nidus.twinly.chat.dto.websocket.ChatReadCommittedPayload"
+        }
+      ]
+    },
+    "_user_queue_chat_commands_send_publishReadRejected": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/_user_queue_chat_commands"
+      },
+      "title": "_user_queue_chat_commands_send",
+      "description": "읽음 처리 실패(거절)",
+      "bindings": {
+        "stomp": { }
+      },
+      "messages": [
+        {
+          "$ref": "#/channels/_user_queue_chat_commands/messages/com.nidus.twinly.chat.dto.websocket.ChatReadRejectedPayload"
+        }
+      ]
+    }
+  }
+}
