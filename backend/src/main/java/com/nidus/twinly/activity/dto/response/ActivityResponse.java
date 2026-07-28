@@ -18,7 +18,8 @@ public record ActivityResponse(
         String version,
         Instant serverNow,
         List<ActivitySceneResponse> scenes,
-        List<ActivityQuestionResponse> questions
+        List<ActivityQuestionResponse> questions,
+        List<ActivityProfilePhotoResponse> profilePhotos
 ) {
 
     public static ActivityResponse from(ActivityResult result) {
@@ -29,7 +30,8 @@ public record ActivityResponse(
                 result.version(),
                 result.serverNow(),
                 result.scenes().stream().map(ActivitySceneResponse::from).toList(),
-                result.questions().stream().map(ActivityQuestionResponse::from).toList()
+                result.questions().stream().map(ActivityQuestionResponse::from).toList(),
+                result.profilePhotos().stream().map(ActivityProfilePhotoResponse::from).toList()
         );
     }
 }

@@ -7,6 +7,7 @@ public record PeopleEventResult(
         LocalDate date,
         Long userId,
         String version,
-        List<PeopleEventSceneResult> scenes
+        List<PeopleEventSceneResult> scenes,
+        List<PeopleEventProfilePhotoResult> profilePhotos
 ) {
 }

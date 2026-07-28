@@ -7,9 +7,14 @@ import com.nidus.twinly.activity.entity.ScenePartner;
 import com.nidus.twinly.activity.repository.QuestionRepository;
 import com.nidus.twinly.activity.repository.ScenePartnerRepository;
 import com.nidus.twinly.activity.repository.SceneRepository;
+import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
+import com.nidus.twinly.common.photo.PhotoType;
+import com.nidus.twinly.common.photo.ProfilePhotoInfo;
 import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
+import com.nidus.twinly.user.entity.Photo;
 import com.nidus.twinly.user.entity.User;
+import com.nidus.twinly.user.repository.PhotoRepository;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -32,6 +37,8 @@ public class ActivityService {
     private final ScenePartnerRepository scenePartnerRepository;
     private final QuestionRepository questionRepository;
     private final UserRepository userRepository;
+    private final PhotoRepository photoRepository;
+    private final CloudFrontService cloudFrontService;
     private final CurrentSeasonReader currentSeasonReader;
     private final ObjectMapper objectMapper;
 
@@ -63,7 +70,8 @@ public class ActivityService {
                 scenes.isEmpty() ? null : scenes.get(0).getVersion(),
                 Instant.now(),
                 sceneResults,
-                questionResults
+                questionResults,
+                toProfilePhotoResults(allPartnerUserIds)
         );
     }
 
@@ -96,6 +104,19 @@ public class ActivityService {
                     parseLines(scene.getLines())
             );
         };
+    }
+
+    private List<ActivityProfilePhotoResult> toProfilePhotoResults(List<Long> partnerUserIds) {
+        if (partnerUserIds.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Long, ProfilePhotoInfo> profilePhotoByUserId = photoRepository.findAllByUserIdInAndType(partnerUserIds, PhotoType.PROFILE).stream()
+                .collect(Collectors.toMap(Photo::getUserId, photo -> new ProfilePhotoInfo(photo.getKey(), cloudFrontService.getSignedUrl(photo.getKey()), photo.position())));
+
+        return partnerUserIds.stream()
+                .map(partnerUserId -> new ActivityProfilePhotoResult(partnerUserId, profilePhotoByUserId.get(partnerUserId)))
+                .toList();
     }
 
     private ActivitySpeakerResult toSpeakerResult(Long partnerUserId, Map<Long, User> partnerUserById) {

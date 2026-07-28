@@ -372,7 +372,25 @@ public class PeopleService {
 
         String version = scenes.isEmpty() ? null : scenes.get(0).getVersion();
 
-        return new PeopleEventResult(date, partnerUserId, version, sceneResults);
+        List<Long> withUserIds = scenes.stream()
+                .flatMap(scene -> partnerUserIdsBySceneId.getOrDefault(scene.getId(), List.<Long>of()).stream())
+                .distinct()
+                .toList();
+
+        return new PeopleEventResult(date, partnerUserId, version, sceneResults, toProfilePhotoResults(withUserIds));
+    }
+
+    private List<PeopleEventProfilePhotoResult> toProfilePhotoResults(List<Long> userIds) {
+        if (userIds.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Long, ProfilePhotoInfo> profilePhotoByUserId = photoRepository.findAllByUserIdInAndType(userIds, PhotoType.PROFILE).stream()
+                .collect(Collectors.toMap(Photo::getUserId, photo -> new ProfilePhotoInfo(photo.getKey(), cloudFrontService.getSignedUrl(photo.getKey()), photo.position())));
+
+        return userIds.stream()
+                .map(userId -> new PeopleEventProfilePhotoResult(userId, profilePhotoByUserId.get(userId)))
+                .toList();
     }
 
     private PeopleEventSceneResult toSceneResult(Scene scene, List<Long> partnerUserIds, Map<Long, User> userById) {
