@@ -11,6 +11,7 @@ import com.nidus.twinly.common.photo.ProfilePhotoInfo;
 import com.nidus.twinly.common.presign.PhotoCommitService;
 import com.nidus.twinly.common.presign.PhotoPresignResult;
 import com.nidus.twinly.common.presign.PresignService;
+import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.legal.entity.Agreement;
@@ -75,7 +76,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -94,7 +94,6 @@ public class MeService {
 
     private static final Duration WITHDRAWAL_RECOVERABLE_PERIOD = Duration.ofDays(15);
     private static final int DEFAULT_APP_NOTIFICATIONS_LIMIT = 20;
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private final PresignService presignService;
     private final PhotoCommitService photoCommitService;
@@ -390,7 +389,7 @@ public class MeService {
     }
 
     public MeHesitationsResult hesitations(Long userId, HesitationDuration duration, HesitationStatus status) {
-        LocalDate today = LocalDate.now(KST);
+        LocalDate today = KstTimes.today();
 
         List<Question> candidates = switch (duration) {
             case TODAY -> questionRepository.findAllByUserIdAndTypeAndIsSkippedFalseAndDate(userId, QuestionType.PERSONA, today);
