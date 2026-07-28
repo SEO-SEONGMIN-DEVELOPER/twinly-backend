@@ -1,5 +1,6 @@
 package com.nidus.twinly.anon.service;
 
+import com.nidus.twinly.anon.config.AnonProperties;
 import com.nidus.twinly.anon.dto.result.AnonStartResult;
 import com.nidus.twinly.anon.dto.snapshot.AnonSessionSnapshot;
 import com.nidus.twinly.anon.entity.AnonSession;
@@ -9,7 +10,6 @@ import com.nidus.twinly.common.web.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -18,13 +18,18 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AnonService {
 
-    private static final Duration TTL = Duration.ofDays(14);
+    /*
+     * [멘토링 피드백 반영 완료]
+     * 상수는 환경변수에서 가져오도록 변환
+     */
+
+    private final AnonProperties anonProperties;
 
     private final AnonSessionRepository anonSessionRepository;
 
     public AnonStartResult start() {
         UUID token = UUID.randomUUID();
-        Instant expiresAt = Instant.now().plus(TTL);
+        Instant expiresAt = Instant.now().plus(anonProperties.sessionTtl());
 
         anonSessionRepository.save(AnonSession.create(token, expiresAt));
 

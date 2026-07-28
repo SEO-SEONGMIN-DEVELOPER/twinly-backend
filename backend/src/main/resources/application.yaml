@@ -76,3 +76,6 @@ solapi:
 
 jwt:
   secret-key: ${JWT_SECRET_KEY}
+
+anon:
+  session-ttl: 14d
