@@ -3,10 +3,11 @@ package com.nidus.twinly.push.service;
 import com.nidus.twinly.device.entity.Device;
 import com.nidus.twinly.device.repository.DeviceRepository;
 import com.nidus.twinly.push.dto.command.PushTokenRegisterCommand;
-import com.nidus.twinly.push.dto.command.PushTokenRevokeCommand;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -24,8 +25,8 @@ public class PushService {
     }
 
     @Transactional
-    public void revoke(Long userId, PushTokenRevokeCommand command) {
-        deviceRepository.findByUserIdAndDeviceId(userId, command.deviceId())
+    public void revoke(Long userId, UUID deviceId) {
+        deviceRepository.findByUserIdAndDeviceId(userId, deviceId)
                 .ifPresent(Device::revokeToken);
     }
 }

@@ -4,7 +4,7 @@ import com.nidus.twinly.common.web.RequestId;
 import com.nidus.twinly.me.domain.HesitationDuration;
 import com.nidus.twinly.me.domain.HesitationStatus;
 import com.nidus.twinly.me.dto.command.MeAppNotificationsReadAllCommand;
-import com.nidus.twinly.me.dto.command.MeChangeProfileVisibilityCommand;
+import com.nidus.twinly.me.dto.command.MeChangeProfileVisibilitySettingCommand;
 import com.nidus.twinly.me.dto.command.MeChangePushNotificationsCommand;
 import com.nidus.twinly.me.dto.command.MeGrantConsentsCommand;
 import com.nidus.twinly.me.dto.command.MeHesitationsAnswerCommand;
@@ -13,7 +13,7 @@ import com.nidus.twinly.me.dto.command.MeProfilePhotoCommitCommand;
 import com.nidus.twinly.me.dto.command.MeProfilePhotoPresignCommand;
 import com.nidus.twinly.me.dto.command.MeRevokeConsentsCommand;
 import com.nidus.twinly.me.dto.request.MeAppNotificationsReadAllRequest;
-import com.nidus.twinly.me.dto.request.MeChangeProfileVisibilityRequest;
+import com.nidus.twinly.me.dto.request.MeChangeProfileVisibilitySettingRequest;
 import com.nidus.twinly.me.dto.request.MeChangePushNotificationsRequest;
 import com.nidus.twinly.me.dto.request.MeGrantConsentsRequest;
 import com.nidus.twinly.me.dto.request.MeHesitationsAnswerRequest;
@@ -29,7 +29,7 @@ import com.nidus.twinly.me.dto.response.MePushNotificationsResponse;
 import com.nidus.twinly.me.dto.response.MeProfileEditViewResponse;
 import com.nidus.twinly.me.dto.response.MeProfilePhotoCommitResponse;
 import com.nidus.twinly.me.dto.response.MeProfilePhotoPresignResponse;
-import com.nidus.twinly.me.dto.response.MeProfileVisibilityResponse;
+import com.nidus.twinly.me.dto.response.MeProfileVisibilitySettingsResponse;
 import com.nidus.twinly.me.dto.response.MeStatusResponse;
 import com.nidus.twinly.me.dto.response.MeWithdrawResponse;
 import com.nidus.twinly.me.service.MeService;
@@ -131,16 +131,16 @@ public class MeController {
         meService.changePushNotifications(userInfo.id(), type, MeChangePushNotificationsCommand.from(request));
     }
 
-    @GetMapping("/api/v1/me/profile/visibility")
-    public MeProfileVisibilityResponse profileVisibility(@CurrentUser UserInfo userInfo) {
-        return MeProfileVisibilityResponse.from(meService.profileVisibility(userInfo.id()));
+    @GetMapping("/api/v1/me/profile/visibility-settings")
+    public MeProfileVisibilitySettingsResponse profileVisibilitySettings(@CurrentUser UserInfo userInfo) {
+        return MeProfileVisibilitySettingsResponse.from(meService.profileVisibilitySettings(userInfo.id()));
     }
 
-    @PatchMapping("/api/v1/me/profile/visibility/{type}")
-    public void changeProfileVisibility(@CurrentUser UserInfo userInfo,
+    @PatchMapping("/api/v1/me/profile/visibility-settings/{type}")
+    public void changeProfileVisibilitySetting(@CurrentUser UserInfo userInfo,
                                         @PathVariable DisclosureField type,
-                                        @Valid @RequestBody MeChangeProfileVisibilityRequest request) {
-        meService.changeProfileVisibility(userInfo.id(), type, MeChangeProfileVisibilityCommand.from(request));
+                                        @Valid @RequestBody MeChangeProfileVisibilitySettingRequest request) {
+        meService.changeProfileVisibilitySetting(userInfo.id(), type, MeChangeProfileVisibilitySettingCommand.from(request));
     }
 
     @GetMapping("/api/v1/me/app-notifications/feeds")

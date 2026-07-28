@@ -7,7 +7,7 @@ import com.nidus.twinly.user.dto.header.UserInfo;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -17,7 +17,7 @@ public class SeasonController {
     private final SeasonService seasonService;
 
     @ApiResponse(responseCode = "422", description = "SEASON_NOT_JOINABLE")
-    @PostMapping("/api/v1/season/participations")
+    @PutMapping("/api/v1/season/participation")
     public void participateIn(@CurrentUser UserInfo userInfo) {
         seasonService.participateIn(userInfo.id());
     }

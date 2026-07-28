@@ -1,6 +1,6 @@
 package com.nidus.twinly.me.dto.result;
 
-public record MeProfileVisibilityResult(
+public record MeProfileVisibilitySettingsResult(
         Boolean affiliationVisible,
         Boolean affiliationNumberVisible
 ) {

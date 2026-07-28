@@ -1,6 +1,6 @@
 package com.nidus.twinly.report.dto.result;
 
-public record ReportResult(
+public record ReportUserResult(
         Boolean autoBlock
 ) {
 }

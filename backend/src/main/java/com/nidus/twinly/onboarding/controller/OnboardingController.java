@@ -19,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -32,7 +33,7 @@ public class OnboardingController {
     private final AiChatService aiChatService;
 
     @ApiResponse(responseCode = "401", description = "INVALID_ANON_SESSION")
-    @PostMapping("/api/v1/onboarding/basic-info")
+    @PutMapping("/api/v1/onboarding/basic-info")
     public void basicInfo(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
                           @Valid @RequestBody OnboardingBasicInfoRequest request) {
         onboardingService.basicInfo(anonSessionSnapshot, OnboardingBasicInfoCommand.from(request));
@@ -46,7 +47,7 @@ public class OnboardingController {
     }
 
     @ApiResponse(responseCode = "404", description = "SURVEY_QUESTION_NOT_FOUND")
-    @PostMapping("/api/v1/onboarding/survey-answer")
+    @PostMapping("/api/v1/onboarding/survey-answers")
     public void surveyAnswer(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
                               @Valid @RequestBody OnboardingSurveyAnswerRequest request) {
         onboardingService.surveyAnswer(anonSessionSnapshot, OnboardingSurveyAnswerCommand.from(request));
@@ -82,7 +83,7 @@ public class OnboardingController {
             @ApiResponse(responseCode = "409", description = "NICKNAME_ALREADY_USED"),
             @ApiResponse(responseCode = "422", description = "INVALID_NICKNAME")
     })
-    @PostMapping("/api/v1/onboarding/profile/nickname")
+    @PutMapping("/api/v1/onboarding/profile/nickname")
     public void profileNickname(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
                                  @Valid @RequestBody OnboardingProfileNicknameRequest request) {
         onboardingService.profileNickname(anonSessionSnapshot, OnboardingProfileNicknameCommand.from(request));
@@ -93,7 +94,7 @@ public class OnboardingController {
         return OnboardingAiChatStartResponse.from(aiChatService.aiChatStart(anonSessionSnapshot));
     }
 
-    @PostMapping("/api/v1/onboarding/ai-chat/message")
+    @PostMapping("/api/v1/onboarding/ai-chat/messages")
     public OnboardingAiChatMessageResponse aiChatMessage(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
                                                          @Valid @RequestBody OnboardingAiChatMessageRequest request) {
         return OnboardingAiChatMessageResponse.from(aiChatService.aiChatMessage(anonSessionSnapshot, OnboardingAiChatMessageCommand.from(request)));

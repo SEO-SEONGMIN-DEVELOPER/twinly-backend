@@ -24,7 +24,7 @@ import com.nidus.twinly.legal.service.PolicyCatalog.PolicyKey;
 import com.nidus.twinly.me.domain.HesitationDuration;
 import com.nidus.twinly.me.domain.HesitationStatus;
 import com.nidus.twinly.me.dto.command.MeAppNotificationsReadAllCommand;
-import com.nidus.twinly.me.dto.command.MeChangeProfileVisibilityCommand;
+import com.nidus.twinly.me.dto.command.MeChangeProfileVisibilitySettingCommand;
 import com.nidus.twinly.me.dto.command.MeChangePushNotificationsCommand;
 import com.nidus.twinly.me.dto.command.MeGrantConsentsCommand;
 import com.nidus.twinly.me.dto.command.MeHesitationsAnswerCommand;
@@ -46,7 +46,7 @@ import com.nidus.twinly.me.dto.result.MePushNotificationsSettingsResult;
 import com.nidus.twinly.me.dto.result.MeProfileEditViewResult;
 import com.nidus.twinly.me.dto.result.MeProfilePhotoCommitResult;
 import com.nidus.twinly.me.dto.result.MeProfilePhotoPresignResult;
-import com.nidus.twinly.me.dto.result.MeProfileVisibilityResult;
+import com.nidus.twinly.me.dto.result.MeProfileVisibilitySettingsResult;
 import com.nidus.twinly.me.dto.result.MeStatusReportResult;
 import com.nidus.twinly.me.dto.result.MeStatusResult;
 import com.nidus.twinly.me.dto.result.MeStatusWithdrawalResult;
@@ -299,18 +299,18 @@ public class MeService {
                 );
     }
 
-    public MeProfileVisibilityResult profileVisibility(Long userId) {
+    public MeProfileVisibilitySettingsResult profileVisibilitySettings(Long userId) {
         Set<DisclosureField> disclosedFields = disclosureAgreementRepository.findAllByUserId(userId).stream()
                 .map(DisclosureAgreement::getField)
                 .collect(Collectors.toSet());
 
-        return new MeProfileVisibilityResult(
+        return new MeProfileVisibilitySettingsResult(
                 disclosedFields.contains(DisclosureField.AFFILIATION),
                 disclosedFields.contains(DisclosureField.AFFILIATION_NUMBER));
     }
 
     @Transactional
-    public void changeProfileVisibility(Long userId, DisclosureField type, MeChangeProfileVisibilityCommand command) {
+    public void changeProfileVisibilitySetting(Long userId, DisclosureField type, MeChangeProfileVisibilitySettingCommand command) {
         if (command.isVisible()) {
             if (!disclosureAgreementRepository.existsByUserIdAndField(userId, type)) {
                 disclosureAgreementRepository.save(DisclosureAgreement.create(userId, type));

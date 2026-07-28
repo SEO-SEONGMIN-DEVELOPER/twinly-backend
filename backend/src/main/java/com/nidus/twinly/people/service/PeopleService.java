@@ -187,7 +187,7 @@ public class PeopleService {
         );
     }
 
-    public void favorites(Long userId, Long partnerUserId) {
+    public void favorite(Long userId, Long partnerUserId) {
         Encounter encounter = encounterRepository.findByUserAIdAndUserBId(Math.min(userId, partnerUserId), Math.max(userId, partnerUserId))
                 .orElseThrow(() -> new BusinessException(ErrorCode.ENCOUNTER_NOT_FOUND));
 
@@ -198,7 +198,7 @@ public class PeopleService {
         encounterPreferenceRepository.save(preference);
     }
 
-    public void deleteFavorites(Long userId, Long partnerUserId) {
+    public void deleteFavorite(Long userId, Long partnerUserId) {
         Encounter encounter = encounterRepository.findByUserAIdAndUserBId(Math.min(userId, partnerUserId), Math.max(userId, partnerUserId))
                 .orElseThrow(() -> new BusinessException(ErrorCode.ENCOUNTER_NOT_FOUND));
 

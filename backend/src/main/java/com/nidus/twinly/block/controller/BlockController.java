@@ -10,7 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -20,7 +20,7 @@ public class BlockController {
     private final BlockService blockService;
 
     @ApiResponse(responseCode = "422", description = "CANNOT_BLOCK_SELF")
-    @PostMapping("/api/v1/blocks/{userId}")
+    @PutMapping("/api/v1/blocks/{userId}")
     public void block(@CurrentUser UserInfo userInfo,
                       @PathVariable String userId) {
         blockService.block(userInfo.id(), RequestId.toLong(userId, "userId"));

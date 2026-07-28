@@ -18,7 +18,7 @@ public class ConnectionController {
 
     private final ConnectionService connectionService;
 
-    @PostMapping("/api/v1/connection-token")
+    @PostMapping("/api/v1/connection-tokens")
     public ConnectionTokenResponse token(@CurrentUser UserInfo userInfo,
                                          @Valid @RequestBody ConnectionTokenRequest request) {
         return ConnectionTokenResponse.from(connectionService.token(userInfo.id(), ConnectionTokenCommand.from(request)));

@@ -7,8 +7,8 @@ import com.nidus.twinly.block.repository.BlockRepository;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.report.dto.command.ReportAiUtteranceCommand;
-import com.nidus.twinly.report.dto.command.ReportCommand;
-import com.nidus.twinly.report.dto.result.ReportResult;
+import com.nidus.twinly.report.dto.command.ReportUserCommand;
+import com.nidus.twinly.report.dto.result.ReportUserResult;
 import com.nidus.twinly.report.entity.AiUtteranceReport;
 import com.nidus.twinly.report.entity.Report;
 import com.nidus.twinly.report.repository.AiUtteranceReportRepository;
@@ -29,7 +29,9 @@ public class ReportService {
     private final SceneRepository sceneRepository;
 
     @Transactional
-    public ReportResult report(Long userId, Long reportedUserId, ReportCommand command) {
+    public ReportUserResult reportUser(Long userId, ReportUserCommand command) {
+        Long reportedUserId = command.targetUserId();
+
         if (userId.equals(reportedUserId)) {
             throw new BusinessException(ErrorCode.CANNOT_REPORT_SELF);
         }
@@ -40,11 +42,11 @@ public class ReportService {
             blockRepository.save(Block.create(userId, reportedUserId));
         }
 
-        return new ReportResult(AUTO_BLOCK);
+        return new ReportUserResult(AUTO_BLOCK);
     }
 
     @Transactional
-    public void aiUtterance(Long userId, ReportAiUtteranceCommand command) {
+    public void reportAiUtterance(Long userId, ReportAiUtteranceCommand command) {
         Long reportedUserId = command.targetUserId();
         Long sceneId = command.sceneId();
 

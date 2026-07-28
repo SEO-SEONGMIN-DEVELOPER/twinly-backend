@@ -17,7 +17,7 @@ public class ActivityController {
 
     private final ActivityService activityService;
 
-    @GetMapping("/api/v1/activity/{date}")
+    @GetMapping("/api/v1/activities/{date}")
     public ActivityResponse activity(@CurrentUser UserInfo userInfo,
                                      @PathVariable LocalDate date) {
         return ActivityResponse.from(activityService.activity(userInfo.id(), date));

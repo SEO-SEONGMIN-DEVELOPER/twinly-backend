@@ -45,17 +45,17 @@ public class PeopleController {
     }
 
     @ApiResponse(responseCode = "404", description = "ENCOUNTER_NOT_FOUND")
-    @PutMapping("/api/v1/people/{userId}/favorites")
-    public void favorites(@CurrentUser UserInfo userInfo,
+    @PutMapping("/api/v1/people/{userId}/favorite")
+    public void favorite(@CurrentUser UserInfo userInfo,
                           @PathVariable("userId") String partnerUserId) {
-        peopleService.favorites(userInfo.id(), RequestId.toLong(partnerUserId, "userId"));
+        peopleService.favorite(userInfo.id(), RequestId.toLong(partnerUserId, "userId"));
     }
 
     @ApiResponse(responseCode = "404", description = "ENCOUNTER_NOT_FOUND")
-    @DeleteMapping("/api/v1/people/{userId}/favorites")
-    public void deleteFavorites(@CurrentUser UserInfo userInfo,
+    @DeleteMapping("/api/v1/people/{userId}/favorite")
+    public void deleteFavorite(@CurrentUser UserInfo userInfo,
                                 @PathVariable("userId") String partnerUserId) {
-        peopleService.deleteFavorites(userInfo.id(), RequestId.toLong(partnerUserId, "userId"));
+        peopleService.deleteFavorite(userInfo.id(), RequestId.toLong(partnerUserId, "userId"));
     }
 
     @ApiResponse(responseCode = "404", description = "RELATIONSHIP_NOT_FOUND")
@@ -78,7 +78,7 @@ public class PeopleController {
         return PeopleEventsResponse.from(peopleService.events(userInfo.id(), RequestId.toLong(partnerUserId, "userId"), cursor, limit));
     }
 
-    @GetMapping("/api/v1/people/{userId}/event/{date}")
+    @GetMapping("/api/v1/people/{userId}/events/{date}")
     public PeopleEventResponse event(@CurrentUser UserInfo userInfo,
                                      @PathVariable("userId") String partnerUserId,
                                      @PathVariable LocalDate date) {
