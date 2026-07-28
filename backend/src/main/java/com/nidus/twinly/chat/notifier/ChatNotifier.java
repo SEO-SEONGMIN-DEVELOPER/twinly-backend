@@ -8,8 +8,12 @@ import com.nidus.twinly.chat.entity.Chat;
 import com.nidus.twinly.chat.event.ChatChangedEvent;
 import com.nidus.twinly.chat.event.ChatMessageCreatedEvent;
 import com.nidus.twinly.common.websocket.domain.WebSocketBodyType;
-import com.nidus.twinly.common.websocket.dto.WebSocketResponseBody;
+import com.nidus.twinly.common.websocket.dto.WebSocketEventBody;
+import io.github.springwolf.bindings.stomp.annotations.StompAsyncOperationBinding;
+import io.github.springwolf.core.asyncapi.annotations.AsyncOperation;
+import io.github.springwolf.core.asyncapi.annotations.AsyncPublisher;
 import lombok.RequiredArgsConstructor;
+import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
@@ -21,6 +25,12 @@ import java.nio.charset.StandardCharsets;
 @Component
 @RequiredArgsConstructor
 public class ChatNotifier {
+
+    private static final String ROOM_DESTINATION_PREFIX = "/queue/chat/rooms/";
+    private static final String INDEX_DESTINATION = "/queue/chat/index";
+
+    private static final String ROOM_OUTBOUND_CHANNEL = "/user/queue/chat/rooms/{roomId}";
+    private static final String INDEX_OUTBOUND_CHANNEL = "/user/queue/chat/index";
 
     private final SimpMessagingTemplate messagingTemplate;
 
@@ -41,10 +51,8 @@ public class ChatNotifier {
                     chat.getSentAt(),
                     senderType == ChatSenderType.ME ? chat.getClientMsgId() : null);
 
-            messagingTemplate.convertAndSendToUser(
-                    String.valueOf(participantUserId),
-                    "/queue/chat/rooms/" + encodedRoomId,
-                    WebSocketResponseBody.event(WebSocketBodyType.CHAT_MESSAGE_CREATED,
+            publishMessageCreated(participantUserId, encodedRoomId,
+                    WebSocketEventBody.of(WebSocketBodyType.CHAT_MESSAGE_CREATED,
                             new ChatMessageCreatedPayload(chat.getRoomId(), message)));
         }
     }
@@ -52,11 +60,28 @@ public class ChatNotifier {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onChatChanged(ChatChangedEvent event) {
         for (Long participantUserId : event.participantUserIds()) {
-            messagingTemplate.convertAndSendToUser(
-                    String.valueOf(participantUserId),
-                    "/queue/chat/index",
-                    WebSocketResponseBody.event(WebSocketBodyType.CHAT_CHANGED, new ChatChangedPayload(event.roomId())));
+            publishChatChanged(participantUserId,
+                    WebSocketEventBody.of(WebSocketBodyType.CHAT_CHANGED, new ChatChangedPayload(event.roomId())));
         }
+    }
+
+    @AsyncPublisher(operation = @AsyncOperation(
+            channelName = ROOM_OUTBOUND_CHANNEL,
+            description = "채팅방에 새 메시지가 생성됨 (참여자별로 senderType이 me/them으로 다르게 전달된다)"
+    ))
+    @StompAsyncOperationBinding
+    public void publishMessageCreated(Long userId, String encodedRoomId,
+                                      @Payload WebSocketEventBody<ChatMessageCreatedPayload> body) {
+        messagingTemplate.convertAndSendToUser(String.valueOf(userId), ROOM_DESTINATION_PREFIX + encodedRoomId, body);
+    }
+
+    @AsyncPublisher(operation = @AsyncOperation(
+            channelName = INDEX_OUTBOUND_CHANNEL,
+            description = "채팅방 목록 갱신 필요 (목록 재조회 트리거)"
+    ))
+    @StompAsyncOperationBinding
+    public void publishChatChanged(Long userId, @Payload WebSocketEventBody<ChatChangedPayload> body) {
+        messagingTemplate.convertAndSendToUser(String.valueOf(userId), INDEX_DESTINATION, body);
     }
 
     private String encodePathSegment(String value) {
