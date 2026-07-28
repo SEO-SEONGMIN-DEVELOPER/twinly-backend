@@ -500,6 +500,7 @@ CREATE TABLE seasons (
     id          BIGINT NOT NULL AUTO_INCREMENT,
     started_at  DATETIME(6) NOT NULL,
     ended_at    DATETIME(6) NOT NULL,
+    is_active   BOOLEAN DEFAULT 0 NOT NULL,
     created_at  DATETIME(6) DEFAULT (UTC_TIMESTAMP(6)) NOT NULL,
 
     CONSTRAINT pk_seasons PRIMARY KEY (id)

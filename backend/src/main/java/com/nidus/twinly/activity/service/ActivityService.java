@@ -8,10 +8,10 @@ import com.nidus.twinly.activity.repository.QuestionRepository;
 import com.nidus.twinly.activity.repository.ScenePartnerRepository;
 import com.nidus.twinly.activity.repository.SceneRepository;
 import com.nidus.twinly.common.time.KstTimes;
+import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
@@ -28,13 +28,11 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ActivityService {
 
-    @Value("${app.current-season-id}")
-    private Long currentSeasonId;
-
     private final SceneRepository sceneRepository;
     private final ScenePartnerRepository scenePartnerRepository;
     private final QuestionRepository questionRepository;
     private final UserRepository userRepository;
+    private final CurrentSeasonReader currentSeasonReader;
     private final ObjectMapper objectMapper;
 
     public ActivityResult activity(Long userId, LocalDate date) {
@@ -60,7 +58,7 @@ public class ActivityService {
 
         return new ActivityResult(
                 userId,
-                currentSeasonId,
+                currentSeasonReader.read().getId(),
                 date,
                 scenes.isEmpty() ? null : scenes.get(0).getVersion(),
                 Instant.now(),

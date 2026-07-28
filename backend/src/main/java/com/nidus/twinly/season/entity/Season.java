@@ -23,5 +23,7 @@ public class Season {
 
     private Instant endedAt;
 
+    private Boolean isActive;
+
     private Instant createdAt;
 }

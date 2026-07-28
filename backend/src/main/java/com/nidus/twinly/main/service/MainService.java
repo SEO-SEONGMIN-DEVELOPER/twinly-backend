@@ -5,9 +5,8 @@ import com.nidus.twinly.main.dto.result.MainTabResult;
 import com.nidus.twinly.main.dto.result.MainTabSeasonResult;
 import com.nidus.twinly.notification.repository.AppNotificationFeedRepository;
 import com.nidus.twinly.season.entity.Season;
-import com.nidus.twinly.season.repository.SeasonRepository;
+import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -17,16 +16,12 @@ import java.time.Instant;
 @RequiredArgsConstructor
 public class MainService {
 
-    @Value("${app.current-season-id}")
-    private Long currentSeasonId;
-
-    private final SeasonRepository seasonRepository;
+    private final CurrentSeasonReader currentSeasonReader;
     private final ChatRepository chatRepository;
     private final AppNotificationFeedRepository appNotificationFeedRepository;
 
     public MainTabResult mainTab(Long userId) {
-        Season season = seasonRepository.findById(currentSeasonId)
-                .orElseThrow(() -> new IllegalStateException("현재 시즌으로 설정된 시즌이 존재하지 않습니다: seasonId=" + currentSeasonId));
+        Season season = currentSeasonReader.read();
 
         Instant now = Instant.now();
         long totalMillis = Duration.between(season.getStartedAt(), season.getEndedAt()).toMillis();

@@ -21,6 +21,7 @@ import com.nidus.twinly.match.repository.MatchRepository;
 import com.nidus.twinly.relationship.domain.RelationshipSpecificType;
 import com.nidus.twinly.relationship.entity.Relationship;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
+import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.user.domain.DisclosureField;
 import com.nidus.twinly.user.entity.DisclosureAgreement;
 import com.nidus.twinly.user.entity.Photo;
@@ -30,7 +31,6 @@ import com.nidus.twinly.user.repository.PhotoRepository;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,9 +51,6 @@ public class ChatService {
     private static final int DEFAULT_MESSAGES_LIMIT = 20;
     private static final int MAX_TEXT_BYTES = 4 * 1024;
 
-    @Value("${app.current-season-id}")
-    private Long currentSeasonId;
-
     private final CloudFrontService cloudFrontService;
 
     private final UserRepository userRepository;
@@ -64,6 +61,7 @@ public class ChatService {
     private final RelationshipRepository relationshipRepository;
     private final PhotoRepository photoRepository;
     private final DisclosureAgreementRepository disclosureAgreementRepository;
+    private final CurrentSeasonReader currentSeasonReader;
 
     private final ApplicationEventPublisher eventPublisher;
 
@@ -153,8 +151,10 @@ public class ChatService {
                         .collect(Collectors.toMap(ChatRepository.UnreadCountProjection::getRoomId, ChatRepository.UnreadCountProjection::getCount))
         );
 
+        Long currentSeasonId = currentSeasonReader.read().getId();
+
         List<ChatRoomResult> roomResults = visibleRooms.stream()
-                .map(room -> toChatRoomResult(room, userId, context))
+                .map(room -> toChatRoomResult(room, userId, context, currentSeasonId))
                 .toList();
 
         return new ChatRoomsResult(roomResults);
@@ -187,7 +187,7 @@ public class ChatService {
                 .toList();
     }
 
-    private ChatRoomResult toChatRoomResult(ChatRoom room, Long userId, RoomsContext context) {
+    private ChatRoomResult toChatRoomResult(ChatRoom room, Long userId, RoomsContext context, Long currentSeasonId) {
         Match match = context.matchById().get(room.getMatchId());
         Long partnerId = resolvePartnerId(match, userId);
         User partner = context.partnerById().get(partnerId);
@@ -249,6 +249,8 @@ public class ChatService {
         Set<DisclosureField> agreedFields = disclosureAgreementRepository.findAllByUserId(partnerId).stream()
                 .map(DisclosureAgreement::getField)
                 .collect(Collectors.toSet());
+
+        Long currentSeasonId = currentSeasonReader.read().getId();
 
         return new ChatRoomDetailResult(
                 room.getId(),
