@@ -11,10 +11,6 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.server.ResponseStatusException;
 
-/*
- * [멘토링 피드백 반영 완료]
- * request 값 검증을 서비스 로직에서 분리
- */
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {

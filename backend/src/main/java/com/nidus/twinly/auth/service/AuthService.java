@@ -45,10 +45,6 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
-/* [멘토링 피드백 반영 완료]
- * 1. verify 로직에 대해서 중복 제거 및 책임 분리
- * 2. 온보딩 / 로그인 API 분리
- */
 @Service
 @RequiredArgsConstructor
 public class AuthService {

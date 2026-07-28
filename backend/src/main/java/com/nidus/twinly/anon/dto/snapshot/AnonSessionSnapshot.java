@@ -6,11 +6,6 @@ import com.nidus.twinly.common.domain.Gender;
 import java.time.Instant;
 import java.util.UUID;
 
-/*
- * [멘토링 피드백 반영 완료]
- * Controller -> Service 에서 Snapshot 전달
- */
-
 public record AnonSessionSnapshot(
         Long id,
         UUID token,

@@ -83,11 +83,6 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-/*
- * [멘토링 피드백 반영 완료]
- * JPA에서 업데이트된 정보가 분실되는 상황 발생 -> 그 컬럼만 바꾸게 SQL 짜기
- */
-
 @Service
 @RequiredArgsConstructor
 public class MeService {

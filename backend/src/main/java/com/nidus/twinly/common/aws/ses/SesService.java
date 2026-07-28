@@ -16,11 +16,6 @@ public class SesService {
     private final SesProperties sesProperties;
 
     public void send(String toAddress, String subject, String body) {
-        /*
-         * [멘토링 피드백 반영 완료]
-         * 응답 성공 / 실패에 따라 에러 호출. 실패 이유도 로그에 저장하기
-         * DB에 상태 저장?
-         */
         SendEmailRequest request = SendEmailRequest.builder()
                 .source(sesProperties.fromAddress())
                 .destination(Destination.builder().toAddresses(toAddress).build())
