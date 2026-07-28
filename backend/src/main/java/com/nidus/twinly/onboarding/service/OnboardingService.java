@@ -146,10 +146,11 @@ public class OnboardingService {
     }
 
     public OnboardingProfileNicknameCheckResult profileNicknameCheck(AnonSessionSnapshot anonSessionSnapshot, OnboardingProfileNicknameCheckCommand command) {
+        Long anonSessionId = anonSessionSnapshot.id();
         String nickname = validateAndNormalizeNickname(command.nickname());
 
         boolean isAvailable = !userRepository.existsByNickname(nickname)
-                && !anonSessionRepository.existsByNickname(nickname);
+                && !anonSessionRepository.existsByNicknameAndIdNot(nickname, anonSessionId);
 
         return new OnboardingProfileNicknameCheckResult(isAvailable);
     }
@@ -160,7 +161,7 @@ public class OnboardingService {
         String nickname = validateAndNormalizeNickname(command.nickname());
 
         if (userRepository.existsByNickname(nickname)
-                || anonSessionRepository.existsByNickname(nickname)) {
+                || anonSessionRepository.existsByNicknameAndIdNot(nickname, anonSessionId)) {
             throw new BusinessException(ErrorCode.NICKNAME_ALREADY_USED, "이미 사용 중인 닉네임입니다: " + nickname);
         }
 

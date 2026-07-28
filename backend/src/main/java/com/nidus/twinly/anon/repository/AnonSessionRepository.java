@@ -10,5 +10,5 @@ public interface AnonSessionRepository extends JpaRepository<AnonSession, Long> 
 
     Optional<AnonSession> findByToken(UUID token);
 
-    boolean existsByNickname(String nickname);
+    boolean existsByNicknameAndIdNot(String nickname, Long id);
 }
