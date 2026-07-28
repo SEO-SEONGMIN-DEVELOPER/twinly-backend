@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Component
 public class WebSocketFrameValidationInterceptor implements ChannelInterceptor {
@@ -20,12 +21,31 @@ public class WebSocketFrameValidationInterceptor implements ChannelInterceptor {
     private static final int MAX_HEADER_KEY_BYTES = 64;
     private static final int MAX_HEADER_VALUE_BYTES = 1024;
 
+    private static final Set<String> ALLOWED_SEND_DESTINATIONS = Set.of(
+            "/app/chat/messages",
+            "/app/chat/read"
+    );
+    private static final String ALLOWED_SUBSCRIBE_PREFIX = "/user/";
+
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
         StompHeaderAccessor accessor = StompHeaderAccessor.wrap(message);
-        if (accessor.getCommand() != StompCommand.SEND) {
+        StompCommand command = accessor.getCommand();
+
+        if (command == null) {
             return message;
         }
+
+        if (command == StompCommand.SUBSCRIBE) {
+            validateSubscribeDestination(message, accessor.getDestination());
+            return message;
+        }
+
+        if (command != StompCommand.SEND) {
+            return message;
+        }
+
+        validateSendDestination(message, accessor.getDestination());
 
         if (bodyByteLength(message) > MAX_BODY_BYTES) {
             throw new MessagingException(message, "본문 크기 상한을 초과했습니다.");
@@ -34,6 +54,18 @@ public class WebSocketFrameValidationInterceptor implements ChannelInterceptor {
         validateHeaders(message, accessor);
 
         return message;
+    }
+
+    private void validateSubscribeDestination(Message<?> message, String destination) {
+        if (destination == null || !destination.startsWith(ALLOWED_SUBSCRIBE_PREFIX)) {
+            throw new MessagingException(message, "허용되지 않은 구독 목적지입니다.");
+        }
+    }
+
+    private void validateSendDestination(Message<?> message, String destination) {
+        if (destination == null || !ALLOWED_SEND_DESTINATIONS.contains(destination)) {
+            throw new MessagingException(message, "허용되지 않은 전송 목적지입니다.");
+        }
     }
 
     private void validateHeaders(Message<?> message, StompHeaderAccessor accessor) {
