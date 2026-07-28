@@ -1,16 +1,15 @@
 package com.nidus.twinly.people.dto.result;
 
-import com.nidus.twinly.activity.dto.result.ActivitySpeakerResult;
-
 import java.time.OffsetDateTime;
 import java.util.List;
 
 public record PeopleEventActionSceneResult(
+        Long sceneId,
         String type,
         OffsetDateTime startsAt,
         OffsetDateTime endsAt,
         String place,
-        List<ActivitySpeakerResult> with,
+        List<PeopleEventSpeakerResult> with,
         String narration,
         String mind
 ) implements PeopleEventSceneResult {

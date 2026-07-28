@@ -1,10 +1,6 @@
 package com.nidus.twinly.people.service;
 
 import com.nidus.twinly.activity.domain.SceneType;
-import com.nidus.twinly.activity.dto.result.ActivityBubbleLineResult;
-import com.nidus.twinly.activity.dto.result.ActivityLineResult;
-import com.nidus.twinly.activity.dto.result.ActivityNarrationLineResult;
-import com.nidus.twinly.activity.dto.result.ActivitySpeakerResult;
 import com.nidus.twinly.activity.entity.Scene;
 import com.nidus.twinly.activity.entity.ScenePartner;
 import com.nidus.twinly.activity.repository.ScenePartnerRepository;
@@ -330,23 +326,23 @@ public class PeopleService {
             return scene.getNarration();
         }
 
-        List<ActivityLineResult> lines = parseLines(scene.getLines());
+        List<PeopleEventLineResult> lines = parseLines(scene.getLines());
         if (lines.isEmpty()) {
             return null;
         }
 
         return switch (lines.get(0)) {
-            case ActivityNarrationLineResult narration -> narration.text();
-            case ActivityBubbleLineResult bubble -> bubble.text();
+            case PeopleEventNarrationLineResult narration -> narration.text();
+            case PeopleEventBubbleLineResult bubble -> bubble.text();
         };
     }
 
-    private List<ActivityLineResult> parseLines(String linesJson) {
+    private List<PeopleEventLineResult> parseLines(String linesJson) {
         if (linesJson == null) {
             return List.of();
         }
 
-        return objectMapper.readValue(linesJson, new TypeReference<List<ActivityLineResult>>() {
+        return objectMapper.readValue(linesJson, new TypeReference<List<PeopleEventLineResult>>() {
         });
     }
 
@@ -394,10 +390,10 @@ public class PeopleService {
     }
 
     private PeopleEventSceneResult toSceneResult(Scene scene, List<Long> partnerUserIds, Map<Long, User> userById) {
-        List<ActivitySpeakerResult> with = partnerUserIds.stream()
+        List<PeopleEventSpeakerResult> with = partnerUserIds.stream()
                 .map(partnerUserId -> {
                     User user = userById.get(partnerUserId);
-                    return new ActivitySpeakerResult(partnerUserId, user != null ? user.getFamilyName() + user.getGivenName() : null);
+                    return new PeopleEventSpeakerResult(partnerUserId, user != null ? user.getFamilyName() + user.getGivenName() : null);
                 })
                 .toList();
 
@@ -406,6 +402,7 @@ public class PeopleService {
 
         return switch (scene.getType()) {
             case ACTION -> new PeopleEventActionSceneResult(
+                    scene.getId(),
                     "action",
                     startsAt,
                     endsAt,
@@ -415,6 +412,7 @@ public class PeopleService {
                     scene.getMind()
             );
             case DIALOGUE -> new PeopleEventDialogueSceneResult(
+                    scene.getId(),
                     "dialogue",
                     startsAt,
                     endsAt,
