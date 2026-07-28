@@ -14,6 +14,7 @@ import com.nidus.twinly.chat.entity.ChatRoom;
 import com.nidus.twinly.chat.repository.ChatRoomRepository;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
 import com.nidus.twinly.common.photo.PhotoType;
+import com.nidus.twinly.common.photo.ProfilePhotoInfo;
 import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
@@ -89,8 +90,8 @@ public class PeopleService {
         Map<Long, User> userByPartnerUserId = userRepository.findAllById(partnerUserIds).stream()
                 .collect(Collectors.toMap(User::getId, Function.identity()));
 
-        Map<Long, String> photoUrlByPartnerUserId = photoRepository.findAllByUserIdInAndType(partnerUserIds, PhotoType.PROFILE).stream()
-                .collect(Collectors.toMap(Photo::getUserId, photo -> cloudFrontService.getSignedUrl(photo.getKey())));
+        Map<Long, ProfilePhotoInfo> profilePhotoByPartnerUserId = photoRepository.findAllByUserIdInAndType(partnerUserIds, PhotoType.PROFILE).stream()
+                .collect(Collectors.toMap(Photo::getUserId, photo -> new ProfilePhotoInfo(photo.getKey(), cloudFrontService.getSignedUrl(photo.getKey()), photo.position())));
 
         Map<Long, Integer> intimacyByPartnerUserId = relationshipRepository.findLatestByUserIdAndPartnerUserIdIn(userId, partnerUserIds).stream()
                 .collect(Collectors.toMap(Relationship::getPartnerUserId, Relationship::getIntimacy));
@@ -126,7 +127,7 @@ public class PeopleService {
                     return new PeopleItemResult(
                             partnerUserId,
                             user != null ? user.getGivenName() : null,
-                            photoUrlByPartnerUserId.get(partnerUserId),
+                            profilePhotoByPartnerUserId.get(partnerUserId),
                             intimacy,
                             RelationshipType.fromIntimacy(intimacy),
                             RelationshipSpecificType.fromIntimacy(intimacy),
@@ -162,8 +163,8 @@ public class PeopleService {
 
         boolean isBlocked = blockRepository.existsByUserIdAndBlockedUserId(userId, partnerUserId);
 
-        String profilePhotoUrl = photoRepository.findByUserIdAndType(partnerUserId, PhotoType.PROFILE)
-                .map(photo -> cloudFrontService.getSignedUrl(photo.getKey()))
+        ProfilePhotoInfo profilePhoto = photoRepository.findByUserIdAndType(partnerUserId, PhotoType.PROFILE)
+                .map(photo -> new ProfilePhotoInfo(photo.getKey(), cloudFrontService.getSignedUrl(photo.getKey()), photo.position()))
                 .orElse(null);
 
         Set<DisclosureField> disclosedFields = disclosureAgreementRepository.findAllByUserId(partnerUserId).stream()
@@ -178,7 +179,7 @@ public class PeopleService {
         return new PeopleProfileResult(
                 partnerUserId,
                 partner.getFamilyName() + partner.getGivenName(),
-                profilePhotoUrl,
+                profilePhoto,
                 intimacy,
                 RelationshipType.fromIntimacy(intimacy),
                 RelationshipSpecificType.fromIntimacy(intimacy),
@@ -267,14 +268,14 @@ public class PeopleService {
                 .map(Relationship::getIntimacy)
                 .orElse(0);
 
-        String profilePhotoUrl = photoRepository.findByUserIdAndType(partnerUserId, PhotoType.PROFILE)
-                .map(photo -> cloudFrontService.getSignedUrl(photo.getKey()))
+        ProfilePhotoInfo profilePhoto = photoRepository.findByUserIdAndType(partnerUserId, PhotoType.PROFILE)
+                .map(photo -> new ProfilePhotoInfo(photo.getKey(), cloudFrontService.getSignedUrl(photo.getKey()), photo.position()))
                 .orElse(null);
 
         PeopleEventsPartnerResult partnerResult = new PeopleEventsPartnerResult(
                 partnerUserId,
                 partner.getFamilyName() + partner.getGivenName(),
-                profilePhotoUrl,
+                profilePhoto,
                 intimacy,
                 RelationshipSpecificType.fromIntimacy(intimacy)
         );

@@ -13,6 +13,7 @@ import com.nidus.twinly.chat.repository.ChatRoomParticipationRepository;
 import com.nidus.twinly.chat.repository.ChatRoomRepository;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
 import com.nidus.twinly.common.photo.PhotoType;
+import com.nidus.twinly.common.photo.ProfilePhotoInfo;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.chat.event.ChatMessageCreatedEvent;
@@ -208,7 +209,7 @@ public class ChatService {
                 new ChatRoomPartnerResult(
                         partner.getId(),
                         partner.getNickname(),
-                        partnerPhoto != null ? cloudFrontService.getSignedUrl(partnerPhoto.getKey()) : null,
+                        partnerPhoto != null ? new ProfilePhotoInfo(partnerPhoto.getKey(), cloudFrontService.getSignedUrl(partnerPhoto.getKey()), partnerPhoto.position()) : null,
                         relationship != null ? relationship.getIntimacy() : 0,
                         partner.getDeletedAt() != null
                 ),
@@ -262,7 +263,7 @@ public class ChatService {
                 new ChatRoomDetailPartnerResult(
                         partner.getId(),
                         partner.getNickname(),
-                        partnerPhoto != null ? cloudFrontService.getSignedUrl(partnerPhoto.getKey()) : null,
+                        partnerPhoto != null ? new ProfilePhotoInfo(partnerPhoto.getKey(), cloudFrontService.getSignedUrl(partnerPhoto.getKey()), partnerPhoto.position()) : null,
                         intimacy,
                         RelationshipSpecificType.fromIntimacy(intimacy),
                         new ChatRoomDetailDisclosedFieldsResult(

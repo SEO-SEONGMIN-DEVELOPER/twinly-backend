@@ -7,6 +7,7 @@ import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
 import com.nidus.twinly.common.crypto.BlindIndexHasher;
 import com.nidus.twinly.common.photo.PhotoPosInfo;
 import com.nidus.twinly.common.photo.PhotoType;
+import com.nidus.twinly.common.photo.ProfilePhotoInfo;
 import com.nidus.twinly.common.presign.PhotoCommitService;
 import com.nidus.twinly.common.presign.PhotoPresignResult;
 import com.nidus.twinly.common.presign.PresignService;
@@ -153,8 +154,8 @@ public class MeService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
-        String profilePhotoUrl = photoRepository.findByUserIdAndType(userId, PhotoType.PROFILE)
-                .map(photo -> cloudFrontService.getSignedUrl(photo.getKey()))
+        ProfilePhotoInfo profilePhoto = photoRepository.findByUserIdAndType(userId, PhotoType.PROFILE)
+                .map(photo -> new ProfilePhotoInfo(photo.getKey(), cloudFrontService.getSignedUrl(photo.getKey()), photo.position()))
                 .orElse(null);
 
         return new MeProfileEditViewResult(
@@ -164,7 +165,7 @@ public class MeService {
                 user.getAffiliation(),
                 user.getAffiliationNumber(),
                 user.getBirthDate(),
-                profilePhotoUrl
+                profilePhoto
         );
     }
 

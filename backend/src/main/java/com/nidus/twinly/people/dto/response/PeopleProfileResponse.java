@@ -1,6 +1,7 @@
 package com.nidus.twinly.people.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.nidus.twinly.common.photo.ProfilePhotoInfo;
 import com.nidus.twinly.people.dto.result.PeopleProfileResult;
 import com.nidus.twinly.relationship.domain.RelationshipSpecificType;
 import com.nidus.twinly.relationship.domain.RelationshipType;
@@ -11,7 +12,7 @@ public record PeopleProfileResponse(
         Long userId,
         String userName,
         @Schema(nullable = true)
-        String profilePhotoUrl,
+        ProfilePhotoInfo profilePhoto,
         Integer intimacy,
         RelationshipType relationshipType,
         RelationshipSpecificType relationshipSpecificType,
@@ -26,7 +27,7 @@ public record PeopleProfileResponse(
         return new PeopleProfileResponse(
                 result.userId(),
                 result.userName(),
-                result.profilePhotoUrl(),
+                result.profilePhoto(),
                 result.intimacy(),
                 result.relationshipType(),
                 result.relationshipSpecificType(),

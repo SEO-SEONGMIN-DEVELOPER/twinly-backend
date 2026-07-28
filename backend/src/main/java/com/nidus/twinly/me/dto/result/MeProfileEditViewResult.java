@@ -1,5 +1,7 @@
 package com.nidus.twinly.me.dto.result;
 
+import com.nidus.twinly.common.photo.ProfilePhotoInfo;
+
 public record MeProfileEditViewResult(
         Long userId,
         String familyName,
@@ -7,6 +9,6 @@ public record MeProfileEditViewResult(
         String affiliation,
         String affiliationNumber,
         String birthDate,
-        String profilePhotoUrl
+        ProfilePhotoInfo profilePhoto
 ) {
 }
