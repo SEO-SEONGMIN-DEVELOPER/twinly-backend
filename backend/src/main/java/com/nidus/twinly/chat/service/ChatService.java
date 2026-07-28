@@ -80,6 +80,9 @@ public class ChatService {
 
         Long receiverUserId = resolvePartnerId(match, userId);
 
+        List<ChatRoomParticipation> participations = chatRoomParticipationRepository.findAllByRoomId(roomId);
+        checkActiveParticipant(participations, userId);
+
         Optional<Chat> existing = chatRepository.findBySenderUserIdAndClientMsgId(userId, command.clientMsgId());
         if (existing.isPresent()) {
             Chat sentChat = existing.get();
@@ -94,7 +97,7 @@ public class ChatService {
         Chat chat = Chat.create(command.clientMsgId(), roomId, userId, receiverUserId, ChatMessageType.TEXT, command.text());
         chatRepository.save(chat);
 
-        eventPublisher.publishEvent(new ChatMessageCreatedEvent(chat, List.of(userId, receiverUserId)));
+        eventPublisher.publishEvent(new ChatMessageCreatedEvent(chat, activeParticipantIds(participations)));
 
         return new ChatSendMessageResult(chat.getId(), chat.getMessage(), chat.getSentAt(), command.clientMsgId());
     }
@@ -109,6 +112,37 @@ public class ChatService {
         if (!match.getUserAId().equals(userId) && !match.getUserBId().equals(userId)) {
             throw new BusinessException(ErrorCode.NOT_MATCH_PARTICIPANT);
         }
+    }
+
+    private void checkActiveParticipant(List<ChatRoomParticipation> participations, Long userId) {
+        ChatRoomParticipation mine = participations.stream()
+                .filter(participation -> participation.getUserId().equals(userId))
+                .findFirst()
+                .orElseThrow(() -> new BusinessException(ErrorCode.CHAT_PARTICIPATION_NOT_FOUND));
+
+        checkParticipationActive(mine);
+    }
+
+    private ChatRoomParticipation getActiveParticipation(Long roomId, Long userId) {
+        ChatRoomParticipation participation = chatRoomParticipationRepository.findByRoomIdAndUserId(roomId, userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.CHAT_PARTICIPATION_NOT_FOUND));
+
+        checkParticipationActive(participation);
+
+        return participation;
+    }
+
+    private void checkParticipationActive(ChatRoomParticipation participation) {
+        if (!participation.isActive()) {
+            throw new BusinessException(ErrorCode.NOT_ACTIVE_ROOM_PARTICIPANT);
+        }
+    }
+
+    private List<Long> activeParticipantIds(List<ChatRoomParticipation> participations) {
+        return participations.stream()
+                .filter(ChatRoomParticipation::isActive)
+                .map(ChatRoomParticipation::getUserId)
+                .toList();
     }
 
     public ChatRoomsResult rooms(Long userId) {
@@ -183,7 +217,7 @@ public class ChatService {
         return rooms.stream()
                 .filter(room -> {
                     ChatRoomParticipation mine = myParticipationByRoomId.get(room.getId());
-                    return mine == null || (mine.getLeftAt() == null && !mine.getIsHidden());
+                    return mine == null || mine.isActive();
                 })
                 .toList();
     }
@@ -235,8 +269,7 @@ public class ChatService {
         User partner = userRepository.findById(partnerId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
-        ChatRoomParticipation myParticipation = chatRoomParticipationRepository.findByRoomIdAndUserId(roomId, userId)
-                .orElse(null);
+        ChatRoomParticipation myParticipation = getActiveParticipation(roomId, userId);
         ChatRoomParticipation partnerParticipation = chatRoomParticipationRepository.findByRoomIdAndUserId(roomId, partnerId)
                 .orElse(null);
 
@@ -257,7 +290,7 @@ public class ChatService {
                 room.getId(),
                 match.getId(),
                 new ChatRoomEntryStatusResult(
-                        myParticipation != null && myParticipation.getEntryAgreedAt() != null,
+                        myParticipation.getEntryAgreedAt() != null,
                         partnerParticipation != null && partnerParticipation.getEntryAgreedAt() != null
                 ),
                 new ChatRoomDetailPartnerResult(
@@ -287,11 +320,7 @@ public class ChatService {
 
         checkUserInMatch(match, userId);
 
-        chatRoomParticipationRepository.findByRoomIdAndUserId(roomId, userId)
-                .ifPresentOrElse(
-                        ChatRoomParticipation::agree,
-                        () -> { throw new IllegalStateException("채팅방은 있는데 참여 정보가 없습니다: roomId=" + roomId + ", userId=" + userId); }
-                );
+        getActiveParticipation(roomId, userId).agree();
 
         return roomDetail(userId, roomId);
     }
@@ -321,6 +350,7 @@ public class ChatService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.MATCH_NOT_FOUND));
 
         checkUserInMatch(match, userId);
+        getActiveParticipation(roomId, userId);
 
         int effectiveLimit = limit != null ? limit : DEFAULT_MESSAGES_LIMIT;
 
@@ -355,12 +385,12 @@ public class ChatService {
 
         checkUserInMatch(match, userId);
 
+        ChatRoomParticipation participation = getActiveParticipation(roomId, userId);
+
         if (!chatRepository.existsByIdAndRoomId(command.lastMsgId(), roomId)) {
             throw new BusinessException(ErrorCode.MESSAGE_NOT_IN_ROOM);
         }
 
-        ChatRoomParticipation participation = chatRoomParticipationRepository.findByRoomIdAndUserId(roomId, userId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.CHAT_PARTICIPATION_NOT_FOUND));
         Long before = participation.getLastReadMessageId();
 
         chatRoomParticipationRepository.advanceReadPointer(roomId, userId, command.lastMsgId());

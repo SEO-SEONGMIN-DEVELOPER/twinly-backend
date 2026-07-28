@@ -60,6 +60,7 @@ public enum ErrorCode {
     MATCH_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 매칭입니다."),
     CHAT_PARTICIPATION_NOT_FOUND(HttpStatus.NOT_FOUND, "참여 정보가 없습니다."),
     NOT_MATCH_PARTICIPANT(HttpStatus.FORBIDDEN, "이 매칭의 참여자가 아닙니다."),
+    NOT_ACTIVE_ROOM_PARTICIPANT(HttpStatus.FORBIDDEN, "더 이상 참여 중이지 않은 채팅방입니다."),
     MESSAGE_LENGTH_EXCEEDED(HttpStatus.UNPROCESSABLE_CONTENT, "메시지 길이 상한을 초과했습니다."),
     MESSAGE_NOT_IN_ROOM(HttpStatus.UNPROCESSABLE_CONTENT, "해당 방에 존재하지 않는 메시지입니다."),
     CLIENT_MSG_ID_CONFLICT(HttpStatus.CONFLICT, "이미 다른 내용으로 사용된 clientMsgId입니다."),

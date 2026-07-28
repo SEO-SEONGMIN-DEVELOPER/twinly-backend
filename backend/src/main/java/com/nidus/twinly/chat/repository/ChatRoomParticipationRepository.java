@@ -13,6 +13,8 @@ public interface ChatRoomParticipationRepository extends JpaRepository<ChatRoomP
 
     Optional<ChatRoomParticipation> findByRoomIdAndUserId(Long roomId, Long userId);
 
+    List<ChatRoomParticipation> findAllByRoomId(Long roomId);
+
     List<ChatRoomParticipation> findAllByRoomIdIn(List<Long> roomIds);
 
     @Modifying

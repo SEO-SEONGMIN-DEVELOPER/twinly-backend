@@ -47,6 +47,10 @@ public class ChatRoomParticipation {
         return participation;
     }
 
+    public boolean isActive() {
+        return this.leftAt == null && !this.isHidden;
+    }
+
     public void agree() {
         if (this.entryAgreedAt == null) {
             this.entryAgreedAt = Instant.now();
