@@ -48,6 +48,7 @@ public class Scene {
     private String mind;
 
     @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "`lines`")
     private String lines;
 
     private Instant createdAt;
