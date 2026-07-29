@@ -77,6 +77,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Objects;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
@@ -137,7 +138,7 @@ public class MeService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
         if (user.getWithdrawalRequestedAt() != null) {
-            throw new BusinessException(ErrorCode.WITHDRAWAL_ALREADY_REQUESTED);
+            return new MeWithdrawResult(user.getWithdrawalScheduledAt());
         }
 
         user.requestWithdrawal(WITHDRAWAL_RECOVERABLE_PERIOD);
@@ -417,6 +418,9 @@ public class MeService {
         }
 
         if (question.getAnsweredAt() != null || Boolean.TRUE.equals(question.getIsSkipped())) {
+            if (isSameHandling(question, command)) {
+                return;
+            }
             throw new BusinessException(ErrorCode.HESITATION_ALREADY_HANDLED);
         }
 
@@ -434,5 +438,14 @@ public class MeService {
         }
 
         question.answer(command.answer());
+    }
+
+    /** 이미 처리된 망설임에 대한 재요청이 직전과 같은 내용인지 판정한다. (같으면 재전송으로 보고 멱등 처리) */
+    private boolean isSameHandling(Question question, MeHesitationsAnswerCommand command) {
+        if (Boolean.TRUE.equals(command.skipped())) {
+            return Boolean.TRUE.equals(question.getIsSkipped());
+        }
+
+        return question.getAnsweredAt() != null && Objects.equals(question.getChoice(), command.answer());
     }
 }

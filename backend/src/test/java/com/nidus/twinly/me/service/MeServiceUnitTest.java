@@ -234,18 +234,21 @@ class MeServiceUnitTest {
     }
 
     @Test
-    @DisplayName("이미 탈퇴 신청한 유저가 다시 탈퇴하면 WITHDRAWAL_ALREADY_REQUESTED 예외가 발생한다")
-    void withdraw_already_requested_throws() {
-        // given: 이미 탈퇴 신청된 유저
+    @DisplayName("탈퇴 신청 멱등: 이미 신청된 유저가 다시 신청하면 기존 예정 시각을 그대로 반환한다")
+    void withdraw_already_requested_is_idempotent() {
+        // given: 하루 전에 탈퇴를 신청해 예정 시각이 이미 정해진 유저
         User user = user();
+        Instant scheduledAt = Instant.now().plus(Duration.ofDays(14));
         ReflectionTestUtils.setField(user, "withdrawalRequestedAt", Instant.now().minus(Duration.ofDays(1)));
+        ReflectionTestUtils.setField(user, "withdrawalScheduledAt", scheduledAt);
         given(userRepository.findById(ME)).willReturn(Optional.of(user));
 
-        // when & then: WITHDRAWAL_ALREADY_REQUESTED 예외 발생
-        assertThatThrownBy(() -> meService.withdraw(ME))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(ErrorCode.WITHDRAWAL_ALREADY_REQUESTED);
+        // when: 같은 유저가 탈퇴를 다시 신청
+        MeWithdrawResult result = meService.withdraw(ME);
+
+        // then: 예외 없이 기존 예정 시각이 반환되고, 신청 시각도 갱신되지 않는다
+        assertThat(result.recoverableUntil()).isEqualTo(scheduledAt);
+        assertThat(user.getWithdrawalScheduledAt()).isEqualTo(scheduledAt);
     }
 
     @Test
@@ -857,17 +860,47 @@ class MeServiceUnitTest {
     }
 
     @Test
-    @DisplayName("이미 답변한 망설임에 다시 답변하면 HESITATION_ALREADY_HANDLED 예외가 발생한다")
-    void hesitationsAnswer_already_answered_throws() {
-        // given: 이미 답변된 질문
+    @DisplayName("이미 답변한 망설임에 다른 답을 보내면 HESITATION_ALREADY_HANDLED 예외가 발생한다")
+    void hesitationsAnswer_already_answered_with_different_answer_throws() {
+        // given: A로 이미 답변된 질문
         Question question = question(42L, ME, LocalDate.now(KST), Instant.now(), false, List.of("A", "B"));
+        ReflectionTestUtils.setField(question, "choice", "A");
         given(questionRepository.findById(42L)).willReturn(Optional.of(question));
 
-        // when & then: HESITATION_ALREADY_HANDLED 예외 발생
-        assertThatThrownBy(() -> meService.hesitationsAnswer(ME, 42L, new MeHesitationsAnswerCommand("A", false)))
+        // when & then: 다른 답(B)은 재전송이 아니라 수정 시도이므로 거절된다
+        assertThatThrownBy(() -> meService.hesitationsAnswer(ME, 42L, new MeHesitationsAnswerCommand("B", false)))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.HESITATION_ALREADY_HANDLED);
+    }
+
+    @Test
+    @DisplayName("망설임 답변 멱등: 이미 답변한 것과 같은 답을 다시 보내면 예외 없이 통과한다")
+    void hesitationsAnswer_same_answer_is_idempotent() {
+        // given: A로 이미 답변된 질문
+        Instant answeredAt = Instant.now().minus(Duration.ofMinutes(1));
+        Question question = question(42L, ME, LocalDate.now(KST), answeredAt, false, List.of("A", "B"));
+        ReflectionTestUtils.setField(question, "choice", "A");
+        given(questionRepository.findById(42L)).willReturn(Optional.of(question));
+
+        // when: 같은 답(A)을 다시 전송 (응답 유실 후 재시도 상황)
+        meService.hesitationsAnswer(ME, 42L, new MeHesitationsAnswerCommand("A", false));
+
+        // then: 예외 없이 통과하고 답변 시각도 갱신되지 않는다
+        assertThat(question.getChoice()).isEqualTo("A");
+        assertThat(question.getAnsweredAt()).isEqualTo(answeredAt);
+    }
+
+    @Test
+    @DisplayName("망설임 건너뛰기 멱등: 이미 건너뛴 망설임을 다시 건너뛰면 예외 없이 통과한다")
+    void hesitationsAnswer_same_skip_is_idempotent() {
+        // given: 이미 건너뛴 질문
+        Question question = question(42L, ME, LocalDate.now(KST), null, true, List.of("A", "B"));
+        given(questionRepository.findById(42L)).willReturn(Optional.of(question));
+
+        // when & then: 같은 건너뛰기 재전송은 예외 없이 통과한다
+        meService.hesitationsAnswer(ME, 42L, new MeHesitationsAnswerCommand(null, true));
+        assertThat(question.getIsSkipped()).isTrue();
     }
 
     @Test

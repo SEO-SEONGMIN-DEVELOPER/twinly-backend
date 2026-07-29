@@ -33,7 +33,6 @@ public enum ErrorCode {
 
     // 유저/회원
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 유저입니다."),
-    WITHDRAWAL_ALREADY_REQUESTED(HttpStatus.CONFLICT, "이미 탈퇴 신청이 된 상태입니다."),
     WITHDRAWAL_RECOVERY_EXPIRED(HttpStatus.UNPROCESSABLE_CONTENT, "복구 가능 기간이 지났습니다."),
 
     // 온보딩/닉네임/설문

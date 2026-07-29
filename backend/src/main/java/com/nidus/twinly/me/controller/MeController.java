@@ -69,10 +69,7 @@ public class MeController {
         return MeProfilePhotoCommitResponse.from(meService.profilePhotoCommit(userInfo.id(), MeProfilePhotoCommitCommand.from(request)));
     }
 
-    @ApiResponses({
-            @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND"),
-            @ApiResponse(responseCode = "409", description = "WITHDRAWAL_ALREADY_REQUESTED")
-    })
+    @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND")
     @DeleteMapping("/api/v1/me")
     public MeWithdrawResponse withdraw(@CurrentUser UserInfo userInfo) {
         return MeWithdrawResponse.from(meService.withdraw(userInfo.id()));
