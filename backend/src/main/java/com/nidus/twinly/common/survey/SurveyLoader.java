@@ -18,7 +18,7 @@ public class SurveyLoader {
     ObjectMapper objectMapper;
 
     private Map<Integer, SurveyQuestion> questionMap;
-    private Integer lastKey;
+    private Integer lastQuestionId;
 
     @PostConstruct
     public void load() throws IOException {
@@ -31,7 +31,9 @@ public class SurveyLoader {
             questionMap.put(question.id(), question);
         }
 
-        lastKey = questionMap.size();
+        lastQuestionId = questionMap.keySet().stream()
+                .reduce((first, second) -> second)
+                .orElseThrow(() -> new IllegalStateException("설문 문항이 비어 있습니다: survey/survey_v1_mixed.json"));
     }
 
     public SurveyQuestion getQuestion(Integer id) {
@@ -42,7 +44,7 @@ public class SurveyLoader {
         return List.copyOf(questionMap.values());
     }
 
-    public Integer lastKey() {
-        return lastKey;
+    public boolean isLastQuestion(Integer id) {
+        return lastQuestionId.equals(id);
     }
 }

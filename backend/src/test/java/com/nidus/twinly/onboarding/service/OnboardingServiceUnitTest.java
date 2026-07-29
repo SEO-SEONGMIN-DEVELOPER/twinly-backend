@@ -199,7 +199,7 @@ class OnboardingServiceUnitTest {
         // given: 존재하는 문항이고 기존 답변이 없으며 마지막 문항도 아님
         given(surveyLoader.getQuestion(8)).willReturn(question(8));
         given(surveyAnswerRepository.findByAnonSessionIdAndQId(ANON_SESSION_ID, 8)).willReturn(Optional.empty());
-        given(surveyLoader.lastKey()).willReturn(23);
+        given(surveyLoader.isLastQuestion(8)).willReturn(false);
 
         // when: 설문 답변 저장
         onboardingService.surveyAnswer(ANON_SESSION,
@@ -221,7 +221,7 @@ class OnboardingServiceUnitTest {
         SurveyAnswer existing = SurveyAnswer.create(ANON_SESSION_ID, 8, SurveyOptionName.A);
         given(surveyLoader.getQuestion(8)).willReturn(question(8));
         given(surveyAnswerRepository.findByAnonSessionIdAndQId(ANON_SESSION_ID, 8)).willReturn(Optional.of(existing));
-        given(surveyLoader.lastKey()).willReturn(23);
+        given(surveyLoader.isLastQuestion(8)).willReturn(false);
 
         // when: 같은 문항에 B로 다시 답변
         onboardingService.surveyAnswer(ANON_SESSION,
@@ -238,7 +238,7 @@ class OnboardingServiceUnitTest {
         // given: 마지막 문항(23)에 답하고, 세션에 답변 1건이 저장되어 있음
         given(surveyLoader.getQuestion(23)).willReturn(question(23));
         given(surveyAnswerRepository.findByAnonSessionIdAndQId(ANON_SESSION_ID, 23)).willReturn(Optional.empty());
-        given(surveyLoader.lastKey()).willReturn(23);
+        given(surveyLoader.isLastQuestion(23)).willReturn(true);
         given(surveyAnswerRepository.findAllByAnonSessionId(ANON_SESSION_ID))
                 .willReturn(List.of(SurveyAnswer.create(ANON_SESSION_ID, 23, SurveyOptionName.B)));
 

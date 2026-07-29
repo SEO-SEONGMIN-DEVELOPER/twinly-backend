@@ -97,7 +97,7 @@ public class OnboardingService {
                         () -> surveyAnswerRepository.save(SurveyAnswer.create(anonSessionId, qId, answerValue))
                 );
 
-        if (qId.equals(surveyLoader.lastKey())) {
+        if (surveyLoader.isLastQuestion(qId)) {
             saveAllSurveyAnswer(anonSessionId);
         }
     }
