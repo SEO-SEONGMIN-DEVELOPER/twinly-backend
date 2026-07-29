@@ -26,7 +26,7 @@
   - `backend/src/main/java/com/nidus/twinly/auth/service/AuthService.java:238-242` — null 가능 값을 그대로 `blindIndexHasher.hash(...)`에 넘김
   - `backend/src/main/java/com/nidus/twinly/common/crypto/BlindIndexHasher.java:25` — `plainText.getBytes(...)`에서 NPE
   - `backend/src/main/java/com/nidus/twinly/common/crypto/BlindIndexHasher.java:28` — `catch (Exception e)`가 NPE까지 삼켜 `IllegalStateException`으로 바꿈 → `GlobalExceptionHandler`의 `handleUnexpected`로 500
-- **제안**: signup 진입부에서 필수 온보딩 필드 null 검사를 하고 `BusinessException(ErrorCode.VERIFICATION_NOT_COMPLETED 또는 신규 ONBOARDING_NOT_COMPLETED)`(4xx)로 변환한다. 부가로 `BlindIndexHasher`의 `catch (Exception)`은 `GeneralSecurityException` 등으로 좁혀 프로그래밍 오류(NPE)를 감추지 않게 한다.
+- **제안**: signup 진입부에서 필수 온보딩 필드 null 검사를 하고 `BusinessException(신규 ONBOARDING_NOT_COMPLETED)`(4xx)로 변환한다. 부가로 `BlindIndexHasher`의 `catch (Exception)`은 `GeneralSecurityException` 등으로 좁혀 프로그래밍 오류(NPE)를 감추지 않게 한다.
 
 ---
 

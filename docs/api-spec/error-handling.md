@@ -54,14 +54,24 @@ try {
 | HTTP | code | 언제 | 적용 범위 |
 |---|---|---|---|
 | 400 | `INVALID_REQUEST` | 요청 바디/파라미터 검증 실패, path 변수 형식 오류 등 | 전체 |
-| 401 | `UNAUTHORIZED` 외 인증 코드 | 인증 실패 (아래 "인증/토큰" 그룹의 코드들) | **인증이 필요한 엔드포인트만** |
+| 401 | 인증 방식별 코드 | 인증 실패 | **인증이 필요한 엔드포인트만** |
 | 500 | `INTERNAL_ERROR` | 서버 내부 오류 | 전체 |
+| 404 | `NOT_FOUND` | **존재하지 않는 경로**로 요청 | 라우팅 단계 (특정 엔드포인트의 응답이 아님) |
+| 405 | `METHOD_NOT_ALLOWED` | 존재하는 경로에 **지원하지 않는 HTTP 메서드**로 요청 | 라우팅 단계 (특정 엔드포인트의 응답이 아님) |
 
-> **401 참고**: OpenAPI에는 대표로 `401 UNAUTHORIZED`만 표기되지만, 실제 응답 `code`는 아래 "인증/토큰" 그룹의 여러 값(`INVALID_TOKEN`, `TOKEN_EXPIRED`, `WITHDRAWN_USER`, `INVALID_ANON_SESSION` 등) 중 하나일 수 있습니다. 대부분 동일하게 "재인증"으로 처리하되, `WITHDRAWN_USER`(탈퇴)만 별도 UX가 필요할 수 있습니다.
+> **401 참고**: OpenAPI의 각 오퍼레이션에는 해당 인증 방식에서 실제로 발생할 수 있는 코드가 모두 표기됩니다.
+> - `@CurrentUser`(액세스 토큰): `UNAUTHORIZED`, `INVALID_TOKEN`, `WITHDRAWN_USER`
+> - `@CurrentAnonSession`(익명 세션): `UNAUTHORIZED`, `INVALID_TOKEN`, `INVALID_ANON_SESSION`, `TOKEN_EXPIRED`
+>
+> 대부분 동일하게 "재인증"으로 처리하되, `WITHDRAWN_USER`(탈퇴)만 별도 UX가 필요할 수 있습니다.
+
+> **404/405 참고**: 이 둘은 **라우팅 단계**에서 발생하므로 개별 오퍼레이션 문서에는 표기하지 않습니다.
+> 문서에 존재하는 경로·메서드로 요청하면 발생할 수 없기 때문입니다. 오퍼레이션의 404는
+> `USER_NOT_FOUND`처럼 그 엔드포인트가 정의한 도메인 코드입니다.
 
 ---
 
-## 3. 에러 코드 카탈로그 (전체 55개)
+## 3. 에러 코드 카탈로그 (전체 58개)
 
 ### 공통
 | code | HTTP | 의미 |
@@ -70,6 +80,7 @@ try {
 | `UNAUTHORIZED` | 401 | 인증이 필요합니다. |
 | `FORBIDDEN` | 403 | 권한이 없습니다. |
 | `NOT_FOUND` | 404 | 요청한 리소스를 찾을 수 없습니다. |
+| `METHOD_NOT_ALLOWED` | 405 | 지원하지 않는 요청 방식입니다. |
 | `INTERNAL_ERROR` | 500 | 일시적인 서버 오류가 발생했습니다. |
 
 ### 인증 / 토큰 (401)
@@ -78,7 +89,7 @@ try {
 | `INVALID_TOKEN` | 401 | 유효하지 않은 토큰입니다. |
 | `TOKEN_EXPIRED` | 401 | 만료된 토큰입니다. |
 | `WITHDRAWN_USER` | 401 | 탈퇴한 유저입니다. |
-| `INVALID_ANON_SESSION` | 401 | 유효하지 않은 (익명) 세션입니다. |
+| `INVALID_ANON_SESSION` | 401 | 유효하지 않은 익명 세션입니다. |
 | `INVALID_REFRESH_TOKEN` | 401 | 유효하지 않은 리프레시 토큰입니다. |
 | `REFRESH_TOKEN_ALREADY_REVOKED` | 401 | 이미 무효화된 리프레시 토큰입니다. |
 
@@ -90,17 +101,17 @@ try {
 | `EMAIL_ALREADY_REGISTERED` | 409 | 이미 가입된 이메일입니다. |
 | `PHONE_ALREADY_REGISTERED` | 409 | 이미 가입된 전화번호입니다. |
 | `VERIFICATION_NOT_FOUND` | 404 | 유효하지 않은 인증 요청입니다. |
-| `SIGNUP_SESSION_NOT_FOUND` | 404 | 유효하지 않은 세션입니다. |
+| `SIGNUP_SESSION_NOT_FOUND` | 404 | 회원가입에 사용할 세션을 찾을 수 없습니다. |
 | `VERIFICATION_CODE_EXPIRED` | 410 | 인증번호가 만료되었습니다. |
 | `VERIFICATION_EXPIRED` | 410 | 인증이 만료되었습니다. |
 | `VERIFICATION_CODE_MISMATCH` | 422 | 인증번호가 일치하지 않습니다. |
-| `VERIFICATION_NOT_COMPLETED` | 422 | 인증이 완료되지 않았습니다. |
+| `SMS_VERIFICATION_NOT_COMPLETED` | 422 | SMS 인증이 완료되지 않았습니다. |
+| `EMAIL_VERIFICATION_NOT_COMPLETED` | 422 | 이메일 인증이 완료되지 않았습니다. |
 
 ### 유저 / 회원
 | code | HTTP | 의미 |
 |---|---|---|
 | `USER_NOT_FOUND` | 404 | 존재하지 않는 유저입니다. |
-| `WITHDRAWAL_ALREADY_REQUESTED` | 409 | 이미 탈퇴 신청이 된 상태입니다. |
 | `WITHDRAWAL_RECOVERY_EXPIRED` | 422 | 복구 가능 기간이 지났습니다. |
 
 ### 온보딩 / 닉네임 / 설문
@@ -137,6 +148,7 @@ try {
 | `MATCH_NOT_FOUND` | 404 | 존재하지 않는 매칭입니다. |
 | `CHAT_PARTICIPATION_NOT_FOUND` | 404 | 참여 정보가 없습니다. |
 | `NOT_MATCH_PARTICIPANT` | 403 | 이 매칭의 참여자가 아닙니다. |
+| `NOT_ACTIVE_ROOM_PARTICIPANT` | 403 | 더 이상 참여 중이지 않은 채팅방입니다. |
 | `MESSAGE_LENGTH_EXCEEDED` | 422 | 메시지 길이 상한을 초과했습니다. |
 | `MESSAGE_NOT_IN_ROOM` | 422 | 해당 방에 존재하지 않는 메시지입니다. |
 | `CLIENT_MSG_ID_CONFLICT` | 409 | 이미 다른 내용으로 사용된 clientMsgId입니다. |
@@ -146,6 +158,7 @@ try {
 |---|---|---|
 | `ENCOUNTER_NOT_FOUND` | 404 | 만난 적 없는 상대입니다. |
 | `RELATIONSHIP_NOT_FOUND` | 404 | 관계 없는 상대입니다. |
+| `INVALID_DATE_RANGE` | 400 | 조회 기간이 올바르지 않습니다. |
 
 ### AI 채팅
 | code | HTTP | 의미 |
