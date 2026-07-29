@@ -165,6 +165,40 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("회원가입: 익명 세션과 그 자식 행(인증 세션)이 모두 정리된다")
+    void signup_cleans_up_anon_session_and_children() throws Exception {
+        // given: 온보딩 정보와 SMS/EMAIL 인증 세션(= anon_sessions를 FK로 참조하는 자식 행)을 가진 익명 세션
+        UUID anonToken = UUID.randomUUID();
+        AnonSession anonSession = AnonSession.create(anonToken, Instant.now().plus(Duration.ofDays(1)));
+        anonSession.changeNickname("cleanup-nick");
+        anonSession.changeFamilyName("정");
+        anonSession.changeGivenName("수민");
+        anonSession.changeGender(Gender.FEMALE);
+        anonSession.changeAffiliation("트윈리대학교");
+        anonSession.changeAffiliationNumber("20250004");
+        anonSession.changeBirthDate("2000-04-04");
+        anonSessionRepository.save(anonSession);
+
+        String phone = "01033332222";
+        String email = "cleanup@test.com";
+        anonSessionVerificationSessionRepository.save(verifiedAnonSession(anonSession.getId(), VerificationType.SMS, phone));
+        anonSessionVerificationSessionRepository.save(verifiedAnonSession(anonSession.getId(), VerificationType.EMAIL, email));
+
+        // when: 회원가입 API 호출
+        mockMvc.perform(post("/api/v1/auth/signup")
+                        .header("Authorization", "Bearer " + anonToken))
+                .andExpect(status().isOk());
+
+        // then: 익명 세션과 자식 인증 세션이 모두 삭제된다
+        // (이 조회가 anon_sessions 쿼리 스페이스를 건드려 auto-flush를 유발하므로, 삭제 순서가 잘못되면 여기서 FK 위반이 드러난다)
+        assertThat(anonSessionRepository.findById(anonSession.getId())).isEmpty();
+        assertThat(anonSessionVerificationSessionRepository
+                .findByAnonSessionIdAndType(anonSession.getId(), VerificationType.SMS)).isEmpty();
+        assertThat(anonSessionVerificationSessionRepository
+                .findByAnonSessionIdAndType(anonSession.getId(), VerificationType.EMAIL)).isEmpty();
+    }
+
+    @Test
     @DisplayName("같은 초에 로그인을 두 번 해도 각각 다른 리프레시 토큰이 발급되고 둘 다 성공한다")
     void login_twice_in_same_second_issues_distinct_tokens() throws Exception {
         // given: 실제 유저와, 그 전화번호로 SMS 인증이 끝난 인증 세션을 DB에 저장

@@ -251,7 +251,6 @@ public class AuthService {
                 )
         );
 
-        anonSessionRepository.delete(anonSession);
         anonSessionVerificationSessionRepository.deleteByAnonSessionId(anonSessionId);
 
         List<AnonSessionPhoto> anonSessionPhotos = anonSessionPhotoRepository.findAllByAnonSessionId(anonSessionId);
@@ -297,6 +296,8 @@ public class AuthService {
         ));
 
         anonSessionPersonaElementRepository.deleteAll(anonSessionPersonaElements);
+
+        anonSessionRepository.delete(anonSession);
 
         verificationRepository.save(Verification.create(user.getId(), VerificationType.SMS, smsSession.getVerifiedAt()));
         verificationRepository.save(Verification.create(user.getId(), VerificationType.EMAIL, emailSession.getVerifiedAt()));
