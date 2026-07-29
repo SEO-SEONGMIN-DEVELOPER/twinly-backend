@@ -539,9 +539,6 @@ class MeIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     @DisplayName("프로필 사진 commit: 업로드가 끝난 key면 photos 행이 생성된다")
-    // [의도된 실패 - BUG-PHOTO-01] Photo.key가 MySQL 예약어 key에 인용부호 없이 매핑되어
-    // INSERT가 SQL 문법 오류로 깨진다 → 신규 사진 커밋은 항상 500이다.
-    // 운영 코드 버그이므로 테스트를 비틀지 않고 그대로 둔다. (docs/test-findings/me.md)
     void profilePhotoCommit_end_to_end() throws Exception {
         // given: 실제 유저 + S3 업로드 완료·CloudFront 서명 URL을 목으로 대체
         User me = saveUser();

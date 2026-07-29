@@ -25,7 +25,7 @@ public class AnonSessionPhoto {
     @Enumerated(EnumType.STRING)
     private PhotoType type;
 
-    @Column(columnDefinition = "TEXT")
+    @Column(name = "`key`", columnDefinition = "TEXT")
     private String key;
 
     private Integer xPos;
