@@ -171,8 +171,6 @@ public class OnboardingService {
 
         anonSession.changeNickname(nickname);
 
-        // 위 검사와 저장 사이에 다른 요청이 같은 닉네임을 선점할 수 있다.
-        // 최종 판정은 유니크 제약이 하므로, 여기서 flush해 제약 위반을 도메인 에러로 바꾼다.
         try {
             anonSessionRepository.saveAndFlush(anonSession);
         } catch (DataIntegrityViolationException e) {
