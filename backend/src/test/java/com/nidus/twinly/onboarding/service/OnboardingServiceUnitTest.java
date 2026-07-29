@@ -44,6 +44,7 @@ import com.nidus.twinly.onboarding.dto.result.OnboardingProfilePhotoPresignResul
 import com.nidus.twinly.onboarding.entity.SurveyAnswer;
 import com.nidus.twinly.onboarding.repository.SurveyAnswerRepository;
 import com.nidus.twinly.user.repository.UserRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -467,6 +468,25 @@ class OnboardingServiceUnitTest {
                 .isEqualTo(ErrorCode.NICKNAME_ALREADY_USED);
 
         then(anonSessionRepository).should(never()).findById(anyLong());
+    }
+
+    @Test
+    @DisplayName("검사를 통과한 뒤 다른 요청이 같은 닉네임을 선점하면 NICKNAME_ALREADY_USED 예외로 변환된다")
+    void profileNickname_when_lost_race_throws_already_used() {
+        // given: 검사 시점에는 비어 있었지만, 저장 시점에 유니크 제약이 걸리는 상황
+        AnonSession anonSession = AnonSession.create(UUID.randomUUID(), Instant.now().plusSeconds(3600));
+        given(userRepository.existsByNickname("twinly")).willReturn(false);
+        given(anonSessionRepository.existsByNicknameAndIdNot("twinly", ANON_SESSION_ID)).willReturn(false);
+        given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(anonSession));
+        given(anonSessionRepository.saveAndFlush(anonSession))
+                .willThrow(new DataIntegrityViolationException("uk_anon_sessions_nickname"));
+
+        // when & then: 500이 아니라 도메인 에러(409)로 나간다
+        assertThatThrownBy(() -> onboardingService.profileNickname(
+                ANON_SESSION, new OnboardingProfileNicknameCommand("twinly")))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.NICKNAME_ALREADY_USED);
     }
 
     // ---------- consents ----------
