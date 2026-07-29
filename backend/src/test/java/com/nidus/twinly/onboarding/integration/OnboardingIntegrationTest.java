@@ -38,6 +38,8 @@ import static org.hamcrest.Matchers.startsWith;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.times;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -152,6 +154,59 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
                 .findByAnonSessionIdAndTurnIndexAndSender(session.getId(), 0, AiChatSender.AI)
                 .orElseThrow();
         assertThat(saved.getMessage()).isEqualTo("요즘 제일 자주 가는 곳은 어디야?");
+    }
+
+    @Test
+    @DisplayName("AI 채팅 답변 멱등: 같은 턴에 두 번 답해도 이미 생성된 다음 질문을 그대로 돌려준다")
+    void aiChatMessage_is_idempotent() throws Exception {
+        // given: 0번 턴 AI 질문이 저장된 상태
+        AnonSession session = saveAnonSession();
+        aiChatRepository.save(AiChat.create(session.getId(), AiChatSender.AI, "요즘 뭐에 빠져 있어?", 0));
+        given(bedrockService.converse(anyString())).willReturn("그거 언제부터 좋아했어?");
+        flushAndClear();
+
+        // when: 같은 turnIndex로 답변 API를 두 번 호출 (네트워크 재시도 상황)
+        for (int i = 0; i < 2; i++) {
+            mockMvc.perform(post("/api/v1/onboarding/ai-chat/messages")
+                            .header("Authorization", anonBearer(session))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"message": "요즘 등산에 빠졌어", "turnIndex": 0}
+                                    """))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.message").value("그거 언제부터 좋아했어?"))
+                    .andExpect(jsonPath("$.turnIndex").value(1))
+                    .andExpect(jsonPath("$.isEnd").value(false));
+        }
+
+        // then: 사용자 답변·다음 질문·DETAIL 요소가 각각 한 건씩만 남고 모델도 한 번만 불린다
+        flushAndClear();
+        assertThat(aiChatRepository.findByAnonSessionIdOrderByTurnIndexAscSenderDesc(session.getId())).hasSize(3);
+        assertThat(anonSessionPersonaElementRepository.findAllByAnonSessionId(session.getId())).hasSize(1);
+        then(bedrockService).should(times(1)).converse(anyString());
+    }
+
+    @Test
+    @DisplayName("AI 채팅 시작 멱등: 두 번 호출해도 저장된 첫 질문을 그대로 돌려주고 모델을 다시 부르지 않는다")
+    void aiChatStart_is_idempotent() throws Exception {
+        // given: 실제 익명 세션 + 외부 모델 호출은 목으로 차단
+        AnonSession session = saveAnonSession();
+        given(bedrockService.converse(anyString())).willReturn("요즘 제일 자주 가는 곳은 어디야?");
+
+        // when: 같은 익명 세션으로 시작 API를 두 번 호출 (화면 재진입·새로고침·재시도 상황)
+        for (int i = 0; i < 2; i++) {
+            mockMvc.perform(post("/api/v1/onboarding/ai-chat/start")
+                            .header("Authorization", anonBearer(session)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.message").value("요즘 제일 자주 가는 곳은 어디야?"))
+                    .andExpect(jsonPath("$.turnIndex").value(0))
+                    .andExpect(jsonPath("$.isEnd").value(false));
+        }
+
+        // then: 0번 턴 AI 메시지는 한 건만 남고, 모델은 첫 호출에서만 불린다 (재호출은 비용이므로)
+        flushAndClear();
+        assertThat(aiChatRepository.findByAnonSessionIdOrderByTurnIndexAscSenderDesc(session.getId())).hasSize(1);
+        then(bedrockService).should(times(1)).converse(anyString());
     }
 
     @Test

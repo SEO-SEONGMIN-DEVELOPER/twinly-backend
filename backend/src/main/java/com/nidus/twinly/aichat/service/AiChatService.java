@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -34,13 +35,21 @@ public class AiChatService {
     @Transactional
     public OnboardingAiChatStartResult aiChatStart(AnonSessionSnapshot anonSessionSnapshot) {
         Long anonSessionId = anonSessionSnapshot.id();
+        int turnIndex = 0;
+
+        // 이미 시작된 세션이면 저장된 첫 질문을 그대로 돌려준다.
+        // 모델 호출 전에 검사해야 재요청마다 비용이 새지 않는다.
+        Optional<AiChat> started = aiChatRepository
+                .findByAnonSessionIdAndTurnIndexAndSender(anonSessionId, turnIndex, AiChatSender.AI);
+        if (started.isPresent()) {
+            return new OnboardingAiChatStartResult(started.get().getMessage(), turnIndex, false);
+        }
 
         List<AnonSessionPersonaElement> personaElements = anonSessionPersonaElementRepository.findAllByAnonSessionId(anonSessionId);
 
         String prompt = buildPersonaPrompt(anonSessionSnapshot, personaElements);
         String message = bedrockService.converse(prompt);
 
-        int turnIndex = 0;
         aiChatRepository.save(AiChat.create(anonSessionId, AiChatSender.AI, message, turnIndex));
 
         return new OnboardingAiChatStartResult(message, turnIndex, false);
@@ -74,6 +83,21 @@ public class AiChatService {
 
         AiChat aiQuestion = aiChatRepository.findByAnonSessionIdAndTurnIndexAndSender(anonSessionId, command.turnIndex(), AiChatSender.AI)
                 .orElseThrow(() -> new BusinessException(ErrorCode.AI_QUESTION_NOT_FOUND, "해당 턴의 AI 질문이 존재하지 않습니다: " + command.turnIndex()));
+
+        // 이미 답한 턴이면 그때 만들어 둔 다음 질문을 그대로 돌려준다.
+        // 답변 저장과 다음 질문 생성이 같은 트랜잭션이라, 답변이 있으면 다음 질문도 반드시 있다.
+        if (aiChatRepository.findByAnonSessionIdAndTurnIndexAndSender(anonSessionId, command.turnIndex(), AiChatSender.USER).isPresent()) {
+            if (command.turnIndex() >= MAX_TURN_INDEX) {
+                return new OnboardingAiChatMessageResult(LAST_MESSAGE, command.turnIndex(), true);
+            }
+
+            int nextTurnIndex = command.turnIndex() + 1;
+            AiChat nextQuestion = aiChatRepository
+                    .findByAnonSessionIdAndTurnIndexAndSender(anonSessionId, nextTurnIndex, AiChatSender.AI)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.AI_QUESTION_NOT_FOUND, "다음 턴의 AI 질문이 존재하지 않습니다: " + nextTurnIndex));
+
+            return new OnboardingAiChatMessageResult(nextQuestion.getMessage(), nextTurnIndex, false);
+        }
 
         aiChatRepository.save(AiChat.create(anonSessionId, AiChatSender.USER, command.message(), command.turnIndex()));
 
