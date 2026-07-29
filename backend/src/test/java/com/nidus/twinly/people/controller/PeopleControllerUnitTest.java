@@ -289,6 +289,22 @@ class PeopleControllerUnitTest {
         then(peopleService).should(never()).intimacySeries(any(), any(), any(), any(), any(), any());
     }
 
+    @Test
+    @DisplayName("친밀도 시계열 조회 시 필수 쿼리 파라미터가 빠지면 400을 반환하고 서비스를 호출하지 않는다")
+    void intimacySeries_with_missing_required_param_returns_400() throws Exception {
+        // when: 필수 파라미터 maxPoints 없이 친밀도 시계열 조회 API 호출
+        var result = mockMvc.perform(get("/api/v1/people/{userId}/intimacy-series", "42")
+                .param("from", "2026-07-01T00:00:00Z")
+                .param("to", "2026-07-31T00:00:00Z")
+                .param("resolution", "DAY")
+                .header("Authorization", "Bearer access-token"));
+
+        // then: 클라이언트 입력 오류이므로 400 INVALID_REQUEST 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        then(peopleService).should(never()).intimacySeries(any(), any(), any(), any(), any(), any());
+    }
+
     // ------------------------------------------------- GET /api/v1/people/{userId}/events
 
     @Test

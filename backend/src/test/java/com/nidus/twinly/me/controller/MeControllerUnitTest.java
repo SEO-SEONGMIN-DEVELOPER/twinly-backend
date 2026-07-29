@@ -661,6 +661,19 @@ class MeControllerUnitTest {
     }
 
     @Test
+    @DisplayName("망설임 목록 조회 시 필수 쿼리 파라미터가 빠지면 400을 반환하고 서비스를 호출하지 않는다")
+    void hesitations_with_missing_required_param_returns_400() throws Exception {
+        // when: 필수 파라미터 duration 없이 망설임 목록 조회 API 호출
+        var result = mockMvc.perform(get("/api/v1/me/hesitations")
+                .header("Authorization", BEARER)
+                .param("status", "ALL"));
+
+        // then: 클라이언트 입력 오류이므로 400 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest());
+        then(meService).should(never()).hesitations(anyLong(), any(), any());
+    }
+
+    @Test
     @DisplayName("망설임 답변 성공 시 200을 반환하고 경로 id와 answer·skipped 커맨드로 서비스를 호출한다")
     void hesitationsAnswer_success() throws Exception {
         // when: 선택지 중 하나를 골라 망설임 답변 API 호출
