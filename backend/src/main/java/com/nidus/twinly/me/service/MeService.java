@@ -115,6 +115,7 @@ public class MeService {
         return new MeProfilePhotoPresignResult(presign.uploadUrl(), presign.key(), presign.method(), presign.requiredHeaders(), presign.maxBytes(), presign.expiresAt());
     }
 
+    @Transactional
     public MeProfilePhotoCommitResult profilePhotoCommit(Long userId, MeProfilePhotoCommitCommand command) {
         String photoUrl = photoCommitService.commitProfilePhoto(userId, command.key());
 

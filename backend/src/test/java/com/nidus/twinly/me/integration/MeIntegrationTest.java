@@ -33,6 +33,8 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Duration;
@@ -561,6 +563,48 @@ class MeIntegrationTest extends AbstractIntegrationTest {
         Photo photo = photoRepository.findByUserIdAndType(me.getId(), PhotoType.PROFILE).orElseThrow();
         assertThat(photo.getKey()).isEqualTo(key);
         assertThat(photo.getWidth()).isEqualTo(300);
+    }
+
+    /**
+     * 베이스 클래스의 @Transactional을 끈다.
+     * 켜둔 채로 두면 서비스가 테스트의 트랜잭션에 편승해 더티 체킹이 성공해버려서,
+     * 운영에서 실제로 발생하는 "주변 트랜잭션 없음" 상황이 재현되지 않는다.
+     * 롤백도 함께 사라지므로 생성한 행은 직접 정리한다.
+     */
+    @Test
+    @DisplayName("프로필 사진 commit: 이미 사진이 있으면 새 key·좌표로 기존 행이 갱신된다")
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void profilePhotoCommit_replaces_existing_photo() throws Exception {
+        // given: 이미 프로필 사진이 등록된 유저
+        User me = saveUser();
+        String oldKey = "profile/%d/photo-old".formatted(me.getId());
+        String newKey = "profile/%d/photo-new".formatted(me.getId());
+        Photo existing = photoRepository.save(
+                Photo.create(me.getId(), PhotoType.PROFILE, oldKey, 1, 2, 300, 400, Instant.now()));
+        given(s3Service.exists(newKey)).willReturn(true);
+        given(cloudFrontService.getSignedUrl(newKey)).willReturn("https://cdn.example.com/" + newKey);
+
+        try {
+            // when: 새 key로 다시 commit API 호출
+            mockMvc.perform(post("/api/v1/me/profile/photo/commit")
+                            .header("Authorization", bearer(me.getId()))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"key": "%s", "position": {"startPos": {"x": 10, "y": 20}, "width": 500, "height": 600}}
+                                    """.formatted(newKey)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.photoUrl").value("https://cdn.example.com/" + newKey));
+
+            // then: 새 행이 생기지 않고 기존 행의 key·좌표가 실제로 DB에 반영됨
+            Photo photo = photoRepository.findByUserIdAndType(me.getId(), PhotoType.PROFILE).orElseThrow();
+            assertThat(photo.getId()).isEqualTo(existing.getId());
+            assertThat(photo.getKey()).isEqualTo(newKey);
+            assertThat(photo.getXPos()).isEqualTo(10);
+            assertThat(photo.getWidth()).isEqualTo(500);
+        } finally {
+            photoRepository.deleteAll(photoRepository.findAllByUserIdInAndType(List.of(me.getId()), PhotoType.PROFILE));
+            userRepository.deleteById(me.getId());
+        }
     }
 
     // ---------------------------------------------------------------- 픽스처
