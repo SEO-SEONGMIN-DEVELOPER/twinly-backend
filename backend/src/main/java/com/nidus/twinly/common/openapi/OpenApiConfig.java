@@ -2,6 +2,7 @@ package com.nidus.twinly.common.openapi;
 
 import com.nidus.twinly.anon.annotation.CurrentAnonSession;
 import com.nidus.twinly.anon.dto.snapshot.AnonSessionSnapshot;
+import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.user.annotation.CurrentUser;
 import com.nidus.twinly.user.dto.header.UserInfo;
 import io.swagger.v3.oas.models.Components;
@@ -17,11 +18,10 @@ import org.springdoc.core.utils.SpringDocUtils;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.MethodParameter;
+import org.springframework.web.method.HandlerMethod;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
+import java.util.regex.Pattern;
 
 @Configuration
 public class OpenApiConfig {
@@ -63,6 +63,14 @@ public class OpenApiConfig {
         };
     }
 
+    private static final List<ErrorCode> USER_AUTH_401 = List.of(
+            ErrorCode.UNAUTHORIZED, ErrorCode.INVALID_TOKEN, ErrorCode.WITHDRAWN_USER);
+
+    private static final List<ErrorCode> ANON_AUTH_401 = List.of(
+            ErrorCode.UNAUTHORIZED, ErrorCode.INVALID_TOKEN, ErrorCode.INVALID_ANON_SESSION, ErrorCode.TOKEN_EXPIRED);
+
+    private static final Pattern ERROR_CODE_NAMES = Pattern.compile("[A-Z][A-Z_]*(, ?[A-Z][A-Z_]*)*");
+
     @Bean
     public OperationCustomizer commonErrorResponsesCustomizer() {
         return (operation, handlerMethod) -> {
@@ -72,30 +80,49 @@ public class OpenApiConfig {
                 operation.setResponses(responses);
             }
 
-            addErrorResponseIfAbsent(responses, "400", "INVALID_REQUEST");
+            mergeErrorCodes(responses, "400", List.of(ErrorCode.INVALID_REQUEST));
+            mergeErrorCodes(responses, "500", List.of(ErrorCode.INTERNAL_ERROR));
 
-            boolean requiresAuth = false;
-            for (MethodParameter parameter : handlerMethod.getMethodParameters()) {
-                if (parameter.hasParameterAnnotation(CurrentUser.class)
-                        || parameter.hasParameterAnnotation(CurrentAnonSession.class)) {
-                    requiresAuth = true;
-                    break;
-                }
+            List<ErrorCode> auth401 = resolveAuth401(handlerMethod);
+            if (!auth401.isEmpty()) {
+                mergeErrorCodes(responses, "401", auth401);
             }
-            if (requiresAuth) {
-                addErrorResponseIfAbsent(responses, "401", "UNAUTHORIZED");
-            }
-
-            addErrorResponseIfAbsent(responses, "500", "INTERNAL_ERROR");
 
             return operation;
         };
     }
 
-    private void addErrorResponseIfAbsent(ApiResponses responses, String status, String description) {
-        if (!responses.containsKey(status)) {
-            responses.addApiResponse(status, new ApiResponse().description(description));
+    private List<ErrorCode> resolveAuth401(HandlerMethod handlerMethod) {
+        for (MethodParameter parameter : handlerMethod.getMethodParameters()) {
+            if (parameter.hasParameterAnnotation(CurrentUser.class)) {
+                return USER_AUTH_401;
+            }
+            if (parameter.hasParameterAnnotation(CurrentAnonSession.class)) {
+                return ANON_AUTH_401;
+            }
         }
+
+        return List.of();
+    }
+
+    private void mergeErrorCodes(ApiResponses responses, String status, List<ErrorCode> errorCodes) {
+        Set<String> merged = new LinkedHashSet<>();
+        errorCodes.forEach(errorCode -> merged.add(errorCode.name()));
+
+        ApiResponse existing = responses.get(status);
+        if (existing == null) {
+            responses.addApiResponse(status, new ApiResponse().description(String.join(", ", merged)));
+            return;
+        }
+
+        String description = existing.getDescription();
+        if (description != null && ERROR_CODE_NAMES.matcher(description).matches()) {
+            for (String name : description.split(",")) {
+                merged.add(name.trim());
+            }
+        }
+
+        existing.setDescription(String.join(", ", merged));
     }
 
     @Bean

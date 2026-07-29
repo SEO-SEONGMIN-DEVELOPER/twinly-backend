@@ -51,7 +51,7 @@ public class ChatController {
     }
 
     @ApiResponses({
-            @ApiResponse(responseCode = "403", description = "NOT_MATCH_PARTICIPANT"),
+            @ApiResponse(responseCode = "403", description = "NOT_MATCH_PARTICIPANT, NOT_ACTIVE_ROOM_PARTICIPANT"),
             @ApiResponse(responseCode = "404", description = "ROOM_NOT_FOUND, MATCH_NOT_FOUND, USER_NOT_FOUND")
     })
     @GetMapping("/api/v1/chat/rooms/{roomId}")
@@ -61,7 +61,7 @@ public class ChatController {
     }
 
     @ApiResponses({
-            @ApiResponse(responseCode = "403", description = "NOT_MATCH_PARTICIPANT"),
+            @ApiResponse(responseCode = "403", description = "NOT_MATCH_PARTICIPANT, NOT_ACTIVE_ROOM_PARTICIPANT"),
             @ApiResponse(responseCode = "404", description = "ROOM_NOT_FOUND, MATCH_NOT_FOUND, USER_NOT_FOUND")
     })
     @PostMapping("/api/v1/chat/rooms/{roomId}/enter")
@@ -93,7 +93,7 @@ public class ChatController {
     }
 
     @ApiResponses({
-            @ApiResponse(responseCode = "403", description = "NOT_MATCH_PARTICIPANT"),
+            @ApiResponse(responseCode = "403", description = "NOT_MATCH_PARTICIPANT, NOT_ACTIVE_ROOM_PARTICIPANT"),
             @ApiResponse(responseCode = "404", description = "ROOM_NOT_FOUND, MATCH_NOT_FOUND, CHAT_PARTICIPATION_NOT_FOUND"),
             @ApiResponse(responseCode = "422", description = "MESSAGE_NOT_IN_ROOM")
     })

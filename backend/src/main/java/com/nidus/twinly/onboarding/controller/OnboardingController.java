@@ -32,7 +32,6 @@ public class OnboardingController {
     private final OnboardingService onboardingService;
     private final AiChatService aiChatService;
 
-    @ApiResponse(responseCode = "401", description = "INVALID_ANON_SESSION")
     @PutMapping("/api/v1/onboarding/basic-info")
     public void basicInfo(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
                           @Valid @RequestBody OnboardingBasicInfoRequest request) {
@@ -59,12 +58,17 @@ public class OnboardingController {
         onboardingService.interests(anonSessionSnapshot, OnboardingInterestsCommand.from(request));
     }
 
+    @ApiResponse(responseCode = "415", description = "UNSUPPORTED_IMAGE_TYPE")
     @PostMapping("/api/v1/onboarding/profile/photo/presign")
     public OnboardingProfilePhotoPresignResponse profilePhotoPresign(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
                                                                      @Valid @RequestBody OnboardingProfilePhotoPresignRequest request) {
         return OnboardingProfilePhotoPresignResponse.from(onboardingService.profilePhotoPresign(anonSessionSnapshot, OnboardingProfilePhotoPresignCommand.from(request)));
     }
 
+    @ApiResponses({
+            @ApiResponse(responseCode = "403", description = "NOT_KEY_OWNER"),
+            @ApiResponse(responseCode = "422", description = "UPLOAD_NOT_COMPLETED")
+    })
     @PostMapping("/api/v1/onboarding/profile/photo/commit")
     public OnboardingProfilePhotoCommitResponse profilePhotoCommit(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
                                                                    @Valid @RequestBody OnboardingProfilePhotoCommitRequest request) {
@@ -79,7 +83,6 @@ public class OnboardingController {
     }
 
     @ApiResponses({
-            @ApiResponse(responseCode = "401", description = "INVALID_ANON_SESSION"),
             @ApiResponse(responseCode = "409", description = "NICKNAME_ALREADY_USED"),
             @ApiResponse(responseCode = "422", description = "INVALID_NICKNAME")
     })
@@ -94,6 +97,7 @@ public class OnboardingController {
         return OnboardingAiChatStartResponse.from(aiChatService.aiChatStart(anonSessionSnapshot));
     }
 
+    @ApiResponse(responseCode = "404", description = "AI_QUESTION_NOT_FOUND")
     @PostMapping("/api/v1/onboarding/ai-chat/messages")
     public OnboardingAiChatMessageResponse aiChatMessage(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
                                                          @Valid @RequestBody OnboardingAiChatMessageRequest request) {

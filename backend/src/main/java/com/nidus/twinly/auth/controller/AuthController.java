@@ -20,6 +20,7 @@ public class AuthController {
 
     private final AuthService authService;
 
+    @ApiResponse(responseCode = "502", description = "EMAIL_SEND_FAILED")
     @PostMapping("/api/v1/auth/onboarding/email/send")
     public AuthEmailSendResponse onboardingEmailSend(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
                                                      @Valid @RequestBody AuthEmailSendRequest request) {
@@ -37,6 +38,7 @@ public class AuthController {
         authService.onboardingEmailVerify(anonSessionSnapshot, AuthEmailVerifyCommand.from(request));
     }
 
+    @ApiResponse(responseCode = "502", description = "SMS_SEND_FAILED")
     @PostMapping("/api/v1/auth/onboarding/sms/send")
     public AuthSmsSendResponse onboardingSmsSend(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
                                                  @Valid @RequestBody AuthSmsSendRequest request) {
@@ -54,7 +56,10 @@ public class AuthController {
         authService.onboardingSmsVerify(anonSessionSnapshot, AuthSmsVerifyCommand.from(request));
     }
 
-    @ApiResponse(responseCode = "404", description = "EMAIL_NOT_REGISTERED")
+    @ApiResponses({
+            @ApiResponse(responseCode = "404", description = "EMAIL_NOT_REGISTERED"),
+            @ApiResponse(responseCode = "502", description = "EMAIL_SEND_FAILED")
+    })
     @PostMapping("/api/v1/auth/email/send")
     public AuthEmailSendResponse emailSend(@Valid @RequestBody AuthEmailSendRequest request) {
         return AuthEmailSendResponse.from(authService.emailSend(AuthEmailSendCommand.from(request)));
@@ -70,7 +75,10 @@ public class AuthController {
         return AuthEmailVerifyResponse.from(authService.emailVerify(AuthEmailVerifyCommand.from(request)));
     }
 
-    @ApiResponse(responseCode = "404", description = "PHONE_NOT_REGISTERED")
+    @ApiResponses({
+            @ApiResponse(responseCode = "404", description = "PHONE_NOT_REGISTERED"),
+            @ApiResponse(responseCode = "502", description = "SMS_SEND_FAILED")
+    })
     @PostMapping("/api/v1/auth/sms/send")
     public AuthSmsSendResponse smsSend(@Valid @RequestBody AuthSmsSendRequest request) {
         return AuthSmsSendResponse.from(authService.smsSend(AuthSmsSendCommand.from(request)));

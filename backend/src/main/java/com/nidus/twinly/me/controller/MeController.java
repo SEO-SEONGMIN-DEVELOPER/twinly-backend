@@ -59,12 +59,17 @@ public class MeController {
 
     private final MeService meService;
 
+    @ApiResponse(responseCode = "415", description = "UNSUPPORTED_IMAGE_TYPE")
     @PostMapping("/api/v1/me/profile/photo/presign")
     public MeProfilePhotoPresignResponse profilePhotoPresign(@CurrentUser UserInfo userInfo,
                                                               @Valid @RequestBody MeProfilePhotoPresignRequest request) {
         return MeProfilePhotoPresignResponse.from(meService.profilePhotoPresign(userInfo.id(), MeProfilePhotoPresignCommand.from(request)));
     }
 
+    @ApiResponses({
+            @ApiResponse(responseCode = "403", description = "NOT_KEY_OWNER"),
+            @ApiResponse(responseCode = "422", description = "UPLOAD_NOT_COMPLETED")
+    })
     @PostMapping("/api/v1/me/profile/photo/commit")
     public MeProfilePhotoCommitResponse profilePhotoCommit(@CurrentUser UserInfo userInfo,
                                                             @Valid @RequestBody MeProfilePhotoCommitRequest request) {
