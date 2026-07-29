@@ -87,6 +87,35 @@ class ChatIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("채팅방 목록 조회: 메시지가 한 건도 없는 방은 lastMessage 없이 정상 응답된다")
+    void rooms_when_room_has_no_message_returns_room_without_last_message() throws Exception {
+        // given: 매칭으로 방은 만들어졌지만 아직 아무도 메시지를 보내지 않은 상태 (신규 매칭 직후)
+        Fixture fixture = saveChatRoomFixture();
+
+        // when & then: 목록 전체가 정상 응답되고 마지막 메시지만 비어 있다
+        mockMvc.perform(get("/api/v1/chat/rooms")
+                        .header("Authorization", bearer(fixture.me().getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rooms.length()").value(1))
+                .andExpect(jsonPath("$.rooms[0].messages.unreadCount").value(0))
+                .andExpect(jsonPath("$.rooms[0].messages.lastMessage").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("채팅방 목록 조회: 매칭이 한 건도 없는 유저는 200과 빈 목록을 받는다")
+    void rooms_when_no_match_returns_empty_list() throws Exception {
+        // given: 매칭도 채팅방도 없는 신규 유저 (가입 직후의 정상 상태)
+        saveCurrentSeason();
+        User newbie = saveUser();
+
+        // when & then: 조회가 성공하고 방이 0건이다
+        mockMvc.perform(get("/api/v1/chat/rooms")
+                        .header("Authorization", bearer(newbie.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rooms.length()").value(0));
+    }
+
+    @Test
     @DisplayName("채팅방 입장 성공: 응답의 입장 상태가 true가 되고 DB 참여 정보에 동의 시각이 저장된다")
     void enterRoom_success_end_to_end() throws Exception {
         // given: 아직 아무도 입장 동의하지 않은 채팅방

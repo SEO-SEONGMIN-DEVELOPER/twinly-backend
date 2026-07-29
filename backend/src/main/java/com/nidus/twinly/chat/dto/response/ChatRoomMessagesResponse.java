@@ -10,6 +10,8 @@ public record ChatRoomMessagesResponse(
 ) {
 
     public static ChatRoomMessagesResponse from(ChatRoomMessagesResult result) {
-        return new ChatRoomMessagesResponse(result.unreadCount(), ChatRoomLastMessageResponse.from(result.lastMessage()));
+        return new ChatRoomMessagesResponse(
+                result.unreadCount(),
+                result.lastMessage() != null ? ChatRoomLastMessageResponse.from(result.lastMessage()) : null);
     }
 }
