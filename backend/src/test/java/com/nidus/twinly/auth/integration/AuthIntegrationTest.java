@@ -1,5 +1,6 @@
 package com.nidus.twinly.auth.integration;
 
+import com.jayway.jsonpath.JsonPath;
 import com.nidus.twinly.anon.entity.AnonSession;
 import com.nidus.twinly.anon.repository.AnonSessionRepository;
 import com.nidus.twinly.auth.entity.AnonSessionVerificationSession;
@@ -161,6 +162,55 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
         assertThat(refreshTokenRepository.findAll())
                 .extracting(RefreshToken::getUserId)
                 .contains(user.getId());
+    }
+
+    @Test
+    @DisplayName("같은 초에 로그인을 두 번 해도 각각 다른 리프레시 토큰이 발급되고 둘 다 성공한다")
+    void login_twice_in_same_second_issues_distinct_tokens() throws Exception {
+        // given: 실제 유저와, 그 전화번호로 SMS 인증이 끝난 인증 세션을 DB에 저장
+        String phone = "01055554444";
+        User user = userRepository.save(User.create(
+                "double-nick",
+                "박", blindIndexHasher.hash("박"),
+                "철수", blindIndexHasher.hash("철수"),
+                Gender.MALE,
+                "트윈리대학교", blindIndexHasher.hash("트윈리대학교"),
+                "20250003", blindIndexHasher.hash("20250003"),
+                "2000-03-03", blindIndexHasher.hash("2000-03-03"),
+                phone, blindIndexHasher.hash(phone),
+                "double@test.com", blindIndexHasher.hash("double@test.com")));
+
+        VerificationSession session = VerificationSession.create(
+                VerificationType.SMS, phone, "123456", Instant.now().plus(Duration.ofMinutes(5)));
+        session.verify(Instant.now().plus(Duration.ofMinutes(30)));
+        verificationSessionRepository.save(session);
+
+        String body = """
+                {"smsVerifiedToken":"%s"}
+                """.formatted(session.getVerifiedToken());
+
+        // when: 같은 인증 완료 토큰으로 지연 없이 로그인을 두 번 호출 (버튼 더블클릭·클라이언트 재시도 상황)
+        String firstResponse = mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        String secondResponse = mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        // then: 두 번째 호출도 성공하고, 두 리프레시 토큰은 서로 다른 값이다
+        String firstRefreshToken = JsonPath.read(firstResponse, "$.refreshToken");
+        String secondRefreshToken = JsonPath.read(secondResponse, "$.refreshToken");
+        assertThat(firstRefreshToken).isNotEqualTo(secondRefreshToken);
+
+        // then: 두 토큰이 각각 DB에 저장되어 두 세션이 독립적으로 살아 있다
+        assertThat(refreshTokenRepository.findAll())
+                .filteredOn(token -> token.getUserId().equals(user.getId()))
+                .hasSize(2);
     }
 
     @Test
@@ -398,13 +448,11 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
     @DisplayName("토큰 재발급: 유효한 리프레시 토큰이면 새 토큰이 발급되고 기존 토큰 행은 회전(삭제)된다")
     void refresh_end_to_end() throws Exception {
         // given: 실제 유저와, 그 유저에게 발급된 리프레시 토큰 행을 DB에 저장
-        // (JWT에 iat/jti가 없어 같은 초에 발급하면 토큰 문자열이 동일해진다 — BUG-AUTH-01.
-        //  현실의 재발급은 발급 직후가 아니므로, 1초 이상 띄워 실제 시나리오를 재현한다)
+        // (발급 직후 곧바로 재발급한다. jti 덕분에 같은 초에 발급해도 토큰이 달라지므로 지연이 필요 없다)
         User user = saveUser();
         AuthTokenResult issued = jwtService.generateAuthTokenResult(user.getId());
         refreshTokenRepository.save(RefreshToken.create(
                 user.getId(), blindIndexHasher.hash(issued.refreshToken()), issued.refreshExpiresAt()));
-        Thread.sleep(1_100);
 
         // when: 해당 리프레시 토큰으로 재발급 API 호출
         mockMvc.perform(post("/api/v1/auth/refresh")

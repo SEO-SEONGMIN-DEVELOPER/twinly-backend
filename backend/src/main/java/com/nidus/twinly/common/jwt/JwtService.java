@@ -12,6 +12,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Date;
+import java.util.UUID;
 
 @Component
 public class JwtService {
@@ -44,8 +45,10 @@ public class JwtService {
 
     private String generate(Long userId, JwtType type, Instant expiresAt) {
         return Jwts.builder()
+                .id(UUID.randomUUID().toString())
                 .subject(userId.toString())
                 .claim("type", type.name())
+                .issuedAt(Date.from(Instant.now()))
                 .expiration(Date.from(expiresAt))
                 .signWith(key)
                 .compact();
