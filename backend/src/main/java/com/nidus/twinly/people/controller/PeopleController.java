@@ -12,6 +12,7 @@ import com.nidus.twinly.people.service.PeopleService;
 import com.nidus.twinly.user.annotation.CurrentUser;
 import com.nidus.twinly.user.dto.header.UserInfo;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -65,7 +66,7 @@ public class PeopleController {
                                                        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
                                                        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to,
                                                        @RequestParam IntimacyResolution resolution,
-                                                       @RequestParam Integer maxPoints) {
+                                                       @RequestParam @Min(1) Integer maxPoints) {
         return PeopleIntimacySeriesResponse.from(peopleService.intimacySeries(userInfo.id(), RequestId.toLong(partnerUserId, "userId"), from.toLocalDate(), to.toLocalDate(), resolution, maxPoints));
     }
 

@@ -305,6 +305,23 @@ class PeopleControllerUnitTest {
         then(peopleService).should(never()).intimacySeries(any(), any(), any(), any(), any(), any());
     }
 
+    @Test
+    @DisplayName("친밀도 시계열 조회 시 maxPoints가 1 미만이면 400을 반환하고 서비스를 호출하지 않는다")
+    void intimacySeries_with_non_positive_maxPoints_returns_400() throws Exception {
+        // when & then: 음수는 다운샘플링에서 터지고, 0은 조용히 빈 시계열이 되므로 둘 다 입력 단계에서 막는다
+        for (String maxPoints : List.of("-1", "0")) {
+            mockMvc.perform(get("/api/v1/people/{userId}/intimacy-series", "42")
+                            .param("from", "2026-07-01T00:00:00Z")
+                            .param("to", "2026-07-31T00:00:00Z")
+                            .param("resolution", "DAY")
+                            .param("maxPoints", maxPoints)
+                            .header("Authorization", "Bearer access-token"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        }
+        then(peopleService).should(never()).intimacySeries(any(), any(), any(), any(), any(), any());
+    }
+
     // ------------------------------------------------- GET /api/v1/people/{userId}/events
 
     @Test
