@@ -9,13 +9,14 @@ public enum ErrorCode {
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "인증이 필요합니다."),
     FORBIDDEN(HttpStatus.FORBIDDEN, "권한이 없습니다."),
     NOT_FOUND(HttpStatus.NOT_FOUND, "요청한 리소스를 찾을 수 없습니다."),
+    METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "지원하지 않는 요청 방식입니다."),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "일시적인 서버 오류가 발생했습니다."),
 
     // 인증/토큰
     INVALID_TOKEN(HttpStatus.UNAUTHORIZED, "유효하지 않은 토큰입니다."),
     TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED, "만료된 토큰입니다."),
     WITHDRAWN_USER(HttpStatus.UNAUTHORIZED, "탈퇴한 유저입니다."),
-    INVALID_ANON_SESSION(HttpStatus.UNAUTHORIZED, "유효하지 않은 세션입니다."),
+    INVALID_ANON_SESSION(HttpStatus.UNAUTHORIZED, "유효하지 않은 익명 세션입니다."),
     INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "유효하지 않은 리프레시 토큰입니다."),
     REFRESH_TOKEN_ALREADY_REVOKED(HttpStatus.UNAUTHORIZED, "이미 무효화된 리프레시 토큰입니다."),
 
@@ -25,11 +26,12 @@ public enum ErrorCode {
     EMAIL_ALREADY_REGISTERED(HttpStatus.CONFLICT, "이미 가입된 이메일입니다."),
     PHONE_ALREADY_REGISTERED(HttpStatus.CONFLICT, "이미 가입된 전화번호입니다."),
     VERIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "유효하지 않은 인증 요청입니다."),
-    SIGNUP_SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "유효하지 않은 세션입니다."),
+    SIGNUP_SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "회원가입에 사용할 세션을 찾을 수 없습니다."),
     VERIFICATION_CODE_EXPIRED(HttpStatus.GONE, "인증번호가 만료되었습니다."),
     VERIFICATION_EXPIRED(HttpStatus.GONE, "인증이 만료되었습니다."),
     VERIFICATION_CODE_MISMATCH(HttpStatus.UNPROCESSABLE_CONTENT, "인증번호가 일치하지 않습니다."),
-    VERIFICATION_NOT_COMPLETED(HttpStatus.UNPROCESSABLE_CONTENT, "인증이 완료되지 않았습니다."),
+    SMS_VERIFICATION_NOT_COMPLETED(HttpStatus.UNPROCESSABLE_CONTENT, "SMS 인증이 완료되지 않았습니다."),
+    EMAIL_VERIFICATION_NOT_COMPLETED(HttpStatus.UNPROCESSABLE_CONTENT, "이메일 인증이 완료되지 않았습니다."),
 
     // 유저/회원
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 유저입니다."),

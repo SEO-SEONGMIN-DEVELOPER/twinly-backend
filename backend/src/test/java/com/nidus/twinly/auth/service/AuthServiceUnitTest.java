@@ -420,17 +420,39 @@ class AuthServiceUnitTest {
     // ---------- 회원가입 ----------
 
     @Test
-    @DisplayName("회원가입: SMS 인증이 완료되지 않았으면 VERIFICATION_NOT_COMPLETED 예외가 발생하고 유저를 만들지 않는다")
+    @DisplayName("회원가입: SMS 인증이 완료되지 않았으면 SMS_VERIFICATION_NOT_COMPLETED 예외가 발생하고 유저를 만들지 않는다")
     void signup_without_verified_sms_throws() {
         // given: SMS 인증 세션 자체가 없음
         given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.SMS))
                 .willReturn(Optional.empty());
 
-        // when & then: VERIFICATION_NOT_COMPLETED 예외 발생 + 유저 저장 없음
+        // when & then: 어느 인증이 남았는지 구분되는 코드로 실패하고 유저 저장은 없음
         assertThatThrownBy(() -> authService.signup(SNAPSHOT))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(ErrorCode.VERIFICATION_NOT_COMPLETED);
+                .isEqualTo(ErrorCode.SMS_VERIFICATION_NOT_COMPLETED);
+
+        then(userRepository).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("회원가입: SMS는 됐는데 이메일 인증이 없으면 EMAIL_VERIFICATION_NOT_COMPLETED 예외가 발생한다")
+    void signup_without_verified_email_throws() {
+        // given: SMS 인증은 끝났지만 이메일 인증 세션이 없음
+        AnonSessionVerificationSession smsSession = AnonSessionVerificationSession.create(
+                VerificationType.SMS, ANON_SESSION_ID, PHONE, "123456", Instant.now().plusSeconds(60));
+        smsSession.verify();
+
+        given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.SMS))
+                .willReturn(Optional.of(smsSession));
+        given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.EMAIL))
+                .willReturn(Optional.empty());
+
+        // when & then: SMS와 구분되는 코드로 실패한다
+        assertThatThrownBy(() -> authService.signup(SNAPSHOT))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.EMAIL_VERIFICATION_NOT_COMPLETED);
 
         then(userRepository).should(never()).save(any());
     }

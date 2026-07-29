@@ -319,7 +319,13 @@ public class AuthService {
     private AnonSessionVerificationSession requireVerified(Long anonSessionId, VerificationType type) {
         return anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(anonSessionId, type)
                 .filter(session -> session.getVerifiedAt() != null)
-                .orElseThrow(() -> new BusinessException(ErrorCode.VERIFICATION_NOT_COMPLETED, type + " 인증이 완료되지 않았습니다."));
+                .orElseThrow(() -> new BusinessException(verificationNotCompletedCode(type)));
+    }
+
+    private ErrorCode verificationNotCompletedCode(VerificationType type) {
+        return type == VerificationType.SMS
+                ? ErrorCode.SMS_VERIFICATION_NOT_COMPLETED
+                : ErrorCode.EMAIL_VERIFICATION_NOT_COMPLETED;
     }
 
     @Transactional

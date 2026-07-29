@@ -2,6 +2,9 @@ package com.nidus.twinly.common.web;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -25,7 +28,7 @@ public class GlobalExceptionHandler {
         }
         return ResponseEntity
                 .status(errorCode.getStatus())
-                .body(ErrorResponse.of(errorCode, e.getMessage()));
+                .body(ErrorResponse.of(errorCode));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -58,14 +61,38 @@ public class GlobalExceptionHandler {
         return ErrorResponse.of(ErrorCode.INVALID_REQUEST);
     }
 
+    @ExceptionHandler(NoResourceFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ErrorResponse handleNoResourceFound(NoResourceFoundException e) {
+        return ErrorResponse.of(ErrorCode.NOT_FOUND);
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    @ResponseStatus(HttpStatus.METHOD_NOT_ALLOWED)
+    public ErrorResponse handleMethodNotSupported(HttpRequestMethodNotSupportedException e) {
+        return ErrorResponse.of(ErrorCode.METHOD_NOT_ALLOWED);
+    }
+
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<ErrorResponse> handleResponseStatusException(ResponseStatusException e) {
+        ErrorCode errorCode = resolveErrorCode(e.getStatusCode());
         if (e.getStatusCode().is5xxServerError()) {
             log.error("[5xx Error]: ", e);
         }
         return ResponseEntity
                 .status(e.getStatusCode())
-                .body(new ErrorResponse(null, e.getReason()));
+                .body(ErrorResponse.of(errorCode));
+    }
+
+    private ErrorCode resolveErrorCode(HttpStatusCode status) {
+        return switch (status.value()) {
+            case 400 -> ErrorCode.INVALID_REQUEST;
+            case 401 -> ErrorCode.UNAUTHORIZED;
+            case 403 -> ErrorCode.FORBIDDEN;
+            case 404 -> ErrorCode.NOT_FOUND;
+            case 405 -> ErrorCode.METHOD_NOT_ALLOWED;
+            default -> status.is5xxServerError() ? ErrorCode.INTERNAL_ERROR : ErrorCode.INVALID_REQUEST;
+        };
     }
 
     @ExceptionHandler(Exception.class)
