@@ -5,41 +5,9 @@
 
 ---
 
-## POST /api/v1/me/profile/photo/commit
-
-### 1. `profilePhotoCommit`에 `@Transactional`이 없어 "기존 사진 갱신"이 DB에 반영되지 않는다
-
-- **증상**
-  이미 프로필 사진이 등록된 유저가 사진을 다시 커밋하면 HTTP 200과 새 `photoUrl`이 정상적으로 내려오지만,
-  `photos` 테이블의 `key` / `x_pos` / `y_pos` / `width` / `height` / `uploaded_at`은 예전 값 그대로 남는다.
-  (사진이 처음 등록되는 경우는 `photoRepository.save(...)`를 타므로 정상 동작한다 → "최초 등록은 되는데 교체만 안 되는" 형태로 드러난다.)
-
-- **재현 조건**
-  1. 유저 A가 프로필 사진을 한 번 commit 해서 `photos` 행을 만든다.
-  2. 새 key로 다시 `POST /api/v1/me/profile/photo/commit` 호출.
-  3. 응답은 200 + 새 URL이지만, `photos` 행을 조회하면 이전 key/좌표 그대로.
-
-- **근거 코드 위치**
-  - `backend/src/main/java/com/nidus/twinly/me/service/MeService.java:123` — `profilePhotoCommit`에 `@Transactional`이 없음
-    (같은 클래스의 `withdraw`(138), `profile`(171), `restore`(179) 등 다른 변경 메서드에는 붙어 있다)
-  - `backend/src/main/java/com/nidus/twinly/me/service/MeService.java:129` — `photo.changePhoto(...)`로 더티 체킹에 의존
-  - `backend/src/main/resources/application.yaml:22` — `spring.jpa.open-in-view: false`
-  트랜잭션이 없으면 `photoRepository.findByUserIdAndType(...)` 호출이 자체 트랜잭션(`SimpleJpaRepository`의 `@Transactional(readOnly = true)`)으로 끝나면서
-  영속성 컨텍스트가 닫히고, 반환된 `Photo`는 **준영속(detached)** 상태가 된다. 이후 세터 호출은 UPDATE로 이어지지 않는다.
-
-- **심각도**: high
-  (예약어 `key` 인용 누락으로 최초 등록이 500이던 결함은 해결됐다. 그동안 최초 등록이 막혀 교체 경로에
-  도달할 수조차 없었으므로, 이제 이 건이 이 엔드포인트에 남은 유일한 결함이다.)
-
-- **제안**
-  `profilePhotoCommit`에 `@Transactional`을 붙인다. 외부 호출(S3 존재 확인/CloudFront 서명)이 트랜잭션 안으로 들어오는 게 부담이라면,
-  외부 호출을 먼저 끝낸 뒤 DB 반영 구간만 별도 트랜잭션 메서드로 분리하는 방식도 가능하다.
-
----
-
 ## POST /api/v1/me/restore
 
-### 2. 복구 시 `withdrawalScheduledAt`이 초기화되지 않아 `GET /api/v1/me/status` 응답이 오염된다
+### 1. 복구 시 `withdrawalScheduledAt`이 초기화되지 않아 `GET /api/v1/me/status` 응답이 오염된다
 
 - **증상**
   탈퇴 신청 → 복구를 마친 유저가 `GET /api/v1/me/status`를 호출하면
@@ -63,39 +31,9 @@
 
 ---
 
-## GET /api/v1/me/hesitations
-
-### 3. 필수 쿼리 파라미터가 빠지면 400이 아니라 500이 내려간다
-
-- **증상**
-  `duration` 또는 `status` 없이 호출하면 `MissingServletRequestParameterException`이 발생하는데,
-  `GlobalExceptionHandler`에 이 예외(또는 상위 `ServletRequestBindingException`)에 대한 핸들러가 없어
-  마지막 catch-all인 `@ExceptionHandler(Exception.class)`가 잡아 **500 INTERNAL_ERROR**로 응답한다.
-  클라이언트 입력 오류가 서버 오류로 보고되고, 에러 로그도 `[500 Error]`로 남아 노이즈가 된다.
-
-- **재현 조건**
-  `GET /api/v1/me/hesitations?status=ALL` (duration 누락) 또는 `GET /api/v1/me/hesitations` 호출.
-  ※ 값이 잘못된 경우(`duration=WEEK`)는 `MethodArgumentTypeMismatchException` 핸들러가 있어 정상적으로 400이 나간다 — **누락일 때만** 500이다.
-
-- **근거 코드 위치**
-  - `backend/src/main/java/com/nidus/twinly/me/controller/MeController.java:180` — `@RequestParam HesitationDuration duration` (required 기본값 true)
-  - `backend/src/main/java/com/nidus/twinly/me/controller/MeController.java:181` — `@RequestParam HesitationStatus status`
-  - `backend/src/main/java/com/nidus/twinly/common/web/GlobalExceptionHandler.java:45` — 타입 불일치만 400으로 처리
-  - `backend/src/main/java/com/nidus/twinly/common/web/GlobalExceptionHandler.java:61` — 나머지는 전부 500
-
-- **심각도**: medium
-  (me 도메인 전용 문제가 아니라 `@RequestParam`/`@RequestPart`를 쓰는 모든 API에 공통으로 적용된다.)
-
-- **제안**
-  `GlobalExceptionHandler`에 `@ExceptionHandler(ServletRequestBindingException.class)`(또는 `MissingServletRequestParameterException`)를 추가해
-  `INVALID_REQUEST` + 400으로 매핑한다.
-  ※ 버그를 테스트로 고정하지 않기 위해 이 케이스는 테스트로 작성하지 않았다. 수정 후 400 검증 테스트를 추가하는 것을 권장한다.
-
----
-
 ## POST /api/v1/me/consents
 
-### 4. 아직 발효되지 않은(또는 `effectiveAt`이 null인) 정책 버전에도 동의할 수 있다
+### 2. 아직 발효되지 않은(또는 `effectiveAt`이 null인) 정책 버전에도 동의할 수 있다
 
 - **증상**
   `GET /api/v1/me/consents`는 `effectiveAt`이 현재보다 과거인 버전만 노출하는데,
@@ -120,7 +58,7 @@
 
 ## DELETE /api/v1/me/consents
 
-### 5. 존재하지 않는 정책 버전을 조용히 무시한다 (동의 API와 비일관)
+### 3. 존재하지 않는 정책 버전을 조용히 무시한다 (동의 API와 비일관)
 
 - **증상**
   `grantConsents`는 카탈로그에 없는 `(policyId, version)`이면 `POLICY_NOT_FOUND`(404)를 던지는데,
@@ -144,7 +82,7 @@
 
 ## GET /api/v1/me/app-notifications/feeds
 
-### 6. `limit` 상한이 없다
+### 4. `limit` 상한이 없다
 
 - **증상**
   `limit`은 "0 이하이거나 null이면 기본값 20"만 처리하고 상한은 없다.
@@ -165,7 +103,7 @@
 
 ## PATCH /api/v1/me/profile
 
-### 7. `affiliation`이 `@NotNull`만 걸려 있어 공백 문자열이 통과한다
+### 5. `affiliation`이 `@NotNull`만 걸려 있어 공백 문자열이 통과한다
 
 - **증상**
   `{"affiliation":"   "}` 또는 `{"affiliation":""}`이 400 없이 통과해 소속이 공백으로 저장된다.
@@ -187,7 +125,7 @@
 
 ## PATCH /api/v1/me/push-notifications/{type}, PATCH /api/v1/me/profile/visibility-settings/{type}
 
-### 8. "조회 후 없으면 저장" 패턴이라 동시 요청 시 유니크 제약 위반이 발생할 수 있다
+### 6. "조회 후 없으면 저장" 패턴이라 동시 요청 시 유니크 제약 위반이 발생할 수 있다
 
 - **증상**
   같은 유저가 동일 설정 변경을 동시에 두 번 보내면 두 요청 모두 "행 없음"으로 판단하고 INSERT를 시도해
@@ -212,7 +150,7 @@
 
 ## DELETE /api/v1/me/consents
 
-### 9. DELETE 요청에 바디를 요구한다
+### 7. DELETE 요청에 바디를 요구한다
 
 - **증상**
   철회 대상 목록을 `@RequestBody`로 받는다. RFC 상 DELETE의 바디는 정의되지 않아
@@ -226,12 +164,3 @@
 - **제안**
   `POST /api/v1/me/consents/revoke` 같은 별도 엔드포인트로 옮기거나, 쿼리 파라미터로 받는다.
   현행 유지 시 클라이언트 제약을 API 스펙에 명시한다.
-
----
-
-## 참고: 테스트로 고정하지 않은 사항
-
-- 위 **1번(사진 커밋 갱신 누락)** 은 서비스 단위 테스트(목 기반)에서는 드러나지 않는다.
-  `MeServiceUnitTest#profilePhotoCommit_updates_existing_photo`는 "엔티티 상태가 바뀌고 save를 다시 호출하지 않는다"까지만 검증한다.
-  실제 DB 반영 여부는 `@Transactional` 부착 후 통합 테스트로 검증하는 것을 권장한다.
-- 위 **3번(필수 파라미터 누락 시 500)** 은 잘못된 동작을 테스트로 굳히지 않기 위해 의도적으로 테스트를 작성하지 않았다.

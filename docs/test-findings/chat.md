@@ -45,37 +45,7 @@
 
 ## GET /api/v1/chat/rooms
 
-### 1. 메시지가 한 건도 없는 방이 목록에 있으면 응답 변환 중 NPE로 500이 난다
-- **증상**: `lastMessage`가 `null`인 방이 하나라도 있으면 `ChatRoomsResponse` 변환 단계에서 `NullPointerException` → `GlobalExceptionHandler.handleUnexpected`가 잡아 500(INTERNAL_ERROR) 반환. 목록 전체가 내려가지 않는다.
-- **재현 조건**: 매칭이 성사되어 채팅방(`chat_rooms`)은 만들어졌지만 아직 아무도 메시지를 보내지 않은 상태에서 `GET /api/v1/chat/rooms` 호출. (신규 매칭 직후의 **정상적인 기본 상태**라 발생 확률이 매우 높다)
-- **근거 코드 위치**:
-  - `backend/src/main/java/com/nidus/twinly/chat/service/ChatService.java:216` — `lastChat == null`이면 `ChatRoomMessagesResult(unreadCount, null)`로 `lastMessage`에 `null`을 그대로 넣는다.
-  - `backend/src/main/java/com/nidus/twinly/chat/dto/response/ChatRoomMessagesResponse.java:13` — `ChatRoomLastMessageResponse.from(result.lastMessage())` 를 **null 검사 없이** 호출.
-  - `backend/src/main/java/com/nidus/twinly/chat/dto/response/ChatRoomLastMessageResponse.java:12` — 인자가 null이면 `result.text()`에서 NPE.
-- **심각도**: **high**
-- **제안**: `ChatRoomMessagesResponse.from`에서 null 가드를 넣는다.
-  ```java
-  public static ChatRoomMessagesResponse from(ChatRoomMessagesResult result) {
-      return new ChatRoomMessagesResponse(
-              result.unreadCount(),
-              result.lastMessage() != null ? ChatRoomLastMessageResponse.from(result.lastMessage()) : null);
-  }
-  ```
-  (`preview`는 이미 null 허용이고 OpenAPI 스냅샷에서도 `lastMessage`는 nullable로 선언되어 있으므로, 응답 스펙은 그대로 두고 변환부만 고치면 된다.)
-- **비고**: 이 버그 때문에 컨트롤러 슬라이스/통합 테스트의 목록 조회 케이스는 **마지막 메시지가 있는 방**으로만 구성했다. 수정 후 `lastMessage == null` 케이스를 테스트에 추가할 것을 권장한다.
-
-### 2. 매칭이 하나도 없는 유저의 목록 조회 시 빈 IN 절로 SQL 오류 가능 (미검증)
-- **증상**: 조회 가능한 방이 0개면 `visibleRoomIds`가 빈 리스트가 되어 **네이티브 쿼리**의 `IN (:roomIds)`가 `IN ()`으로 전개될 수 있고, MySQL에서 문법 오류 → 500.
-- **재현 조건**: 아직 매칭이 없는(또는 모든 방을 숨김/나가기 한) 유저가 `GET /api/v1/chat/rooms` 호출.
-- **근거 코드 위치**:
-  - `backend/src/main/java/com/nidus/twinly/chat/service/ChatService.java:149` — `chatRepository.findLatestByRoomIdIn(visibleRoomIds)` (네이티브 쿼리)
-  - `backend/src/main/java/com/nidus/twinly/chat/service/ChatService.java:152` — `chatRepository.countUnreadByRoomIdIn(userId, visibleRoomIds)` (네이티브 쿼리)
-  - `backend/src/main/java/com/nidus/twinly/chat/repository/ChatRepository.java` — 두 쿼리 모두 `nativeQuery = true`. (JPQL 파생 쿼리는 Hibernate가 빈 컬렉션을 처리해주지만 네이티브는 그대로 전개된다)
-- **심각도**: **high** (사실이라면 신규 가입자 전원이 채팅 탭에서 500)
-- **제안**: 빈 리스트면 리포지토리 호출 자체를 건너뛰도록 early-return 하거나(`visibleRooms.isEmpty()`면 `new ChatRoomsResult(List.of())` 반환), 네이티브 쿼리를 JPQL/Spring Data 파생 쿼리로 바꾼다. 어느 쪽이든 **매칭 0건 유저 케이스를 테스트로 고정**해야 한다.
-- **비고**: 실행 확인을 하지 못해(빌드 실행 금지) 테스트로 고정하지 않았다. 우선 확인 필요.
-
-### 3. 같은 방에서 `sent_at`이 동일한 메시지가 2건이면 500 (미검증)
+### 1. 같은 방에서 `sent_at`이 동일한 메시지가 2건이면 500 (미검증)
 - **증상**: `findLatestByRoomIdIn`은 방별 `MAX(sent_at)`과 조인하므로 동일 `sent_at`이 2건이면 같은 `room_id`로 두 행이 나오고, `Collectors.toMap(Chat::getRoomId, ...)`이 duplicate key로 `IllegalStateException` → 500.
 - **재현 조건**: 같은 방에서 마이크로초까지 동일한 시각에 2건이 저장(동시 전송 / 시계 해상도가 낮은 환경).
 - **근거 코드 위치**: `backend/src/main/java/com/nidus/twinly/chat/service/ChatService.java:149-150`, `backend/src/main/java/com/nidus/twinly/chat/repository/ChatRepository.java` (`findLatestByRoomIdIn`)
@@ -86,7 +56,7 @@
 
 ## GET /api/v1/chat/rooms/{roomId}/messages
 
-### 4. `limit` 값 검증이 없어 `limit=0`이면 500, 음수면 SQL 오류
+### 2. `limit` 값 검증이 없어 `limit=0`이면 500, 음수면 SQL 오류
 - **증상**
   - `limit=0`: `effectiveLimit=0` → `LIMIT 1`로 1건을 읽어오고 `hasMore=true`가 되지만 `pageChats = chats.subList(0, 0)` 이 빈 리스트라 `pageChats.getLast()`에서 `NoSuchElementException` → 500.
   - `limit=-1`: `LIMIT 0`(=`effectiveLimit+1`)이 되어 결과가 항상 비고, 더 작은 음수(`limit=-2` 등)는 `LIMIT -1` 같은 SQL이 만들어져 문법 오류 → 500.
@@ -100,7 +70,7 @@
 
 ## POST /api/v1/chat/rooms/{roomId}/enter, POST /api/v1/chat/rooms/{roomId}/hide, POST /api/v1/chat/rooms/{roomId}/leave
 
-### 5. 참여 정보가 없을 때 `IllegalStateException`으로 500이 나고, `/read`와 처리 방식이 불일치한다
+### 3. 참여 정보가 없을 때 `IllegalStateException`으로 500이 나고, `/read`와 처리 방식이 불일치한다
 - **증상**: 방은 있는데 `chat_room_participations` 행이 없으면 `IllegalStateException`이 던져져 500(INTERNAL_ERROR). 같은 상황에서 `POST /read`는 `CHAT_PARTICIPATION_NOT_FOUND`(404)로 처리한다.
 - **재현 조건**: 채팅방 생성 트랜잭션이 부분 실패했거나 참여 행이 유실된 상태에서 enter/hide/leave 호출.
 - **근거 코드 위치**:
@@ -115,20 +85,20 @@
 
 ## POST /api/v1/chat/rooms/{roomId}/messages
 
-### 6. 닫힌 방·나간 방에도 메시지를 보낼 수 있다
+### 4. 닫힌 방·나간 방에도 메시지를 보낼 수 있다
 - **증상**: `sendMessage`는 `room.closedAt`과 내 참여 정보의 `leftAt`을 전혀 확인하지 않는다. 종료된 채팅방이나 이미 나간 방에도 메시지가 저장된다.
 - **재현 조건**: `POST /leave` 후(또는 `chat_rooms.closed_at`이 채워진 뒤) 같은 방으로 메시지 전송.
 - **근거 코드 위치**: `backend/src/main/java/com/nidus/twinly/chat/service/ChatService.java:71-101` (방/매칭 조회 후 참여자 여부만 검사)
 - **심각도**: **medium** (정책 확정 전이면 low)
 - **제안**: 닫힌 방/나간 방에 대한 정책을 정하고, 차단할 거라면 전용 ErrorCode(예: `ROOM_CLOSED`)를 추가해 403/409로 처리한다. 지금 당장 정책이 없다면 최소한 TODO로 남길 것.
 
-### 7. 본문 길이 검사가 권한 검사보다 먼저 수행된다
+### 5. 본문 길이 검사가 권한 검사보다 먼저 수행된다
 - **증상**: 4KB 초과 본문이면 방 존재 여부·참여자 여부를 확인하기 전에 422(`MESSAGE_LENGTH_EXCEEDED`)를 반환한다. 존재하지 않는 방/남의 방에 대해서도 422가 나가므로 404/403과 응답이 갈린다(방 존재 여부를 유추할 수 있는 미세한 정보 노출).
 - **근거 코드 위치**: `backend/src/main/java/com/nidus/twinly/chat/service/ChatService.java:72-77`
 - **심각도**: **low**
 - **제안**: 인가(방 조회 → 참여자 확인) 이후에 본문 길이를 검사한다.
 
-### 8. `text`에 `@NotBlank`/`@Size`가 없어 빈 문자열 메시지가 저장된다
+### 6. `text`에 `@NotBlank`/`@Size`가 없어 빈 문자열 메시지가 저장된다
 - **증상**: `{"text":"","clientMsgId":"..."}` 가 `@NotNull`만 통과해 빈 메시지가 그대로 저장되고, 목록의 `preview`도 빈 문자열이 된다. `clientMsgId`도 길이 제한이 없다.
 - **근거 코드 위치**: `backend/src/main/java/com/nidus/twinly/chat/dto/request/ChatSendMessageRequest.java:6-9`
 - **심각도**: **low**
@@ -138,13 +108,13 @@
 
 ## POST /api/v1/chat/rooms/{roomId}/read
 
-### 9. 서비스가 확정한 읽음 포인터를 REST 응답에서 버린다
+### 7. 서비스가 확정한 읽음 포인터를 REST 응답에서 버린다
 - **증상**: `ChatService.readMessages`는 `ChatReadMessagesResult(roomId, confirmed)`를 돌려주지만 컨트롤러가 `void`라 클라이언트는 서버가 확정한 포인터를 알 수 없다. WebSocket 경로(`CHAT_READ_COMMITTED`)는 이 값을 내려주므로 두 경로의 계약이 다르다.
 - **근거 코드 위치**: `backend/src/main/java/com/nidus/twinly/chat/controller/ChatController.java:99-103`
 - **심각도**: **low**
 - **제안**: 응답 DTO를 만들어 `lastMessageId`를 내려주면 클라이언트가 로컬 상태를 서버 기준으로 맞출 수 있다. (지금 필요 없다면 그대로 둬도 무방)
 
-### 10. `@Modifying` 네이티브 UPDATE 이후 영속성 컨텍스트가 갱신되지 않는다
+### 8. `@Modifying` 네이티브 UPDATE 이후 영속성 컨텍스트가 갱신되지 않는다
 - **증상**: `advanceReadPointer`는 네이티브 UPDATE라 같은 트랜잭션의 영속성 컨텍스트에 있는 `ChatRoomParticipation` 엔티티는 이전 값을 그대로 들고 있다. 현재 흐름에서는 직후에 트랜잭션이 끝나 실피해는 없지만, 같은 트랜잭션에서 참여 정보를 다시 읽는 로직이 추가되면 즉시 스테일 데이터를 보게 된다.
 - **근거 코드 위치**: `backend/src/main/java/com/nidus/twinly/chat/service/ChatService.java:359-363`, `backend/src/main/java/com/nidus/twinly/chat/repository/ChatRoomParticipationRepository.java` (`advanceReadPointer`)
 - **심각도**: **low**
@@ -155,13 +125,13 @@
 
 ## 도메인 공통
 
-### 11. `ChatChangedEvent`가 어디서도 발행되지 않는다 (죽은 알림 경로)
+### 9. `ChatChangedEvent`가 어디서도 발행되지 않는다 (죽은 알림 경로)
 - **증상**: `ChatNotifier.onChatChanged`가 `/user/queue/chat/index`로 `CHAT_CHANGED`를 보내도록 되어 있지만, `ChatChangedEvent`를 `publishEvent` 하는 코드가 프로젝트 전체에 없다. 즉 채팅 목록 화면의 실시간 갱신 신호가 한 번도 나가지 않는다.
 - **근거 코드 위치**: `backend/src/main/java/com/nidus/twinly/chat/notifier/ChatNotifier.java:52-60` (리스너), `backend/src/main/java/com/nidus/twinly/chat/event/ChatChangedEvent.java` (발행처 없음). `ChatService.sendMessage`는 `ChatMessageCreatedEvent`만 발행한다 (`ChatService.java:98`).
 - **심각도**: **medium** (기능 미구현 / 죽은 코드)
 - **제안**: 메시지 생성·읽음 처리·방 상태 변경 시점에 `ChatChangedEvent`를 발행하도록 연결하거나, 아직 쓰지 않을 거면 리스너와 이벤트를 제거해 죽은 코드를 남기지 않는다.
 
-### 12. 조회 전용 메서드에 `@Transactional(readOnly = true)`가 없다
+### 10. 조회 전용 메서드에 `@Transactional(readOnly = true)`가 없다
 - **증상**: `rooms`, `roomDetail`, `messages`는 트랜잭션 없이 실행되어 메서드 안의 여러 쿼리가 서로 다른 트랜잭션/커넥션에서 수행된다. 목록 조회는 8개 이상의 쿼리를 묶어 쓰므로 중간 상태가 섞여 보일 수 있다.
 - **근거 코드 위치**: `backend/src/main/java/com/nidus/twinly/chat/service/ChatService.java:115` (`rooms`), `:226` (`roomDetail`), `:313` (`messages`)
 - **심각도**: **low**

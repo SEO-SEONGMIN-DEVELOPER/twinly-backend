@@ -56,27 +56,7 @@
 
 ## POST /api/v1/onboarding/profile/nickname/check, PUT /api/v1/onboarding/profile/nickname
 
-### 5. 자기 자신이 이미 설정한 닉네임을 다시 제출하면 409가 난다 (재제출 비멱등) — **설정 API는 해결됨, 중복 확인 API는 남음**
-
-- **증상**: 중복 검사가 "다른 세션인지"를 구분하지 않고 `anonSessionRepository.existsByNickname(nickname)`만 본다.
-  이미 `nickname=twinly`로 설정한 세션이 같은 값을 다시 제출하면 자기 자신 때문에 `NICKNAME_ALREADY_USED(409)`가 난다.
-  중복 확인 API도 자기 닉네임에 대해 `isAvailable=false`를 준다. 네트워크 재시도/화면 재진입에서 바로 드러난다.
-- **심각도**: medium
-- **조치**: `profileNickname`·`profileNicknameCheck` 모두 중복 검사를 `existsByNicknameAndIdNot(nickname, anonSessionId)`로 교체했다.
-  같은 닉네임 재제출이 멱등하게 성공하고(설정 API는 `PUT`으로 전환), 자기 닉네임 중복 확인도 `isAvailable=true`가 된다.
-  `AnonSessionRepository.existsByNickname`은 호출부가 사라져 제거했다.
-
-### 6. 검사-후-저장 사이의 경쟁 조건이 500으로 새어 나간다
-
-- **증상**: `exists` 확인과 `changeNickname` 사이에 다른 요청이 같은 닉네임을 선점하면
-  `uk_anon_sessions_nickname` / `uk_users_nickname` 위반이 flush 시점에 터져 500이 된다. (409로 매핑되지 않음)
-- **근거 코드 위치**
-  - `backend/src/main/java/com/nidus/twinly/onboarding/service/OnboardingService.java:157-171`
-  - `backend/src/main/resources/db/migration/V1__init_schema.sql:125` (`uk_anon_sessions_nickname`)
-- **심각도**: low
-- **제안**: `DataIntegrityViolationException`을 잡아 `NICKNAME_ALREADY_USED`로 변환한다(유니크 제약을 최종 방어선으로 사용).
-
-### 7. 닉네임 정책이 금지어 검사뿐이다
+### 5. 닉네임 정책이 금지어 검사뿐이다
 
 - **증상**: `validateAndNormalizeNickname`은 trim + 금지어 4개 확인만 한다. 길이 상한, 허용 문자,
   공백/특수문자 규칙이 없어 500자 닉네임이나 제어문자도 통과한다. (`INVALID_NICKNAME` 코드가 사실상 금지어 전용)
@@ -87,41 +67,9 @@
 
 ---
 
-## POST /api/v1/onboarding/ai-chat/start
-
-### 8. 두 번 호출하면 유니크 제약 위반으로 500이 난다
-
-- **증상**: `aiChatStart`는 이미 시작된 세션인지 확인하지 않고 항상 `turnIndex=0`의 AI 메시지를 insert한다.
-  `uk_ai_chats_anon_session_id_sender_turn_index (anon_session_id, sender, turn_index)`에 걸려
-  `DataIntegrityViolationException` → **500**. 화면 재진입/새로고침/재시도에서 바로 발생한다.
-  (게다가 예외 이전에 Bedrock을 이미 호출하므로 실패 요청마다 모델 비용이 발생한다.)
-- **재현 조건**: 같은 익명 세션 토큰으로 `POST /api/v1/onboarding/ai-chat/start` 2회 호출
-- **근거 코드 위치**
-  - `backend/src/main/java/com/nidus/twinly/aichat/service/AiChatService.java:35-51` (특히 :44 save)
-  - `backend/src/main/resources/db/migration/V1__init_schema.sql:28` (유니크 제약)
-- **심각도**: medium
-- **제안**: `aiChatRepository.existsByAnonSessionId(anonSessionId)`(이미 존재하는 메서드)로 확인해
-  이미 시작된 세션이면 저장된 0번 턴 질문을 그대로 반환한다(멱등). 최소한 Bedrock 호출 **전에** 검사해야 한다.
-
----
-
-## POST /api/v1/onboarding/ai-chat/messages
-
-### 9. 같은 turnIndex로 두 번 답하면 500이 난다
-
-- **증상**: 사용자 답변을 저장할 때 중복 검사가 없다. 같은 `turnIndex`로 재전송하면
-  `(anon_session_id, 'USER', turn_index)` 유니크 제약 위반으로 500. 네트워크 재시도에서 발생 가능하다.
-  또한 `DETAIL` 페르소나 요소도 매번 append되어 중복 누적된다.
-- **근거 코드 위치**: `backend/src/main/java/com/nidus/twinly/aichat/service/AiChatService.java:78-81`
-- **심각도**: medium
-- **제안**: 해당 턴의 USER 메시지가 이미 있으면 저장된 다음 질문을 그대로 반환(멱등)하거나,
-  명시적 도메인 에러(409)로 매핑한다.
-
----
-
 ## POST /api/v1/onboarding/consents
 
-### 10. 최신/시행 중인 정책 버전인지 확인하지 않는다
+### 6. 최신/시행 중인 정책 버전인지 확인하지 않는다
 
 - **증상**: `PolicyCatalog.loadByKey`는 `effective_at` 필터 없이 모든 버전을 키로 만든다.
   따라서 클라이언트가 **과거 버전**(`version: 1`, 이미 v2가 시행 중)으로 동의를 보내도 그대로 저장된다.
@@ -136,7 +84,7 @@
 
 ## DELETE /api/v1/onboarding/consents
 
-### 11. 존재하지 않는 정책/버전을 철회 요청해도 200을 반환한다 (등록 API와 비대칭)
+### 7. 존재하지 않는 정책/버전을 철회 요청해도 200을 반환한다 (등록 API와 비대칭)
 
 - **증상**: `grantConsents`는 정책을 못 찾으면 `POLICY_NOT_FOUND(404)`를 던지는데,
   `revokeConsents`는 `filter(policy -> policy != null)`로 **조용히 무시**하고 200을 반환한다.
@@ -146,7 +94,7 @@
 - **심각도**: medium
 - **제안**: 등록과 동일하게 조회 실패 시 `POLICY_NOT_FOUND`를 던져 동작을 대칭으로 맞춘다.
 
-### 12. DELETE에 요청 바디를 요구한다
+### 8. DELETE에 요청 바디를 요구한다
 
 - **증상**: `@DeleteMapping` + `@RequestBody`. 일부 HTTP 클라이언트/프록시/캐시는 DELETE 바디를 버리거나
   전달하지 않아(RFC 9110에서도 의미가 정의돼 있지 않음) 400으로 실패할 수 있다.
@@ -159,14 +107,14 @@
 
 ## PUT /api/v1/onboarding/basic-info
 
-### 13. 생년월일에 미래 날짜가 들어올 수 있다
+### 9. 생년월일에 미래 날짜가 들어올 수 있다
 
 - **증상**: `birthDate`에 `@NotNull`만 있어 `"2999-01-01"`도 통과해 그대로 저장된다.
 - **근거 코드 위치**: `backend/src/main/java/com/nidus/twinly/onboarding/dto/request/OnboardingBasicInfoRequest.java:15`
 - **심각도**: low
 - **제안**: `@Past`(또는 `@PastOrPresent`) 추가. 필요하면 연령 하한도 함께 검증한다.
 
-### 14. `INVALID_ANON_SESSION` 분기는 사실상 도달 불가하다 (참고)
+### 10. `INVALID_ANON_SESSION` 분기는 사실상 도달 불가하다 (참고)
 
 - **증상**: 인증 리졸버(`CurrentAnonSessionArgumentResolver` → `AnonService.resolveByToken`)가 이미 세션을 조회·검증했으므로,
   서비스의 `findById(...).orElseThrow(INVALID_ANON_SESSION)`는 같은 트랜잭션 안에서 실질적으로 실패하지 않는다.

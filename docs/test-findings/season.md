@@ -59,9 +59,12 @@
 ### 2. 현재 시즌 설정이 잘못되면 런타임 500으로만 드러난다
 
 - **증상**: `app.current-season-id`가 가리키는 시즌 행이 없으면 `IllegalStateException`이 던져져 500 INTERNAL_ERROR가 된다. 설정 오류이므로 500 자체는 타당하지만, **기동 시점이 아니라 유저 요청 시점에야** 드러난다. 실제로 마이그레이션(`V1__init_schema.sql`)에 seasons 시드 데이터가 전혀 없어서, 시즌 행을 수동으로 넣지 않으면 이 경로가 곧바로 터진다.
-- **재현 조건**: seasons 테이블에 id=1 행이 없는 상태에서 인증된 유저가 참가 API 호출.
+- **재현 조건**: seasons 테이블에 활성 시즌 행이 없는 상태에서 인증된 유저가 참가 API 호출.
 - **근거 코드 위치**: `backend/src/main/java/com/nidus/twinly/season/service/SeasonService.java:29`
-- **심각도**: low
+- **심각도**: **high** (폭발 반경이 시즌 도메인에 한정되지 않는다)
+- **폭발 반경**: `CurrentSeasonReader`를 쓰는 모든 경로가 함께 죽는다. 실행으로 확인한 것만 해도
+  `GET /api/v1/chat/rooms`가 활성 시즌 행이 없으면 `IllegalStateException`으로 500이 된다.
+  시즌 전환 사이에 빈 구간이 생기면 여러 화면이 동시에 장애를 맞는다.
 - **제안**: 기동 시 현재 시즌 존재를 검증(`ApplicationRunner`/`@PostConstruct`)해 fail-fast 하거나, 마이그레이션에 시즌 시드를 추가한다.
 
 ### 3. `SeasonParticipation.create`가 `Instant.now()`를 두 번 호출한다

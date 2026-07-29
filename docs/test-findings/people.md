@@ -19,7 +19,6 @@ springdoc이 노출하는 이 도메인의 오퍼레이션 8개는 단위·통�
 
 ---
 
-
 ## GET /api/v1/people
 
 ### 1. 탈퇴 유저·차단 유저가 목록에서 걸러지지 않는다
@@ -83,43 +82,28 @@ springdoc이 노출하는 이 도메인의 오퍼레이션 8개는 단위·통�
 
 ## GET /api/v1/people/{userId}/intimacy-series
 
-### 8. `maxPoints`에 검증이 없어 음수를 주면 500이 난다
-- 증상: `maxPoints`가 음수면 `new ArrayList<>(maxPoints)`에서 `IllegalArgumentException: Illegal Capacity`가 발생하고, 전역 핸들러의 `@ExceptionHandler(Exception.class)`에 잡혀 500 `INTERNAL_ERROR`가 나간다. `maxPoints=0`이면 예외 없이 **조용히 빈 시계열**이 내려간다(에러도 아니고 데이터도 없음).
-- 재현 조건: `GET /api/v1/people/{userId}/intimacy-series?from=...&to=...&resolution=DAY&maxPoints=-1`
-- 근거 코드 위치: `people/service/PeopleService.java:248-260` (`downsample`), 컨트롤러 파라미터 `people/controller/PeopleController.java:68` (검증 애노테이션 없음)
-- 심각도: high
-- 제안: 컨트롤러에서 `@Min(1) @Max(...)`로 검증하거나(클래스에 `@Validated` 필요), 서비스에서 `maxPoints <= 0`이면 다운샘플링을 건너뛴다.
-
-### 9. 필수 쿼리 파라미터가 빠지면 400이 아니라 500이 나간다 (전역 이슈, 이 API가 가장 크게 노출)
-- 증상: `from`/`to`/`resolution`/`maxPoints`는 모두 필수인데, 하나라도 빠지면 Spring이 `MissingServletRequestParameterException`을 던진다. `GlobalExceptionHandler`에 이 예외(또는 상위 `ServletRequestBindingException`) 전용 핸들러가 없고 `@ExceptionHandler(Exception.class)`가 있어, `ExceptionHandlerExceptionResolver`가 `DefaultHandlerExceptionResolver`(400 매핑)보다 먼저 이 catch-all을 선택한다. 결과적으로 400이어야 할 요청이 500 `INTERNAL_ERROR`로 응답된다.
-- 재현 조건: `GET /api/v1/people/{userId}/intimacy-series?from=2026-07-01T00:00:00Z&to=2026-07-31T00:00:00Z&resolution=DAY` (maxPoints 누락)
-- 근거 코드 위치: `common/web/GlobalExceptionHandler.java:44-52` (타입 불일치만 처리), `common/web/GlobalExceptionHandler.java:64-69` (catch-all)
-- 심각도: high
-- 제안: `GlobalExceptionHandler`에 `MissingServletRequestParameterException`/`ServletRequestBindingException` 핸들러를 추가해 400 `INVALID_REQUEST`로 매핑하거나, `ResponseEntityExceptionHandler`를 상속해 프레임워크 표준 매핑을 살린다.
-- 비고: 확실히 재현 가능한 회귀 테스트를 남기면 현재 동작(500)을 고정해 버리므로, 테스트는 작성하지 않고 기록만 한다.
-
-### 10. `from`/`to`의 오프셋을 무시하고 `toLocalDate()`를 한다
+### 8. `from`/`to`의 오프셋을 무시하고 `toLocalDate()`를 한다
 - 증상: 컨트롤러가 `OffsetDateTime`을 받아 그대로 `.toLocalDate()`를 호출한다. 즉 클라이언트가 보낸 오프셋 기준 날짜가 그대로 쓰이는데, 저장된 `relationships.date`는 KST 기준 날짜다. `2026-07-01T00:00:00Z`(=KST 09:00)를 보내면 KST 기준 7/1이 맞지만, `2026-07-01T23:00:00Z`(=KST 7/2 08:00)를 보내면 7/1로 해석되어 하루가 밀린다.
 - 재현 조건: UTC 오프셋으로 기간 경계를 지정해 호출.
 - 근거 코드 위치: `people/controller/PeopleController.java:69`
 - 심각도: medium
 - 제안: `KstTimes`처럼 KST로 변환한 뒤 `toLocalDate()`를 하거나, 애초에 파라미터 타입을 `LocalDate`로 받는다.
 
-### 11. `from > to`를 검증하지 않는다
+### 9. `from > to`를 검증하지 않는다
 - 증상: 뒤집힌 기간을 주면 에러 없이 빈 시계열 + `currentIntimacy`만 내려간다. 클라이언트가 버그를 알아채기 어렵다.
 - 재현 조건: `from=2026-07-31T00:00:00Z&to=2026-07-01T00:00:00Z`
 - 근거 코드 위치: `people/service/PeopleService.java:215-226`
 - 심각도: low
 - 제안: `from.isAfter(to)`면 `INVALID_REQUEST`로 거절한다.
 
-### 12. WEEK 버킷의 대표값이 "그 주의 첫 기록"이다
+### 10. WEEK 버킷의 대표값이 "그 주의 첫 기록"이다
 - 증상: 주 단위 집계에서 각 버킷의 **첫** 기록 친밀도를 쓴다. 시계열 그래프 관점에서는 보통 주의 마지막(가장 최신) 값이나 평균을 쓰므로, 주중에 친밀도가 오르내리면 그래프가 실제 추세보다 뒤처져 보인다.
 - 재현 조건: 같은 주에 친밀도 10 → 50 기록이 있을 때 `resolution=WEEK`로 조회 → 10이 내려온다.
 - 근거 코드 위치: `people/service/PeopleService.java:236-240`
 - 심각도: low
 - 제안: 버킷 대표값 정책(마지막 값/평균)을 명시적으로 정하고 주석으로 남긴다.
 
-### 13. 관계 존재 검증이 계산 뒤에 있다
+### 11. 관계 존재 검증이 계산 뒤에 있다
 - 증상: 관계가 아예 없어 `RELATIONSHIP_NOT_FOUND`로 끝날 요청도 시계열 버킷팅·다운샘플링을 모두 수행한 뒤에 예외를 던진다.
 - 근거 코드 위치: `people/service/PeopleService.java:219-223`
 - 심각도: low
@@ -129,21 +113,21 @@ springdoc이 노출하는 이 도메인의 오퍼레이션 8개는 단위·통�
 
 ## GET /api/v1/people/{userId}/events
 
-### 14. 관계 이력 전체를 기간 제한 없이 로딩한다
+### 12. 관계 이력 전체를 기간 제한 없이 로딩한다
 - 증상: 페이지에 담을 날짜는 `limit`개인데, 친밀도 변화량·관계 변화를 계산하려고 `findAllByUserIdAndPartnerUserIdOrderByDateAsc`로 **해당 상대와의 전체 관계 이력**을 매 요청마다 메모리에 올린다. 관계가 오래될수록 요청 비용이 선형으로 커진다.
 - 재현 조건: 관계 기록이 수백 일치 쌓인 상대의 이벤트 목록 조회.
 - 근거 코드 위치: `people/service/PeopleService.java:296`
 - 심각도: medium
 - 제안: 페이지 날짜 범위(+직전 1건)만 조회하도록 쿼리를 좁힌다.
 
-### 15. `scenesByDate.get(date).get(0)`이 NPE가 될 수 있다
+### 13. `scenesByDate.get(date).get(0)`이 NPE가 될 수 있다
 - 증상: 날짜 목록 쿼리와 씬 목록 쿼리가 별개의 쿼리라, 두 쿼리 사이에 해당 날짜의 씬이 삭제되면 `scenesByDate.get(date)`가 null이 되어 NPE → 500.
 - 재현 조건: 두 쿼리 사이에 씬 삭제(경쟁 조건). 트랜잭션 경계가 없어 실제로 발생 가능하다(6번 참고).
 - 근거 코드 위치: `people/service/PeopleService.java:311`
 - 심각도: low
 - 제안: `getOrDefault(date, List.of())` + 빈 경우 스킵, 또는 조회 메서드를 `@Transactional(readOnly = true)`로 묶는다.
 
-### 16. `lines` JSON이 손상되면 500이 난다
+### 14. `lines` JSON이 손상되면 500이 난다
 - 증상: `preview()`가 `objectMapper.readValue`를 예외 처리 없이 호출한다. `scenes.lines`에 파싱 불가한 JSON이 들어 있으면 목록 전체가 500이 된다.
 - 재현 조건: `scenes.lines`에 스키마에 맞지 않는 JSON이 저장된 경우.
 - 근거 코드 위치: `people/service/PeopleService.java:343-350`
@@ -154,20 +138,20 @@ springdoc이 노출하는 이 도메인의 오퍼레이션 8개는 단위·통�
 
 ## GET /api/v1/people/{userId}/events/{date}
 
-### 17. 상대 존재 여부를 검증하지 않아 아무 userId나 200을 받는다
+### 15. 상대 존재 여부를 검증하지 않아 아무 userId나 200을 받는다
 - 증상: `events`는 `USER_NOT_FOUND`(404)를 던지는데, `event`는 상대 유저 조회 자체를 하지 않는다. 존재하지 않는 `userId`나 나와 아무 관계 없는 `userId`로 호출해도 `scenes: []`, `version: null`인 200이 내려간다. 같은 리소스 계열인데 404 규약이 서로 다르다.
 - 재현 조건: `GET /api/v1/people/99999999/event/2026-07-20`
 - 근거 코드 위치: `people/service/PeopleService.java:352-375` (컨트롤러에도 404 문서가 없다 — `people/controller/PeopleController.java:81-86`)
 - 심각도: medium
 - 제안: `events`와 동일하게 상대 유저를 먼저 검증하고 `USER_NOT_FOUND`를 던진다.
 
-### 18. 그날의 내 씬을 전부 로드한 뒤 메모리에서 상대로 필터링한다
+### 16. 그날의 내 씬을 전부 로드한 뒤 메모리에서 상대로 필터링한다
 - 증상: `findAllByUserIdAndDate`로 그날 내 씬 전체 + 그 씬들의 파트너 전체를 읽고 나서 자바 스트림으로 상대만 걸러낸다. 하루 씬이 많아질수록 불필요한 로딩이 커진다. `speakerUserIds`도 관련 없는 파트너까지 포함해 `findAllById`를 돈다.
 - 근거 코드 위치: `people/service/PeopleService.java:353-366`
 - 심각도: low
 - 제안: `SceneRepository.findAllByUserIdAndWithPartnerUserIdAndDateIn`처럼 조인 조건을 쿼리로 내린다.
 
-### 19. `version`을 필터된 첫 씬의 값으로만 결정한다
+### 17. `version`을 필터된 첫 씬의 값으로만 결정한다
 - 증상: 같은 날짜 씬들의 `version`이 서로 다를 수 있는데(스키마상 씬별 컬럼), 응답의 `version`은 첫 씬 값 하나만 쓴다. 클라이언트가 캐시 무효화 키로 쓰면 오탐/미탐이 생긴다.
 - 근거 코드 위치: `people/service/PeopleService.java:372`
 - 심각도: low
@@ -177,5 +161,5 @@ springdoc이 노출하는 이 도메인의 오퍼레이션 8개는 단위·통�
 
 ## GET /api/v1/people/{userId}/learned-facts
 
-### 20. 발견된 이슈 없음
+### 18. 발견된 이슈 없음
 - 최신 관계 기록의 `partnerModel`을 그대로 반환하고, 없으면 `RELATIONSHIP_NOT_FOUND`(404)를 던진다. 컨트롤러의 `@ApiResponse` 문서와도 일치한다.
