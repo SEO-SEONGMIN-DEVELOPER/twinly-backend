@@ -1,11 +1,14 @@
 package com.nidus.twinly.push.dto.request;
 
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+
 import java.util.UUID;
 
 public record PushTokenRegisterRequest(
         @NotNull UUID deviceId,
-        @NotNull String deviceModel,
-        @NotNull String fcmToken
+        @NotBlank @Size(max = 100) String deviceModel,
+        @NotBlank @Size(max = 512) String fcmToken
 ) {
 }

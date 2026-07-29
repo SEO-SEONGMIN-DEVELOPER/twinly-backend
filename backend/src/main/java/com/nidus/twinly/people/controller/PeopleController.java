@@ -12,7 +12,9 @@ import com.nidus.twinly.people.service.PeopleService;
 import com.nidus.twinly.user.annotation.CurrentUser;
 import com.nidus.twinly.user.dto.header.UserInfo;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Max;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -34,7 +36,7 @@ public class PeopleController {
     @GetMapping("/api/v1/people")
     public PeopleResponse people(@CurrentUser UserInfo userInfo,
                                     @RequestParam(required = false) String cursor,
-                                    @RequestParam(required = false) Integer limit) {
+                                    @RequestParam(required = false) @Min(1) @Max(100) Integer limit) {
         return PeopleResponse.from(peopleService.people(userInfo.id(), RequestId.toLongOrNull(cursor, "cursor"), limit));
     }
 
@@ -59,7 +61,10 @@ public class PeopleController {
         peopleService.deleteFavorite(userInfo.id(), RequestId.toLong(partnerUserId, "userId"));
     }
 
-    @ApiResponse(responseCode = "404", description = "RELATIONSHIP_NOT_FOUND")
+    @ApiResponses({
+            @ApiResponse(responseCode = "400", description = "INVALID_DATE_RANGE"),
+            @ApiResponse(responseCode = "404", description = "RELATIONSHIP_NOT_FOUND")
+    })
     @GetMapping("/api/v1/people/{userId}/intimacy-series")
     public PeopleIntimacySeriesResponse intimacySeries(@CurrentUser UserInfo userInfo,
                                                        @PathVariable("userId") String partnerUserId,
@@ -75,7 +80,7 @@ public class PeopleController {
     public PeopleEventsResponse events(@CurrentUser UserInfo userInfo,
                                        @PathVariable("userId") String partnerUserId,
                                        @RequestParam(required = false) LocalDate cursor,
-                                       @RequestParam(required = false) Integer limit) {
+                                       @RequestParam(required = false) @Min(1) @Max(100) Integer limit) {
         return PeopleEventsResponse.from(peopleService.events(userInfo.id(), RequestId.toLong(partnerUserId, "userId"), cursor, limit));
     }
 

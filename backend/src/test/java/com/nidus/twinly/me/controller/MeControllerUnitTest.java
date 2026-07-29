@@ -722,4 +722,33 @@ class MeControllerUnitTest {
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
         then(meService).should(never()).hesitationsAnswer(anyLong(), anyLong(), any());
     }
+
+    @Test
+    @DisplayName("프로필 수정 시 affiliation이 공백뿐이면 400을 반환하고 서비스를 호출하지 않는다")
+    void profile_with_blank_affiliation_returns_400() throws Exception {
+        // when: 공백만 있는 소속으로 프로필 수정 API 호출
+        var result = mockMvc.perform(patch("/api/v1/me/profile")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"affiliation\":\"   \"}"));
+
+        // then: 400 INVALID_REQUEST 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        then(meService).should(never()).profile(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("앱 알림 목록 조회 시 limit이 허용 범위(1~100) 밖이면 400을 반환하고 서비스를 호출하지 않는다")
+    void appNotificationsFeeds_with_out_of_range_limit_returns_400() throws Exception {
+        // when & then: 0과 상한 초과 모두 입력 단계에서 막힌다
+        for (String limit : List.of("0", "101")) {
+            mockMvc.perform(get("/api/v1/me/app-notifications/feeds")
+                            .header("Authorization", BEARER)
+                            .param("limit", limit))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        }
+        then(meService).should(never()).appNotificationsFeeds(anyLong(), any(), any(), any());
+    }
 }

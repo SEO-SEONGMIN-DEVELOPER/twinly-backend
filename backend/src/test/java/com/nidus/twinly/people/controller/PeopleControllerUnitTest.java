@@ -440,4 +440,18 @@ class PeopleControllerUnitTest {
                 .andExpect(jsonPath("$.learnedFacts").value("커피를 좋아한다"));
         then(peopleService).should().learnedFacts(1L, 42L);
     }
+
+    @Test
+    @DisplayName("사람 목록 조회 시 limit이 허용 범위(1~100) 밖이면 400을 반환하고 서비스를 호출하지 않는다")
+    void people_with_out_of_range_limit_returns_400() throws Exception {
+        // when & then: 0과 상한 초과 모두 입력 단계에서 막힌다
+        for (String limit : List.of("0", "101")) {
+            mockMvc.perform(get("/api/v1/people")
+                            .param("limit", limit)
+                            .header("Authorization", "Bearer access-token"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        }
+        then(peopleService).should(never()).people(any(), any(), any());
+    }
 }

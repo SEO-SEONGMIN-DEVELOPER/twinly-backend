@@ -1,16 +1,19 @@
 package com.nidus.twinly.onboarding.dto.request;
 
-import jakarta.validation.constraints.NotNull;
 import com.nidus.twinly.common.domain.Gender;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Past;
+import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
 
 public record OnboardingBasicInfoRequest(
-        @NotNull String familyName,
-        @NotNull String givenName,
+        @NotBlank @Size(max = 50) String familyName,
+        @NotBlank @Size(max = 50) String givenName,
         @NotNull Gender gender,
-        @NotNull String affiliation,
-        @NotNull String affiliationNumber,
-        @NotNull LocalDate birthDate
+        @NotBlank @Size(max = 50) String affiliation,
+        @NotBlank @Size(max = 50) String affiliationNumber,
+        @NotNull @Past LocalDate birthDate
 ) {
 }

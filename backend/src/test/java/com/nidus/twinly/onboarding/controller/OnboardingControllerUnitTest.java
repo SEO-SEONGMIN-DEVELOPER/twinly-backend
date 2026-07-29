@@ -570,4 +570,44 @@ class OnboardingControllerUnitTest {
         result.andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value(ErrorCode.REQUIRED_POLICY_REVOKE_DENIED.name()));
     }
+
+    @Test
+    @DisplayName("관심사 등록 시 원소가 null이거나 공백뿐이면 400을 반환하고 서비스를 호출하지 않는다")
+    void interests_with_blank_element_returns_400() throws Exception {
+        // when & then: null 원소와 공백 원소 모두 입력 단계에서 막힌다
+        for (String body : List.of("{\"interests\": [null]}", "{\"interests\": [\"  \"]}")) {
+            mockMvc.perform(post("/api/v1/onboarding/interests")
+                            .header("Authorization", ANON_BEARER)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        }
+        then(onboardingService).should(never()).interests(any(), any());
+    }
+
+    @Test
+    @DisplayName("기본 정보 입력 시 생년월일이 미래면 400을 반환하고 서비스를 호출하지 않는다")
+    void basicInfo_with_future_birth_date_returns_400() throws Exception {
+        // when: 미래 생년월일로 기본 정보 입력 API 호출
+        var result = mockMvc.perform(put("/api/v1/onboarding/basic-info")
+                .header("Authorization", ANON_BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .characterEncoding("UTF-8")
+                .content("""
+                        {
+                          "familyName": "홍",
+                          "givenName": "길동",
+                          "gender": "male",
+                          "affiliation": "니두스대학교",
+                          "affiliationNumber": "2024001",
+                          "birthDate": "2999-01-01"
+                        }
+                        """));
+
+        // then: 400 INVALID_REQUEST 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        then(onboardingService).should(never()).basicInfo(any(), any());
+    }
 }

@@ -41,6 +41,8 @@ import com.nidus.twinly.user.dto.header.UserInfo;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -144,7 +146,7 @@ public class MeController {
     public MeAppNotificationsFeedsResponse appNotificationsFeeds(@CurrentUser UserInfo userInfo,
                                                                  @RequestParam(required = false) Boolean unreadOnly,
                                                                  @RequestParam(required = false) AppNotificationFeedType type,
-                                                                 @RequestParam(required = false) Integer limit) {
+                                                                 @RequestParam(required = false) @Min(1) @Max(100) Integer limit) {
         return MeAppNotificationsFeedsResponse.from(meService.appNotificationsFeeds(userInfo.id(), unreadOnly, type, limit));
     }
 

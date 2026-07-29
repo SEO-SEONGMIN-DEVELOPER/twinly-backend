@@ -1,9 +1,10 @@
 package com.nidus.twinly.chat.dto.request;
 
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 public record ChatSendMessageRequest(
-        @NotNull String text,
-        @NotNull String clientMsgId
+        @NotBlank String text,
+        @NotBlank @Size(max = 255) String clientMsgId
 ) {
 }

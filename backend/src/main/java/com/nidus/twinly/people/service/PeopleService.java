@@ -210,6 +210,10 @@ public class PeopleService {
     }
 
     public PeopleIntimacySeriesResult intimacySeries(Long userId, Long partnerUserId, LocalDate from, LocalDate to, IntimacyResolution resolution, Integer maxPoints) {
+        if (from.isAfter(to)) {
+            throw new BusinessException(ErrorCode.INVALID_DATE_RANGE, "조회 시작일이 종료일보다 늦습니다: from=%s, to=%s".formatted(from, to));
+        }
+
         List<Relationship> relationships = relationshipRepository
                 .findAllByUserIdAndPartnerUserIdAndDateBetweenOrderByDateAsc(userId, partnerUserId, from, to);
 

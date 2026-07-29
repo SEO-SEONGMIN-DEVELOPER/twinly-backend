@@ -39,6 +39,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
@@ -48,6 +49,8 @@ public class OnboardingService {
     private static final Set<String> FORBIDDEN_NICKNAME_WORDS = Set.of(
             "admin", "관리자", "운영자", "공지"
     );
+
+    private static final Pattern NICKNAME_PATTERN = Pattern.compile("^[가-힣a-zA-Z0-9_-]{2,20}$");
 
     private final PresignService presignService;
     private final PhotoCommitService photoCommitService;
@@ -231,6 +234,10 @@ public class OnboardingService {
 
     private String validateAndNormalizeNickname(String nickname) {
         String trimmed = nickname.trim();
+
+        if (!NICKNAME_PATTERN.matcher(trimmed).matches()) {
+            throw new BusinessException(ErrorCode.INVALID_NICKNAME, "닉네임은 2~20자의 한글·영문·숫자·(_-)만 사용할 수 있습니다: " + trimmed);
+        }
 
         String normalized = trimmed.toLowerCase();
         boolean containsForbiddenWord = FORBIDDEN_NICKNAME_WORDS.stream()

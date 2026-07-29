@@ -72,6 +72,35 @@ class ChatControllerUnitTest {
     }
 
     @Test
+    @DisplayName("메시지 전송 시 text가 공백뿐이면 400을 반환하고 서비스를 호출하지 않는다")
+    void sendMessage_with_blank_text_returns_400() throws Exception {
+        // when: 공백만 있는 본문으로 메시지 전송 API 호출
+        var result = mockMvc.perform(post("/api/v1/chat/rooms/{roomId}/messages", "10")
+                .header("Authorization", AUTH_HEADER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"text\":\"   \",\"clientMsgId\":\"client-1\"}"));
+
+        // then: 400 INVALID_REQUEST 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        then(chatService).should(never()).sendMessage(anyLong(), anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("메시지 목록 조회 시 limit이 허용 범위(1~100) 밖이면 400을 반환하고 서비스를 호출하지 않는다")
+    void messages_with_out_of_range_limit_returns_400() throws Exception {
+        // when & then: 0과 상한 초과 모두 입력 단계에서 막힌다
+        for (String limit : List.of("0", "101")) {
+            mockMvc.perform(get("/api/v1/chat/rooms/{roomId}/messages", "10")
+                            .header("Authorization", AUTH_HEADER)
+                            .param("limit", limit))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        }
+        then(chatService).should(never()).messages(anyLong(), anyLong(), any(), any());
+    }
+
+    @Test
     @DisplayName("메시지 전송 성공 시 200과 messageId를 문자열로 반환하고 인증 유저 id·roomId·커맨드로 서비스를 호출한다")
     void sendMessage_success() throws Exception {
         // given: 서비스가 저장된 메시지 결과를 반환

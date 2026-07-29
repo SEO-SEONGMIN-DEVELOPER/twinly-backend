@@ -15,6 +15,8 @@ import com.nidus.twinly.user.annotation.CurrentUser;
 import com.nidus.twinly.user.dto.header.UserInfo;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -86,7 +88,7 @@ public class ChatController {
     public ChatMessagesResponse messages(@CurrentUser UserInfo userInfo,
                                          @PathVariable String roomId,
                                          @RequestParam(required = false) String cursor,
-                                         @RequestParam(required = false) Integer limit) {
+                                         @RequestParam(required = false) @Min(1) @Max(100) Integer limit) {
         return ChatMessagesResponse.from(chatService.messages(userInfo.id(), RequestId.toLong(roomId, "roomId"), RequestId.toLongOrNull(cursor, "cursor"), limit));
     }
 

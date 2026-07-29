@@ -182,4 +182,28 @@ class PushControllerUnitTest {
                 .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
         then(pushService).should(never()).revoke(anyLong(), any());
     }
+
+    @Test
+    @DisplayName("푸시 토큰 등록 시 deviceModel·fcmToken이 공백뿐이면 400을 반환하고 서비스를 호출하지 않는다")
+    void register_with_blank_fields_returns_400() throws Exception {
+        // given: 필수 문자열이 공백뿐인 요청 본문
+        String body = """
+                {
+                  "deviceId": "11111111-1111-1111-1111-111111111111",
+                  "deviceModel": "   ",
+                  "fcmToken": ""
+                }
+                """;
+
+        // when: 인증 상태로 푸시 토큰 등록 API 호출
+        var result = mockMvc.perform(post("/api/v1/push/tokens")
+                .header("Authorization", "Bearer access-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body));
+
+        // then: 400 INVALID_REQUEST 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        then(pushService).should(never()).register(anyLong(), any());
+    }
 }

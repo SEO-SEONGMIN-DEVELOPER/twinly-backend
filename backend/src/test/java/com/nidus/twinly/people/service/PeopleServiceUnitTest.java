@@ -658,4 +658,15 @@ class PeopleServiceUnitTest {
             throw new IllegalStateException("테스트 엔티티 생성 실패: " + type.getName(), e);
         }
     }
+
+    @Test
+    @DisplayName("친밀도 시계열 조회 시 from이 to보다 늦으면 INVALID_DATE_RANGE 예외가 발생한다")
+    void intimacySeries_when_from_after_to_throws() {
+        // when & then: 뒤집힌 기간은 빈 결과 대신 명시적 오류로 거절된다
+        assertThatThrownBy(() -> peopleService.intimacySeries(
+                1L, 42L, LocalDate.of(2026, 7, 31), LocalDate.of(2026, 7, 1), IntimacyResolution.DAY, 10))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_DATE_RANGE);
+    }
 }

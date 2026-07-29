@@ -612,4 +612,21 @@ class OnboardingServiceUnitTest {
                 SurveyOptionName.A, new SurveyOption("A 라벨", "A 특성"),
                 SurveyOptionName.B, new SurveyOption("B 라벨", "B 특성")));
     }
+
+    @Test
+    @DisplayName("닉네임이 길이(2~20자)나 허용 문자 규칙을 벗어나면 INVALID_NICKNAME 예외가 발생한다")
+    void profileNickname_when_violates_policy_throws() {
+        // given: 규칙을 벗어나는 닉네임들 (한 글자 / 21자 / 허용되지 않는 문자)
+        List<String> invalid = List.of("a", "a".repeat(21), "twin ly", "twin!ly");
+
+        // when & then: 모두 INVALID_NICKNAME으로 거절되고 중복 검사까지 가지 않는다
+        for (String nickname : invalid) {
+            assertThatThrownBy(() -> onboardingService.profileNickname(
+                    ANON_SESSION, new OnboardingProfileNicknameCommand(nickname)))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting(e -> ((BusinessException) e).getErrorCode())
+                    .isEqualTo(ErrorCode.INVALID_NICKNAME);
+        }
+        then(anonSessionRepository).should(never()).findById(anyLong());
+    }
 }
