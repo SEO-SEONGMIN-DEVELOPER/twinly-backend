@@ -1,58 +1,7 @@
 # me 도메인 테스트 발견사항
 
-담당 엔드포인트(20개)의 컨트롤러 슬라이스 / 서비스 단위 / 통합 테스트를 작성하면서 확인한 운영 코드 이슈입니다.
-운영 코드는 수정하지 않았고, 기록만 남깁니다.
-
----
-
-# [이번 라운드] springdoc 스펙 기준 통합 커버리지 확장
-
-통합 테스트를 5건 → 19건으로 늘려 me의 20개 오퍼레이션을 전부 관통시켰다.
-
-## 테스트 통과 여부
-
-| 구분 | 결과 |
-|---|---|
-| 단위/슬라이스 (`MeControllerUnitTest` 34 + `MeServiceUnitTest` 46) | **80/80 통과** |
-| 통합 (`MeIntegrationTest`) | **18/19 통과, 1 실패** |
-
-| 실패 테스트 | 원인 |
-|---|---|
-| `프로필 사진 commit: 업로드가 끝난 key면 photos 행이 생성된다` | BUG-PHOTO-01 |
-
-## BUG-PHOTO-01 — `POST /api/v1/me/profile/photo/commit`이 **항상 500**이다
-
-- **심각도**: **critical**
-- **증상**: 사진이 없는 유저가 커밋하면 INSERT가 SQL 문법 오류로 깨져 500.
-- **원인**: `Photo.key` 필드가 매핑되는 컬럼명 `key`는 **MySQL 예약어**다. DDL은 백틱으로 감쌌지만
-  (`V1__init_schema.sql:343`) 엔티티에 `@Column(name = "`key`")`가 없어 Hibernate가 INSERT에
-  인용부호 없이 `key`를 넣는다.
-- **근거 코드 위치**: `backend/src/main/java/com/nidus/twinly/user/entity/Photo.java:30`
-- **onboarding 도메인의 `AnonSessionPhoto`도 동일한 결함**이다. 상세 분석·수정 제안은
-  [onboarding.md](onboarding.md)의 BUG-PHOTO-01 항목에 정리해 두었다.
-
-### 기존에 기록된 "사진 교체가 반영되지 않는다" 건과의 관계
-
-이 문서 아래쪽에 이미 기록된 `@Transactional` 누락 건과 **별개이면서 서로를 가리는** 관계다.
-
-- 최초 등록 경로(`save`) → BUG-PHOTO-01로 **500**
-- 교체 경로(dirty checking) → `@Transactional` 누락으로 **조용히 미반영**
-
-즉 최초 등록이 막혀 있어 교체 경로에 도달할 수조차 없다. 둘 다 고쳐야 이 엔드포인트가 동작한다.
-
-## 이번 라운드에 추가한 통합 테스트 (모두 통과)
-
-| 오퍼레이션 | 검증 내용 |
-|---|---|
-| `POST /me/restore` | 탈퇴 신청 취소 후 DB `withdrawalRequestedAt` 비워짐 + 상태 조회 `isDeleted=false` / 신청 이력 없어도 200 (멱등) |
-| `GET /me/profile-edit-view` | 암호화 컬럼이 복호화되어 응답, 사진 없으면 `profilePhoto` 미포함 |
-| `PATCH /me/profile` | 소속 평문 + 블라인드 인덱스 해시가 함께 갱신 |
-| `DELETE /me/consents` | 선택 정책 철회 → 조회 `isGranted=false` / 필수 정책은 403 `REQUIRED_POLICY_REVOKE_DENIED` |
-| `GET`·`PATCH /me/profile/visibility-settings/{type}` | 공개 설정 on/off 왕복이 DB 공개 동의 행과 응답에 함께 반영 |
-| `POST /me/app-notifications/read-all` | `lastAppNotificationId` 이하 전부 읽음 처리 → 미읽음 0 |
-| `GET /me/hesitations` | 오늘·미답변 필터가 실제 쿼리로 동작 |
-| `POST /me/hesitations/{id}/answer` | 정상 답변 저장 / 남의 질문 403 / 선택지 밖 답 422 |
-| `POST /me/profile/photo/presign` | key가 `profile/{userId}/` 접두사로 생성 |
+담당 엔드포인트(20개)의 컨트롤러 슬라이스 / 서비스 단위 / 통합 테스트를 작성하면서 확인한 **미해결** 항목이다.
+해결된 항목은 이 문서에서 제거하고 회귀 테스트로 대체한다. 이력은 [_summary.md](_summary.md) 참조.
 
 ---
 
@@ -79,6 +28,8 @@
   영속성 컨텍스트가 닫히고, 반환된 `Photo`는 **준영속(detached)** 상태가 된다. 이후 세터 호출은 UPDATE로 이어지지 않는다.
 
 - **심각도**: high
+  (예약어 `key` 인용 누락으로 최초 등록이 500이던 결함은 해결됐다. 그동안 최초 등록이 막혀 교체 경로에
+  도달할 수조차 없었으므로, 이제 이 건이 이 엔드포인트에 남은 유일한 결함이다.)
 
 - **제안**
   `profilePhotoCommit`에 `@Transactional`을 붙인다. 외부 호출(S3 존재 확인/CloudFront 서명)이 트랜잭션 안으로 들어오는 게 부담이라면,
