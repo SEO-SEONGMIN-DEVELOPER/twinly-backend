@@ -198,7 +198,7 @@ class OnboardingServiceUnitTest {
     void surveyAnswer_first_time_saves_new_answer() {
         // given: 존재하는 문항이고 기존 답변이 없으며 마지막 문항도 아님
         given(surveyLoader.getQuestion(8)).willReturn(question(8));
-        given(surveyAnswerRepository.findByAnonSessionIdAndQId(ANON_SESSION_ID, 8)).willReturn(Optional.empty());
+        given(surveyAnswerRepository.findByAnonSessionIdAndQuestionId(ANON_SESSION_ID, 8)).willReturn(Optional.empty());
         given(surveyLoader.isLastQuestion(8)).willReturn(false);
 
         // when: 설문 답변 저장
@@ -209,7 +209,7 @@ class OnboardingServiceUnitTest {
         ArgumentCaptor<SurveyAnswer> captor = ArgumentCaptor.forClass(SurveyAnswer.class);
         then(surveyAnswerRepository).should().save(captor.capture());
         assertThat(captor.getValue().getAnonSessionId()).isEqualTo(ANON_SESSION_ID);
-        assertThat(captor.getValue().getQId()).isEqualTo(8);
+        assertThat(captor.getValue().getQuestionId()).isEqualTo(8);
         assertThat(captor.getValue().getOptionName()).isEqualTo(SurveyOptionName.A);
         then(anonSessionPersonaElementRepository).should(never()).save(any());
     }
@@ -220,7 +220,7 @@ class OnboardingServiceUnitTest {
         // given: 같은 문항에 대한 기존 답변(A)이 존재하고 마지막 문항은 아님
         SurveyAnswer existing = SurveyAnswer.create(ANON_SESSION_ID, 8, SurveyOptionName.A);
         given(surveyLoader.getQuestion(8)).willReturn(question(8));
-        given(surveyAnswerRepository.findByAnonSessionIdAndQId(ANON_SESSION_ID, 8)).willReturn(Optional.of(existing));
+        given(surveyAnswerRepository.findByAnonSessionIdAndQuestionId(ANON_SESSION_ID, 8)).willReturn(Optional.of(existing));
         given(surveyLoader.isLastQuestion(8)).willReturn(false);
 
         // when: 같은 문항에 B로 다시 답변
@@ -237,7 +237,7 @@ class OnboardingServiceUnitTest {
     void surveyAnswer_on_last_question_creates_persona_elements() {
         // given: 마지막 문항(23)에 답하고, 세션에 답변 1건이 저장되어 있음
         given(surveyLoader.getQuestion(23)).willReturn(question(23));
-        given(surveyAnswerRepository.findByAnonSessionIdAndQId(ANON_SESSION_ID, 23)).willReturn(Optional.empty());
+        given(surveyAnswerRepository.findByAnonSessionIdAndQuestionId(ANON_SESSION_ID, 23)).willReturn(Optional.empty());
         given(surveyLoader.isLastQuestion(23)).willReturn(true);
         given(surveyAnswerRepository.findAllByAnonSessionId(ANON_SESSION_ID))
                 .willReturn(List.of(SurveyAnswer.create(ANON_SESSION_ID, 23, SurveyOptionName.B)));

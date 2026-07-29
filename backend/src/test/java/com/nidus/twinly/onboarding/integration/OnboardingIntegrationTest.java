@@ -111,9 +111,6 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     @DisplayName("설문 답변: 실제 설문 로더의 문항에 답하면 survey_answers 행이 생성된다")
-    // [의도된 실패 - BUG-ONB-01] SurveyAnswerRepository.findByAnonSessionIdAndQId 가
-    // 엔티티 필드 qId를 'QId'로 해석해 UnknownPathException → 이 엔드포인트는 항상 500이다.
-    // 운영 코드 버그이므로 초록불을 위해 테스트를 비틀지 않고 그대로 둔다. (docs/test-findings/onboarding.md)
     void surveyAnswer_end_to_end() throws Exception {
         // given: 실제 익명 세션 저장 (survey_answers가 anon_sessions를 FK로 참조)
         AnonSession session = saveAnonSession();
@@ -129,7 +126,7 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
 
         // then: DB에 답변이 저장되고, 마지막 문항이 아니므로 페르소나 요소는 아직 생성되지 않음
         flushAndClear();
-        SurveyAnswer saved = surveyAnswerRepository.findByAnonSessionIdAndQId(session.getId(), 8).orElseThrow();
+        SurveyAnswer saved = surveyAnswerRepository.findByAnonSessionIdAndQuestionId(session.getId(), 8).orElseThrow();
         assertThat(saved.getOptionName()).isEqualTo(SurveyOptionName.A);
         assertThat(anonSessionPersonaElementRepository.findAllByAnonSessionId(session.getId())).isEmpty();
     }

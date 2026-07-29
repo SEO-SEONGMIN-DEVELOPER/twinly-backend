@@ -509,13 +509,13 @@ CREATE TABLE seasons (
 CREATE TABLE survey_answers (
     id               BIGINT NOT NULL AUTO_INCREMENT,
     anon_session_id  BIGINT NOT NULL,
-    q_id             INTEGER NOT NULL,
+    question_id      INTEGER NOT NULL,
     option_name      ENUM ('A','B'),
     created_at       DATETIME(6) DEFAULT (UTC_TIMESTAMP(6)) NOT NULL,
 
     CONSTRAINT pk_survey_answers PRIMARY KEY (id),
     CONSTRAINT fk_survey_answers_anon_session_id FOREIGN KEY (anon_session_id) REFERENCES anon_sessions(id),
-    CONSTRAINT uk_survey_answers_anon_session_id_q_id UNIQUE (anon_session_id, q_id)
+    CONSTRAINT uk_survey_answers_anon_session_id_question_id UNIQUE (anon_session_id, question_id)
 ) ENGINE = INNODB;
 
 CREATE TABLE users (

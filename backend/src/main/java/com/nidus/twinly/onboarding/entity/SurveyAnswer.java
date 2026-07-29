@@ -22,17 +22,17 @@ public class SurveyAnswer {
 
     private Long anonSessionId;
 
-    private Integer qId;
+    private Integer questionId;
 
     @Enumerated(EnumType.STRING)
     private SurveyOptionName optionName;
 
     private Instant createdAt;
 
-    public static SurveyAnswer create(Long anonSessionId, Integer qId, SurveyOptionName optionName) {
+    public static SurveyAnswer create(Long anonSessionId, Integer questionId, SurveyOptionName optionName) {
         SurveyAnswer surveyAnswer = new SurveyAnswer();
         surveyAnswer.anonSessionId = anonSessionId;
-        surveyAnswer.qId = qId;
+        surveyAnswer.questionId = questionId;
         surveyAnswer.optionName = optionName;
         surveyAnswer.createdAt = Instant.now();
         return surveyAnswer;

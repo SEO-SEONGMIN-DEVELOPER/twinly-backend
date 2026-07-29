@@ -91,7 +91,7 @@ public class OnboardingService {
             throw new BusinessException(ErrorCode.SURVEY_QUESTION_NOT_FOUND, "존재하지 않는 질문입니다: " + qId);
         }
 
-        surveyAnswerRepository.findByAnonSessionIdAndQId(anonSessionId, qId)
+        surveyAnswerRepository.findByAnonSessionIdAndQuestionId(anonSessionId, qId)
                 .ifPresentOrElse(
                         sa -> sa.changeOptionName(answerValue),
                         () -> surveyAnswerRepository.save(SurveyAnswer.create(anonSessionId, qId, answerValue))
@@ -107,7 +107,7 @@ public class OnboardingService {
         List<SurveyAnswer> answers = surveyAnswerRepository.findAllByAnonSessionId(anonSessionId);
 
         for (SurveyAnswer answer : answers) {
-            SurveyQuestion question = surveyLoader.getQuestion(answer.getQId());
+            SurveyQuestion question = surveyLoader.getQuestion(answer.getQuestionId());
             AnonSessionPersonaElement personaElement = AnonSessionPersonaElement.create(answer.getAnonSessionId(), question.dimension(), question.traitFor(answer.getOptionName()));
             anonSessionPersonaElementRepository.save(personaElement);
         }
