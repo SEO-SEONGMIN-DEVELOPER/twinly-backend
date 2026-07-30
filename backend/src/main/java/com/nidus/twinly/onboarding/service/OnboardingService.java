@@ -110,16 +110,30 @@ public class OnboardingService {
     public void saveAllSurveyAnswer(Long anonSessionId) {
         List<SurveyAnswer> answers = surveyAnswerRepository.findAllByAnonSessionId(anonSessionId);
 
-        for (SurveyAnswer answer : answers) {
-            SurveyQuestion question = surveyLoader.getQuestion(answer.getQuestionId());
-            AnonSessionPersonaElement personaElement = AnonSessionPersonaElement.create(answer.getAnonSessionId(), question.dimension(), question.traitFor(answer.getOptionName()));
-            anonSessionPersonaElementRepository.save(personaElement);
+        List<AnonSessionPersonaElement> personaElements = answers.stream()
+                .map(answer -> {
+                    SurveyQuestion question = surveyLoader.getQuestion(answer.getQuestionId());
+                    return AnonSessionPersonaElement.create(anonSessionId, question.dimension(), question.traitFor(answer.getOptionName()));
+                })
+                .toList();
+
+        Set<PersonaDimension> dimensions = personaElements.stream()
+                .map(AnonSessionPersonaElement::getDimension)
+                .collect(Collectors.toSet());
+
+        if (!dimensions.isEmpty()) {
+            anonSessionPersonaElementRepository.deleteByAnonSessionIdAndDimensionIn(anonSessionId, dimensions);
         }
+
+        anonSessionPersonaElementRepository.saveAll(personaElements);
     }
 
     @Transactional
     public void interests(AnonSessionSnapshot anonSessionSnapshot, OnboardingInterestsCommand command) {
         Long anonSessionId = anonSessionSnapshot.id();
+
+        anonSessionPersonaElementRepository.deleteByAnonSessionIdAndDimensionIn(anonSessionId, Set.of(PersonaDimension.INTERESTS));
+
         for (String interest : command.interests()) {
             anonSessionPersonaElementRepository.save(AnonSessionPersonaElement.create(anonSessionId, PersonaDimension.INTERESTS, interest));
         }
@@ -218,8 +232,13 @@ public class OnboardingService {
         Map<PolicyKey, Policy> policyByKey = policyCatalog.loadByKey(policyNameIdentifiers);
 
         List<Policy> policies = command.grants().stream()
-                .map(grant -> policyByKey.get(new PolicyKey(grant.policyId(), grant.version())))
-                .filter(policy -> policy != null)
+                .map(grant -> {
+                    Policy policy = policyByKey.get(new PolicyKey(grant.policyId(), grant.version()));
+                    if (policy == null) {
+                        throw new BusinessException(ErrorCode.POLICY_NOT_FOUND);
+                    }
+                    return policy;
+                })
                 .toList();
 
         if (policies.stream().anyMatch(policy -> Boolean.TRUE.equals(policy.getIsRequired()))) {

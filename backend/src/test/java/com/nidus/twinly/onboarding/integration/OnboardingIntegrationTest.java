@@ -40,7 +40,6 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.times;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -494,7 +493,7 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
         flushAndClear();
 
         // when: 익명 세션 토큰으로 동의 철회 API 호출
-        mockMvc.perform(delete("/api/v1/onboarding/consents")
+        mockMvc.perform(post("/api/v1/onboarding/consents/revoke")
                         .header("Authorization", anonBearer(session))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -517,7 +516,7 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
         flushAndClear();
 
         // when: 필수 정책에 대해 철회 API 호출
-        var result = mockMvc.perform(delete("/api/v1/onboarding/consents")
+        var result = mockMvc.perform(post("/api/v1/onboarding/consents/revoke")
                 .header("Authorization", anonBearer(session))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
@@ -560,5 +559,76 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
     private void flushAndClear() {
         entityManager.flush();
         entityManager.clear();
+    }
+
+    @Test
+    @DisplayName("관심사 등록 멱등: 같은 목록을 다시 제출해도 INTERESTS 요소가 늘지 않는다")
+    void interests_same_list_is_idempotent() throws Exception {
+        // given: 실제 익명 세션 저장
+        AnonSession session = saveAnonSession();
+        String body = """
+                {"interests": ["등산", "재즈"]}
+                """;
+
+        // when: 같은 관심사 목록을 두 번 제출 (온보딩 화면 재진입)
+        for (int i = 0; i < 2; i++) {
+            mockMvc.perform(post("/api/v1/onboarding/interests")
+                            .header("Authorization", anonBearer(session))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isOk());
+        }
+
+        // then: 중복 누적 없이 2건만 남는다
+        flushAndClear();
+        assertThat(anonSessionPersonaElementRepository.findAllByAnonSessionId(session.getId()))
+                .extracting(AnonSessionPersonaElement::getExplanation)
+                .containsExactlyInAnyOrder("등산", "재즈");
+    }
+
+    @Test
+    @DisplayName("관심사 등록: 다른 목록을 제출하면 이전 관심사가 남지 않고 치환된다")
+    void interests_different_list_replaces_previous() throws Exception {
+        // given: 관심사를 한 번 등록한 익명 세션
+        AnonSession session = saveAnonSession();
+        mockMvc.perform(post("/api/v1/onboarding/interests")
+                        .header("Authorization", anonBearer(session))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"interests": ["등산", "재즈"]}
+                                """))
+                .andExpect(status().isOk());
+
+        // when: 다른 목록으로 다시 제출 (관심사는 변경 가능한 값이다)
+        mockMvc.perform(post("/api/v1/onboarding/interests")
+                        .header("Authorization", anonBearer(session))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"interests": ["요리"]}
+                                """))
+                .andExpect(status().isOk());
+
+        // then: 이전 관심사는 사라지고 새 목록만 남는다
+        flushAndClear();
+        assertThat(anonSessionPersonaElementRepository.findAllByAnonSessionId(session.getId()))
+                .extracting(AnonSessionPersonaElement::getExplanation)
+                .containsExactly("요리");
+    }
+
+    @Test
+    @DisplayName("동의 철회: 존재하지 않는 정책/버전이면 404 POLICY_NOT_FOUND를 반환한다 (등록 API와 대칭)")
+    void revokeConsents_unknown_policy_returns_404() throws Exception {
+        // given: 실제 익명 세션
+        AnonSession session = saveAnonSession();
+
+        // when & then: 카탈로그에 없는 (policyId, version)이므로 조용히 200이 아니라 404
+        mockMvc.perform(post("/api/v1/onboarding/consents/revoke")
+                        .header("Authorization", anonBearer(session))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"grants":[{"policyId":"없는정책","version":"1"}]}
+                                """))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("POLICY_NOT_FOUND"));
     }
 }

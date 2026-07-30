@@ -14,6 +14,8 @@ import com.nidus.twinly.report.entity.Report;
 import com.nidus.twinly.report.repository.AiUtteranceReportRepository;
 import com.nidus.twinly.report.repository.ReportRepository;
 import lombok.RequiredArgsConstructor;
+
+import java.util.Objects;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,7 +38,13 @@ public class ReportService {
             throw new BusinessException(ErrorCode.CANNOT_REPORT_SELF);
         }
 
-        reportRepository.save(Report.create(userId, reportedUserId, command.reason(), command.detail()));
+        boolean alreadyReported = reportRepository.findAllByUserIdAndReportedUserId(userId, reportedUserId).stream()
+                .anyMatch(report -> report.getReason() == command.reason()
+                        && Objects.equals(report.getDetail(), command.detail()));
+
+        if (!alreadyReported) {
+            reportRepository.save(Report.create(userId, reportedUserId, command.reason(), command.detail()));
+        }
 
         if (AUTO_BLOCK && !blockRepository.existsByUserIdAndBlockedUserId(userId, reportedUserId)) {
             blockRepository.save(Block.create(userId, reportedUserId));
@@ -54,6 +62,14 @@ public class ReportService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.SCENE_NOT_FOUND));
         if (!scene.getUserId().equals(reportedUserId)) {
             throw new BusinessException(ErrorCode.SCENE_TARGET_MISMATCH);
+        }
+
+        boolean alreadyReported = aiUtteranceReportRepository.findAllByUserIdAndSceneId(userId, sceneId).stream()
+                .anyMatch(report -> Objects.equals(report.getUtteranceText(), command.utteranceText())
+                        && Objects.equals(report.getReason(), command.reason()));
+
+        if (alreadyReported) {
+            return;
         }
 
         aiUtteranceReportRepository.save(

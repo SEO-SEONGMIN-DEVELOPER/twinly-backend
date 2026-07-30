@@ -130,4 +130,57 @@ class ReportIntegrationTest extends AbstractIntegrationTest {
         ReflectionTestUtils.setField(scene, "createdAt", Instant.now());
         return sceneRepository.save(scene);
     }
+
+    @Test
+    @DisplayName("유저 신고 멱등: 같은 사유·상세로 다시 신고해도 신고 행이 늘지 않는다")
+    void reportUser_same_content_is_idempotent() throws Exception {
+        // given: 실제 유저 2명
+        User me = saveUser();
+        User target = saveUser();
+        String body = """
+                {"targetUserId":"%s","reason":"HARASSMENT","detail":"지속적으로 괴롭힙니다"}
+                """.formatted(target.getId());
+
+        // when: 같은 내용으로 두 번 신고 (더블클릭·재시도)
+        for (int i = 0; i < 2; i++) {
+            mockMvc.perform(post("/api/v1/reports/users")
+                            .header("Authorization", bearer(me.getId()))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isOk());
+        }
+
+        // then: 신고 행은 한 건만 남는다
+        assertThat(reportRepository.findAllByReportedUserIdAndStatus(target.getId(), ReportStatus.PENDING)).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("유저 신고: 사유가 다르면 별개 신고로 새 행이 생성된다")
+    void reportUser_different_reason_creates_new_report() throws Exception {
+        // given: 실제 유저 2명
+        User me = saveUser();
+        User target = saveUser();
+
+        // when: 서로 다른 사유로 두 번 신고 (각각 독립된 신고 사건이다)
+        mockMvc.perform(post("/api/v1/reports/users")
+                        .header("Authorization", bearer(me.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"targetUserId":"%s","reason":"HARASSMENT","detail":"지속적으로 괴롭힙니다"}
+                                """.formatted(target.getId())))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/reports/users")
+                        .header("Authorization", bearer(me.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"targetUserId":"%s","reason":"SPAM","detail":"광고를 계속 보냅니다"}
+                                """.formatted(target.getId())))
+                .andExpect(status().isOk());
+
+        // then: 사유별로 신고 행이 각각 남는다
+        assertThat(reportRepository.findAllByReportedUserIdAndStatus(target.getId(), ReportStatus.PENDING))
+                .extracting(Report::getReason)
+                .containsExactlyInAnyOrder(ReportReason.HARASSMENT, ReportReason.SPAM);
+    }
 }

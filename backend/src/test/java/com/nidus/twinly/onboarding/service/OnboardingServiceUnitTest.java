@@ -58,6 +58,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -247,12 +248,17 @@ class OnboardingServiceUnitTest {
         onboardingService.surveyAnswer(ANON_SESSION,
                 new OnboardingSurveyAnswerCommand(new SurveyAnswerInput(23, SurveyOptionName.B)));
 
-        // then: 문항의 차원과 선택지의 특성으로 페르소나 요소가 저장됨
-        ArgumentCaptor<AnonSessionPersonaElement> captor = ArgumentCaptor.forClass(AnonSessionPersonaElement.class);
-        then(anonSessionPersonaElementRepository).should().save(captor.capture());
-        assertThat(captor.getValue().getAnonSessionId()).isEqualTo(ANON_SESSION_ID);
-        assertThat(captor.getValue().getDimension()).isEqualTo(PersonaDimension.OPENNESS);
-        assertThat(captor.getValue().getExplanation()).isEqualTo("B 특성");
+        // then: 설문이 만드는 차원을 먼저 지우고(재답변 시 중복 누적 방지) 변환 결과를 저장한다
+        then(anonSessionPersonaElementRepository).should()
+                .deleteByAnonSessionIdAndDimensionIn(ANON_SESSION_ID, Set.of(PersonaDimension.OPENNESS));
+
+        ArgumentCaptor<List<AnonSessionPersonaElement>> captor = ArgumentCaptor.forClass(List.class);
+        then(anonSessionPersonaElementRepository).should().saveAll(captor.capture());
+        assertThat(captor.getValue()).singleElement().satisfies(element -> {
+            assertThat(element.getAnonSessionId()).isEqualTo(ANON_SESSION_ID);
+            assertThat(element.getDimension()).isEqualTo(PersonaDimension.OPENNESS);
+            assertThat(element.getExplanation()).isEqualTo("B 특성");
+        });
     }
 
     // ---------- interests ----------
@@ -593,16 +599,18 @@ class OnboardingServiceUnitTest {
     }
 
     @Test
-    @DisplayName("존재하지 않는 정책만 철회 요청하면 예외 없이 철회 쿼리도 실행되지 않는다")
-    void revokeConsents_unknown_policy_is_noop() {
+    @DisplayName("존재하지 않는 정책을 철회 요청하면 POLICY_NOT_FOUND 예외가 발생한다 (등록 API와 대칭)")
+    void revokeConsents_unknown_policy_throws() {
         // given: 카탈로그에 해당 정책 버전이 없음
         given(policyCatalog.loadByKey(List.of("unknown"))).willReturn(Map.of());
 
-        // when: 존재하지 않는 정책 철회 요청
-        onboardingService.revokeConsents(ANON_SESSION, new OnboardingRevokeConsentsCommand(
-                List.of(new OnboardingRevokeConsentsItemCommand("unknown", 1))));
+        // when & then: 마스터 데이터에 없는 정책이므로 조용히 무시하지 않고 404로 거절
+        assertThatThrownBy(() -> onboardingService.revokeConsents(ANON_SESSION,
+                new OnboardingRevokeConsentsCommand(List.of(new OnboardingRevokeConsentsItemCommand("unknown", 1)))))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.POLICY_NOT_FOUND);
 
-        // then: 철회 쿼리는 호출되지 않음 (현재 동작: 404가 아니라 무시)
         then(anonSessionAgreementRepository).should(never())
                 .revokeWithPreviousVersionsByAnonSessionIdAndPolicyIdIn(anyLong(), anyList());
     }
