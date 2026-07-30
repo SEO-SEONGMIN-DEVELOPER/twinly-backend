@@ -188,8 +188,8 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
 
         // when: 기간·해상도·최대 포인트 수와 함께 친밀도 시계열 조회 API 호출
         var result = mockMvc.perform(get("/api/v1/people/{userId}/intimacy-series", partner.getId().toString())
-                .param("from", "2026-07-01T00:00:00Z")
-                .param("to", "2026-07-31T00:00:00Z")
+                .param("from", "2026-07-01")
+                .param("to", "2026-07-31")
                 .param("resolution", "DAY")
                 .param("maxPoints", "10")
                 .header("Authorization", bearer(me.getId())));

@@ -16,7 +16,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Max;
 import lombok.RequiredArgsConstructor;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,7 +24,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
 
 @RestController
 @RequiredArgsConstructor
@@ -68,11 +66,11 @@ public class PeopleController {
     @GetMapping("/api/v1/people/{userId}/intimacy-series")
     public PeopleIntimacySeriesResponse intimacySeries(@CurrentUser UserInfo userInfo,
                                                        @PathVariable("userId") String partnerUserId,
-                                                       @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
-                                                       @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to,
+                                                       @RequestParam LocalDate from,
+                                                       @RequestParam LocalDate to,
                                                        @RequestParam IntimacyResolution resolution,
                                                        @RequestParam @Min(1) Integer maxPoints) {
-        return PeopleIntimacySeriesResponse.from(peopleService.intimacySeries(userInfo.id(), RequestId.toLong(partnerUserId, "userId"), from.toLocalDate(), to.toLocalDate(), resolution, maxPoints));
+        return PeopleIntimacySeriesResponse.from(peopleService.intimacySeries(userInfo.id(), RequestId.toLong(partnerUserId, "userId"), from, to, resolution, maxPoints));
     }
 
     @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND")
@@ -84,6 +82,7 @@ public class PeopleController {
         return PeopleEventsResponse.from(peopleService.events(userInfo.id(), RequestId.toLong(partnerUserId, "userId"), cursor, limit));
     }
 
+    @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND")
     @GetMapping("/api/v1/people/{userId}/events/{date}")
     public PeopleEventResponse event(@CurrentUser UserInfo userInfo,
                                      @PathVariable("userId") String partnerUserId,

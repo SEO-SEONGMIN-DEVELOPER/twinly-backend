@@ -12,7 +12,6 @@ public record PeopleProfileResult(
         RelationshipType relationshipType,
         RelationshipSpecificType relationshipSpecificType,
         Boolean isFavorited,
-        Boolean isHighlighted,
         PeopleProfileDisclosedFieldsResult disclosedFields,
         Boolean isDeleted,
         Boolean isBlocked

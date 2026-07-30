@@ -17,7 +17,6 @@ public record PeopleProfileResponse(
         RelationshipType relationshipType,
         RelationshipSpecificType relationshipSpecificType,
         Boolean isFavorited,
-        Boolean isHighlighted,
         PeopleProfileDisclosedFieldsResponse disclosedFields,
         Boolean isDeleted,
         Boolean isBlocked
@@ -32,7 +31,6 @@ public record PeopleProfileResponse(
                 result.relationshipType(),
                 result.relationshipSpecificType(),
                 result.isFavorited(),
-                result.isHighlighted(),
                 result.disclosedFields() != null ? PeopleProfileDisclosedFieldsResponse.from(result.disclosedFields()) : null,
                 result.isDeleted(),
                 result.isBlocked()
