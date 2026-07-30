@@ -150,6 +150,51 @@ class ChatWebSocketIntegrationTest extends AbstractWebSocketIntegrationTest {
     }
 
     @Test
+    @DisplayName("검증 실패 e2e: 봉투 type 불일치·@Valid 실패도 무응답이 아니라 목적지에 맞는 rejected 프레임으로 돌아온다")
+    void invalidCommand_returnsRejectedFrame() throws Exception {
+        // given: 정상 접속한 유저
+        User me = saveUser();
+        StompSession session = connect(issueWsTicket(me.getId()));
+        BlockingQueue<WebSocketCommandResultBody> commandQueue =
+                subscribe(session, "/user/queue/chat/commands", WebSocketCommandResultBody.class);
+
+        // when: 봉투 type이 목적지와 어긋난 명령 (컨트롤러 진입 전 IllegalArgumentException)
+        session.send("/app/chat/messages", new WebSocketRequestBody<>(
+                1, WebSocketBodyKind.COMMAND, WebSocketBodyType.CHAT_READ_ADVANCE, "command-envelope-1",
+                new ChatMessageSendPayload(1L, "cmid-e1", "안녕")));
+
+        // then: 로그만 남기고 끝나지 않고, 목적지에 맞는 거절 프레임이 요청자에게 돌아온다
+        WebSocketCommandResultBody rejected = commandQueue.poll(5, TimeUnit.SECONDS);
+        assertThat(rejected).isNotNull();
+        assertThat(rejected.type()).isEqualTo(WebSocketBodyType.CHAT_MESSAGE_REJECTED);
+        assertThat(rejected.commandId()).isEqualTo("command-envelope-1");
+
+        // when: 필수 필드가 빠진 명령 (@Valid 실패)
+        session.send("/app/chat/messages", new WebSocketRequestBody<>(
+                1, WebSocketBodyKind.COMMAND, WebSocketBodyType.CHAT_MESSAGE_SEND, "command-valid-1",
+                new ChatMessageSendPayload(1L, "cmid-v1", null)));
+
+        // then: 같은 경로로 거절 프레임이 돌아오고 commandId가 보존된다
+        WebSocketCommandResultBody invalid = commandQueue.poll(5, TimeUnit.SECONDS);
+        assertThat(invalid).isNotNull();
+        assertThat(invalid.type()).isEqualTo(WebSocketBodyType.CHAT_MESSAGE_REJECTED);
+        assertThat(invalid.commandId()).isEqualTo("command-valid-1");
+
+        // when: 읽음 목적지로 잘못된 명령
+        session.send("/app/chat/read", new WebSocketRequestBody<>(
+                1, WebSocketBodyKind.COMMAND, WebSocketBodyType.CHAT_MESSAGE_SEND, "command-read-1",
+                new ChatReadAdvancePayload(1L, 5L)));
+
+        // then: 메시지 전송이 아니라 읽음 거절 타입으로 돌아온다
+        WebSocketCommandResultBody readRejected = commandQueue.poll(5, TimeUnit.SECONDS);
+        assertThat(readRejected).isNotNull();
+        assertThat(readRejected.type()).isEqualTo(WebSocketBodyType.CHAT_READ_REJECTED);
+        assertThat(readRejected.commandId()).isEqualTo("command-read-1");
+
+        session.disconnect();
+    }
+
+    @Test
     @DisplayName("거절 e2e: 존재하지 않는 방으로 전송하면 rejected 프레임이 요청자에게 돌아오고 DB에는 저장되지 않는다")
     void sendMessage_roomNotFound_returnsRejectedFrame() throws Exception {
         // given: 유저만 있고 채팅방은 만들지 않는다 (roomId 999999 는 존재하지 않음)

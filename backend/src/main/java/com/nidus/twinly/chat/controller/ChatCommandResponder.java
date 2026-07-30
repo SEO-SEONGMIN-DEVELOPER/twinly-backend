@@ -37,7 +37,7 @@ public class ChatCommandResponder {
     public void messageRejected(Long userId, String sessionId, String commandId,
                                 Long roomId, String clientMsgId, BusinessException e) {
         ChatMessageRejectedPayload payload = new ChatMessageRejectedPayload(
-                roomId, clientMsgId, toCommandError(e, CommandErrorCode.TEXT_SIZE_LIMIT_EXCEEDED));
+                roomId, clientMsgId, toCommandError(e));
 
         publishMessageRejected(userId, sessionId,
                 WebSocketCommandResultBody.of(WebSocketBodyType.CHAT_MESSAGE_REJECTED, commandId, payload));
@@ -51,7 +51,7 @@ public class ChatCommandResponder {
     public void readRejected(Long userId, String sessionId, String commandId,
                              Long roomId, Long lastMsgId, BusinessException e) {
         ChatReadRejectedPayload payload = new ChatReadRejectedPayload(
-                roomId, lastMsgId, toCommandError(e, CommandErrorCode.INVALID_MESSAGE_CURSOR));
+                roomId, lastMsgId, toCommandError(e));
 
         publishReadRejected(userId, sessionId,
                 WebSocketCommandResultBody.of(WebSocketBodyType.CHAT_READ_REJECTED, commandId, payload));
@@ -108,12 +108,17 @@ public class ChatCommandResponder {
                 String.valueOf(userId), COMMANDS_DESTINATION, body, accessor.getMessageHeaders());
     }
 
-    private CommandError toCommandError(BusinessException e, CommandErrorCode unprocessableCode) {
-        CommandErrorCode code = switch (e.getErrorCode().getStatus().value()) {
-            case 409 -> CommandErrorCode.CLIENT_MSG_ID_CONFLICT;
-            case 422 -> unprocessableCode;
-            case 403 -> CommandErrorCode.NOT_A_PARTICIPANT;
-            case 404 -> CommandErrorCode.ROOM_NOT_FOUND;
+    private CommandError toCommandError(BusinessException e) {
+        CommandErrorCode code = switch (e.getErrorCode()) {
+            case INVALID_REQUEST -> CommandErrorCode.INVALID_REQUEST;
+            case ROOM_NOT_FOUND -> CommandErrorCode.ROOM_NOT_FOUND;
+            case MATCH_NOT_FOUND -> CommandErrorCode.MATCH_NOT_FOUND;
+            case CHAT_PARTICIPATION_NOT_FOUND -> CommandErrorCode.PARTICIPATION_NOT_FOUND;
+            case NOT_MATCH_PARTICIPANT -> CommandErrorCode.NOT_A_PARTICIPANT;
+            case NOT_ACTIVE_ROOM_PARTICIPANT -> CommandErrorCode.NOT_ACTIVE_PARTICIPANT;
+            case CLIENT_MSG_ID_CONFLICT -> CommandErrorCode.CLIENT_MSG_ID_CONFLICT;
+            case MESSAGE_LENGTH_EXCEEDED -> CommandErrorCode.TEXT_SIZE_LIMIT_EXCEEDED;
+            case MESSAGE_NOT_IN_ROOM -> CommandErrorCode.INVALID_MESSAGE_CURSOR;
             default -> CommandErrorCode.INTERNAL;
         };
 

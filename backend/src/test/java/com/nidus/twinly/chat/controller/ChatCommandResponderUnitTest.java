@@ -121,26 +121,30 @@ class ChatCommandResponderUnitTest {
 
     @ParameterizedTest(name = "{0} → {1}")
     @CsvSource({
-            "ROOM_NOT_FOUND,         ROOM_NOT_FOUND",           // 404
-            "NOT_MATCH_PARTICIPANT,  NOT_A_PARTICIPANT",        // 403
-            "CLIENT_MSG_ID_CONFLICT, CLIENT_MSG_ID_CONFLICT",   // 409
-            "MESSAGE_LENGTH_EXCEEDED, TEXT_SIZE_LIMIT_EXCEEDED",// 422 → 메시지 전송 전용 코드
-            "INTERNAL_ERROR,         INTERNAL"                  // 그 외
+            "ROOM_NOT_FOUND,               ROOM_NOT_FOUND",
+            "MATCH_NOT_FOUND,              MATCH_NOT_FOUND",           // 404이지만 방 없음과 구분된다
+            "CHAT_PARTICIPATION_NOT_FOUND, PARTICIPATION_NOT_FOUND",   // 〃
+            "NOT_MATCH_PARTICIPANT,        NOT_A_PARTICIPANT",
+            "NOT_ACTIVE_ROOM_PARTICIPANT,  NOT_ACTIVE_PARTICIPANT",    // 403이지만 미참여와 구분된다
+            "CLIENT_MSG_ID_CONFLICT,       CLIENT_MSG_ID_CONFLICT",
+            "MESSAGE_LENGTH_EXCEEDED,      TEXT_SIZE_LIMIT_EXCEEDED",
+            "MESSAGE_NOT_IN_ROOM,          INVALID_MESSAGE_CURSOR",
+            "INTERNAL_ERROR,               INTERNAL"                   // 매핑되지 않은 코드
     })
-    @DisplayName("메시지 거절 시 도메인 예외의 status에 따라 CommandErrorCode로 매핑한다")
-    void messageRejected_mapsStatusToCommandErrorCode(ErrorCode errorCode, CommandErrorCode expected) {
-        // when: 각 status의 도메인 예외로 거절 응답 전송
+    @DisplayName("메시지 거절은 status가 아니라 ErrorCode 자체로 CommandErrorCode를 정한다")
+    void messageRejected_mapsErrorCodeToCommandErrorCode(ErrorCode errorCode, CommandErrorCode expected) {
+        // when: 각 도메인 예외로 거절 응답 전송
         responder.messageRejected(1L, "session-A", "command-1", 10L, "cmid-1", new BusinessException(errorCode));
 
-        // then: status별로 정해진 CommandErrorCode로 변환됨
+        // then: 같은 status를 공유하는 코드들도 서로 다른 CommandErrorCode로 갈린다
         ChatMessageRejectedPayload payload = (ChatMessageRejectedPayload) captureSentTo("1").payload();
         assertThat(payload.error().code()).isEqualTo(expected);
     }
 
     @Test
-    @DisplayName("읽음 거절의 422는 메시지 전송과 달리 INVALID_MESSAGE_CURSOR로 매핑한다")
-    void readRejected_maps422ToInvalidMessageCursor() {
-        // given: 422 도메인 예외 (같은 status라도 명령 종류에 따라 다른 코드로 매핑되어야 함)
+    @DisplayName("읽음 거절도 같은 규칙을 쓰므로 MESSAGE_NOT_IN_ROOM은 INVALID_MESSAGE_CURSOR가 된다")
+    void readRejected_mapsMessageNotInRoomToInvalidCursor() {
+        // given: 읽음 커서가 방에 없는 상황
         BusinessException exception = new BusinessException(ErrorCode.MESSAGE_NOT_IN_ROOM);
 
         // when
