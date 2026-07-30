@@ -17,7 +17,9 @@ import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.PhotoRepository;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
@@ -29,6 +31,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ActivityService {
@@ -71,7 +74,7 @@ public class ActivityService {
                 Instant.now(),
                 sceneResults,
                 questionResults,
-                toProfilePhotoResults(allPartnerUserIds)
+                toProfilePhotoResults(allPartnerUserIds, partnerUserById)
         );
     }
 
@@ -101,17 +104,21 @@ public class ActivityService {
                     endsAt,
                     scene.getPlace(),
                     with,
-                    parseLines(scene.getLines())
+                    parseLines(scene)
             );
         };
     }
 
-    private List<ActivityProfilePhotoResult> toProfilePhotoResults(List<Long> partnerUserIds) {
+    private List<ActivityProfilePhotoResult> toProfilePhotoResults(List<Long> partnerUserIds, Map<Long, User> partnerUserById) {
         if (partnerUserIds.isEmpty()) {
             return List.of();
         }
 
-        Map<Long, ProfilePhotoInfo> profilePhotoByUserId = photoRepository.findAllByUserIdInAndType(partnerUserIds, PhotoType.PROFILE).stream()
+        List<Long> visiblePartnerUserIds = partnerUserIds.stream()
+                .filter(partnerUserId -> !partnerUserById.get(partnerUserId).isWithdrawn())
+                .toList();
+
+        Map<Long, ProfilePhotoInfo> profilePhotoByUserId = photoRepository.findAllByUserIdInAndType(visiblePartnerUserIds, PhotoType.PROFILE).stream()
                 .collect(Collectors.toMap(Photo::getUserId, photo -> new ProfilePhotoInfo(photo.getKey(), cloudFrontService.getSignedUrl(photo.getKey()), photo.position())));
 
         return partnerUserIds.stream()
@@ -121,17 +128,22 @@ public class ActivityService {
 
     private ActivitySpeakerResult toSpeakerResult(Long partnerUserId, Map<Long, User> partnerUserById) {
         User partner = partnerUserById.get(partnerUserId);
-        String userName = partner != null ? partner.getFamilyName() + partner.getGivenName() : null;
+        String userName = partner.displayName();
         return new ActivitySpeakerResult(partnerUserId, userName);
     }
 
-    private List<ActivityLineResult> parseLines(String linesJson) {
-        if (linesJson == null) {
+    private List<ActivityLineResult> parseLines(Scene scene) {
+        if (scene.getLines() == null) {
             return List.of();
         }
 
-        return objectMapper.readValue(linesJson, new TypeReference<List<ActivityLineResult>>() {
-        });
+        try {
+            return objectMapper.readValue(scene.getLines(), new TypeReference<List<ActivityLineResult>>() {
+            });
+        } catch (JacksonException e) {
+            log.warn("씬 대사 파싱에 실패해 빈 목록으로 대체합니다. sceneId={}", scene.getId(), e);
+            return List.of();
+        }
     }
 
     private ActivityQuestionResult toQuestionResult(Question question) {

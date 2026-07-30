@@ -149,4 +149,19 @@ class BlockIntegrationTest extends AbstractIntegrationTest {
         entityManager.flush();
         entityManager.clear();
     }
+
+    @Test
+    @DisplayName("차단: 존재하지 않는 유저를 차단하면 404 USER_NOT_FOUND를 반환하고 차단 행이 생기지 않는다")
+    void block_unknown_user_returns_404() throws Exception {
+        // given: 실제 유저 1명 (차단 대상은 실재하지 않는 id)
+        User me = saveUser();
+
+        // when & then: 마스터 데이터(유저)에 없는 id이므로 404
+        mockMvc.perform(put("/api/v1/blocks/{userId}", "99999999")
+                        .header("Authorization", bearer(me.getId())))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("USER_NOT_FOUND"));
+
+        assertThat(blockRepository.findAllByUserId(me.getId())).isEmpty();
+    }
 }

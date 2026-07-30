@@ -55,7 +55,8 @@ class BlockServiceUnitTest {
     @Test
     @DisplayName("이미 차단한 유저면 다시 저장하지 않는다 (멱등)")
     void block_already_blocked_is_noop() {
-        // given: 이미 차단된 상태
+        // given: 대상 유저가 실재하고 이미 차단된 상태
+        given(userRepository.existsById(2L)).willReturn(true);
         given(blockRepository.existsByUserIdAndBlockedUserId(1L, 2L)).willReturn(true);
 
         // when: 같은 대상을 다시 차단
@@ -68,7 +69,8 @@ class BlockServiceUnitTest {
     @Test
     @DisplayName("차단 이력이 없으면 userId/blockedUserId로 새 Block을 저장한다")
     void block_new_saves() {
-        // given: 차단 이력 없음
+        // given: 대상 유저가 실재하고 차단 이력은 없음
+        given(userRepository.existsById(2L)).willReturn(true);
         given(blockRepository.existsByUserIdAndBlockedUserId(1L, 2L)).willReturn(false);
 
         // when: 신규 차단
@@ -122,5 +124,20 @@ class BlockServiceUnitTest {
             ReflectionTestUtils.setField(user, "deletedAt", deletedAt);
         }
         return user;
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 유저를 차단하면 USER_NOT_FOUND 예외가 발생하고 저장하지 않는다")
+    void block_unknown_user_throws() {
+        // given: 대상 유저가 마스터 데이터에 없음
+        given(userRepository.existsById(2L)).willReturn(false);
+
+        // when & then: 조용히 저장하지 않고 404로 거절
+        assertThatThrownBy(() -> blockService.block(1L, 2L))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.USER_NOT_FOUND);
+
+        then(blockRepository).should(never()).save(any());
     }
 }

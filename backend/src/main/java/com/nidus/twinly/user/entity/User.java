@@ -19,6 +19,8 @@ import java.time.Instant;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class User {
 
+    public static final String WITHDRAWN_NAME = "탈퇴한 사용자";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -119,6 +121,22 @@ public class User {
         user.createdAt = Instant.now();
 
         return user;
+    }
+
+    public boolean isWithdrawn() {
+        return deletedAt != null;
+    }
+
+    public String displayName() {
+        return isWithdrawn() ? WITHDRAWN_NAME : familyName + givenName;
+    }
+
+    public String displayGivenName() {
+        return isWithdrawn() ? WITHDRAWN_NAME : givenName;
+    }
+
+    public String displayNickname() {
+        return isWithdrawn() ? WITHDRAWN_NAME : nickname;
     }
 
     public void changeAffiliation(String affiliation, String affiliationHash) {

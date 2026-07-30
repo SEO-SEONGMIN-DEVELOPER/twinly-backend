@@ -34,7 +34,10 @@ import com.nidus.twinly.user.repository.DisclosureAgreementRepository;
 import com.nidus.twinly.user.repository.PhotoRepository;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
@@ -50,8 +53,10 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class PeopleService {
 
     private static final int DEFAULT_LIMIT = 20;
@@ -86,7 +91,11 @@ public class PeopleService {
         Map<Long, User> userByPartnerUserId = userRepository.findAllById(partnerUserIds).stream()
                 .collect(Collectors.toMap(User::getId, Function.identity()));
 
-        Map<Long, ProfilePhotoInfo> profilePhotoByPartnerUserId = photoRepository.findAllByUserIdInAndType(partnerUserIds, PhotoType.PROFILE).stream()
+        List<Long> visiblePartnerUserIds = partnerUserIds.stream()
+                .filter(partnerUserId -> !userByPartnerUserId.get(partnerUserId).isWithdrawn())
+                .toList();
+
+        Map<Long, ProfilePhotoInfo> profilePhotoByPartnerUserId = photoRepository.findAllByUserIdInAndType(visiblePartnerUserIds, PhotoType.PROFILE).stream()
                 .collect(Collectors.toMap(Photo::getUserId, photo -> new ProfilePhotoInfo(photo.getKey(), cloudFrontService.getSignedUrl(photo.getKey()), photo.position())));
 
         Map<Long, Integer> intimacyByPartnerUserId = relationshipRepository.findLatestByUserIdAndPartnerUserIdIn(userId, partnerUserIds).stream()
@@ -122,15 +131,14 @@ public class PeopleService {
 
                     return new PeopleItemResult(
                             partnerUserId,
-                            user != null ? user.getGivenName() : null,
+                            user.displayGivenName(),
                             profilePhotoByPartnerUserId.get(partnerUserId),
                             intimacy,
                             RelationshipType.fromIntimacy(intimacy),
                             RelationshipSpecificType.fromIntimacy(intimacy),
                             sceneCountByPartnerUserId.getOrDefault(partnerUserId, 0),
                             chatRoomId,
-                            isFavorited,
-                            false
+                            isFavorited
                     );
                 })
                 .toList();
@@ -159,13 +167,15 @@ public class PeopleService {
 
         boolean isBlocked = blockRepository.existsByUserIdAndBlockedUserId(userId, partnerUserId);
 
-        ProfilePhotoInfo profilePhoto = photoRepository.findByUserIdAndType(partnerUserId, PhotoType.PROFILE)
-                .map(photo -> new ProfilePhotoInfo(photo.getKey(), cloudFrontService.getSignedUrl(photo.getKey()), photo.position()))
-                .orElse(null);
+        ProfilePhotoInfo profilePhoto = partner.isWithdrawn() ? null
+                : photoRepository.findByUserIdAndType(partnerUserId, PhotoType.PROFILE)
+                        .map(photo -> new ProfilePhotoInfo(photo.getKey(), cloudFrontService.getSignedUrl(photo.getKey()), photo.position()))
+                        .orElse(null);
 
-        Set<DisclosureField> disclosedFields = disclosureAgreementRepository.findAllByUserId(partnerUserId).stream()
-                .map(DisclosureAgreement::getField)
-                .collect(Collectors.toSet());
+        Set<DisclosureField> disclosedFields = partner.isWithdrawn() ? Set.of()
+                : disclosureAgreementRepository.findAllByUserId(partnerUserId).stream()
+                        .map(DisclosureAgreement::getField)
+                        .collect(Collectors.toSet());
 
         PeopleProfileDisclosedFieldsResult disclosed = new PeopleProfileDisclosedFieldsResult(
                 disclosedFields.contains(DisclosureField.AFFILIATION) ? partner.getAffiliation() : null,
@@ -174,19 +184,19 @@ public class PeopleService {
 
         return new PeopleProfileResult(
                 partnerUserId,
-                partner.getFamilyName() + partner.getGivenName(),
+                partner.displayName(),
                 profilePhoto,
                 intimacy,
                 RelationshipType.fromIntimacy(intimacy),
                 RelationshipSpecificType.fromIntimacy(intimacy),
                 isFavorited,
-                false,
                 disclosed,
                 partner.getDeletedAt() != null,
                 isBlocked
         );
     }
 
+    @Transactional
     public void favorite(Long userId, Long partnerUserId) {
         Encounter encounter = encounterRepository.findByUserAIdAndUserBId(Math.min(userId, partnerUserId), Math.max(userId, partnerUserId))
                 .orElseThrow(() -> new BusinessException(ErrorCode.ENCOUNTER_NOT_FOUND));
@@ -198,6 +208,7 @@ public class PeopleService {
         encounterPreferenceRepository.save(preference);
     }
 
+    @Transactional
     public void deleteFavorite(Long userId, Long partnerUserId) {
         Encounter encounter = encounterRepository.findByUserAIdAndUserBId(Math.min(userId, partnerUserId), Math.max(userId, partnerUserId))
                 .orElseThrow(() -> new BusinessException(ErrorCode.ENCOUNTER_NOT_FOUND));
@@ -268,13 +279,14 @@ public class PeopleService {
                 .map(Relationship::getIntimacy)
                 .orElse(0);
 
-        ProfilePhotoInfo profilePhoto = photoRepository.findByUserIdAndType(partnerUserId, PhotoType.PROFILE)
-                .map(photo -> new ProfilePhotoInfo(photo.getKey(), cloudFrontService.getSignedUrl(photo.getKey()), photo.position()))
-                .orElse(null);
+        ProfilePhotoInfo profilePhoto = partner.isWithdrawn() ? null
+                : photoRepository.findByUserIdAndType(partnerUserId, PhotoType.PROFILE)
+                        .map(photo -> new ProfilePhotoInfo(photo.getKey(), cloudFrontService.getSignedUrl(photo.getKey()), photo.position()))
+                        .orElse(null);
 
         PeopleEventsPartnerResult partnerResult = new PeopleEventsPartnerResult(
                 partnerUserId,
-                partner.getFamilyName() + partner.getGivenName(),
+                partner.displayName(),
                 profilePhoto,
                 intimacy,
                 RelationshipSpecificType.fromIntimacy(intimacy)
@@ -330,7 +342,7 @@ public class PeopleService {
             return scene.getNarration();
         }
 
-        List<PeopleEventLineResult> lines = parseLines(scene.getLines());
+        List<PeopleEventLineResult> lines = parseLines(scene);
         if (lines.isEmpty()) {
             return null;
         }
@@ -341,16 +353,25 @@ public class PeopleService {
         };
     }
 
-    private List<PeopleEventLineResult> parseLines(String linesJson) {
-        if (linesJson == null) {
+    private List<PeopleEventLineResult> parseLines(Scene scene) {
+        if (scene.getLines() == null) {
             return List.of();
         }
 
-        return objectMapper.readValue(linesJson, new TypeReference<List<PeopleEventLineResult>>() {
-        });
+        try {
+            return objectMapper.readValue(scene.getLines(), new TypeReference<List<PeopleEventLineResult>>() {
+            });
+        } catch (JacksonException e) {
+            log.warn("씬 대사 파싱에 실패해 빈 목록으로 대체합니다. sceneId={}", scene.getId(), e);
+            return List.of();
+        }
     }
 
     public PeopleEventResult event(Long userId, Long partnerUserId, LocalDate date) {
+        if (!userRepository.existsById(partnerUserId)) {
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+        }
+
         List<Scene> myScenes = sceneRepository.findAllByUserIdAndDate(userId, date);
 
         List<Long> sceneIds = myScenes.stream().map(Scene::getId).toList();
@@ -377,15 +398,19 @@ public class PeopleService {
                 .distinct()
                 .toList();
 
-        return new PeopleEventResult(date, partnerUserId, version, sceneResults, toProfilePhotoResults(withUserIds));
+        return new PeopleEventResult(date, partnerUserId, version, sceneResults, toProfilePhotoResults(withUserIds, userById));
     }
 
-    private List<PeopleEventProfilePhotoResult> toProfilePhotoResults(List<Long> userIds) {
+    private List<PeopleEventProfilePhotoResult> toProfilePhotoResults(List<Long> userIds, Map<Long, User> userById) {
         if (userIds.isEmpty()) {
             return List.of();
         }
 
-        Map<Long, ProfilePhotoInfo> profilePhotoByUserId = photoRepository.findAllByUserIdInAndType(userIds, PhotoType.PROFILE).stream()
+        List<Long> visibleUserIds = userIds.stream()
+                .filter(userId -> !userById.get(userId).isWithdrawn())
+                .toList();
+
+        Map<Long, ProfilePhotoInfo> profilePhotoByUserId = photoRepository.findAllByUserIdInAndType(visibleUserIds, PhotoType.PROFILE).stream()
                 .collect(Collectors.toMap(Photo::getUserId, photo -> new ProfilePhotoInfo(photo.getKey(), cloudFrontService.getSignedUrl(photo.getKey()), photo.position())));
 
         return userIds.stream()
@@ -397,7 +422,7 @@ public class PeopleService {
         List<PeopleEventSpeakerResult> with = partnerUserIds.stream()
                 .map(partnerUserId -> {
                     User user = userById.get(partnerUserId);
-                    return new PeopleEventSpeakerResult(partnerUserId, user != null ? user.getFamilyName() + user.getGivenName() : null);
+                    return new PeopleEventSpeakerResult(partnerUserId, user.displayName());
                 })
                 .toList();
 
@@ -422,7 +447,7 @@ public class PeopleService {
                     endsAt,
                     scene.getPlace(),
                     with,
-                    parseLines(scene.getLines())
+                    parseLines(scene)
             );
         };
     }

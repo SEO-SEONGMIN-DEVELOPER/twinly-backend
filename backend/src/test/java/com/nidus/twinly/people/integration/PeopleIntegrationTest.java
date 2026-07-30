@@ -5,6 +5,8 @@ import com.nidus.twinly.activity.entity.Scene;
 import com.nidus.twinly.activity.entity.ScenePartner;
 import com.nidus.twinly.activity.repository.ScenePartnerRepository;
 import com.nidus.twinly.activity.repository.SceneRepository;
+import com.nidus.twinly.block.entity.Block;
+import com.nidus.twinly.block.repository.BlockRepository;
 import com.nidus.twinly.people.entity.Encounter;
 import com.nidus.twinly.people.entity.EncounterPreference;
 import com.nidus.twinly.people.repository.EncounterPreferenceRepository;
@@ -51,6 +53,9 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     EncounterPreferenceRepository encounterPreferenceRepository;
 
+    @Autowired
+    BlockRepository blockRepository;
+
     @Test
     @DisplayName("사람 목록 조회: 실제 관계 데이터를 파트너 id 오름차순으로 관통 조회해 친밀도·관계 타입을 내려준다")
     void people_success_end_to_end() throws Exception {
@@ -73,11 +78,34 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.people[0].intimacy").value(40))
                 .andExpect(jsonPath("$.people[0].relationshipType").value("friend"))
                 .andExpect(jsonPath("$.people[0].isFavorited").value(false))
+                .andExpect(jsonPath("$.people[0].isHighlighted").doesNotExist())
                 .andExpect(jsonPath("$.people[1].userId").value(partner2.getId().toString()))
                 .andExpect(jsonPath("$.people[1].intimacy").value(80))
                 .andExpect(jsonPath("$.people[1].relationshipType").value("best_friend"))
                 .andExpect(jsonPath("$.page.hasMore").value(false))
                 .andExpect(jsonPath("$.page.nextCursor").isEmpty());
+    }
+
+    @Test
+    @DisplayName("사람 목록 조회: 내가 차단한 상대는 쿼리 단계에서 제외되어 목록에 나오지 않는다")
+    void people_excludes_blocked_partner() throws Exception {
+        // given: 관계가 있는 파트너 2명 중 한 명을 차단
+        User me = saveUser();
+        User partner1 = saveUser();
+        User partner2 = saveUser();
+        saveRelationship(me.getId(), partner1.getId(), DAY_2, 40, "{}");
+        saveRelationship(me.getId(), partner2.getId(), DAY_2, 80, "{}");
+        blockRepository.save(Block.create(me.getId(), partner2.getId()));
+
+        // when: 사람 목록 조회
+        var result = mockMvc.perform(get("/api/v1/people")
+                .header("Authorization", bearer(me.getId())));
+
+        // then: 차단한 상대만 빠지고, 페이지 정보도 남은 건수 기준으로 계산된다
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.people.length()").value(1))
+                .andExpect(jsonPath("$.people[0].userId").value(partner1.getId().toString()))
+                .andExpect(jsonPath("$.page.hasMore").value(false));
     }
 
     @Test
@@ -99,6 +127,7 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.intimacy").value(75))
                 .andExpect(jsonPath("$.relationshipType").value("best_friend"))
                 .andExpect(jsonPath("$.isFavorited").value(false))
+                .andExpect(jsonPath("$.isHighlighted").doesNotExist())
                 .andExpect(jsonPath("$.isBlocked").value(false))
                 .andExpect(jsonPath("$.isDeleted").value(false))
                 .andExpect(jsonPath("$.disclosedFields.affiliation").isEmpty())
@@ -299,5 +328,18 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("테스트 엔티티 생성 실패: " + type.getName(), e);
         }
+    }
+
+    @Test
+    @DisplayName("이벤트 상세 조회: 존재하지 않는 상대면 404 USER_NOT_FOUND를 반환한다 (목록 조회와 같은 규약)")
+    void event_unknown_partner_returns_404() throws Exception {
+        // given: 실제 유저 1명
+        User me = saveUser();
+
+        // when & then: 상대가 마스터 데이터에 없으므로 빈 200이 아니라 404
+        mockMvc.perform(get("/api/v1/people/{userId}/events/{date}", "99999999", "2026-07-20")
+                        .header("Authorization", bearer(me.getId())))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("USER_NOT_FOUND"));
     }
 }

@@ -11,6 +11,8 @@ import com.nidus.twinly.chat.entity.ChatRoomParticipation;
 import com.nidus.twinly.chat.repository.ChatRepository;
 import com.nidus.twinly.chat.repository.ChatRoomParticipationRepository;
 import com.nidus.twinly.chat.repository.ChatRoomRepository;
+import com.nidus.twinly.block.entity.Block;
+import com.nidus.twinly.block.repository.BlockRepository;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
 import com.nidus.twinly.common.photo.PhotoType;
 import com.nidus.twinly.common.photo.ProfilePhotoInfo;
@@ -47,6 +49,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class ChatService {
 
     private static final int DEFAULT_MESSAGES_LIMIT = 20;
@@ -62,6 +65,7 @@ public class ChatService {
     private final RelationshipRepository relationshipRepository;
     private final PhotoRepository photoRepository;
     private final DisclosureAgreementRepository disclosureAgreementRepository;
+    private final BlockRepository blockRepository;
     private final CurrentSeasonReader currentSeasonReader;
 
     private final ApplicationEventPublisher eventPublisher;
@@ -100,6 +104,13 @@ public class ChatService {
         eventPublisher.publishEvent(new ChatMessageCreatedEvent(chat, activeParticipantIds(participations)));
 
         return new ChatSendMessageResult(chat.getId(), chat.getMessage(), chat.getSentAt(), command.clientMsgId());
+    }
+
+    private ProfilePhotoInfo toProfilePhotoInfo(User partner, Photo photo) {
+        if (partner.isWithdrawn() || photo == null) {
+            return null;
+        }
+        return new ProfilePhotoInfo(photo.getKey(), cloudFrontService.getSignedUrl(photo.getKey()), photo.position());
     }
 
     private Long resolvePartnerId(Match match, Long senderId) {
@@ -158,7 +169,13 @@ public class ChatService {
         Map<Long, ChatRoomParticipation> myParticipationByRoomId = participationByRoomId(participations, userId, true);
         Map<Long, ChatRoomParticipation> partnerParticipationByRoomId = participationByRoomId(participations, userId, false);
 
-        List<ChatRoom> visibleRooms = filterVisibleRooms(rooms, myParticipationByRoomId);
+        Set<Long> blockedUserIds = blockRepository.findAllByUserId(userId).stream()
+                .map(Block::getBlockedUserId)
+                .collect(Collectors.toSet());
+
+        List<ChatRoom> visibleRooms = filterVisibleRooms(rooms, myParticipationByRoomId).stream()
+                .filter(room -> !blockedUserIds.contains(resolvePartnerId(matchById.get(room.getMatchId()), userId)))
+                .toList();
         List<Long> visibleRoomIds = visibleRooms.stream().map(ChatRoom::getId).toList();
 
         List<Long> partnerIds = visibleRooms.stream().map(room -> resolvePartnerId(matchById.get(room.getMatchId()), userId)).toList();
@@ -242,10 +259,10 @@ public class ChatService {
                 ),
                 new ChatRoomPartnerResult(
                         partner.getId(),
-                        partner.getNickname(),
-                        partnerPhoto != null ? new ProfilePhotoInfo(partnerPhoto.getKey(), cloudFrontService.getSignedUrl(partnerPhoto.getKey()), partnerPhoto.position()) : null,
+                        partner.displayNickname(),
+                        toProfilePhotoInfo(partner, partnerPhoto),
                         relationship != null ? relationship.getIntimacy() : 0,
-                        partner.getDeletedAt() != null
+                        partner.isWithdrawn()
                 ),
                 lastChat != null ? lastChat.getMessage() : null,
                 new ChatRoomMessagesResult(
@@ -273,16 +290,18 @@ public class ChatService {
         ChatRoomParticipation partnerParticipation = chatRoomParticipationRepository.findByRoomIdAndUserId(roomId, partnerId)
                 .orElse(null);
 
-        Photo partnerPhoto = photoRepository.findByUserIdAndType(partnerId, PhotoType.PROFILE)
-                .orElse(null);
+        Photo partnerPhoto = partner.isWithdrawn() ? null
+                : photoRepository.findByUserIdAndType(partnerId, PhotoType.PROFILE)
+                        .orElse(null);
 
         Integer intimacy = relationshipRepository.findLatestByUserIdAndPartnerUserId(userId, partnerId)
                 .map(Relationship::getIntimacy)
                 .orElse(0);
 
-        Set<DisclosureField> agreedFields = disclosureAgreementRepository.findAllByUserId(partnerId).stream()
-                .map(DisclosureAgreement::getField)
-                .collect(Collectors.toSet());
+        Set<DisclosureField> agreedFields = partner.isWithdrawn() ? Set.of()
+                : disclosureAgreementRepository.findAllByUserId(partnerId).stream()
+                        .map(DisclosureAgreement::getField)
+                        .collect(Collectors.toSet());
 
         Long currentSeasonId = currentSeasonReader.read().getId();
 
@@ -295,8 +314,8 @@ public class ChatService {
                 ),
                 new ChatRoomDetailPartnerResult(
                         partner.getId(),
-                        partner.getNickname(),
-                        partnerPhoto != null ? new ProfilePhotoInfo(partnerPhoto.getKey(), cloudFrontService.getSignedUrl(partnerPhoto.getKey()), partnerPhoto.position()) : null,
+                        partner.displayNickname(),
+                        toProfilePhotoInfo(partner, partnerPhoto),
                         intimacy,
                         RelationshipSpecificType.fromIntimacy(intimacy),
                         new ChatRoomDetailDisclosedFieldsResult(

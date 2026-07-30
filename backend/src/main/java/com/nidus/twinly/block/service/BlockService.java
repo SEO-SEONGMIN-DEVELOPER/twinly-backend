@@ -30,6 +30,10 @@ public class BlockService {
             throw new BusinessException(ErrorCode.CANNOT_BLOCK_SELF);
         }
 
+        if (!userRepository.existsById(blockedUserId)) {
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+        }
+
         if (blockRepository.existsByUserIdAndBlockedUserId(userId, blockedUserId)) {
             return;
         }
@@ -56,9 +60,7 @@ public class BlockService {
                 .map(block -> {
                     User user = usersById.get(block.getBlockedUserId());
 
-                    String name = user != null && user.getDeletedAt() == null
-                            ? user.getFamilyName() + user.getGivenName()
-                            : "탈퇴한 사용자";
+                    String name = user.displayName();
 
                     return new BlockListItemResult(block.getBlockedUserId(), name);
                 })

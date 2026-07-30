@@ -35,11 +35,17 @@ public interface RelationshipRepository extends JpaRepository<Relationship, Long
     List<Relationship> findLatestByUserIdAndPartnerUserIdIn(@Param("userId") Long userId, @Param("partnerUserIds") List<Long> partnerUserIds);
 
     @Query(value = """
-            SELECT DISTINCT partner_user_id
-            FROM relationships
-            WHERE user_id = :userId
-              AND (:cursor IS NULL OR partner_user_id > :cursor)
-            ORDER BY partner_user_id ASC
+            SELECT DISTINCT r.partner_user_id
+            FROM relationships r
+            WHERE r.user_id = :userId
+              AND (:cursor IS NULL OR r.partner_user_id > :cursor)
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM blocks b
+                  WHERE b.user_id = :userId
+                    AND b.blocked_user_id = r.partner_user_id
+              )
+            ORDER BY r.partner_user_id ASC
             LIMIT :limit
             """, nativeQuery = true)
     List<Long> findPartnerUserIdsByUserId(@Param("userId") Long userId,

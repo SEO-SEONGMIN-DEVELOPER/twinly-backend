@@ -53,6 +53,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+import tools.jackson.core.exc.StreamConstraintsException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
@@ -70,6 +71,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willReturn;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
@@ -181,6 +183,8 @@ class PeopleServiceUnitTest {
         // given: limit 2에 대해 3건이 조회된 상태(다음 페이지 존재)
         given(relationshipRepository.findPartnerUserIdsByUserId(ME, null, 3))
                 .willReturn(List.of(10L, 20L, 30L));
+        given(userRepository.findAllById(List.of(10L, 20L)))
+                .willReturn(List.of(user(10L, "홍", "길동"), user(20L, "김", "철수")));
 
         // when: limit 2로 사람 목록 조회
         PeopleResult result = peopleService.people(ME, null, 2);
@@ -189,6 +193,29 @@ class PeopleServiceUnitTest {
         assertThat(result.people()).extracting(PeopleItemResult::userId).containsExactly(10L, 20L);
         assertThat(result.page().hasMore()).isTrue();
         assertThat(result.page().nextCursor()).isEqualTo(20L);
+    }
+
+    @Test
+    @DisplayName("목록에서 탈퇴한 파트너는 사진 조회 대상에서 빠져 photo가 null이 된다")
+    void people_excludes_withdrawn_partner_from_photo_lookup() {
+        // given: 파트너 2명 중 20이 탈퇴한 상태
+        User withdrawn = user(20L, "김", "철수");
+        ReflectionTestUtils.setField(withdrawn, "deletedAt", Instant.now());
+        given(relationshipRepository.findPartnerUserIdsByUserId(ME, null, 21)).willReturn(List.of(10L, 20L));
+        given(userRepository.findAllById(List.of(10L, 20L)))
+                .willReturn(List.of(user(10L, "홍", "길동"), withdrawn));
+        given(photoRepository.findAllByUserIdInAndType(List.of(10L), PhotoType.PROFILE))
+                .willReturn(List.of(Photo.create(10L, PhotoType.PROFILE, "key10", 10, 20, 100, 200, Instant.now())));
+        given(cloudFrontService.getSignedUrl("key10")).willReturn("https://cdn.example.com/signed10");
+
+        // when: 사람 목록 조회
+        PeopleResult result = peopleService.people(ME, null, null);
+
+        // then: 탈퇴한 파트너는 목록에 남되 이름·사진이 가려진다
+        assertThat(result.people()).extracting(PeopleItemResult::userName)
+                .containsExactly("길동", User.WITHDRAWN_NAME);
+        assertThat(result.people().get(0).profilePhoto()).isNotNull();
+        assertThat(result.people().get(1).profilePhoto()).isNull();
     }
 
     @Test
@@ -251,6 +278,32 @@ class PeopleServiceUnitTest {
         assertThat(result.isBlocked()).isTrue();
         assertThat(result.isDeleted()).isFalse();
         assertThat(result.profilePhoto()).isNull();
+    }
+
+    @Test
+    @DisplayName("탈퇴한 상대의 프로필은 이름·사진·공개 필드를 모두 가리고 조회조차 하지 않는다")
+    void profile_of_withdrawn_partner_is_masked() {
+        // given: 소속을 공개 동의했지만 탈퇴한 상대
+        User partner = user(20L, "김", "철수");
+        ReflectionTestUtils.setField(partner, "affiliation", "트윈리대학교");
+        ReflectionTestUtils.setField(partner, "deletedAt", Instant.now());
+        given(userRepository.findById(20L)).willReturn(Optional.of(partner));
+        given(relationshipRepository.findLatestByUserIdAndPartnerUserId(ME, 20L)).willReturn(Optional.empty());
+        given(encounterRepository.findByUserAIdAndUserBId(ME, 20L)).willReturn(Optional.empty());
+
+        // when: 프로필 조회
+        PeopleProfileResult result = peopleService.profile(ME, 20L);
+
+        // then: block 도메인과 같은 문구로 마스킹되고 isDeleted로도 구분할 수 있다
+        assertThat(result.userName()).isEqualTo(User.WITHDRAWN_NAME);
+        assertThat(result.isDeleted()).isTrue();
+        assertThat(result.profilePhoto()).isNull();
+        assertThat(result.disclosedFields().affiliation()).isNull();
+        assertThat(result.disclosedFields().affiliationNumber()).isNull();
+
+        // then: 가려질 값이므로 사진·공개 동의는 조회하지 않는다
+        then(photoRepository).should(never()).findByUserIdAndType(eq(20L), any());
+        then(disclosureAgreementRepository).should(never()).findAllByUserId(20L);
     }
 
     // ------------------------------------------------- favorite() / deleteFavorite()
@@ -415,6 +468,32 @@ class PeopleServiceUnitTest {
     }
 
     @Test
+    @DisplayName("lines JSON이 손상되어도 preview만 null로 떨어지고 목록 전체는 성공한다")
+    void events_broken_lines_json_does_not_fail_whole_list() {
+        // given: 대화 씬의 lines가 파싱 불가한 상태
+        LocalDate day = LocalDate.of(2026, 7, 19);
+        String brokenJson = "{\"not\":\"an array\"}";
+
+        given(userRepository.findById(20L)).willReturn(Optional.of(user(20L, "김", "철수")));
+        given(relationshipRepository.findLatestByUserIdAndPartnerUserId(ME, 20L)).willReturn(Optional.empty());
+        given(sceneRepository.findDistinctDatesFromCursorByUserIdAndWithPartnerUserId(ME, 20L, null, 21))
+                .willReturn(List.of(day));
+        given(sceneRepository.findAllByUserIdAndWithPartnerUserIdAndDateIn(ME, 20L, List.of(day)))
+                .willReturn(List.of(scene(200L, ME, day, "v1", "학교 복도", SceneType.DIALOGUE, null, null, brokenJson)));
+        given(relationshipRepository.findAllByUserIdAndPartnerUserIdOrderByDateAsc(ME, 20L)).willReturn(List.of());
+        willThrow(new StreamConstraintsException("깨진 JSON"))
+                .given(objectMapper).readValue(eq(brokenJson), any(TypeReference.class));
+
+        // when: 이벤트 목록 조회
+        PeopleEventsResult result = peopleService.events(ME, 20L, null, null);
+
+        // then: 500 대신 그 날짜의 preview만 null이고 나머지는 정상 매핑된다
+        assertThat(result.events()).hasSize(1);
+        assertThat(result.events().getFirst().place()).isEqualTo("학교 복도");
+        assertThat(result.events().getFirst().preview()).isNull();
+    }
+
+    @Test
     @DisplayName("이벤트 목록은 날짜별 첫 씬의 장소·미리보기와 전날 대비 친밀도 변화량·관계 변화를 담는다")
     void events_builds_items_with_delta_and_preview() {
         // given: 7/19(대화 씬)·7/20(행동 씬)에 기록이 있고 친밀도가 10 -> 35로 오른 상태
@@ -465,8 +544,19 @@ class PeopleServiceUnitTest {
     // ------------------------------------------------------------------- event()
 
     @Test
+    @DisplayName("존재하지 않는 상대의 이벤트 상세를 조회하면 USER_NOT_FOUND 예외가 발생한다")
+    void event_user_not_found() {
+        // when & then: 목록과 동일하게 상대 유저가 없으면 USER_NOT_FOUND 예외 발생
+        assertThatThrownBy(() -> peopleService.event(ME, 20L, LocalDate.of(2026, 7, 20)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.USER_NOT_FOUND);
+    }
+
+    @Test
     @DisplayName("이벤트 상세는 해당 상대가 참여한 씬만 남기고 첫 씬의 version을 사용한다")
     void event_filters_scenes_by_partner() {
+        given(userRepository.existsById(20L)).willReturn(true);
         // given: 같은 날 씬 2개 중 100번만 상대(20)가 참여
         LocalDate date = LocalDate.of(2026, 7, 20);
         given(sceneRepository.findAllByUserIdAndDate(ME, date))
@@ -501,6 +591,7 @@ class PeopleServiceUnitTest {
     @Test
     @DisplayName("이벤트 상세의 profilePhotos는 남은 씬의 with에 등장한 유저만 담는다")
     void event_maps_profile_photos_of_remaining_scenes() {
+        given(userRepository.existsById(20L)).willReturn(true);
         // given: 상대(20)가 참여한 씬에는 30도 함께 있고, 상대가 없는 씬에는 40만 참여
         LocalDate date = LocalDate.of(2026, 7, 20);
         given(sceneRepository.findAllByUserIdAndDate(ME, date))
@@ -528,6 +619,7 @@ class PeopleServiceUnitTest {
     @Test
     @DisplayName("해당 날짜에 씬이 없으면 빈 씬 목록과 null version을 반환한다")
     void event_without_scenes_returns_empty() {
+        given(userRepository.existsById(20L)).willReturn(true);
         // when: 씬이 없는 날짜로 이벤트 상세 조회
         PeopleEventResult result = peopleService.event(ME, 20L, LocalDate.of(2026, 7, 20));
 

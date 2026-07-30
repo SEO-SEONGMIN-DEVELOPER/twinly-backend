@@ -11,6 +11,8 @@ import com.nidus.twinly.chat.dto.result.ChatRoomDetailResult;
 import com.nidus.twinly.chat.dto.result.ChatRoomResult;
 import com.nidus.twinly.chat.dto.result.ChatRoomsResult;
 import com.nidus.twinly.chat.dto.result.ChatSendMessageResult;
+import com.nidus.twinly.block.entity.Block;
+import com.nidus.twinly.block.repository.BlockRepository;
 import com.nidus.twinly.chat.entity.Chat;
 import com.nidus.twinly.chat.entity.ChatRoom;
 import com.nidus.twinly.chat.entity.ChatRoomParticipation;
@@ -47,6 +49,7 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -55,6 +58,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
@@ -95,6 +99,9 @@ class ChatServiceUnitTest {
 
     @Mock
     DisclosureAgreementRepository disclosureAgreementRepository;
+
+    @Mock
+    BlockRepository blockRepository;
 
     @Mock
     CurrentSeasonReader currentSeasonReader;
@@ -581,6 +588,35 @@ class ChatServiceUnitTest {
     }
 
     @Test
+    @DisplayName("채팅방 목록에서 내가 차단한 상대의 방은 제외된다")
+    void rooms_excludes_blocked_partner_room() {
+        // given: 활성 방 2개 중 상대 3L을 차단한 상태
+        given(currentSeasonReader.read()).willReturn(currentSeason());
+        given(matchRepository.findAllByUserAIdOrUserBId(ME, ME)).willReturn(List.of(
+                match(MATCH_ID, ME, PARTNER, CURRENT_SEASON_ID),
+                match(200L, ME, 3L, CURRENT_SEASON_ID)
+        ));
+        given(chatRoomRepository.findAllByMatchIdIn(List.of(MATCH_ID, 200L)))
+                .willReturn(List.of(room(ROOM_ID, MATCH_ID), room(20L, 200L)));
+        given(chatRoomParticipationRepository.findAllByRoomIdIn(List.of(ROOM_ID, 20L)))
+                .willReturn(List.of(participation(ROOM_ID, ME), participation(20L, ME)));
+        given(blockRepository.findAllByUserId(ME)).willReturn(List.of(Block.create(ME, 3L)));
+
+        given(userRepository.findAllById(List.of(PARTNER))).willReturn(List.of(user(PARTNER, "partnerNick")));
+        given(photoRepository.findAllByUserIdInAndType(List.of(PARTNER), PhotoType.PROFILE)).willReturn(List.of());
+        given(relationshipRepository.findLatestByUserIdAndPartnerUserIdIn(ME, List.of(PARTNER))).willReturn(List.of());
+        given(chatRepository.findLatestByRoomIdIn(List.of(ROOM_ID))).willReturn(List.of());
+        given(chatRepository.countUnreadByRoomIdIn(ME, List.of(ROOM_ID))).willReturn(List.of());
+
+        // when: 채팅방 목록 조회
+        ChatRoomsResult result = chatService.rooms(ME);
+
+        // then: 차단한 상대의 방만 빠지고, 부가 정보도 남은 방 기준으로만 조회된다
+        assertThat(result.rooms()).hasSize(1);
+        assertThat(result.rooms().getFirst().partner().userId()).isEqualTo(PARTNER);
+    }
+
+    @Test
     @DisplayName("채팅방 상세는 상대가 공개 동의한 필드만 노출하고 친밀도로 관계 타입을 계산한다")
     void roomDetail_discloses_only_agreed_fields() {
         // given: 상대가 소속만 공개 동의했고 친밀도가 45인 관계
@@ -609,6 +645,35 @@ class ChatServiceUnitTest {
                 .isEqualTo(RelationshipSpecificType.RELATIONSHIP_SPECIFIC_TYPE_2);
         assertThat(result.entryStatus().myEntryAgreed()).isTrue();
         assertThat(result.entryStatus().partnerEntryAgreed()).isFalse();
+    }
+
+    @Test
+    @DisplayName("채팅방 상세에서 탈퇴한 상대는 닉네임·사진·공개 필드를 모두 가리고 조회하지 않는다")
+    void roomDetail_of_withdrawn_partner_is_masked() {
+        // given: 탈퇴한 상대와의 채팅방
+        given(currentSeasonReader.read()).willReturn(currentSeason());
+        given(chatRoomRepository.findById(ROOM_ID)).willReturn(Optional.of(room(ROOM_ID, MATCH_ID)));
+        given(matchRepository.findById(MATCH_ID)).willReturn(Optional.of(match(MATCH_ID, ME, PARTNER, CURRENT_SEASON_ID)));
+        User withdrawn = user(PARTNER, "partnerNick");
+        ReflectionTestUtils.setField(withdrawn, "deletedAt", Instant.now());
+        given(userRepository.findById(PARTNER)).willReturn(Optional.of(withdrawn));
+        ChatRoomParticipation mine = participation(ROOM_ID, ME);
+        mine.agree();
+        given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, ME)).willReturn(Optional.of(mine));
+        given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, PARTNER)).willReturn(Optional.empty());
+        given(relationshipRepository.findLatestByUserIdAndPartnerUserId(ME, PARTNER)).willReturn(Optional.empty());
+
+        // when: 채팅방 상세 조회
+        ChatRoomDetailResult result = chatService.roomDetail(ME, ROOM_ID);
+
+        // then: 실명 도메인과 같은 문구로 닉네임까지 가려진다
+        assertThat(result.partner().userName()).isEqualTo(User.WITHDRAWN_NAME);
+        assertThat(result.partner().profilePhoto()).isNull();
+        assertThat(result.partner().disclosedFields().affiliation()).isNull();
+
+        // then: 가려질 값이므로 사진·공개 동의는 조회하지 않는다
+        then(photoRepository).should(never()).findByUserIdAndType(eq(PARTNER), any());
+        then(disclosureAgreementRepository).should(never()).findAllByUserId(PARTNER);
     }
 
     private ChatRoom room(Long id, Long matchId) {

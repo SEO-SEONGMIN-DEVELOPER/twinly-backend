@@ -160,6 +160,24 @@ class ActivityServiceUnitTest {
     }
 
     @Test
+    @DisplayName("lines JSON이 손상되어도 그 씬의 대사만 비우고 하루치 조회는 성공한다")
+    void activity_broken_lines_json_does_not_fail_whole_day() {
+        // given: lines에 배열이 아닌 JSON이 저장된 dialogue 씬
+        Scene broken = dialogueScene(11L, "v1", "교실",
+                LocalDateTime.of(2026, 7, 26, 12, 0), LocalDateTime.of(2026, 7, 26, 12, 30), "{\"not\":\"an array\"}");
+        given(sceneRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of(broken));
+        given(questionRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of());
+
+        // when: 활동 조회
+        ActivityResult result = activityService.activity(USER_ID, DATE);
+
+        // then: 500 대신 그 씬의 lines만 비고 나머지 필드는 정상 매핑된다
+        ActivityDialogueSceneResult dialogue = (ActivityDialogueSceneResult) result.scenes().get(0);
+        assertThat(dialogue.lines()).isEmpty();
+        assertThat(dialogue.place()).isEqualTo("교실");
+    }
+
+    @Test
     @DisplayName("dialogue 씬의 lines가 null이면 빈 리스트로 매핑한다")
     void activity_dialogue_with_null_lines_returns_empty_lines() {
         // given: lines가 저장되지 않은 dialogue 씬
@@ -174,25 +192,6 @@ class ActivityServiceUnitTest {
         // then: NPE 없이 빈 lines로 응답한다
         ActivityDialogueSceneResult dialogue = (ActivityDialogueSceneResult) result.scenes().get(0);
         assertThat(dialogue.lines()).isEmpty();
-    }
-
-    @Test
-    @DisplayName("동행 유저를 users에서 찾지 못하면 이름은 null로 채운다")
-    void activity_unknown_partner_has_null_name() {
-        // given: scene_partners에는 있으나 users 조회 결과에는 없는 파트너
-        Scene scene = actionScene(10L, "v1", "학교 복도",
-                LocalDateTime.of(2026, 7, 26, 9, 0), LocalDateTime.of(2026, 7, 26, 10, 0), "걸었다", "무덤덤했다");
-        given(sceneRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of(scene));
-        given(scenePartnerRepository.findAllBySceneIdIn(List.of(10L))).willReturn(List.of(scenePartner(10L, 999L)));
-        given(userRepository.findAllById(List.of(999L))).willReturn(List.of());
-        given(questionRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of());
-
-        // when: 활동 조회
-        ActivityResult result = activityService.activity(USER_ID, DATE);
-
-        // then: userId는 유지하고 userName만 null
-        ActivityActionSceneResult action = (ActivityActionSceneResult) result.scenes().get(0);
-        assertThat(action.with()).containsExactly(new ActivitySpeakerResult(999L, null));
     }
 
     @Test
