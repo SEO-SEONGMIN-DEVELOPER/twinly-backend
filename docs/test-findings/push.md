@@ -17,7 +17,6 @@ springdoc이 노출하는 이 도메인의 오퍼레이션 2개는 단위·통�
 
 ---
 
-
 ## POST /api/v1/push/tokens
 
 ### 1. deviceId만으로 기존 행을 찾아 소유자를 덮어쓰므로 기기 탈취가 가능하다
@@ -60,15 +59,7 @@ springdoc이 노출하는 이 도메인의 오퍼레이션 2개는 단위·통�
 - **심각도**: low (경합 창이 좁고 클라이언트 재시도로 복구 가능하나, 5xx 알람을 오염시킨다)
 - **제안**: `DataIntegrityViolationException`을 잡아 재조회 후 `reregister`로 폴백하거나, `INSERT ... ON DUPLICATE KEY UPDATE`로 원자화한다. 지금 당장은 트래픽이 없으니 관측되면 대응해도 된다.
 
-### 4. deviceModel / fcmToken이 @NotNull뿐이라 빈 문자열이 그대로 저장된다
-
-- **증상**: `{"deviceId": "...", "deviceModel": "", "fcmToken": ""}` 이 200으로 통과하고 빈 문자열이 `devices`에 저장된다. 등록 시점에는 아무 신호가 없고, 나중에 실제 푸시를 보낼 때가 되어서야 실패한다. 길이 상한도 없어 클라이언트가 임의 길이의 문자열을 TEXT 컬럼에 밀어 넣을 수 있다.
-- **재현 조건**: 위 본문으로 `POST /api/v1/push/tokens` 호출.
-- **근거 코드 위치**: `backend/src/main/java/com/nidus/twinly/push/dto/request/PushTokenRegisterRequest.java:7` ~ `:9`
-- **심각도**: low
-- **제안**: `deviceModel`·`fcmToken`을 `@NotBlank`로 바꾸고, 컬럼이 TEXT여도 `@Size(max = ...)` 상한을 둔다(FCM 토큰은 대략 수백 바이트).
-
-### 5. 신규 등록과 갱신을 클라이언트가 구분할 수 없다
+### 4. 신규 등록과 갱신을 클라이언트가 구분할 수 없다
 
 - **증상**: 핸들러가 `void`라 항상 200 + 빈 본문이며, 새 기기가 만들어졌는지 기존 행이 갱신됐는지 응답으로 알 수 없다. 리소스 생성 경로임에도 201이 아니다.
 - **근거 코드 위치**: `backend/src/main/java/com/nidus/twinly/push/controller/PushController.java:23` ~ `:27`
@@ -79,14 +70,7 @@ springdoc이 노출하는 이 도메인의 오퍼레이션 2개는 단위·통�
 
 ## DELETE /api/v1/push/tokens/{deviceId}
 
-### 6. DELETE가 요청 본문을 필수로 요구한다 — **해결됨**
-
-- **증상**: `deviceId`를 `@RequestBody`로만 받았다. RFC 9110상 DELETE의 본문은 정의된 의미가 없어 일부 HTTP 클라이언트·프록시·CDN이 본문을 제거한다. 본문이 제거되면 `HttpMessageNotReadableException` → 400이 되어 **로그아웃 시 푸시 토큰 해제가 조용히 실패**하고, 유저는 로그아웃 후에도 계속 푸시를 받게 된다.
-- **심각도**: low
-- **조치**: URL 단수/복수 통일 작업에서 `DELETE /api/v1/push/tokens/{deviceId}`(경로 변수)로 옮겨 본문 의존을 없앴다.
-  `PushTokenRevokeRequest`·`PushTokenRevokeCommand`는 함께 제거했고, `PushService.revoke(Long, UUID)`가 `deviceId`를 직접 받는다.
-
-### 7. 남의 기기·미등록 기기를 해제해도 200이라 클라이언트 버그가 드러나지 않는다
+### 5. 남의 기기·미등록 기기를 해제해도 200이라 클라이언트 버그가 드러나지 않는다
 
 - **증상**: `findByUserIdAndDeviceId`가 비면 `ifPresent`가 아무 일도 하지 않고 200을 반환한다. 로그아웃 멱등성 관점에서는 올바른 선택이지만, 잘못된 `deviceId`를 계속 보내는 클라이언트 버그가 서버 쪽에서 영원히 관측되지 않는다. (권한 관점에서는 `userId` 스코프가 걸려 있어 안전하다 — 남의 기기가 실제로 해제되지는 않는다.)
 - **재현 조건**: 등록된 적 없는 UUID 또는 다른 유저 소유의 `deviceId`로 DELETE 호출 → 200, DB 무변화.

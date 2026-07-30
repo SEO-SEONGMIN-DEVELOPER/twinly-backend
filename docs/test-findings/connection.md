@@ -44,27 +44,13 @@ springdoc이 노출하는 이 도메인의 오퍼레이션 1개는 단위·통�
 - 심각도: low
 - 제안: 의도가 "enum은 대문자만 허용"이라면 그대로 두되 API 문서에 명시한다. 일관성을 원한다면 Jackson 쪽에도 `READ_ENUMS_USING_TO_STRING`/case-insensitive 설정을 맞춰 준다. 어느 쪽이든 정책을 한 번 정해서 문서화하는 것이 핵심이다.
 
-### 4. 사용하지 않는 import
-- 증상: `ConnectionService`가 `java.util.Optional`을 import 하지만 사용하지 않는다(`findByTicket(...).orElse(null)`로만 소비).
-- 재현 조건: 정적 분석/IDE 경고.
-- 근거 코드 위치: `backend/src/main/java/com/nidus/twinly/connection/service/ConnectionService.java:15`
-- 심각도: low
-- 제안: import 제거.
-
 ## GET /ws/v1/ (핸드셰이크 — ConnectionService.resolveTicket 경유, 참고)
 
 이 도메인 서비스의 나머지 public 메서드라 단위 테스트에 함께 포함했고, 그 과정에서 확인된 사항이다.
 
-### 5. SCOPE_MISMATCH일 때 티켓이 소비되지 않아 무제한 재시도가 가능하다
+### 4. SCOPE_MISMATCH일 때 티켓이 소비되지 않아 무제한 재시도가 가능하다
 - 증상: `resolveTicket`은 `connectionType` 불일치를 소비(consume)보다 먼저 검사하고 그대로 반환한다. 따라서 잘못된 스코프로 시도한 티켓은 소진되지 않고 TTL 60초 동안 살아남아 계속 재시도할 수 있다.
 - 재현 조건: SSE용 티켓을 발급받아 `/ws/v1/?ticket=...`로 반복 접속 시도 → 매번 403, 티켓은 계속 유효.
 - 근거 코드 위치: `backend/src/main/java/com/nidus/twinly/connection/service/ConnectionService.java:44-50`
 - 심각도: low (티켓 값은 소유자만 알고 TTL이 60초라 실질 위험은 작다. 다만 "1회용 티켓"이라는 의도와는 어긋난다)
 - 제안: 스코프 불일치도 소비 후 실패로 처리할지 정책을 명시한다. 현재 동작이 의도라면 주석으로 이유를 남긴다.
-
-### 6. 네이티브 `@Modifying` 쿼리 이후 영속성 컨텍스트가 stale 하다
-- 증상: `consume`은 `nativeQuery = true`의 `@Modifying`인데 `clearAutomatically`/`flushAutomatically`가 없다. 같은 트랜잭션에서 앞서 `findByTicket`으로 로딩한 `ConnectionTicket` 엔티티는 `usedAt`이 여전히 `null`인 채로 1차 캐시에 남는다.
-- 재현 조건: 같은 트랜잭션 안에서 `resolveTicket` 이후 동일 티켓을 다시 조회하면 `usedAt`이 null로 보인다. (현재 호출부는 그 뒤로 엔티티를 다시 읽지 않아 실제 오동작은 없다 — 잠재 함정)
-- 근거 코드 위치: `backend/src/main/java/com/nidus/twinly/connection/repository/ConnectionTicketRepository.java:16-24`
-- 심각도: low
-- 제안: 지금은 문제가 없으므로 그대로 두되, 이후 `resolveTicket` 뒤에 티켓을 다시 읽는 로직이 생기면 `@Modifying(clearAutomatically = true)`를 붙인다.

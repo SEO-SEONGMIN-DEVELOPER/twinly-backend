@@ -99,12 +99,3 @@
 ---
 
 ## 공통 / 정리
-
-### 8. 사용되지 않는 result DTO (죽은 코드)
-- **심각도**: low
-- **증상**: `AuthLoginResult`, `AuthSignupResult`, `AuthRefreshResult`는 어디서도 참조되지 않는다. 실제로는 세 API 모두 `AuthTokenResult`를 반환한다.
-- **근거 코드 위치**
-  - `backend/src/main/java/com/nidus/twinly/auth/dto/result/AuthLoginResult.java`
-  - `backend/src/main/java/com/nidus/twinly/auth/dto/result/AuthSignupResult.java`
-  - `backend/src/main/java/com/nidus/twinly/auth/dto/result/AuthRefreshResult.java`
-- **제안**: 삭제한다. (응답 DTO `AuthLoginResponse`/`AuthSignupResponse`/`AuthRefreshResponse`도 구조가 동일하므로 하나로 합칠지 여부는 API 문서 가독성과의 trade-off로 판단.)
