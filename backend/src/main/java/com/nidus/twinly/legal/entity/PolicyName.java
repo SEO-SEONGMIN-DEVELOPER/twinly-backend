@@ -20,7 +20,7 @@ public class PolicyName {
     @Column(columnDefinition = "TEXT")
     private String name;
 
-    @Column(columnDefinition = "TEXT")
+    @Column(length = 100)
     private String identifier;
 
     private Boolean isDeprecated;

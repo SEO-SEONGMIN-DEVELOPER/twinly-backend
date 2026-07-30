@@ -306,7 +306,7 @@ class MeIntegrationTest extends AbstractIntegrationTest {
         flushAndClear();
 
         // when: 실제 액세스 토큰으로 동의 철회 API 호출
-        mockMvc.perform(delete("/api/v1/me/consents")
+        mockMvc.perform(post("/api/v1/me/consents/revoke")
                         .header("Authorization", bearer(me.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -334,7 +334,7 @@ class MeIntegrationTest extends AbstractIntegrationTest {
         flushAndClear();
 
         // when: 필수 정책에 대해 철회 API 호출
-        var result = mockMvc.perform(delete("/api/v1/me/consents")
+        var result = mockMvc.perform(post("/api/v1/me/consents/revoke")
                 .header("Authorization", bearer(me.getId()))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
@@ -660,5 +660,22 @@ class MeIntegrationTest extends AbstractIntegrationTest {
         ReflectionTestUtils.setField(feed, "targetUserId", targetUserId);
         ReflectionTestUtils.setField(feed, "createdAt", createdAt);
         return feed;
+    }
+
+    @Test
+    @DisplayName("약관 동의 철회: 존재하지 않는 정책 버전이면 404 POLICY_NOT_FOUND를 반환한다 (등록 API와 대칭)")
+    void revokeConsents_unknown_policy_returns_404() throws Exception {
+        // given: 실제 유저
+        User me = saveUser();
+
+        // when & then: 카탈로그에 없는 (policyId, version)이므로 조용히 200이 아니라 404
+        mockMvc.perform(post("/api/v1/me/consents/revoke")
+                        .header("Authorization", bearer(me.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"grants":[{"policyId":"없는정책","version":"99"}]}
+                                """))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("POLICY_NOT_FOUND"));
     }
 }

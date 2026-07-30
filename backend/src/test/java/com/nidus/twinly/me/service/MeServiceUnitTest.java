@@ -19,7 +19,6 @@ import com.nidus.twinly.legal.entity.Policy;
 import com.nidus.twinly.legal.entity.PolicyName;
 import com.nidus.twinly.legal.repository.AgreementRepository;
 import com.nidus.twinly.legal.repository.PolicyNameRepository;
-import com.nidus.twinly.legal.repository.PolicyRepository;
 import com.nidus.twinly.legal.service.PolicyCatalog;
 import com.nidus.twinly.legal.service.PolicyCatalog.PolicyKey;
 import com.nidus.twinly.me.domain.HesitationDuration;
@@ -120,9 +119,6 @@ class MeServiceUnitTest {
 
     @Mock
     PolicyNameRepository policyNameRepository;
-
-    @Mock
-    PolicyRepository policyRepository;
 
     @Mock
     AgreementRepository agreementRepository;
@@ -394,20 +390,18 @@ class MeServiceUnitTest {
     // ---------------------------------------------------------------- 약관 동의
 
     @Test
-    @DisplayName("약관 동의 목록은 발효된 최신 버전을 고르고, 미발효 버전은 제외하며, 동의 여부를 함께 반환한다")
-    void consents_picks_latest_effective_version() {
-        // given: 약관 2종 + 이용약관은 v1/v2 발효·v3 미발효, 유저는 v2에 동의한 상태
+    @DisplayName("약관 동의 목록은 카탈로그가 고른 노출 버전 기준으로 동의 여부를 판정한다")
+    void consents_uses_catalog_version_to_resolve_agreement() {
+        // given: 카탈로그가 이용약관 v2·마케팅 v1을 노출 버전으로 돌려주고, 유저는 v2에 동의한 상태
         Instant now = Instant.now();
         PolicyName tos = policyName(1L, "서비스 이용약관", "terms_of_service");
         PolicyName marketing = policyName(2L, "마케팅 수신 동의", "marketing");
         given(policyNameRepository.findAllByIsDeprecatedFalse()).willReturn(List.of(tos, marketing));
 
-        Policy tosV1 = policy(10L, 1L, 1, "https://policy/tos/1", true, now.minus(Duration.ofDays(60)));
         Policy tosV2 = policy(11L, 1L, 2, "https://policy/tos/2", true, now.minus(Duration.ofDays(1)));
-        Policy tosV3NotEffective = policy(12L, 1L, 3, "https://policy/tos/3", true, now.plus(Duration.ofDays(10)));
         Policy marketingV1 = policy(20L, 2L, 1, "https://policy/marketing/1", false, now.minus(Duration.ofDays(5)));
-        given(policyRepository.findAllByPolicyNameIdIn(List.of(1L, 2L)))
-                .willReturn(List.of(tosV1, tosV2, tosV3NotEffective, marketingV1));
+        given(policyCatalog.loadLatestByPolicyNameId(List.of(1L, 2L)))
+                .willReturn(Map.of(1L, tosV2, 2L, marketingV1));
 
         Instant agreedAt = now.minus(Duration.ofHours(3));
         given(agreementRepository.findAllByUserIdAndRevokedAtIsNull(ME))
@@ -506,15 +500,18 @@ class MeServiceUnitTest {
     }
 
     @Test
-    @DisplayName("철회 대상 정책을 카탈로그에서 찾지 못하면 예외 없이 철회 쿼리를 실행하지 않는다")
-    void revokeConsents_unknown_policy_is_noop() {
+    @DisplayName("철회 대상 정책을 카탈로그에서 찾지 못하면 POLICY_NOT_FOUND 예외가 발생한다 (등록 API와 대칭)")
+    void revokeConsents_unknown_policy_throws() {
         // given: 카탈로그에 해당 버전이 없음
         given(policyCatalog.loadByKey(List.of("marketing"))).willReturn(Map.of());
 
-        // when: 철회 요청
-        meService.revokeConsents(ME, new MeRevokeConsentsCommand(List.of(new MeRevokeConsentsItemCommand("marketing", 9))));
+        // when & then: 마스터 데이터에 없는 정책이므로 조용히 무시하지 않고 404로 거절
+        assertThatThrownBy(() -> meService.revokeConsents(ME,
+                new MeRevokeConsentsCommand(List.of(new MeRevokeConsentsItemCommand("marketing", 9)))))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.POLICY_NOT_FOUND);
 
-        // then: 철회 쿼리는 실행되지 않음
         then(agreementRepository).should(never()).revokeWithPreviousVersionsByUserIdAndPolicyIdIn(anyLong(), anyList());
     }
 

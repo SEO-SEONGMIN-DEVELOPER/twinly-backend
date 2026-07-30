@@ -19,7 +19,6 @@ import com.nidus.twinly.legal.entity.Policy;
 import com.nidus.twinly.legal.entity.PolicyName;
 import com.nidus.twinly.legal.repository.AgreementRepository;
 import com.nidus.twinly.legal.repository.PolicyNameRepository;
-import com.nidus.twinly.legal.repository.PolicyRepository;
 import com.nidus.twinly.legal.service.PolicyCatalog;
 import com.nidus.twinly.legal.service.PolicyCatalog.PolicyKey;
 import com.nidus.twinly.me.domain.HesitationDuration;
@@ -100,7 +99,6 @@ public class MeService {
     private final PhotoRepository photoRepository;
     private final UserRepository userRepository;
     private final PolicyNameRepository policyNameRepository;
-    private final PolicyRepository policyRepository;
     private final AgreementRepository agreementRepository;
     private final NotificationSettingRepository notificationSettingRepository;
     private final DisclosureAgreementRepository disclosureAgreementRepository;
@@ -193,13 +191,7 @@ public class MeService {
         List<PolicyName> policyNames = policyNameRepository.findAllByIsDeprecatedFalse();
         List<Long> policyNameIds = policyNames.stream().map(PolicyName::getId).toList();
 
-        Instant now = Instant.now();
-        Map<Long, Policy> currentByPolicyNameId = policyRepository.findAllByPolicyNameIdIn(policyNameIds).stream()
-                .filter(policy -> policy.getEffectiveAt() != null && !policy.getEffectiveAt().isAfter(now))
-                .collect(Collectors.toMap(
-                        Policy::getPolicyNameId,
-                        Function.identity(),
-                        (a, b) -> a.getEffectiveAt().isAfter(b.getEffectiveAt()) ? a : b));
+        Map<Long, Policy> currentByPolicyNameId = policyCatalog.loadLatestByPolicyNameId(policyNameIds);
 
         Map<Long, Agreement> agreementByPolicyId = agreementRepository.findAllByUserIdAndRevokedAtIsNull(userId).stream()
                 .collect(Collectors.toMap(
@@ -258,8 +250,13 @@ public class MeService {
         Map<PolicyKey, Policy> policyByKey = policyCatalog.loadByKey(policyNameIdentifiers);
 
         List<Policy> policies = command.grants().stream()
-                .map(grant -> policyByKey.get(new PolicyKey(grant.policyId(), grant.version())))
-                .filter(policy -> policy != null)
+                .map(grant -> {
+                    Policy policy = policyByKey.get(new PolicyKey(grant.policyId(), grant.version()));
+                    if (policy == null) {
+                        throw new BusinessException(ErrorCode.POLICY_NOT_FOUND);
+                    }
+                    return policy;
+                })
                 .toList();
 
         if (policies.stream().anyMatch(policy -> Boolean.TRUE.equals(policy.getIsRequired()))) {

@@ -371,10 +371,11 @@ CREATE TABLE policies (
 CREATE TABLE policy_names (
     id             BIGINT NOT NULL AUTO_INCREMENT,
     name           TEXT NOT NULL,
-    identifier     TEXT NOT NULL,
+    identifier     VARCHAR(100) NOT NULL,
     is_deprecated  BOOLEAN DEFAULT 0 NOT NULL,
 
-    CONSTRAINT pk_policy_names PRIMARY KEY (id)
+    CONSTRAINT pk_policy_names PRIMARY KEY (id),
+    CONSTRAINT uk_policy_names_identifier UNIQUE (identifier)
 ) ENGINE = INNODB;
 
 CREATE TABLE question_partners (
