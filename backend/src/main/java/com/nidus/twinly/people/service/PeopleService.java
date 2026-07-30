@@ -201,11 +201,7 @@ public class PeopleService {
         Encounter encounter = encounterRepository.findByUserAIdAndUserBId(Math.min(userId, partnerUserId), Math.max(userId, partnerUserId))
                 .orElseThrow(() -> new BusinessException(ErrorCode.ENCOUNTER_NOT_FOUND));
 
-        EncounterPreference preference = encounterPreferenceRepository.findByEncounterIdAndUserId(encounter.getId(), userId)
-                .orElseGet(() -> EncounterPreference.create(encounter.getId(), userId));
-
-        preference.changeIsFavorited(true);
-        encounterPreferenceRepository.save(preference);
+        encounterPreferenceRepository.upsertIsFavorited(encounter.getId(), userId, true);
     }
 
     @Transactional

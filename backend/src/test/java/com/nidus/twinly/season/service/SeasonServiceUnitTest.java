@@ -91,35 +91,18 @@ class SeasonServiceUnitTest {
     }
 
     @Test
-    @DisplayName("이미 참가한 시즌이면 다시 저장하지 않는다 (멱등)")
-    void participateIn_already_participated_is_noop() {
-        // given: 참가 가능한 기간 + 이미 참가 이력 존재
+    @DisplayName("시즌 참가는 조회 없이 upsert 한 번으로 위임한다")
+    void participateIn_delegates_to_upsert() {
+        // given: 참가 가능한 기간
         given(currentSeasonReader.read()).willReturn(joinableSeason());
-        given(seasonParticipationRepository.existsByUserIdAndSeasonId(USER_ID, CURRENT_SEASON_ID)).willReturn(true);
 
-        // when: 같은 시즌에 다시 참가
+        // when: 참가
         seasonService.participateIn(USER_ID);
 
-        // then: 저장하지 않음 (멱등)
+        // then: 조회-후-저장이 아니라 원자적 upsert 한 번 (참가 버튼 연타가 유니크 제약을 위반하지 않는다)
+        then(seasonParticipationRepository).should().upsert(USER_ID, CURRENT_SEASON_ID);
+        then(seasonParticipationRepository).should(never()).existsByUserIdAndSeasonId(any(), any());
         then(seasonParticipationRepository).should(never()).save(any());
-    }
-
-    @Test
-    @DisplayName("참가 기간이고 참가 이력이 없으면 userId/현재 시즌 id로 참가를 저장한다")
-    void participateIn_new_saves() {
-        // given: 참가 가능한 기간 + 참가 이력 없음
-        given(currentSeasonReader.read()).willReturn(joinableSeason());
-        given(seasonParticipationRepository.existsByUserIdAndSeasonId(USER_ID, CURRENT_SEASON_ID)).willReturn(false);
-
-        // when: 신규 참가
-        seasonService.participateIn(USER_ID);
-
-        // then: userId/현재 시즌 id로 새 참가 저장 + participatedInAt 기록
-        ArgumentCaptor<SeasonParticipation> captor = ArgumentCaptor.forClass(SeasonParticipation.class);
-        then(seasonParticipationRepository).should().save(captor.capture());
-        assertThat(captor.getValue().getUserId()).isEqualTo(USER_ID);
-        assertThat(captor.getValue().getSeasonId()).isEqualTo(CURRENT_SEASON_ID);
-        assertThat(captor.getValue().getParticipatedInAt()).isNotNull();
     }
 
     @Test

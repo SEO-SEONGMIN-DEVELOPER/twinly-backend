@@ -15,6 +15,7 @@ import java.time.Instant;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class SeasonService {
 
     private final CurrentSeasonReader currentSeasonReader;
@@ -30,11 +31,7 @@ public class SeasonService {
             throw new BusinessException(ErrorCode.SEASON_NOT_JOINABLE);
         }
 
-        if (seasonParticipationRepository.existsByUserIdAndSeasonId(userId, season.getId())) {
-            return;
-        }
-
-        seasonParticipationRepository.save(SeasonParticipation.create(userId, season.getId()));
+        seasonParticipationRepository.upsert(userId, season.getId());
     }
 
     public SeasonParticipationResult participation(Long userId) {

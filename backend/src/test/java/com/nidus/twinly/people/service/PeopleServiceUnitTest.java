@@ -321,20 +321,18 @@ class PeopleServiceUnitTest {
     }
 
     @Test
-    @DisplayName("즐겨찾기 이력이 없으면 새 EncounterPreference를 만들어 isFavorited=true로 저장한다")
-    void favorite_creates_preference() {
-        // given: encounter는 있으나 즐겨찾기 이력이 없는 상태
+    @DisplayName("즐겨찾기 등록은 조회 없이 upsert 한 번으로 위임한다")
+    void favorite_delegates_to_upsert() {
+        // given: encounter가 존재하는 상태
         given(encounterRepository.findByUserAIdAndUserBId(ME, 20L)).willReturn(Optional.of(encounter(9L, ME, 20L)));
 
         // when: 즐겨찾기 등록
         peopleService.favorite(ME, 20L);
 
-        // then: encounterId/userId가 채워진 새 선호도가 isFavorited=true로 저장됨
-        ArgumentCaptor<EncounterPreference> captor = ArgumentCaptor.forClass(EncounterPreference.class);
-        then(encounterPreferenceRepository).should().save(captor.capture());
-        assertThat(captor.getValue().getEncounterId()).isEqualTo(9L);
-        assertThat(captor.getValue().getUserId()).isEqualTo(ME);
-        assertThat(captor.getValue().getIsFavorited()).isTrue();
+        // then: 조회-후-저장이 아니라 원자적 upsert 한 번 (하트 연타가 유니크 제약을 위반하지 않는다)
+        then(encounterPreferenceRepository).should().upsertIsFavorited(9L, ME, true);
+        then(encounterPreferenceRepository).should(never()).findByEncounterIdAndUserId(any(), any());
+        then(encounterPreferenceRepository).should(never()).save(any());
     }
 
     @Test

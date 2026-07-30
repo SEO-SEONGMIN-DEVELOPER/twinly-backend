@@ -53,6 +53,14 @@ class SeasonIntegrationTest extends AbstractIntegrationTest {
                 seasonParticipationRepository.findByUserIdAndSeasonId(user.getId(), CURRENT_SEASON_ID);
         assertThat(saved).isPresent();
         assertThat(saved.get().getParticipatedInAt()).isNotNull();
+
+        // when: 같은 시즌에 다시 참가 (버튼 연타)
+        mockMvc.perform(put("/api/v1/season/participation")
+                        .header("Authorization", bearer(user.getId())))
+                .andExpect(status().isOk());
+
+        // then: upsert라 유니크 제약 위반 없이 행이 하나로 유지된다
+        assertThat(seasonParticipationRepository.findAll()).hasSize(1);
     }
 
     @Test

@@ -284,12 +284,8 @@ public class MeService {
 
     @Transactional
     public void changePushNotifications(Long userId, NotificationType type, MeChangePushNotificationsCommand command) {
-        notificationSettingRepository.findByUserIdAndChannelAndType(userId, NotificationChannel.PUSH, type)
-                .ifPresentOrElse(
-                        notificationSetting -> notificationSetting.changeEnabled(command.isEnabled()),
-                        () -> notificationSettingRepository.save(
-                                NotificationSetting.create(userId, NotificationChannel.PUSH, type, command.isEnabled()))
-                );
+        notificationSettingRepository.upsertEnabled(
+                userId, NotificationChannel.PUSH.name(), type.name(), command.isEnabled());
     }
 
     public MeProfileVisibilitySettingsResult profileVisibilitySettings(Long userId) {
@@ -305,9 +301,7 @@ public class MeService {
     @Transactional
     public void changeProfileVisibilitySetting(Long userId, DisclosureField type, MeChangeProfileVisibilitySettingCommand command) {
         if (command.isVisible()) {
-            if (!disclosureAgreementRepository.existsByUserIdAndField(userId, type)) {
-                disclosureAgreementRepository.save(DisclosureAgreement.create(userId, type));
-            }
+            disclosureAgreementRepository.upsert(userId, type.name());
             return;
         }
 

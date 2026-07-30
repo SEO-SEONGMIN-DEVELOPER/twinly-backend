@@ -313,6 +313,26 @@ class MeServiceUnitTest {
         assertThat(user.getWithdrawalRequestedAt()).isNull();
     }
 
+    @Test
+    @DisplayName("복구한 뒤 내 상태를 조회하면 복구 마감 시각이 남아 있지 않다")
+    void restore_clears_recoverable_until() {
+        // given: 하루 전에 탈퇴 신청한 유저
+        User user = user();
+        Instant requestedAt = Instant.now().minus(Duration.ofDays(1));
+        ReflectionTestUtils.setField(user, "withdrawalRequestedAt", requestedAt);
+        ReflectionTestUtils.setField(user, "withdrawalScheduledAt", requestedAt.plus(Duration.ofDays(15)));
+        given(userRepository.findById(ME)).willReturn(Optional.of(user));
+        given(reportRepository.findAllByReportedUserIdAndStatus(ME, ReportStatus.RESOLVED)).willReturn(List.of());
+
+        // when: 복구 후 내 상태 조회
+        meService.restore(ME);
+        MeStatusResult result = meService.status(ME);
+
+        // then: 탈퇴 여부와 복구 마감 시각이 함께 초기화
+        assertThat(result.withdrawal().isDeleted()).isFalse();
+        assertThat(result.withdrawal().recoverableUntil()).isNull();
+    }
+
     // ---------------------------------------------------------------- 프로필
 
     @Test
@@ -534,38 +554,16 @@ class MeServiceUnitTest {
     }
 
     @Test
-    @DisplayName("푸시 알림 설정 변경 시 기존 설정이 있으면 enabled만 바꾸고 새로 저장하지 않는다")
-    void changePushNotifications_updates_existing() {
-        // given: CHAT 설정이 이미 on으로 저장된 상태
-        NotificationSetting setting = NotificationSetting.create(ME, NotificationChannel.PUSH, NotificationType.CHAT, true);
-        given(notificationSettingRepository.findByUserIdAndChannelAndType(ME, NotificationChannel.PUSH, NotificationType.CHAT))
-                .willReturn(Optional.of(setting));
-
-        // when: off로 변경
+    @DisplayName("푸시 알림 설정 변경은 조회 없이 upsert 한 번으로 위임한다")
+    void changePushNotifications_delegates_to_upsert() {
+        // when: CHAT 설정을 off로 변경
         meService.changePushNotifications(ME, NotificationType.CHAT, new MeChangePushNotificationsCommand(false));
 
-        // then: 기존 엔티티만 갱신되고 저장은 일어나지 않음
-        assertThat(setting.getEnabled()).isFalse();
+        // then: 조회-후-저장이 아니라 원자적 upsert 한 번 (동시 요청이 유니크 제약을 위반하지 않는다)
+        then(notificationSettingRepository).should()
+                .upsertEnabled(ME, NotificationChannel.PUSH.name(), NotificationType.CHAT.name(), false);
+        then(notificationSettingRepository).should(never()).findByUserIdAndChannelAndType(any(), any(), any());
         then(notificationSettingRepository).should(never()).save(any());
-    }
-
-    @Test
-    @DisplayName("푸시 알림 설정 변경 시 기존 설정이 없으면 PUSH 채널 설정을 새로 저장한다")
-    void changePushNotifications_saves_new() {
-        // given: 저장된 설정이 없는 상태
-        given(notificationSettingRepository.findByUserIdAndChannelAndType(ME, NotificationChannel.PUSH, NotificationType.MARKETING))
-                .willReturn(Optional.empty());
-
-        // when: off로 변경
-        meService.changePushNotifications(ME, NotificationType.MARKETING, new MeChangePushNotificationsCommand(false));
-
-        // then: PUSH 채널·MARKETING 타입 설정이 새로 저장됨
-        ArgumentCaptor<NotificationSetting> captor = ArgumentCaptor.forClass(NotificationSetting.class);
-        then(notificationSettingRepository).should().save(captor.capture());
-        assertThat(captor.getValue().getUserId()).isEqualTo(ME);
-        assertThat(captor.getValue().getChannel()).isEqualTo(NotificationChannel.PUSH);
-        assertThat(captor.getValue().getType()).isEqualTo(NotificationType.MARKETING);
-        assertThat(captor.getValue().getEnabled()).isFalse();
     }
 
     // ---------------------------------------------------------------- 프로필 공개 설정
@@ -586,31 +584,14 @@ class MeServiceUnitTest {
     }
 
     @Test
-    @DisplayName("프로필 항목을 공개로 바꿀 때 동의 기록이 없으면 새로 저장한다")
-    void changeProfileVisibility_visible_saves() {
-        // given: 공개 동의 기록이 없는 상태
-        given(disclosureAgreementRepository.existsByUserIdAndField(ME, DisclosureField.AFFILIATION)).willReturn(false);
-
+    @DisplayName("프로필 항목을 공개로 바꾸면 조회 없이 upsert 한 번으로 위임한다")
+    void changeProfileVisibility_visible_delegates_to_upsert() {
         // when: 공개로 변경
         meService.changeProfileVisibilitySetting(ME, DisclosureField.AFFILIATION, new MeChangeProfileVisibilitySettingCommand(true));
 
-        // then: 해당 항목의 공개 동의가 저장됨
-        ArgumentCaptor<DisclosureAgreement> captor = ArgumentCaptor.forClass(DisclosureAgreement.class);
-        then(disclosureAgreementRepository).should().save(captor.capture());
-        assertThat(captor.getValue().getUserId()).isEqualTo(ME);
-        assertThat(captor.getValue().getField()).isEqualTo(DisclosureField.AFFILIATION);
-    }
-
-    @Test
-    @DisplayName("이미 공개된 프로필 항목을 다시 공개로 바꾸면 중복 저장하지 않는다 (멱등)")
-    void changeProfileVisibility_visible_twice_is_noop() {
-        // given: 이미 공개 동의된 상태
-        given(disclosureAgreementRepository.existsByUserIdAndField(ME, DisclosureField.AFFILIATION)).willReturn(true);
-
-        // when: 다시 공개로 변경
-        meService.changeProfileVisibilitySetting(ME, DisclosureField.AFFILIATION, new MeChangeProfileVisibilitySettingCommand(true));
-
-        // then: 저장하지 않음 (멱등)
+        // then: 이미 공개된 경우에도 같은 호출이라 재요청이 멱등하고 동시 요청도 안전하다
+        then(disclosureAgreementRepository).should().upsert(ME, DisclosureField.AFFILIATION.name());
+        then(disclosureAgreementRepository).should(never()).existsByUserIdAndField(any(), any());
         then(disclosureAgreementRepository).should(never()).save(any());
     }
 
