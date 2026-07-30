@@ -46,16 +46,7 @@
 
 ## POST /api/v1/auth/onboarding/{email,sms}/verify, POST /api/v1/auth/{email,sms}/verify
 
-### 3. 인증번호 시도 횟수 제한이 없다 (brute force)
-- **심각도**: medium
-- **증상**: 6자리(=100만 경우의 수) 코드에 대해 유효 시간 5분 동안 **무제한** 시도가 가능하다. 실패 카운트도 잠금도 없다.
-- **재현 조건**: 발급된 `verificationToken`으로 코드만 바꿔가며 verify를 반복 호출 → 계속 422만 반환하고 차단되지 않음.
-- **근거 코드 위치**
-  - `backend/src/main/java/com/nidus/twinly/auth/service/AuthService.java:198-214` — `verifyAnonSession`, 실패 횟수 누적 없음
-  - `backend/src/main/java/com/nidus/twinly/auth/service/CodeVerificationService.java:25-40` — 동일
-- **제안**: 세션에 `attemptCount` 컬럼을 추가해 N회(예: 5회) 실패 시 세션을 무효화하고 재발송을 요구한다.
-
-### 4. 이미 인증 완료된 세션을 같은 코드로 반복 verify할 수 있다
+### 3. 이미 인증 완료된 세션을 같은 코드로 반복 verify할 수 있다
 - **심각도**: low
 - **증상**: 온보딩 verify는 `verifiedAt`만 덮어쓰고, 로그인용 verify는 호출할 때마다 **새 `verifiedToken`을 재발급**한다. 코드가 1회용이 아니다.
 - **재현 조건**: 같은 `verificationToken` + 정답 코드로 verify를 2회 호출 → 둘 다 성공, 로그인용은 서로 다른 `verifiedToken` 2개가 유효하게 존재.
@@ -68,28 +59,9 @@
 
 ## POST /api/v1/auth/email/send, POST /api/v1/auth/sms/send
 
-### 5. 가입 여부가 응답으로 그대로 노출된다 (계정 열거)
-- **심각도**: low
-- **증상**: 미가입이면 404 `EMAIL_NOT_REGISTERED` / `PHONE_NOT_REGISTERED`, 가입이면 200이 나와 임의의 이메일·전화번호의 가입 여부를 확인할 수 있다.
-- **재현 조건**: 임의 이메일로 `/api/v1/auth/email/send` 호출 → status로 가입 여부 판별.
-- **근거 코드 위치**
-  - `backend/src/main/java/com/nidus/twinly/auth/service/AuthService.java:124-126`
-  - `backend/src/main/java/com/nidus/twinly/auth/service/AuthService.java:152-154`
-- **제안**: 제품 정책상 의도된 UX일 수 있다. 유지한다면 최소한 IP/연락처 단위 rate limit을 걸어 대량 조회를 막는다.
-
-### 6. 발송 요청에 rate limit이 없고 세션 행이 계속 쌓인다
-- **심각도**: low
-- **증상**: 로그인용 send는 호출할 때마다 `VerificationSession`을 새로 `save`한다. 반복 호출 시 SMS/메일 비용이 그대로 발생하고 `verification_sessions` 행이 무한 증가한다(삭제 로직 없음).
-- **재현 조건**: `/api/v1/auth/sms/send`를 연속 호출 → 매번 새 행 생성 + 매번 SOLAPI 발송.
-- **근거 코드 위치**
-  - `backend/src/main/java/com/nidus/twinly/auth/service/AuthService.java:131-132` (email), `:159-160` (sms)
-- **제안**: 연락처별 재발송 쿨다운(예: 60초)과 일일 발송 한도를 두고, 만료 세션 정리 배치를 추가한다. (온보딩 send는 `upsertVerificationSession`으로 행이 늘지 않으므로 이 문제는 없다.)
-
----
-
 ## POST /api/v1/auth/refresh
 
-### 7. 저장된 RefreshToken의 expiresAt을 검증하지 않는다
+### 4. 저장된 RefreshToken의 expiresAt을 검증하지 않는다
 - **심각도**: low
 - **증상**: `refresh_tokens.expires_at`은 저장만 하고 확인하지 않는다. 현재는 `jwtService.parseRefreshTokenUserId`가 JWT `exp`를 검증해 실질적 노출은 없지만, JWT 만료와 DB 만료가 어긋나면 만료 토큰이 통과할 수 있다.
 - **재현 조건**: DB의 `expires_at`만 과거로 바꾸고 JWT는 유효한 상태에서 refresh 호출 → 200.

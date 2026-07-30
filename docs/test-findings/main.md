@@ -25,18 +25,6 @@ springdoc이 노출하는 이 도메인의 오퍼레이션 1개는 단위·통�
 - **심각도**: medium
 - **제안**: `countUnreadRoomsByUserId` 쿼리에 `AND p.left_at IS NULL AND p.is_hidden = FALSE`를 추가해 채팅 목록의 가시성 규칙과 한 곳(쿼리)에서 일치시킨다. 가시성 규칙이 두 군데로 갈라진 것이 근본 원인이므로, 규칙을 바꿀 때 양쪽을 함께 고치도록 테스트로 못박아두는 편이 좋다.
 
-### 2. `unreadNotificationCount`는 현재 항상 0 (알림 피드 쓰기 경로 부재)
-
-- **증상**: 응답의 `unreadNotificationCount`가 언제나 0이다.
-- **재현 조건**: 항상. `app_notification_feeds`에 행을 INSERT 하는 운영 코드가 존재하지 않는다(`AppNotificationFeed`를 다루는 코드는 조회·읽음처리뿐이며 `save(...)` 호출부가 없다).
-- **근거 코드 위치**:
-  - `backend/src/main/java/com/nidus/twinly/main/service/MainService.java:41`
-  - `backend/src/main/java/com/nidus/twinly/notification/repository/AppNotificationFeedRepository.java:13` (`countByUserIdAndReadAtIsNull`) — 호출부는 `MeService.java:339`, `MeService.java:343`, `MainService.java:41` 3곳뿐이고 전부 읽기다.
-- **심각도**: medium (미구현일 가능성이 높음. 버그가 아니라 "아직 안 붙인 기능"이면 무시해도 된다)
-- **제안**: 알림 발송 지점(친구 요청/매칭/채팅 준비)에서 `AppNotificationFeed`를 저장하는 경로를 붙이거나, 아직 계획이 아니라면 응답 필드를 노출하지 않는 편이 프론트 혼선을 줄인다. 통합 테스트에서는 이 필드를 검증하기 위해 JDBC로 직접 행을 넣었다(`MainIntegrationTest#insertUnreadNotification`).
-
----
-
 ## 테스트 작성 시 메모 (버그 아님)
 
 - `Season`은 정적 팩토리·세터가 없어 테스트에서 인스턴스를 만들 수 없다. 단위 테스트는 `BeanUtils.instantiateClass(Season.class)` + `ReflectionTestUtils.setField`로, 통합 테스트는 `id`를 설정값(`app.current-season-id=1`)에 맞춰야 해서 `JdbcTemplate`으로 직접 INSERT 했다(`id`가 `AUTO_INCREMENT`라 JPA로는 id를 지정할 수 없다).

@@ -33,23 +33,3 @@
 
 ## PATCH /api/v1/me/push-notifications/{type}, PATCH /api/v1/me/profile/visibility-settings/{type}
 
-### 2. "조회 후 없으면 저장" 패턴이라 동시 요청 시 유니크 제약 위반이 발생할 수 있다
-
-- **증상**
-  같은 유저가 동일 설정 변경을 동시에 두 번 보내면 두 요청 모두 "행 없음"으로 판단하고 INSERT를 시도해
-  유니크 제약 위반(`DataIntegrityViolationException`)이 발생, 한쪽이 500으로 실패한다.
-
-- **재현 조건**
-  동일 유저 토큰으로 `PATCH /api/v1/me/push-notifications/CHAT`을 동시에 2건 호출 (설정 행이 없는 상태).
-
-- **근거 코드 위치**
-  - `backend/src/main/java/com/nidus/twinly/me/service/MeService.java:293` — `findByUserIdAndChannelAndType(...).ifPresentOrElse(..., save)`
-  - `backend/src/main/java/com/nidus/twinly/me/service/MeService.java:314` — `existsByUserIdAndField(...)` 후 `save`
-  - `backend/src/main/resources/db/migration/V1__init_schema.sql:308` — `uk_notification_settings_user_id_channel_id_type`
-  - `backend/src/main/resources/db/migration/V1__init_schema.sql:252` — `uk_disclosure_agreements_user_id_field`
-
-- **심각도**: low (사용자가 실제로 동시에 토글할 확률은 낮음)
-
-- **제안**
-  `INSERT ... ON DUPLICATE KEY UPDATE`(upsert) 네이티브 쿼리로 바꾸거나,
-  `DataIntegrityViolationException`을 잡아 재조회 후 업데이트하는 방식으로 방어한다.

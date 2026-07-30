@@ -94,22 +94,14 @@
 - **심각도**: **low**
 - **제안**: 응답 DTO를 만들어 `lastMessageId`를 내려주면 클라이언트가 로컬 상태를 서버 기준으로 맞출 수 있다. (지금 필요 없다면 그대로 둬도 무방)
 
-## 도메인 공통
-
-### 6. `ChatChangedEvent`가 어디서도 발행되지 않는다 (죽은 알림 경로)
-- **증상**: `ChatNotifier.onChatChanged`가 `/user/queue/chat/index`로 `CHAT_CHANGED`를 보내도록 되어 있지만, `ChatChangedEvent`를 `publishEvent` 하는 코드가 프로젝트 전체에 없다. 즉 채팅 목록 화면의 실시간 갱신 신호가 한 번도 나가지 않는다.
-- **근거 코드 위치**: `backend/src/main/java/com/nidus/twinly/chat/notifier/ChatNotifier.java:52-60` (리스너), `backend/src/main/java/com/nidus/twinly/chat/event/ChatChangedEvent.java` (발행처 없음). `ChatService.sendMessage`는 `ChatMessageCreatedEvent`만 발행한다 (`ChatService.java:98`).
-- **심각도**: **medium** (기능 미구현 / 죽은 코드)
-- **제안**: 메시지 생성·읽음 처리·방 상태 변경 시점에 `ChatChangedEvent`를 발행하도록 연결하거나, 아직 쓰지 않을 거면 리스너와 이벤트를 제거해 죽은 코드를 남기지 않는다.
-
 ## 작성한 테스트에서 의도적으로 제외한 케이스
 
 아래 케이스는 **위 버그 때문에 현재 실패하거나 500이 나므로** 테스트로 고정하지 않았다. 운영 코드 수정 후 추가할 것.
 
 | 케이스 | 관련 항목 |
 | --- | --- |
-| `GET /rooms` — 메시지가 없는 방이 포함된 목록 | 1 |
-| `GET /rooms` — 매칭이 0건인 유저의 빈 목록 | 2 |
-| `GET /rooms/{roomId}/messages?limit=0` | 4 |
-| enter/hide/leave — 참여 정보가 없을 때의 상태 코드 | 5 |
-| `POST /messages` — 닫힌 방/나간 방으로의 전송 차단 | 6 |
+| enter/hide/leave — 참여 정보가 없을 때의 상태 코드 | 2 |
+| `POST /messages` — 닫힌 방/나간 방으로의 전송 차단 | 3 |
+
+메시지가 없는 방·매칭 0건 유저의 목록과 `limit` 범위 밖 요청은 해당 버그가 수정되면서 테스트로 고정됐다
+(`ChatIntegrationTest`, `ChatControllerUnitTest`).

@@ -5,6 +5,9 @@ REST 74개 오퍼레이션(springdoc `/v3/api-docs` 기준, springwolf 문서 3�
 
 해결된 항목은 각 문서에서 제거한다. 해결 이력은 회귀 테스트와 커밋 메시지가 갖는다.
 
+**버그가 아니라 아직 만들지 않은 기능**은 아래 "다음 개발 항목"으로 따로 뺐다. 고칠 코드가 있는 것과
+새로 쓸 코드가 필요한 것은 판단 방식이 다르고, 섞어두면 남은 발견사항 수가 실제보다 부풀어 보인다.
+
 ## 현재 상태
 
 | 태스크 | 테스트 수 | 실패 |
@@ -17,41 +20,79 @@ REST 74개 오퍼레이션(springdoc `/v3/api-docs` 기준, springwolf 문서 3�
 > 통합 테스트는 로컬 `.env`의 암호화 키를 필요로 한다. 키가 없으면 `AesGcmEncryptor` 생성에 실패해
 > 컨텍스트 기동 단계에서 전부 죽는다. CI에 붙일 때 시크릿 주입이 선행되어야 한다.
 
-## 남은 항목 (56건)
+## 남은 항목 (35건)
 
 | 문서 | 항목 | high | medium | low/info |
 |---|---:|---:|---:|---:|
-| [auth](auth.md) | 7 | 0 | 3 | 4 |
-| [chat-websocket](chat-websocket.md) | 7 | 2 | 2 | 3 |
-| [chat](chat.md) | 6 | 0 | 3 | 3 |
-| [people](people.md) | 6 | 0 | 3 | 3 |
-| [push](push.md) | 5 | 0 | 2 | 3 |
-| [connection-websocket](connection-websocket.md) | 4 | 0 | 2 | 2 |
-| [connection](connection.md) | 4 | 0 | 2 | 2 |
-| [anon](anon.md) | 3 | 0 | 1 | 2 |
+| [chat](chat.md) | 5 | 0 | 2 | 3 |
+| [people](people.md) | 5 | 0 | 2 | 3 |
+| [auth](auth.md) | 4 | 0 | 2 | 2 |
+| [push](push.md) | 3 | 0 | 1 | 2 |
+| [anon](anon.md) | 2 | 0 | 0 | 2 |
 | [block](block.md) | 2 | 0 | 0 | 2 |
+| [connection-websocket](connection-websocket.md) | 2 | 0 | 0 | 2 |
+| [connection](connection.md) | 2 | 0 | 1 | 1 |
 | [legal](legal.md) | 2 | 0 | 0 | 2 |
-| [main](main.md) | 2 | 0 | 2 | 0 |
-| [me](me.md) | 2 | 0 | 1 | 1 |
 | [onboarding](onboarding.md) | 2 | 0 | 0 | 2 |
 | [report](report.md) | 2 | 0 | 0 | 2 |
-| [season](season.md) | 2 | 0 | 1 | 1 |
-| **합계** | **56** | **2** | **22** | **32** |
+| [chat-websocket](chat-websocket.md) | 1 | 0 | 0 | 1 |
+| [main](main.md) | 1 | 0 | 1 | 0 |
+| [me](me.md) | 1 | 0 | 1 | 0 |
+| [season](season.md) | 1 | 0 | 0 | 1 |
+| **합계** | **35** | **0** | **10** | **25** |
 
-## 우선 처리 대상 — high 2건
+## 다음 개발 항목 (발견사항 아님)
 
-| 도메인 | 내용 | 성격 |
-|---|---|---|
-| chat-websocket | `chat_room_participations` 행을 만드는 코드가 없어 `/app/chat/read`가 운영에서 항상 실패 | **기능 미구현.** 매칭 성사 시 방·참여를 만드는 흐름 자체가 없음 |
-| chat-websocket | `ChatChangedEvent` 발행처가 없어 `/user/queue/chat/index` 채널이 영구 무음 | **기능 미구현.** 목록 갱신 시점이 제품 결정 사항 |
+아래 11건은 **고칠 코드가 있는 게 아니라 새로 쓰거나 정책을 정해야 하는 것**이다. 무엇을 만들지가
+제품·인프라 결정에 달려 있어 위 발견사항 수에서 뺐다.
 
-둘 다 버그 수정이 아니라 **없는 기능을 만드는 일**이다. "매칭 성사 시점에 방을 만들지, 첫 메시지에 만들지"가
-정해져야 착수할 수 있다.
+### A. 매칭 성사 흐름 (chat-websocket 1·2, chat 6)
+
+**채팅 도메인 전체가 데이터 진입점 없이 떠 있다.** 읽기·전송 API는 다 있는데 방을 만드는 코드가 없어,
+지금 상태로는 어떤 유저도 채팅을 시작할 수 없다.
+
+- `Match`에는 정적 팩토리조차 없다
+- `ChatRoom.create`·`ChatRoomParticipation.create`는 엔티티 파일에만 있고 호출부가 없다
+- 그 결과 `/app/chat/read`는 참여 행이 없어 운영에서 항상 실패한다
+- `ChatChangedEvent` 발행처가 없어 `/user/queue/chat/index` 채널이 영구 무음이다 (리스너와 AsyncAPI 채널은 이미 있다)
+
+정해야 할 것: 매칭 성사 기준과 시점 / 방을 성사 시점에 만들지 첫 메시지에 만들지 /
+참여 행을 방과 함께 만들지 입장 시 만들지 / `ChatChangedEvent`를 어느 시점에 쏠지.
+
+### B. 알림 피드 쓰기 경로 (main 2)
+
+`AppNotificationFeed`를 저장하는 코드가 없다. `AppNotificationFeed.create`도 없고, 리포지토리 호출 5곳이
+전부 조회·읽음처리다. 그래서 `unreadNotificationCount`는 항상 0이고 알림 목록도 항상 비어 있다.
+
+정해야 할 것: 무엇이 알림이 되는가. A가 정해져야 매칭·채팅 관련 알림을 정의할 수 있다.
+
+### C. WebSocket 운영 대응 (connection-websocket 1·2)
+
+- `notifyDraining` 호출처가 없다. 배포 시 "곧 연결이 끊긴다"고 예고하는 용도라 **무중단 배포 절차가 정해져야** 붙일 수 있다
+- 인메모리 `SimpleBroker` + 로컬 `SimpUserRegistry`라 인스턴스가 2대 이상이면 팬아웃이 절반만 나간다 (미검증). 배포 형태(단일 인스턴스 / 오토스케일)에 달렸다
+
+둘 다 진행 중인 배포 작업과 함께 판단하는 것이 맞다.
+
+### D. 남용 제어·정리 (auth 3·5·6, anon 1, connection 1)
+
+전부 "무제한 반복 호출이 가능하다"는 성격이지만, **막을 수단이 배포 구성에 달려 있어** 지금 정할 수 없다.
+
+- 인증번호 시도 횟수 제한 (brute force) — `auth 3`
+- 발송 rate limit, 인증 세션 행 누적 — `auth 6`
+- 인증 없는 공개 쓰기(익명 세션 발급)의 남용 제어 — `anon 1`
+- `connection_tickets` 발급 제한·정리 배치 — `connection 1`
+
+정해야 할 것: rate limit 수단. 오토스케일이면 인메모리(Bucket4j)가 무의미하고, 단일 인스턴스면 Redis는
+과하다. 정리 배치도 어디서 돌릴지(앱 스케줄러 / 외부 크론)가 같은 판단에 걸린다.
+
+`auth 5`(가입 여부가 응답으로 노출되어 계정 열거가 가능)는 성격이 다른 **제품 판단**이다. 미가입도
+성공처럼 응답하면 열거를 막지만, 오타를 친 사용자가 "코드가 안 와요"로 헤맨다. 보안과 UX가 정면으로
+부딪히므로 어느 쪽을 택할지 정해야 착수할 수 있다.
 
 ## 일괄 처리 묶음
 
 도메인별로 하나씩 고치면 변경이 흩어지고 같은 판단을 여러 번 반복하게 된다.
-**원인과 수정 방법이 같은 것끼리 묶어** 한 번에 처리한다. B1~B7·B10·B11·B13·B14가 닫혔고, 남은 묶음 4개가 21건을 덮는다.
+**원인과 수정 방법이 같은 것끼리 묶어** 한 번에 처리한다. B15와 B8 잔여는 개발 항목으로 옮겼다. **묶음은 모두 닫혔고, 남은 것은 개별 항목뿐이다.**
 
 각 묶음은 커밋 하나 단위로 잡을 수 있게 나누었다. 우선순위는 위에서 아래 순이다.
 
@@ -180,29 +221,62 @@ REST 74개 오퍼레이션(springdoc `/v3/api-docs` 기준, springwolf 문서 3�
 (b) 바깥 트랜잭션 없이 도는 `ChatWebSocketIntegrationTest`로 `sendMessage`·`readMessages`의 실제 DB 반영 확인,
 두 가지로 했다. 서비스가 더 늘어 (a)를 눈으로 하기 버거워지면 ArchUnit 규칙으로 옮긴다.
 
-### B8. 남용 제어·rate limit (7건)
+### ~~B8. 남용 제어·rate limit (7건)~~ — 2건 처리, 5건은 개발 항목으로 이관
 
-전부 "무제한 반복 호출이 가능하다"는 같은 성격이다. 발송 비용·행 증가·brute force로 나타난다.
-**공통 rate limit 수단을 하나 마련하면 적용은 기계적이다.**
+**한 묶음이 아니었다.** rate limit 수단이 필요한 것은 3건뿐이고 나머지는 각각 다른 문제였다.
 
-| 문서 | 번호 | 내용 |
+| 문서 | 번호 | 처리 |
 |---|---:|---|
-| auth | 3 | 인증번호 시도 횟수 제한 없음 (brute force) |
-| auth | 5 | 가입 여부가 응답으로 노출 (계정 열거) |
-| auth | 6 | 발송 rate limit 없고 세션 행이 계속 쌓임 |
-| anon | 1 | 인증 없는 공개 쓰기인데 남용 제어 없음 |
-| connection | 1 | 티켓 발급 제한·정리 없어 테이블 무한 증가 |
-| connection | 4 | `SCOPE_MISMATCH`일 때 티켓이 소비되지 않아 무제한 재시도 |
-| push | 1 | `deviceId`만으로 소유자를 덮어써 기기 탈취 가능 |
+| connection | 4 | **로직 버그.** 스코프가 맞지 않으면 티켓을 소비하지 않고 반환해 같은 티켓으로 무제한 재시도할 수 있었다. 소비를 먼저 하고 스코프를 판정하도록 순서를 바꿨다 |
+| push | 1 | **별도 작업에서 처리.** `deviceId`만으로 조회하던 것을 `(userId, deviceId)`로 좁혀 남의 기기 등록을 덮어쓸 수 없게 했다 |
+| auth 3·5·6, anon 1, connection 1 | | **개발 항목 D로 이관.** 배포 구성·제품 판단이 선행되어야 한다 |
 
-### B9. WebSocket 에러·응답 처리 (4건)
+`connection 4`의 기존 테스트는 **결함을 정상 동작으로 고정하고 있었다**(`SCOPE_MISMATCH를 반환하고
+소비하지 않는다`). 계약이 바뀐 것이라 테스트를 다시 썼다.
 
-| 문서 | 번호 | 내용 |
+### ~~B9. WebSocket 에러·응답 처리 (4건)~~ — 처리 완료
+
+| 문서 | 번호 | 처리 |
 |---|---:|---|
-| chat-websocket | 3 | HTTP status 기반 매핑이라 원인이 뭉개짐 |
-| chat-websocket | 4 | 검증 실패 시 클라이언트가 아무 응답도 못 받음 |
-| chat-websocket | 6 | `@AsyncPublisher`에 `payloadType` 없음 (미검증) |
-| chat-websocket | 7 | `roomId` URL 인코딩이 무의미 |
+| chat-websocket | 3 | HTTP status 대신 `ErrorCode` 자체로 `CommandErrorCode`를 정한다 |
+| chat-websocket | 4 | 검증 실패도 목적지에 맞는 rejected 프레임으로 응답한다 |
+| chat-websocket | 6 | **닫음.** `payloadType` 누락은 AsyncAPI 문서 품질 문제이고 `(미검증)`이다. 런타임 영향이 없다 |
+| chat-websocket | 7 | **닫음.** `roomId`는 `Long`이라 URL 인코딩할 문자가 나올 수 없다. 무해하다 |
+
+**에러 매핑.** status는 여러 원인의 묶음이라 1:1 대응이 성립하지 않았다. 404 하나에 `ROOM_NOT_FOUND`·
+`MATCH_NOT_FOUND`·`CHAT_PARTICIPATION_NOT_FOUND` 셋이, 403에 `NOT_MATCH_PARTICIPANT`·
+`NOT_ACTIVE_ROOM_PARTICIPANT` 둘이 걸려 있어 방이 멀쩡한데도 "존재하지 않는 채팅방입니다"를 받았다.
+`CommandErrorCode`에 셋을 추가해 갈랐다. 422를 명령 종류별로 구분하려고 넘기던 `unprocessableCode`
+파라미터는 필요 없어져 제거했다.
+
+**검증 실패 응답.** 예외 핸들러가 로그만 남기고 끝나서, `@Valid` 실패나 봉투 검증 실패 시 클라이언트가
+committed도 rejected도 받지 못했다. 통합 테스트로 실측해 확인한 사실이다(수신 프레임 0개).
+"성공/실패 둘 중 하나는 반드시 돌려준다"는 명령-결과 프로토콜의 전제가 깨져 있었다.
+
+`@MessageExceptionHandler`가 `Message<?>`와 `Principal`을 받으면 `userId`·`sessionId`가 나오고,
+`message.getPayload()`가 **역직렬화 전 원본 JSON**이라 거기서 `commandId`를 꺼낼 수 있다. 즉 바디 검증이
+실패해도 봉투의 `commandId`는 살아 있다. JSON 자체가 깨져 `commandId`를 못 꺼내는 경우에만 로그만 남긴다.
+
+응답은 **새 봉투 타입을 만들지 않고 기존 `chat.message.rejected`·`chat.read.rejected`를 재사용**한다.
+원본 `simpDestination`(`/app/chat/messages` vs `/app/chat/read`)으로 분기하면 되기 때문이다. 봉투의
+`type` 필드는 검증 실패의 원인일 수 있어 신뢰할 수 없지만, `simpDestination`은 프레임워크가 채우므로
+라우팅과 항상 일치한다. 전달 수단은 `ErrorCode.INVALID_REQUEST`라 기존 매핑 테이블에 한 줄만 더하면 된다.
+
+응답 페이로드가 chat 전용이므로 **예외 핸들러도 chat에 둔다.** `common`에 두면 chat 목적지와 페이로드를
+알아야 해서 `common`이 `chat`을 참조하지 않는 층 구분이 깨진다.
+
+| 핸들러 | 범위 | 하는 일 |
+|---|---|---|
+| `GlobalWebSocketExceptionHandler` (common) | 모든 WS 컨트롤러 | 로그만. 예외가 세션을 끊지 않게 하는 최후 방어선 |
+| `ChatWebSocketExceptionHandler` (chat) | `ChatWebSocketController`만 | 로그 + 거절 프레임 |
+
+**둘 다 `Exception`을 잡고 chat 컨트롤러에는 둘 다 적용되므로 순서가 결과를 바꾼다.** `@Order` 없이는
+빈 등록 순서(사실상 패키지 이름 알파벳 순)에 의존하게 되어, Global이 먼저 걸리면 예외를 삼켜 거절 프레임이
+나가지 않는다. 실제로 순서를 뒤집어 통합 테스트가 깨지는 것을 확인했다. `@Order`로 "구체적인 advice가 먼저,
+범용이 나중"을 명시했다.
+
+`@ControllerAdvice`는 스코프를 지정해도 MVC 슬라이스 테스트(`@WebMvcTest`)에 로딩되는데 그 컨텍스트에는
+`ChatCommandResponder` 빈이 없다. 14개 슬라이스 테스트를 고치는 대신 `ObjectProvider`로 받는다.
 
 ### ~~B10. 죽은 코드 (4건)~~ — 처리 완료
 
@@ -215,19 +289,28 @@ REST 74개 오퍼레이션(springdoc `/v3/api-docs` 기준, springwolf 문서 3�
 | chat | 7 | **B15로 이관.** `ChatChangedEvent`는 발행처만 없을 뿐 리스너·AsyncAPI 채널이 이미 있다. 지우면 문서의 채널까지 없애야 하고, 프론트가 이미 구독 중일 수 있다 |
 | main | 2 | **B15로 이관.** `unreadNotificationCount` 필드를 지우면 응답 스키마가 바뀐다. 알림 피드 쓰기 경로가 생기면 채워질 자리다 |
 
-### B12. 동시 요청 경합 (4건)
+### ~~B12. 동시 요청 경합 (4건)~~ — 3건 처리, 1건 남김
 
-check-then-act 사이에 다른 요청이 끼어들어 유니크 제약 위반이 500으로 샌다.
-**우선순위는 낮다.** 같은 사용자의 재요청은 순차 멱등 처리로 이미 막히고, 남은 것들은 서로 다른 사용자가 겹칠
-여지가 없는 자기 데이터 조작이다. 실제 발생 확률이 있는 닉네임 선점은 처리 완료.
-트래픽이 붙은 뒤 5xx 지표에 `DataIntegrityViolationException`이 찍히면 그때 대응한다.
+네 곳 모두 `조회 → 없으면 생성 → 저장` 형태라 두 요청이 동시에 "없음"을 보면 둘 다 INSERT를 시도하고
+유니크 제약 위반이 500으로 샜다.
 
-| 문서 | 번호 | 내용 |
+**처음에 잡았던 방향(`DataIntegrityViolationException`을 catch 해서 멱등 처리)은 측정으로 뒤집혔다.**
+예외를 삼켜도 JPA가 이미 트랜잭션을 rollback-only로 표시해서, 커밋 시점에 `UnexpectedRollbackException`이
+난다. 500이 나는 것은 똑같고 예외 이름만 바뀐다. 통합 테스트로 확인했다.
+
+그래서 `INSERT ... ON DUPLICATE KEY UPDATE`로 바꿨다. 원자적이라 경합 자체가 없어진다. 네 곳 모두
+"있으면 값을 바꾸고 없으면 만든다"라 upsert의 의미와 정확히 일치하고, 바꾸는 값이 단일 플래그라
+도메인 로직이 SQL로 흩어지는 부담도 작다.
+
+| 문서 | 번호 | 처리 |
 |---|---:|---|
-| me | 2 | 알림·공개 설정 "조회 후 없으면 저장" |
-| push | 3 | 기기 동시 등록 |
-| season | 1 | 시즌 참가 check-then-act |
-| people | 1 | 즐겨찾기 "조회 후 없으면 생성" (B7에서 이관. 트랜잭션 경계는 붙었으나 경합은 그대로) |
+| me | 2 | 푸시 알림 설정·프로필 공개 설정 upsert |
+| season | 1 | 시즌 참가 upsert (`ON DUPLICATE KEY UPDATE id = id`로 no-op) |
+| people | 1 | 즐겨찾기 upsert |
+| push | 3 | **남김.** 소유자 검사가 들어가 upsert로 표현할 수 없다. `ON DUPLICATE KEY UPDATE`에는 조건을 붙일 수 없어, 남의 기기면 거절한다는 인가 규칙을 SQL로 옮기면 검사가 사라진다. 앱 시작 시 자동 호출이라 같은 유저가 동시에 부를 유인도 낮다 |
+
+조회를 없앴으므로 재요청도 자연히 멱등하다. 시즌 참가는 통합 테스트에서 두 번 호출해 행이 하나로
+유지되는 것을 고정했다.
 
 ### ~~B13. 네이티브 UPDATE 이후 stale (2건)~~ — 처리하지 않음
 
@@ -245,19 +328,6 @@ DTO·Command·서비스 계층은 그대로다.
 |---|---:|---|
 | me | 5 | `DELETE /api/v1/me/consents` → `POST /api/v1/me/consents/revoke` |
 | onboarding | 6 | `DELETE /api/v1/onboarding/consents` → `POST /api/v1/onboarding/consents/revoke` |
-
-### B15. 기능 미구현 — 제품 결정 선행 (6건)
-
-버그 수정이 아니라 없는 기능을 만드는 일이다. **동작 정의가 먼저**다.
-
-| 문서 | 번호 | 내용 |
-|---|---:|---|
-| chat-websocket | 1 | **high** — `ChatChangedEvent` 발행처 없음 (목록 갱신 시점이 제품 결정) |
-| chat-websocket | 2 | **high** — 방·참여 생성 흐름 자체가 없음 |
-| chat | 6 | 위 chat-websocket 1과 같은 원인. 리스너·채널은 있고 발행만 없다 |
-| main | 2 | `unreadNotificationCount`가 항상 0 — 알림 피드 쓰기 경로 부재 |
-| connection-websocket | 1 | `notifyDraining` 호출처 없음 |
-| connection-websocket | 2 | 인메모리 브로커라 다중 인스턴스에서 팬아웃 절반 유실 (미검증) |
 
 ### 개별 처리 (35건)
 
