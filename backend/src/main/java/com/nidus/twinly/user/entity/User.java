@@ -152,5 +152,6 @@ public class User {
 
     public void cancelWithdrawal() {
         this.withdrawalRequestedAt = null;
+        this.withdrawalScheduledAt = null;
     }
 }
