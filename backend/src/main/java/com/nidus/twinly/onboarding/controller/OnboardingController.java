@@ -16,7 +16,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -111,8 +110,11 @@ public class OnboardingController {
         onboardingService.grantConsents(anonSessionSnapshot, OnboardingGrantConsentsCommand.from(request));
     }
 
-    @ApiResponse(responseCode = "403", description = "REQUIRED_POLICY_REVOKE_DENIED")
-    @DeleteMapping("/api/v1/onboarding/consents")
+    @ApiResponses({
+            @ApiResponse(responseCode = "403", description = "REQUIRED_POLICY_REVOKE_DENIED"),
+            @ApiResponse(responseCode = "404", description = "POLICY_NOT_FOUND")
+    })
+    @PostMapping("/api/v1/onboarding/consents/revoke")
     public void revokeConsents(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
                                @Valid @RequestBody OnboardingRevokeConsentsRequest request) {
         onboardingService.revokeConsents(anonSessionSnapshot, OnboardingRevokeConsentsCommand.from(request));

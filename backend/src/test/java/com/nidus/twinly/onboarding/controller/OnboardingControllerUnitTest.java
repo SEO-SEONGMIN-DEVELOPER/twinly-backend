@@ -52,7 +52,6 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -538,7 +537,7 @@ class OnboardingControllerUnitTest {
     @DisplayName("동의 철회 성공 시 200을 반환하고 policyId/version 커맨드로 서비스를 호출한다")
     void revokeConsents_success() throws Exception {
         // when: 익명 세션 인증 상태로 동의 철회 API 호출
-        var result = mockMvc.perform(delete("/api/v1/onboarding/consents")
+        var result = mockMvc.perform(post("/api/v1/onboarding/consents/revoke")
                 .header("Authorization", ANON_BEARER)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
@@ -559,7 +558,7 @@ class OnboardingControllerUnitTest {
                 .given(onboardingService).revokeConsents(any(), any());
 
         // when: 필수 정책 철회 API 호출
-        var result = mockMvc.perform(delete("/api/v1/onboarding/consents")
+        var result = mockMvc.perform(post("/api/v1/onboarding/consents/revoke")
                 .header("Authorization", ANON_BEARER)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""

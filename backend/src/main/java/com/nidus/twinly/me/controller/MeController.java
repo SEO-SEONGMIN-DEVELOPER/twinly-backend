@@ -116,8 +116,11 @@ public class MeController {
         meService.grantConsents(userInfo.id(), MeGrantConsentsCommand.from(request));
     }
 
-    @ApiResponse(responseCode = "403", description = "REQUIRED_POLICY_REVOKE_DENIED")
-    @DeleteMapping("/api/v1/me/consents")
+    @ApiResponses({
+            @ApiResponse(responseCode = "403", description = "REQUIRED_POLICY_REVOKE_DENIED"),
+            @ApiResponse(responseCode = "404", description = "POLICY_NOT_FOUND")
+    })
+    @PostMapping("/api/v1/me/consents/revoke")
     public void revokeConsents(@CurrentUser UserInfo userInfo,
                                @Valid @RequestBody MeRevokeConsentsRequest request) {
         meService.revokeConsents(userInfo.id(), MeRevokeConsentsCommand.from(request));

@@ -345,7 +345,7 @@ class MeControllerUnitTest {
     @DisplayName("약관 동의 철회 성공 시 200을 반환하고 policyId·version 커맨드로 서비스를 호출한다")
     void revokeConsents_success() throws Exception {
         // when: 약관 동의 철회 API 호출
-        var result = mockMvc.perform(delete("/api/v1/me/consents")
+        var result = mockMvc.perform(post("/api/v1/me/consents/revoke")
                 .header("Authorization", BEARER)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
