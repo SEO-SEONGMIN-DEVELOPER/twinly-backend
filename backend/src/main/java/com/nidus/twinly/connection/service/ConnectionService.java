@@ -40,12 +40,12 @@ public class ConnectionService {
             return ConnectionTicketResolveResult.invalid();
         }
 
-        if (connectionTicket.getConnectionType() != requiredConnectionType) {
-            return ConnectionTicketResolveResult.scopeMismatch();
-        }
-
         if (connectionTicketRepository.consume(ticket) == 0) {
             return ConnectionTicketResolveResult.invalid();
+        }
+
+        if (connectionTicket.getConnectionType() != requiredConnectionType) {
+            return ConnectionTicketResolveResult.scopeMismatch();
         }
 
         return ConnectionTicketResolveResult.authorized(connectionTicket.getUserId());

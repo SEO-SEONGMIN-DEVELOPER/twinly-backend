@@ -101,19 +101,20 @@ class ConnectionServiceUnitTest {
     }
 
     @Test
-    @DisplayName("티켓의 connectionType이 요구 타입과 다르면 SCOPE_MISMATCH를 반환하고 소비하지 않는다")
-    void resolveTicket_scope_mismatch_returns_scope_mismatch() {
+    @DisplayName("티켓의 connectionType이 요구 타입과 달라도 티켓은 소비하고 SCOPE_MISMATCH를 반환한다")
+    void resolveTicket_scope_mismatch_consumes_ticket() {
         // given: SSE용으로 발급된 티켓
         UUID ticket = UUID.randomUUID();
         given(connectionTicketRepository.findByTicket(ticket)).willReturn(Optional.of(ticket(ticket, 7L, ConnectionType.SSE)));
+        given(connectionTicketRepository.consume(ticket)).willReturn(1);
 
         // when: WS 연결에 사용하려 시도
         ConnectionTicketResolveResult result = connectionService.resolveTicket(ticket, ConnectionType.WS);
 
-        // then: SCOPE_MISMATCH 반환 + 티켓은 소비되지 않음
+        // then: SCOPE_MISMATCH를 반환하되 티켓은 소비돼 같은 티켓으로 재시도할 수 없다
         assertThat(result.status()).isEqualTo(ConnectionTicketStatus.SCOPE_MISMATCH);
         assertThat(result.userId()).isNull();
-        then(connectionTicketRepository).should(never()).consume(any());
+        then(connectionTicketRepository).should().consume(ticket);
     }
 
     @Test
