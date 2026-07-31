@@ -9,6 +9,7 @@ import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -16,6 +17,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class AnonService {
 
     /*
@@ -27,6 +29,7 @@ public class AnonService {
 
     private final AnonSessionRepository anonSessionRepository;
 
+    @Transactional
     public AnonStartResult start() {
         UUID token = UUID.randomUUID();
         Instant expiresAt = Instant.now().plus(anonProperties.sessionTtl());
