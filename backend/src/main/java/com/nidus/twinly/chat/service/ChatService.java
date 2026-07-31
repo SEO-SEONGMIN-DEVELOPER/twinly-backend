@@ -72,10 +72,6 @@ public class ChatService {
 
     @Transactional
     public ChatSendMessageResult sendMessage(Long userId, Long roomId, ChatSendMessageCommand command) {
-        if (command.text().getBytes(StandardCharsets.UTF_8).length > MAX_TEXT_BYTES) {
-            throw new BusinessException(ErrorCode.MESSAGE_LENGTH_EXCEEDED);
-        }
-
         ChatRoom room = chatRoomRepository.findById(roomId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ROOM_NOT_FOUND));
 
@@ -89,6 +85,10 @@ public class ChatService {
 
         if (room.getClosedAt() != null) {
             throw new BusinessException(ErrorCode.ROOM_CLOSED);
+        }
+
+        if (command.text().getBytes(StandardCharsets.UTF_8).length > MAX_TEXT_BYTES) {
+            throw new BusinessException(ErrorCode.MESSAGE_LENGTH_EXCEEDED);
         }
 
         Optional<Chat> existing = chatRepository.findBySenderUserIdAndClientMsgId(userId, command.clientMsgId());

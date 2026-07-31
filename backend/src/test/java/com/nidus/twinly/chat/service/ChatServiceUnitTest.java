@@ -144,8 +144,12 @@ class ChatServiceUnitTest {
     @Test
     @DisplayName("메시지 본문이 4KB를 초과하면 MESSAGE_LENGTH_EXCEEDED 예외가 발생하고 저장하지 않는다")
     void sendMessage_text_over_limit_throws() {
-        // given: 4KB를 1바이트 초과하는 본문
+        // given: 내가 참여 중인 방에 4KB를 1바이트 초과하는 본문
         String tooLong = "a".repeat(4 * 1024 + 1);
+        given(chatRoomRepository.findById(ROOM_ID)).willReturn(Optional.of(room(ROOM_ID, MATCH_ID)));
+        given(matchRepository.findById(MATCH_ID)).willReturn(Optional.of(match(MATCH_ID, ME, PARTNER, CURRENT_SEASON_ID)));
+        given(chatRoomParticipationRepository.findAllByRoomId(ROOM_ID))
+                .willReturn(List.of(participation(ROOM_ID, ME), participation(ROOM_ID, PARTNER)));
 
         // when & then: 상한 초과 예외 발생 + 저장/이벤트 발행 없음
         assertThatThrownBy(() -> chatService.sendMessage(ME, ROOM_ID, new ChatSendMessageCommand(tooLong, "client-1")))
@@ -155,6 +159,20 @@ class ChatServiceUnitTest {
 
         then(chatRepository).should(never()).save(any());
         then(eventPublisher).should(never()).publishEvent(any(ChatMessageCreatedEvent.class));
+    }
+
+    @Test
+    @DisplayName("없는 방에 상한 초과 본문을 보내면 길이가 아니라 ROOM_NOT_FOUND로 응답한다")
+    void sendMessage_over_limit_to_unknown_room_throws_room_not_found() {
+        // given: 존재하지 않는 방 + 4KB 초과 본문
+        String tooLong = "a".repeat(4 * 1024 + 1);
+        given(chatRoomRepository.findById(ROOM_ID)).willReturn(Optional.empty());
+
+        // when & then: 길이 검사가 인가보다 앞서면 422가 나가 방 존재 여부가 유추된다
+        assertThatThrownBy(() -> chatService.sendMessage(ME, ROOM_ID, new ChatSendMessageCommand(tooLong, "client-1")))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.ROOM_NOT_FOUND);
     }
 
     @Test
