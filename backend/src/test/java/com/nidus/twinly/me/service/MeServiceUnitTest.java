@@ -417,7 +417,7 @@ class MeServiceUnitTest {
         Instant now = Instant.now();
         PolicyName tos = policyName(1L, "서비스 이용약관", "terms_of_service");
         PolicyName marketing = policyName(2L, "마케팅 수신 동의", "marketing");
-        given(policyNameRepository.findAllByIsDeprecatedFalse()).willReturn(List.of(tos, marketing));
+        given(policyNameRepository.findAllByIsDeprecatedFalseOrderByIdAsc()).willReturn(List.of(tos, marketing));
 
         PolicySummary tosV2 = policy(11L, 1L, 2, "https://policy/tos/2", true, now.minus(Duration.ofDays(1)));
         PolicySummary marketingV1 = policy(20L, 2L, 1, "https://policy/marketing/1", false, now.minus(Duration.ofDays(5)));

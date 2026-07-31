@@ -21,7 +21,7 @@ public class LegalService {
     private final PolicyCatalog policyCatalog;
 
     public LegalPoliciesResult policies() {
-        List<PolicyName> policyNames = policyNameRepository.findAllByIsDeprecatedFalse();
+        List<PolicyName> policyNames = policyNameRepository.findAllByIsDeprecatedFalseOrderByIdAsc();
         List<Long> policyNameIds = policyNames.stream().map(PolicyName::getId).toList();
 
         Map<Long, PolicySummary> latestByPolicyNameId = policyCatalog.loadLatestByPolicyNameId(policyNameIds);

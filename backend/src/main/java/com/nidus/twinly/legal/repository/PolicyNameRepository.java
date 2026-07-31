@@ -7,7 +7,7 @@ import java.util.List;
 
 public interface PolicyNameRepository extends JpaRepository<PolicyName, Long> {
 
-    List<PolicyName> findAllByIsDeprecatedFalse();
+    List<PolicyName> findAllByIsDeprecatedFalseOrderByIdAsc();
 
     List<PolicyName> findAllByIdentifierIn(List<String> identifiers);
 }

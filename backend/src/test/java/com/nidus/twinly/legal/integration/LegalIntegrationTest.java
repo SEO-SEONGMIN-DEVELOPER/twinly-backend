@@ -85,6 +85,29 @@ class LegalIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.policies[0].isRequired").doesNotExist());
     }
 
+    @Test
+    @DisplayName("정책 목록 조회: 이름 역순으로 저장해도 응답 순서는 id 오름차순으로 고정된다")
+    void policies_are_ordered_by_id_end_to_end() throws Exception {
+        // given: 이름 오름차순과 어긋나게 저장해 DB 반환 순서에 기대지 않았음을 드러낸다
+        PolicyName third = savePolicyName("zzz_policy", "다 약관", false);
+        savePolicy(third.getId(), 1, "https://cdn.twinly.app/zzz/v1.html", true, Instant.parse("2020-01-01T00:00:00Z"));
+        PolicyName second = savePolicyName("mmm_policy", "나 약관", false);
+        savePolicy(second.getId(), 1, "https://cdn.twinly.app/mmm/v1.html", true, Instant.parse("2020-01-01T00:00:00Z"));
+        PolicyName first = savePolicyName("aaa_policy", "가 약관", false);
+        savePolicy(first.getId(), 1, "https://cdn.twinly.app/aaa/v1.html", true, Instant.parse("2020-01-01T00:00:00Z"));
+        flushAndClear();
+
+        // when: 정책 목록 조회 API 호출
+        var result = mockMvc.perform(get("/api/v1/legal/policies"));
+
+        // then: ORDER BY가 없으면 DB 반환 순서에 좌우되는 자리다. 저장 순서(=id 순)로 고정된다
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.policies.length()").value(3))
+                .andExpect(jsonPath("$.policies[0].policyId").value("zzz_policy"))
+                .andExpect(jsonPath("$.policies[1].policyId").value("mmm_policy"))
+                .andExpect(jsonPath("$.policies[2].policyId").value("aaa_policy"));
+    }
+
     /** 영속성 컨텍스트를 비워 이후 조회가 실제 DB를 타도록 강제한다. */
     private void flushAndClear() {
         entityManager.flush();

@@ -188,7 +188,7 @@ public class MeService {
     }
 
     public MeConsentsResult consents(Long userId) {
-        List<PolicyName> policyNames = policyNameRepository.findAllByIsDeprecatedFalse();
+        List<PolicyName> policyNames = policyNameRepository.findAllByIsDeprecatedFalseOrderByIdAsc();
         List<Long> policyNameIds = policyNames.stream().map(PolicyName::getId).toList();
 
         Map<Long, PolicySummary> currentByPolicyNameId = policyCatalog.loadLatestByPolicyNameId(policyNameIds);

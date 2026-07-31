@@ -41,7 +41,7 @@ class LegalServiceUnitTest {
         // given: 폐기되지 않은 정책명 2건에 대해 카탈로그가 시행 중인 최신 버전을 돌려줌
         PolicyName terms = policyName(1L, "terms_of_service", "서비스 이용약관");
         PolicyName privacy = policyName(2L, "privacy_policy", "개인정보 처리방침");
-        given(policyNameRepository.findAllByIsDeprecatedFalse()).willReturn(List.of(terms, privacy));
+        given(policyNameRepository.findAllByIsDeprecatedFalseOrderByIdAsc()).willReturn(List.of(terms, privacy));
         given(policyCatalog.loadLatestByPolicyNameId(List.of(1L, 2L))).willReturn(Map.of(
                 1L, policy(1L, 2, "https://cdn.twinly.app/terms/v2.html", true),
                 2L, policy(2L, 3, "https://cdn.twinly.app/privacy/v3.html", false)));
@@ -70,7 +70,7 @@ class LegalServiceUnitTest {
     void policies_keeps_policy_name_without_effective_version() {
         // given: 시행 중인 버전이 없어 카탈로그가 비어 있는 상태
         PolicyName privacy = policyName(2L, "privacy_policy", "개인정보 처리방침");
-        given(policyNameRepository.findAllByIsDeprecatedFalse()).willReturn(List.of(privacy));
+        given(policyNameRepository.findAllByIsDeprecatedFalseOrderByIdAsc()).willReturn(List.of(privacy));
         given(policyCatalog.loadLatestByPolicyNameId(List.of(2L))).willReturn(Map.of());
 
         // when: 정책 목록 조회
@@ -90,7 +90,7 @@ class LegalServiceUnitTest {
     @DisplayName("노출할 정책명이 하나도 없으면 빈 목록을 반환하고 빈 id 목록으로 버전을 조회한다")
     void policies_returns_empty_when_no_policy_names() {
         // given: 폐기되지 않은 정책명이 하나도 없음
-        given(policyNameRepository.findAllByIsDeprecatedFalse()).willReturn(List.of());
+        given(policyNameRepository.findAllByIsDeprecatedFalseOrderByIdAsc()).willReturn(List.of());
         given(policyCatalog.loadLatestByPolicyNameId(List.of())).willReturn(Map.of());
 
         // when: 정책 목록 조회
