@@ -116,6 +116,7 @@ public class ChatCommandResponder {
             case CHAT_PARTICIPATION_NOT_FOUND -> CommandErrorCode.PARTICIPATION_NOT_FOUND;
             case NOT_MATCH_PARTICIPANT -> CommandErrorCode.NOT_A_PARTICIPANT;
             case NOT_ACTIVE_ROOM_PARTICIPANT -> CommandErrorCode.NOT_ACTIVE_PARTICIPANT;
+            case ROOM_CLOSED -> CommandErrorCode.ROOM_CLOSED;
             case CLIENT_MSG_ID_CONFLICT -> CommandErrorCode.CLIENT_MSG_ID_CONFLICT;
             case MESSAGE_LENGTH_EXCEEDED -> CommandErrorCode.TEXT_SIZE_LIMIT_EXCEEDED;
             case MESSAGE_NOT_IN_ROOM -> CommandErrorCode.INVALID_MESSAGE_CURSOR;

@@ -237,6 +237,27 @@ class ChatServiceUnitTest {
     }
 
     @Test
+    @DisplayName("종료된 방에 메시지를 보내면 ROOM_CLOSED 예외가 발생하고 저장하지 않는다")
+    void sendMessage_closed_room_throws() {
+        // given: 종료된 방이지만 나는 여전히 활성 참여자다
+        ChatRoom closed = room(ROOM_ID, MATCH_ID);
+        closed.close("SEASON_ENDED");
+        given(chatRoomRepository.findById(ROOM_ID)).willReturn(Optional.of(closed));
+        given(matchRepository.findById(MATCH_ID)).willReturn(Optional.of(match(MATCH_ID, ME, PARTNER, CURRENT_SEASON_ID)));
+        given(chatRoomParticipationRepository.findAllByRoomId(ROOM_ID))
+                .willReturn(List.of(participation(ROOM_ID, ME), participation(ROOM_ID, PARTNER)));
+
+        // when & then: 종료 상태로 거절되고 저장·이벤트 발행이 없다
+        assertThatThrownBy(() -> chatService.sendMessage(ME, ROOM_ID, new ChatSendMessageCommand("hello", "client-1")))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.ROOM_CLOSED);
+
+        then(chatRepository).should(never()).save(any());
+        then(eventPublisher).should(never()).publishEvent(any(ChatMessageCreatedEvent.class));
+    }
+
+    @Test
     @DisplayName("방을 숨긴 유저가 메시지를 보내면 NOT_ACTIVE_ROOM_PARTICIPANT 예외가 발생한다")
     void sendMessage_hidden_participant_throws() {
         // given: 내가 숨긴 방
@@ -541,6 +562,58 @@ class ChatServiceUnitTest {
 
         // then: 나간 시각이 기록됨
         assertThat(mine.getLeftAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("채팅방 숨김은 이미 숨긴 방에 다시 호출해도 성공한다 (멱등)")
+    void hideRoom_already_hidden_is_idempotent() {
+        // given: 이미 숨긴 내 참여 정보
+        ChatRoomParticipation mine = participation(ROOM_ID, ME);
+        mine.hide();
+        given(chatRoomRepository.findById(ROOM_ID)).willReturn(Optional.of(room(ROOM_ID, MATCH_ID)));
+        given(matchRepository.findById(MATCH_ID)).willReturn(Optional.of(match(MATCH_ID, ME, PARTNER, CURRENT_SEASON_ID)));
+        given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, ME)).willReturn(Optional.of(mine));
+
+        // when & then: 활성 참여 검사를 끼우면 403이 되는 경로다. 재요청은 흔하므로 성공해야 한다
+        chatService.hideRoom(ME, ROOM_ID);
+
+        assertThat(mine.getIsHidden()).isTrue();
+    }
+
+    @Test
+    @DisplayName("채팅방 나가기는 이미 나간 방에 다시 호출해도 성공한다 (멱등)")
+    void leaveRoom_already_left_is_idempotent() {
+        // given: 이미 나간 내 참여 정보
+        ChatRoomParticipation mine = participation(ROOM_ID, ME);
+        mine.leave();
+        given(chatRoomRepository.findById(ROOM_ID)).willReturn(Optional.of(room(ROOM_ID, MATCH_ID)));
+        given(matchRepository.findById(MATCH_ID)).willReturn(Optional.of(match(MATCH_ID, ME, PARTNER, CURRENT_SEASON_ID)));
+        given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, ME)).willReturn(Optional.of(mine));
+
+        // when & then: 활성 참여 검사를 끼우면 403이 되는 경로다. 재요청은 흔하므로 성공해야 한다
+        chatService.leaveRoom(ME, ROOM_ID);
+
+        assertThat(mine.getLeftAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("채팅방 숨김·나가기는 방은 있는데 참여 정보가 없으면 CHAT_PARTICIPATION_NOT_FOUND 예외가 발생한다")
+    void hideRoom_and_leaveRoom_without_participation_throw() {
+        // given: 방과 매칭은 있지만 내 참여 행이 없는 상태 (읽음 처리·입장과 같은 상황)
+        given(chatRoomRepository.findById(ROOM_ID)).willReturn(Optional.of(room(ROOM_ID, MATCH_ID)));
+        given(matchRepository.findById(MATCH_ID)).willReturn(Optional.of(match(MATCH_ID, ME, PARTNER, CURRENT_SEASON_ID)));
+        given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, ME)).willReturn(Optional.empty());
+
+        // when & then: 500이 아니라 404 도메인 에러로 나가고, 다른 엔드포인트와 코드가 같다
+        assertThatThrownBy(() -> chatService.hideRoom(ME, ROOM_ID))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.CHAT_PARTICIPATION_NOT_FOUND);
+
+        assertThatThrownBy(() -> chatService.leaveRoom(ME, ROOM_ID))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.CHAT_PARTICIPATION_NOT_FOUND);
     }
 
     @Test

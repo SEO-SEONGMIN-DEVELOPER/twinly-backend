@@ -32,9 +32,9 @@ public class ChatController {
     private final ChatService chatService;
 
     @ApiResponses({
-            @ApiResponse(responseCode = "403", description = "NOT_MATCH_PARTICIPANT"),
-            @ApiResponse(responseCode = "404", description = "ROOM_NOT_FOUND, MATCH_NOT_FOUND"),
-            @ApiResponse(responseCode = "409", description = "CLIENT_MSG_ID_CONFLICT"),
+            @ApiResponse(responseCode = "403", description = "NOT_MATCH_PARTICIPANT, NOT_ACTIVE_ROOM_PARTICIPANT"),
+            @ApiResponse(responseCode = "404", description = "ROOM_NOT_FOUND, MATCH_NOT_FOUND, CHAT_PARTICIPATION_NOT_FOUND"),
+            @ApiResponse(responseCode = "409", description = "CLIENT_MSG_ID_CONFLICT, ROOM_CLOSED"),
             @ApiResponse(responseCode = "422", description = "MESSAGE_LENGTH_EXCEEDED")
     })
     @PostMapping("/api/v1/chat/rooms/{roomId}/messages")
@@ -72,7 +72,7 @@ public class ChatController {
 
     @ApiResponses({
             @ApiResponse(responseCode = "403", description = "NOT_MATCH_PARTICIPANT"),
-            @ApiResponse(responseCode = "404", description = "ROOM_NOT_FOUND, MATCH_NOT_FOUND")
+            @ApiResponse(responseCode = "404", description = "ROOM_NOT_FOUND, MATCH_NOT_FOUND, CHAT_PARTICIPATION_NOT_FOUND")
     })
     @PostMapping("/api/v1/chat/rooms/{roomId}/hide")
     public void hideRoom(@CurrentUser UserInfo userInfo,
@@ -106,7 +106,7 @@ public class ChatController {
 
     @ApiResponses({
             @ApiResponse(responseCode = "403", description = "NOT_MATCH_PARTICIPANT"),
-            @ApiResponse(responseCode = "404", description = "ROOM_NOT_FOUND, MATCH_NOT_FOUND")
+            @ApiResponse(responseCode = "404", description = "ROOM_NOT_FOUND, MATCH_NOT_FOUND, CHAT_PARTICIPATION_NOT_FOUND")
     })
     @PostMapping("/api/v1/chat/rooms/{roomId}/leave")
     public void leaveRoom(@CurrentUser UserInfo userInfo,

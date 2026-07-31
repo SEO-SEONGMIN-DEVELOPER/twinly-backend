@@ -126,6 +126,7 @@ class ChatCommandResponderUnitTest {
             "CHAT_PARTICIPATION_NOT_FOUND, PARTICIPATION_NOT_FOUND",   // 〃
             "NOT_MATCH_PARTICIPANT,        NOT_A_PARTICIPANT",
             "NOT_ACTIVE_ROOM_PARTICIPANT,  NOT_ACTIVE_PARTICIPANT",    // 403이지만 미참여와 구분된다
+            "ROOM_CLOSED,                  ROOM_CLOSED",               // 409이지만 clientMsgId 충돌과 구분된다
             "CLIENT_MSG_ID_CONFLICT,       CLIENT_MSG_ID_CONFLICT",
             "MESSAGE_LENGTH_EXCEEDED,      TEXT_SIZE_LIMIT_EXCEEDED",
             "MESSAGE_NOT_IN_ROOM,          INVALID_MESSAGE_CURSOR",

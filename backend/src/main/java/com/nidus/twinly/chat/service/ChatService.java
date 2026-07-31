@@ -87,6 +87,10 @@ public class ChatService {
         List<ChatRoomParticipation> participations = chatRoomParticipationRepository.findAllByRoomId(roomId);
         checkActiveParticipant(participations, userId);
 
+        if (room.getClosedAt() != null) {
+            throw new BusinessException(ErrorCode.ROOM_CLOSED);
+        }
+
         Optional<Chat> existing = chatRepository.findBySenderUserIdAndClientMsgId(userId, command.clientMsgId());
         if (existing.isPresent()) {
             Chat sentChat = existing.get();
@@ -354,11 +358,10 @@ public class ChatService {
 
         checkUserInMatch(match, userId);
 
-        chatRoomParticipationRepository.findByRoomIdAndUserId(roomId, userId)
-                .ifPresentOrElse(
-                        ChatRoomParticipation::hide,
-                        () -> { throw new IllegalStateException("채팅방은 있는데 참여 정보가 없습니다: roomId=" + roomId + ", userId=" + userId); }
-                );
+        ChatRoomParticipation mine = chatRoomParticipationRepository.findByRoomIdAndUserId(roomId, userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.CHAT_PARTICIPATION_NOT_FOUND));
+
+        mine.hide();
     }
 
     public ChatMessagesResult messages(Long userId, Long roomId, Long cursor, Integer limit) {
@@ -429,10 +432,9 @@ public class ChatService {
 
         checkUserInMatch(match, userId);
 
-        chatRoomParticipationRepository.findByRoomIdAndUserId(roomId, userId)
-                .ifPresentOrElse(
-                        ChatRoomParticipation::leave,
-                        () -> { throw new IllegalStateException("채팅방은 있는데 참여 정보가 없습니다: roomId=" + roomId + ", userId=" + userId); }
-                );
+        ChatRoomParticipation mine = chatRoomParticipationRepository.findByRoomIdAndUserId(roomId, userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.CHAT_PARTICIPATION_NOT_FOUND));
+
+        mine.leave();
     }
 }
