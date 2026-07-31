@@ -71,7 +71,7 @@ try {
 
 ---
 
-## 3. 에러 코드 카탈로그 (전체 58개)
+## 3. 에러 코드 카탈로그 (전체 60개)
 
 ### 공통
 | code | HTTP | 의미 |
@@ -107,6 +107,7 @@ try {
 | `VERIFICATION_CODE_MISMATCH` | 422 | 인증번호가 일치하지 않습니다. |
 | `SMS_VERIFICATION_NOT_COMPLETED` | 422 | SMS 인증이 완료되지 않았습니다. |
 | `EMAIL_VERIFICATION_NOT_COMPLETED` | 422 | 이메일 인증이 완료되지 않았습니다. |
+| `PROFILE_NOT_COMPLETED` | 422 | 가입에 필요한 프로필 정보가 완성되지 않았습니다. |
 
 ### 유저 / 회원
 | code | HTTP | 의미 |
@@ -149,6 +150,7 @@ try {
 | `CHAT_PARTICIPATION_NOT_FOUND` | 404 | 참여 정보가 없습니다. |
 | `NOT_MATCH_PARTICIPANT` | 403 | 이 매칭의 참여자가 아닙니다. |
 | `NOT_ACTIVE_ROOM_PARTICIPANT` | 403 | 더 이상 참여 중이지 않은 채팅방입니다. |
+| `ROOM_CLOSED` | 409 | 종료된 채팅방입니다. |
 | `MESSAGE_LENGTH_EXCEEDED` | 422 | 메시지 길이 상한을 초과했습니다. |
 | `MESSAGE_NOT_IN_ROOM` | 422 | 해당 방에 존재하지 않는 메시지입니다. |
 | `CLIENT_MSG_ID_CONFLICT` | 409 | 이미 다른 내용으로 사용된 clientMsgId입니다. |
