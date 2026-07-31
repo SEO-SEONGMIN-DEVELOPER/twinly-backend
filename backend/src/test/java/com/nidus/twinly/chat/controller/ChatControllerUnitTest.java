@@ -3,6 +3,7 @@ package com.nidus.twinly.chat.controller;
 import com.nidus.twinly.anon.service.AnonService;
 import com.nidus.twinly.chat.domain.ChatSenderType;
 import com.nidus.twinly.chat.dto.command.ChatReadMessagesCommand;
+import com.nidus.twinly.chat.dto.result.ChatReadMessagesResult;
 import com.nidus.twinly.chat.dto.command.ChatSendMessageCommand;
 import com.nidus.twinly.chat.dto.result.ChatMessageItemResult;
 import com.nidus.twinly.chat.dto.result.ChatMessagesPageResult;
@@ -298,14 +299,20 @@ class ChatControllerUnitTest {
     @Test
     @DisplayName("읽음 처리 성공 시 200을 반환하고 문자열로 받은 lastMsgId를 Long 커맨드로 변환해 서비스를 호출한다")
     void readMessages_success() throws Exception {
+        // given: 서버가 확정한 읽음 포인터 (요청값과 다를 수 있다)
+        given(chatService.readMessages(1L, 10L, new ChatReadMessagesCommand(77L)))
+                .willReturn(new ChatReadMessagesResult(10L, 77L));
+
         // when: lastMsgId를 문자열로 담아 읽음 처리 API 호출
         var result = mockMvc.perform(post("/api/v1/chat/rooms/{roomId}/read", "10")
                 .header("Authorization", AUTH_HEADER)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"lastMsgId\":\"77\"}"));
 
-        // then: 200 반환 + Long 커맨드로 변환되어 위임
-        result.andExpect(status().isOk());
+        // then: 200 + 확정된 포인터가 WebSocket 페이로드와 같은 필드명·문자열 형식으로 응답된다
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.roomId").value("10"))
+                .andExpect(jsonPath("$.lastMsgId").value("77"));
         then(chatService).should().readMessages(1L, 10L, new ChatReadMessagesCommand(77L));
     }
 

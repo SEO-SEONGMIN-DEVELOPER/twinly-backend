@@ -6,6 +6,7 @@ import com.nidus.twinly.chat.dto.command.ChatSendMessageCommand;
 import com.nidus.twinly.chat.dto.request.ChatReadMessagesRequest;
 import com.nidus.twinly.chat.dto.request.ChatSendMessageRequest;
 import com.nidus.twinly.chat.dto.response.ChatMessagesResponse;
+import com.nidus.twinly.chat.dto.response.ChatReadMessagesResponse;
 import com.nidus.twinly.chat.dto.response.ChatRoomDetailResponse;
 import com.nidus.twinly.chat.dto.response.ChatRoomsResponse;
 import com.nidus.twinly.chat.dto.response.ChatSendMessageResponse;
@@ -98,10 +99,11 @@ public class ChatController {
             @ApiResponse(responseCode = "422", description = "MESSAGE_NOT_IN_ROOM")
     })
     @PostMapping("/api/v1/chat/rooms/{roomId}/read")
-    public void readMessages(@CurrentUser UserInfo userInfo,
+    public ChatReadMessagesResponse readMessages(@CurrentUser UserInfo userInfo,
                      @PathVariable String roomId,
                      @Valid @RequestBody ChatReadMessagesRequest request) {
-        chatService.readMessages(userInfo.id(), RequestId.toLong(roomId, "roomId"), ChatReadMessagesCommand.from(request));
+        return ChatReadMessagesResponse.from(
+                chatService.readMessages(userInfo.id(), RequestId.toLong(roomId, "roomId"), ChatReadMessagesCommand.from(request)));
     }
 
     @ApiResponses({

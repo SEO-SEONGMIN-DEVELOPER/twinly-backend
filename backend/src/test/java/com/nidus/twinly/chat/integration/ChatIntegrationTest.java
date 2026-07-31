@@ -346,6 +346,42 @@ class ChatIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("읽음 처리: 이전 메시지로 되돌리는 요청에도 응답은 서버가 확정한(전진한) 포인터를 담는다")
+    void readMessages_backwards_returns_confirmed_pointer() throws Exception {
+        // given: 상대가 보낸 메시지 2건을 모두 읽은 상태
+        Fixture fixture = saveChatRoomFixture();
+        Chat first = chatRepository.save(Chat.create("c-1", fixture.roomId(),
+                fixture.partner().getId(), fixture.me().getId(), ChatMessageType.TEXT, "먼저"));
+        Chat second = chatRepository.save(Chat.create("c-2", fixture.roomId(),
+                fixture.partner().getId(), fixture.me().getId(), ChatMessageType.TEXT, "나중"));
+        flushAndClear();
+
+        mockMvc.perform(post("/api/v1/chat/rooms/{roomId}/read", fixture.roomId().toString())
+                        .header("Authorization", bearer(fixture.me().getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"lastMsgId\":\"" + second.getId() + "\"}"))
+                .andExpect(status().isOk());
+        flushAndClear();
+
+        // when: 뒤늦게 도착한 요청이 이전 메시지로 포인터를 되돌리려 한다
+        mockMvc.perform(post("/api/v1/chat/rooms/{roomId}/read", fixture.roomId().toString())
+                        .header("Authorization", bearer(fixture.me().getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"lastMsgId\":\"" + first.getId() + "\"}"))
+                // then: 포인터는 전진만 하므로 응답에 요청값이 아니라 기존 포인터가 담긴다.
+                //       void였을 때는 클라이언트가 요청이 반영된 줄 알고 안읽음 수를 어긋나게 표시했다
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.roomId").value(fixture.roomId().toString()))
+                .andExpect(jsonPath("$.lastMsgId").value(second.getId().toString()));
+
+        // then: DB의 포인터도 되돌아가지 않는다
+        flushAndClear();
+        assertThat(chatRoomParticipationRepository
+                .findByRoomIdAndUserId(fixture.roomId(), fixture.me().getId()).orElseThrow()
+                .getLastReadMessageId()).isEqualTo(second.getId());
+    }
+
+    @Test
     @DisplayName("읽음 처리 실패: 해당 방의 메시지가 아니면 422와 MESSAGE_NOT_IN_ROOM 코드를 반환한다")
     void readMessages_when_message_not_in_room_returns_422() throws Exception {
         // given: 채팅방은 있으나 존재하지 않는 메시지 id를 지정
