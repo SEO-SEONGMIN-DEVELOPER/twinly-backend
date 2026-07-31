@@ -67,7 +67,10 @@ public class ChatNotifier {
 
     @AsyncPublisher(operation = @AsyncOperation(
             channelName = ROOM_OUTBOUND_CHANNEL,
-            description = "채팅방에 새 메시지가 생성됨 (참여자별로 senderType이 me/them으로 다르게 전달된다)"
+            description = """
+                    채팅방에 새 메시지가 생성됨 (참여자별로 senderType이 me/them으로 다르게 전달된다).
+                    프레임을 놓쳤다면 같은 clientMsgId로 재전송해도 이 프레임은 다시 오지 않는다. 재연결 후 REST 메시지 목록 재조회로 복구한다.
+                    message.id는 재전송 시에도 동일하므로 클라이언트는 id 기준으로 중복을 제거한다."""
     ))
     @StompAsyncOperationBinding
     public void publishMessageCreated(Long userId, String encodedRoomId,
