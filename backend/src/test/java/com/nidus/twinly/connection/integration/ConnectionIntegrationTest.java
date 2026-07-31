@@ -82,6 +82,30 @@ class ConnectionIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("요청 바디의 enum은 쿼리 파라미터와 마찬가지로 대소문자를 구분하지 않는다")
+    void token_with_lowercase_connection_type_end_to_end() throws Exception {
+        // given: 쿼리 파라미터·경로 변수의 enum은 CaseInsensitiveEnumConverterFactory로 대소문자를 무시하는데,
+        //        요청 바디는 Jackson이 처리해 규칙이 갈려 있었다
+        User me = saveUser();
+
+        // when: 소문자 connectionType으로 연결 토큰 발급 API 호출
+        String response = mockMvc.perform(post("/api/v1/connection-tokens")
+                        .header("Authorization", bearer(me.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"connectionType\":\"ws\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.connectionType").value("WS"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        // then: DB에도 상수값 그대로 저장된다
+        UUID ticket = UUID.fromString(JsonPath.read(response, "$.ticket"));
+        assertThat(connectionTicketRepository.findByTicket(ticket).orElseThrow().getConnectionType())
+                .isEqualTo(ConnectionType.WS);
+    }
+
+    @Test
     @DisplayName("만료 시각은 DB 세션 타임존이 UTC가 아니어도 UTC 기준으로 저장되어 TTL 60초가 유지된다")
     void expiresAt_is_stored_in_utc_regardless_of_db_session_time_zone() throws Exception {
         // given: 만료 시각은 앱이 Instant로 계산해 저장하고, consume은 DB의 UTC_TIMESTAMP()와 비교한다.
