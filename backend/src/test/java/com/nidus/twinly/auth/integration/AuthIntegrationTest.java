@@ -128,6 +128,28 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("회원가입 실패: 온보딩 프로필이 비어 있으면 422 PROFILE_NOT_COMPLETED를 반환하고 유저를 만들지 않는다")
+    void signup_without_completed_profile_returns_422() throws Exception {
+        // given: SMS·EMAIL 인증은 끝났지만 프로필을 입력하지 않은 익명 세션 (users는 해당 컬럼이 전부 NOT NULL이다)
+        UUID anonToken = UUID.randomUUID();
+        AnonSession anonSession = anonSessionRepository.save(
+                AnonSession.create(anonToken, Instant.now().plus(Duration.ofDays(1))));
+
+        String phone = "01055554444";
+        anonSessionVerificationSessionRepository.save(verifiedAnonSession(anonSession.getId(), VerificationType.SMS, phone));
+        anonSessionVerificationSessionRepository.save(verifiedAnonSession(anonSession.getId(), VerificationType.EMAIL, "incomplete@test.com"));
+
+        // when: 익명 세션 토큰을 Bearer로 붙여 회원가입 API 호출
+        var result = mockMvc.perform(post("/api/v1/auth/signup")
+                .header("Authorization", "Bearer " + anonToken));
+
+        // then: NOT NULL 위반으로 500이 되는 대신 422 도메인 에러로 나가고 users 행도 생기지 않는다
+        result.andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("PROFILE_NOT_COMPLETED"));
+        assertThat(userRepository.findByPhoneNumberHash(blindIndexHasher.hash(phone))).isEmpty();
+    }
+
+    @Test
     @DisplayName("로그인: SMS 인증 완료 토큰으로 실제 유저의 토큰이 발급되고 리프레시 토큰이 DB에 저장된다")
     void login_end_to_end() throws Exception {
         // given: 실제 유저와, 그 전화번호로 SMS 인증이 끝난 인증 세션을 DB에 저장

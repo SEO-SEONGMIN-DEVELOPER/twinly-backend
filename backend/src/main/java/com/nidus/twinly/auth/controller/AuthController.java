@@ -97,7 +97,7 @@ public class AuthController {
     @ApiResponses({
             @ApiResponse(responseCode = "404", description = "SIGNUP_SESSION_NOT_FOUND"),
             @ApiResponse(responseCode = "409", description = "PHONE_ALREADY_REGISTERED, EMAIL_ALREADY_REGISTERED"),
-            @ApiResponse(responseCode = "422", description = "SMS_VERIFICATION_NOT_COMPLETED, EMAIL_VERIFICATION_NOT_COMPLETED")
+            @ApiResponse(responseCode = "422", description = "SMS_VERIFICATION_NOT_COMPLETED, EMAIL_VERIFICATION_NOT_COMPLETED, PROFILE_NOT_COMPLETED")
     })
     @PostMapping("/api/v1/auth/signup")
     public AuthSignupResponse signup(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot) {

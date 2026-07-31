@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
 import java.util.Base64;
 
 @Component
@@ -24,7 +25,7 @@ public class BlindIndexHasher {
             mac.init(key);
             byte[] result = mac.doFinal(plainText.getBytes(StandardCharsets.UTF_8));
             return Base64.getEncoder().encodeToString(result);
-        } catch (Exception e) {
+        } catch (GeneralSecurityException e) {
             throw new IllegalStateException("해시 생성에 실패했습니다: ", e);
         }
     }

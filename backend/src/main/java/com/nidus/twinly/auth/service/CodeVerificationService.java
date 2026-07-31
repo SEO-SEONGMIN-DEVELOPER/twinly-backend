@@ -16,7 +16,7 @@ import java.time.temporal.ChronoUnit;
 @RequiredArgsConstructor
 public class CodeVerificationService implements VerificationService {
 
-    private static final int VERIFIED_TOKEN_EXPIRES_MINUTES = 30;
+    private static final int VERIFIED_TOKEN_EXPIRES_MINUTES = 5;
 
     private final VerificationSessionRepository verificationSessionRepository;
 
@@ -30,6 +30,10 @@ public class CodeVerificationService implements VerificationService {
 
         if (!session.getCode().equals(command.value())) {
             throw new BusinessException(ErrorCode.VERIFICATION_CODE_MISMATCH);
+        }
+
+        if (session.getVerifiedAt() != null) {
+            return session;
         }
 
         Instant verifiedTokenExpiresAt = Instant.now().plus(VERIFIED_TOKEN_EXPIRES_MINUTES, ChronoUnit.MINUTES);

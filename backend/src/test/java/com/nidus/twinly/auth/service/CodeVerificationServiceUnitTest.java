@@ -87,7 +87,7 @@ class CodeVerificationServiceUnitTest {
     }
 
     @Test
-    @DisplayName("코드가 일치하면 인증 완료 토큰을 발급하고 만료 시각을 30분 뒤로 설정한다")
+    @DisplayName("코드가 일치하면 인증 완료 토큰을 발급하고 만료 시각을 5분 뒤로 설정한다")
     void verify_success_issues_verified_token() {
         // given: 유효 기간이 남고 코드가 123456인 세션
         VerificationSession session = VerificationSession.create(
@@ -99,11 +99,32 @@ class CodeVerificationServiceUnitTest {
         VerificationSession verified = codeVerificationService.verify(
                 new AuthSmsVerifyCommand(session.getVerificationToken(), "123456"), VerificationType.SMS);
 
-        // then: 인증 완료 토큰·시각이 기록되고 만료 시각이 약 30분 뒤로 설정됨
+        // then: 인증 완료 토큰·시각이 기록되고 만료 시각이 약 5분 뒤로 설정됨 (리플레이 창을 좁힌다)
         assertThat(verified).isSameAs(session);
         assertThat(verified.getVerifiedToken()).isNotNull();
         assertThat(verified.getVerifiedAt()).isNotNull();
         assertThat(verified.getVerifiedTokenExpiresAt())
-                .isBetween(Instant.now().plusSeconds(29 * 60), Instant.now().plusSeconds(31 * 60));
+                .isBetween(Instant.now().plusSeconds(4 * 60), Instant.now().plusSeconds(6 * 60));
+    }
+
+    @Test
+    @DisplayName("이미 인증된 세션을 같은 코드로 다시 확인하면 기존 토큰과 만료 시각을 그대로 반환한다")
+    void verify_twice_keeps_first_verified_token() {
+        // given: 이미 한 번 인증을 마친 세션
+        VerificationSession session = VerificationSession.create(
+                VerificationType.SMS, PHONE, "123456", Instant.now().plusSeconds(60));
+        given(verificationSessionRepository.findByTypeAndVerificationToken(VerificationType.SMS, session.getVerificationToken()))
+                .willReturn(Optional.of(session));
+        codeVerificationService.verify(new AuthSmsVerifyCommand(session.getVerificationToken(), "123456"), VerificationType.SMS);
+        UUID firstToken = session.getVerifiedToken();
+        Instant firstExpiresAt = session.getVerifiedTokenExpiresAt();
+
+        // when: 더블클릭·재시도로 같은 코드를 다시 확인
+        VerificationSession verified = codeVerificationService.verify(
+                new AuthSmsVerifyCommand(session.getVerificationToken(), "123456"), VerificationType.SMS);
+
+        // then: 토큰이 새로 발급되지 않아 유효한 토큰이 늘지 않고, 만료 시각도 연장되지 않는다
+        assertThat(verified.getVerifiedToken()).isEqualTo(firstToken);
+        assertThat(verified.getVerifiedTokenExpiresAt()).isEqualTo(firstExpiresAt);
     }
 }

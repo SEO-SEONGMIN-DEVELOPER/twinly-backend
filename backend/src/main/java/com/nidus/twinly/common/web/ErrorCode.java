@@ -32,6 +32,7 @@ public enum ErrorCode {
     VERIFICATION_CODE_MISMATCH(HttpStatus.UNPROCESSABLE_CONTENT, "인증번호가 일치하지 않습니다."),
     SMS_VERIFICATION_NOT_COMPLETED(HttpStatus.UNPROCESSABLE_CONTENT, "SMS 인증이 완료되지 않았습니다."),
     EMAIL_VERIFICATION_NOT_COMPLETED(HttpStatus.UNPROCESSABLE_CONTENT, "이메일 인증이 완료되지 않았습니다."),
+    PROFILE_NOT_COMPLETED(HttpStatus.UNPROCESSABLE_CONTENT, "가입에 필요한 프로필 정보가 완성되지 않았습니다."),
 
     // 유저/회원
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 유저입니다."),

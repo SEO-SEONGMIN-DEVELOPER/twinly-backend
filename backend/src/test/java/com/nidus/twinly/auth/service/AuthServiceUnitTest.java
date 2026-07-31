@@ -458,6 +458,25 @@ class AuthServiceUnitTest {
     }
 
     @Test
+    @DisplayName("회원가입: 온보딩 프로필이 비어 있으면 PROFILE_NOT_COMPLETED 예외가 발생하고 해싱·유저 생성으로 넘어가지 않는다")
+    void signup_without_completed_profile_throws() {
+        // given: SMS/EMAIL 인증은 끝났지만 이름을 아직 입력하지 않은 익명 세션 (anon_sessions의 프로필 컬럼은 nullable)
+        givenVerifiedSessions();
+        AnonSession anonSession = onboardedAnonSession();
+        ReflectionTestUtils.setField(anonSession, "familyName", null);
+        given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(anonSession));
+
+        // when & then: NPE·NOT NULL 위반으로 500이 되는 대신 422 도메인 에러로 실패한다
+        assertThatThrownBy(() -> authService.signup(SNAPSHOT))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PROFILE_NOT_COMPLETED);
+
+        then(blindIndexHasher).should(never()).hash(any());
+        then(userRepository).should(never()).save(any());
+    }
+
+    @Test
     @DisplayName("회원가입: 이미 가입된 전화번호면 PHONE_ALREADY_REGISTERED 예외가 발생하고 유저를 만들지 않는다")
     void signup_with_already_registered_phone_throws() {
         // given: SMS/EMAIL 인증이 모두 완료된 익명 세션이지만, 전화번호가 이미 가입되어 있음
@@ -640,6 +659,25 @@ class AuthServiceUnitTest {
                 .isEqualTo(ErrorCode.INVALID_REFRESH_TOKEN);
 
         then(refreshTokenRepository).should(never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("토큰 재발급: JWT는 유효해도 저장된 만료 시각이 지났으면 INVALID_REFRESH_TOKEN 예외가 발생한다")
+    void refresh_with_expired_stored_token_throws() {
+        // given: JWT 파싱은 통과하지만 DB에 저장된 만료 시각만 과거인 상태 (두 만료 기준이 어긋난 경우)
+        given(jwtService.parseRefreshTokenUserId("refresh-token")).willReturn(USER_ID);
+        given(blindIndexHasher.hash("refresh-token")).willReturn("hash:refresh-token");
+        given(refreshTokenRepository.findByTokenHash("hash:refresh-token"))
+                .willReturn(Optional.of(RefreshToken.create(USER_ID, "hash:refresh-token", Instant.now().minusSeconds(1))));
+
+        // when & then: DB가 방어선으로 동작해 거절하고 새 토큰도 발급하지 않는다
+        assertThatThrownBy(() -> authService.refresh(new AuthRefreshCommand("refresh-token")))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_REFRESH_TOKEN);
+
+        then(refreshTokenRepository).should(never()).delete(any());
+        then(refreshTokenRepository).should(never()).save(any());
     }
 
     @Test

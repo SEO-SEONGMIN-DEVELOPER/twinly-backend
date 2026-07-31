@@ -218,6 +218,8 @@ public class AuthService {
         AnonSession anonSession = anonSessionRepository.findById(anonSessionId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SIGNUP_SESSION_NOT_FOUND));
 
+        requireProfileCompleted(anonSession);
+
         String phoneNumber = smsSession.getContact();
         String phoneNumberHash = blindIndexHasher.hash(phoneNumber);
         String email = emailSession.getContact();
@@ -328,6 +330,18 @@ public class AuthService {
                 : ErrorCode.EMAIL_VERIFICATION_NOT_COMPLETED;
     }
 
+    private void requireProfileCompleted(AnonSession anonSession) {
+        if (anonSession.getNickname() == null
+                || anonSession.getFamilyName() == null
+                || anonSession.getGivenName() == null
+                || anonSession.getGender() == null
+                || anonSession.getAffiliation() == null
+                || anonSession.getAffiliationNumber() == null
+                || anonSession.getBirthDate() == null) {
+            throw new BusinessException(ErrorCode.PROFILE_NOT_COMPLETED);
+        }
+    }
+
     @Transactional
     public AuthTokenResult login(AuthLoginCommand command) {
         VerificationSession smsSession = verifySession(VerificationType.SMS, command.smsVerifiedToken());
@@ -353,6 +367,10 @@ public class AuthService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.REFRESH_TOKEN_ALREADY_REVOKED));
 
         if (!refreshToken.getUserId().equals(userId)) {
+            throw new BusinessException(ErrorCode.INVALID_REFRESH_TOKEN);
+        }
+
+        if (refreshToken.getExpiresAt().isBefore(Instant.now())) {
             throw new BusinessException(ErrorCode.INVALID_REFRESH_TOKEN);
         }
 
