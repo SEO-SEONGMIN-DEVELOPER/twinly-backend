@@ -106,8 +106,7 @@ public class OnboardingService {
         }
     }
 
-    @Transactional
-    public void saveAllSurveyAnswer(Long anonSessionId) {
+    private void saveAllSurveyAnswer(Long anonSessionId) {
         List<SurveyAnswer> answers = surveyAnswerRepository.findAllByAnonSessionId(anonSessionId);
 
         List<AnonSessionPersonaElement> personaElements = answers.stream()
