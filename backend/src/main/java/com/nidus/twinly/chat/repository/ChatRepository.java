@@ -17,11 +17,11 @@ public interface ChatRepository extends JpaRepository<Chat, Long> {
         SELECT c.*
         FROM chats c
         INNER JOIN (
-            SELECT room_id, MAX(sent_at) AS max_sent_at
+            SELECT room_id, MAX(id) AS max_id
             FROM chats
             WHERE room_id IN (:roomIds)
             GROUP BY room_id
-        ) latest ON c.room_id = latest.room_id AND c.sent_at = latest.max_sent_at
+        ) latest ON c.id = latest.max_id
         """, nativeQuery = true)
     List<Chat> findLatestByRoomIdIn(@Param("roomIds") List<Long> roomIds);
 
@@ -59,6 +59,13 @@ public interface ChatRepository extends JpaRepository<Chat, Long> {
         JOIN chat_room_participations p ON p.room_id = c.room_id AND p.user_id = :userId
         WHERE c.receiver_user_id = :userId
           AND (p.last_read_message_id IS NULL OR c.id > p.last_read_message_id)
+          AND p.left_at IS NULL
+          AND p.is_hidden = FALSE
+          AND NOT EXISTS (
+              SELECT 1
+              FROM blocks b
+              WHERE b.user_id = :userId AND b.blocked_user_id = c.sender_user_id
+          )
         """, nativeQuery = true)
     int countUnreadRoomsByUserId(@Param("userId") Long userId);
 }

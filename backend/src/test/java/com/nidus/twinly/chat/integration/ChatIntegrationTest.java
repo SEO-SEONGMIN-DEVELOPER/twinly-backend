@@ -7,6 +7,8 @@ import com.nidus.twinly.chat.entity.ChatRoomParticipation;
 import com.nidus.twinly.chat.repository.ChatRepository;
 import com.nidus.twinly.chat.repository.ChatRoomParticipationRepository;
 import com.nidus.twinly.chat.repository.ChatRoomRepository;
+import com.nidus.twinly.block.entity.Block;
+import com.nidus.twinly.block.repository.BlockRepository;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.support.AbstractIntegrationTest;
 import com.nidus.twinly.user.entity.User;
@@ -16,6 +18,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -36,6 +41,9 @@ class ChatIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     ChatRoomParticipationRepository chatRoomParticipationRepository;
+
+    @Autowired
+    BlockRepository blockRepository;
 
     @PersistenceContext
     EntityManager entityManager;
@@ -84,6 +92,25 @@ class ChatIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.rooms[0].messages.unreadCount").value(1))
                 .andExpect(jsonPath("$.rooms[0].messages.lastMessage.text").value("hi"))
                 .andExpect(jsonPath("$.rooms[0].isCurrentSeason").value(true));
+    }
+
+    @Test
+    @DisplayName("채팅방 목록 조회: sent_at이 같은 메시지가 2건이어도 목록이 죽지 않고 나중에 저장된 것이 마지막 메시지가 된다")
+    void rooms_when_two_messages_share_sent_at_returns_latest_by_id() throws Exception {
+        // given: 마이크로초까지 같은 시각의 메시지 2건 (동시 전송·시계 해상도가 낮은 환경)
+        Fixture fixture = saveChatRoomFixture();
+        Instant sameInstant = Instant.parse("2026-07-20T01:02:03.456789Z");
+        saveChatAt(fixture, "client-partner-1", "먼저", sameInstant);
+        saveChatAt(fixture, "client-partner-2", "나중", sameInstant);
+        flushAndClear();
+
+        // when & then: sent_at 기준으로 뽑으면 한 방에 두 행이 나와 목록 전체가 500이 된다. id 기준이라 마지막 1건만 나온다
+        mockMvc.perform(get("/api/v1/chat/rooms")
+                        .header("Authorization", bearer(fixture.me().getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rooms.length()").value(1))
+                .andExpect(jsonPath("$.rooms[0].messages.lastMessage.text").value("나중"))
+                .andExpect(jsonPath("$.rooms[0].messages.unreadCount").value(2));
     }
 
     @Test
@@ -345,9 +372,66 @@ class ChatIntegrationTest extends AbstractIntegrationTest {
         result.andExpect(status().isUnauthorized());
     }
 
+    @Test
+    @DisplayName("미읽음 방 집계: 메인 탭 배지와 채팅 목록이 같은 방 집합(나감·숨김·차단 제외)을 본다")
+    void unreadChatRoomCount_agrees_with_visible_rooms_in_list() throws Exception {
+        // given: 안읽은 수신 메시지가 있는 방 4개 — 정상 / 내가 나간 방 / 내가 숨긴 방 / 내가 차단한 상대의 방
+        saveCurrentSeason();
+        User me = saveUser();
+
+        saveRoomWithIncomingMessage(me, saveUser());
+
+        Long leftRoomId = saveRoomWithIncomingMessage(me, saveUser());
+        chatRoomParticipationRepository.findByRoomIdAndUserId(leftRoomId, me.getId()).orElseThrow().leave();
+
+        Long hiddenRoomId = saveRoomWithIncomingMessage(me, saveUser());
+        chatRoomParticipationRepository.findByRoomIdAndUserId(hiddenRoomId, me.getId()).orElseThrow().hide();
+
+        User blockedPartner = saveUser();
+        saveRoomWithIncomingMessage(me, blockedPartner);
+        blockRepository.save(Block.create(me.getId(), blockedPartner.getId()));
+
+        flushAndClear();
+
+        // when: 메인 탭과 채팅 목록을 같은 유저로 조회
+        var mainResult = mockMvc.perform(get("/api/v1/main")
+                .header("Authorization", bearer(me.getId())));
+        var roomsResult = mockMvc.perform(get("/api/v1/chat/rooms")
+                .header("Authorization", bearer(me.getId())));
+
+        // then: 배지와 목록이 모두 정상 방 1개만 센다 (가시성 규칙이 두 경로에서 갈리면 깨진다)
+        mainResult.andExpect(status().isOk())
+                .andExpect(jsonPath("$.unreadChatRoomCount").value(1));
+        roomsResult.andExpect(status().isOk())
+                .andExpect(jsonPath("$.rooms.length()").value(1))
+                .andExpect(jsonPath("$.rooms[0].messages.unreadCount").value(1));
+    }
+
     private void flushAndClear() {
         entityManager.flush();
         entityManager.clear();
+    }
+
+    /** sent_at을 지정해 상대가 보낸 메시지를 저장한다 (Chat.create는 현재 시각을 쓴다). */
+    private void saveChatAt(Fixture fixture, String clientMsgId, String text, Instant sentAt) {
+        Chat chat = Chat.create(clientMsgId, fixture.roomId(),
+                fixture.partner().getId(), fixture.me().getId(), ChatMessageType.TEXT, text);
+        ReflectionTestUtils.setField(chat, "sentAt", sentAt);
+        chatRepository.save(chat);
+    }
+
+    /** 상대가 보낸 안읽은 메시지 1건이 있는 채팅방을 만든다. */
+    private Long saveRoomWithIncomingMessage(User me, User partner) {
+        Long matchId = saveMatch(me.getId(), partner.getId());
+
+        ChatRoom room = chatRoomRepository.save(ChatRoom.create(matchId));
+        chatRoomParticipationRepository.save(ChatRoomParticipation.create(room.getId(), me.getId()));
+        chatRoomParticipationRepository.save(ChatRoomParticipation.create(room.getId(), partner.getId()));
+
+        chatRepository.save(Chat.create("cmid-" + room.getId(), room.getId(), partner.getId(), me.getId(),
+                ChatMessageType.TEXT, "안읽은 메시지"));
+
+        return room.getId();
     }
 
     /** 시즌 → 유저 2명 → 매칭 → 채팅방 → 참여 정보 순으로 저장한다 (FK 순서 준수). */
@@ -372,7 +456,7 @@ class ChatIntegrationTest extends AbstractIntegrationTest {
     private void saveCurrentSeason() {
         entityManager.createNativeQuery("""
                         INSERT INTO seasons (id, started_at, ended_at, is_active, created_at)
-                        VALUES (:id, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6), 1, UTC_TIMESTAMP(6))
+                        VALUES (:id, UTC_TIMESTAMP(6) - INTERVAL 30 DAY, UTC_TIMESTAMP(6) + INTERVAL 30 DAY, 1, UTC_TIMESTAMP(6))
                         """)
                 .setParameter("id", CURRENT_SEASON_ID)
                 .executeUpdate();
