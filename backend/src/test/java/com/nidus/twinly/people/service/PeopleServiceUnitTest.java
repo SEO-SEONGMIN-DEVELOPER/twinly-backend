@@ -393,7 +393,7 @@ class PeopleServiceUnitTest {
     }
 
     @Test
-    @DisplayName("WEEK 해상도는 from 기준 7일 버킷으로 묶고 각 버킷의 첫 기록 값을 사용한다")
+    @DisplayName("WEEK 해상도는 from 기준 7일 버킷으로 묶고 각 버킷의 마지막 기록 값을 사용한다")
     void intimacySeries_week_resolution() {
         // given: 같은 주에 7/1(10)·7/3(20), 다음 주에 7/8(30) 기록
         LocalDate from = LocalDate.of(2026, 7, 1);
@@ -409,11 +409,14 @@ class PeopleServiceUnitTest {
         // when: WEEK 해상도로 시계열 조회
         PeopleIntimacySeriesResult result = peopleService.intimacySeries(ME, 20L, from, to, IntimacyResolution.WEEK, 10);
 
-        // then: 버킷 시작일(7/1, 7/8) 2개 포인트로 축약되고 값은 각 버킷의 첫 기록
+        // then: 버킷 시작일(7/1, 7/8) 2개 포인트로 축약되고, 친밀도는 누적 상태값이므로 구간 끝 값을 쓴다
         assertThat(result.intimacySeries()).extracting(PeopleIntimacySeriesItemResult::date)
                 .containsExactly(LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 8));
         assertThat(result.intimacySeries()).extracting(PeopleIntimacySeriesItemResult::intimacy)
-                .containsExactly(10, 30);
+                .containsExactly(20, 30);
+
+        // then: 마지막 포인트가 currentIntimacy와 일치해 그래프 끝과 현재 값이 어긋나지 않는다
+        assertThat(result.intimacySeries().getLast().intimacy()).isEqualTo(result.currentIntimacy());
     }
 
     @Test

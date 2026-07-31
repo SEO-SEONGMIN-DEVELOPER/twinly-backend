@@ -244,7 +244,7 @@ public class PeopleService {
             return byWeek.entrySet().stream()
                     .map(entry -> new PeopleIntimacySeriesItemResult(
                             entry.getKey(),
-                            entry.getValue().get(0).getIntimacy()))
+                            entry.getValue().getLast().getIntimacy()))
                     .toList();
         }
 
