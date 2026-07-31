@@ -44,6 +44,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class OnboardingService {
 
     private static final Set<String> FORBIDDEN_NICKNAME_WORDS = Set.of(

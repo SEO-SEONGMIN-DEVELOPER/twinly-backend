@@ -85,6 +85,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class MeService {
 
     private static final Duration WITHDRAWAL_RECOVERABLE_PERIOD = Duration.ofDays(15);
