@@ -34,15 +34,11 @@ springdoc이 노출하는 이 도메인의 오퍼레이션 8개는 단위·통�
 
 ## GET /api/v1/people/{userId}/events/{date}
 
-### 2. 그날의 내 씬을 전부 로드한 뒤 메모리에서 상대로 필터링한다
-- 증상: `findAllByUserIdAndDate`로 그날 내 씬 전체 + 그 씬들의 파트너 전체를 읽고 나서 자바 스트림으로 상대만 걸러낸다. 하루 씬이 많아질수록 불필요한 로딩이 커진다. `speakerUserIds`도 관련 없는 파트너까지 포함해 `findAllById`를 돈다.
-- 근거 코드 위치: `people/service/PeopleService.java:353-366`
-- 심각도: low
-- 제안: `SceneRepository.findAllByUserIdAndWithPartnerUserIdAndDateIn`처럼 조인 조건을 쿼리로 내린다.
+## GET /api/v1/people/{userId}/learned-facts
+
+### 2. 발견된 이슈 없음
+- 최신 관계 기록의 `partnerModel`을 그대로 반환하고, 없으면 `RELATIONSHIP_NOT_FOUND`(404)를 던진다. 컨트롤러의 `@ApiResponse` 문서와도 일치한다.
 
 ---
 
-## GET /api/v1/people/{userId}/learned-facts
-
-### 3. 발견된 이슈 없음
-- 최신 관계 기록의 `partnerModel`을 그대로 반환하고, 없으면 `RELATIONSHIP_NOT_FOUND`(404)를 던진다. 컨트롤러의 `@ApiResponse` 문서와도 일치한다.
+**남은 항목 없음.** 기록돼 있던 발견사항은 모두 처리되었거나 판단으로 닫혔다. 이력은 [_summary.md](_summary.md) 참조.
