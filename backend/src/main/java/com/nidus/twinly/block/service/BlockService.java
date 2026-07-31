@@ -49,6 +49,10 @@ public class BlockService {
     public BlockListResult blockList(Long userId) {
         List<Block> blocks = blockRepository.findAllByUserId(userId);
 
+        if (blocks.isEmpty()) {
+            return new BlockListResult(List.of());
+        }
+
         List<Long> blockedUserIds = blocks.stream()
                 .map(Block::getBlockedUserId)
                 .toList();

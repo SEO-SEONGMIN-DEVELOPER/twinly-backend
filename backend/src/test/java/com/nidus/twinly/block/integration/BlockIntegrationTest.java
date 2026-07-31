@@ -116,6 +116,19 @@ class BlockIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("차단 목록 조회: 차단이 한 건도 없으면 200과 빈 목록을 받는다")
+    void blockList_when_no_block_returns_empty_list() throws Exception {
+        // given: 차단한 적 없는 유저 (대다수 유저의 정상 상태)
+        User me = saveUser();
+
+        // when & then: 조립을 건너뛰고 빈 목록이 응답된다
+        mockMvc.perform(get("/api/v1/blocks")
+                        .header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.blocks.length()").value(0));
+    }
+
+    @Test
     @DisplayName("차단 목록 조회: 탈퇴한 유저는 '탈퇴한 사용자'로 응답된다")
     void blockList_with_withdrawn_user_end_to_end() throws Exception {
         // given: 차단 대상이 탈퇴(deletedAt 세팅) 처리된 상태 — 세터가 없어 리플렉션으로 세팅
