@@ -8,8 +8,10 @@ import com.nidus.twinly.connection.service.ConnectionService;
 import com.nidus.twinly.user.annotation.CurrentUser;
 import com.nidus.twinly.user.dto.header.UserInfo;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -18,6 +20,7 @@ public class ConnectionController {
 
     private final ConnectionService connectionService;
 
+    @ResponseStatus(HttpStatus.CREATED)
     @PostMapping("/api/v1/connection-tokens")
     public ConnectionTokenResponse token(@CurrentUser UserInfo userInfo,
                                          @Valid @RequestBody ConnectionTokenRequest request) {

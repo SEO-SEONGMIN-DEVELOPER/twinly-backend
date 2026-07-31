@@ -10,8 +10,10 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -99,6 +101,7 @@ public class AuthController {
             @ApiResponse(responseCode = "409", description = "PHONE_ALREADY_REGISTERED, EMAIL_ALREADY_REGISTERED"),
             @ApiResponse(responseCode = "422", description = "SMS_VERIFICATION_NOT_COMPLETED, EMAIL_VERIFICATION_NOT_COMPLETED, PROFILE_NOT_COMPLETED")
     })
+    @ResponseStatus(HttpStatus.CREATED)
     @PostMapping("/api/v1/auth/signup")
     public AuthSignupResponse signup(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot) {
         return AuthSignupResponse.from(authService.signup(anonSessionSnapshot));

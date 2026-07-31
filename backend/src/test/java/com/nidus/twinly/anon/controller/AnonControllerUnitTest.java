@@ -45,13 +45,13 @@ class AnonControllerUnitTest {
     }
 
     @Test
-    @DisplayName("익명 세션 시작 성공 시 200을 반환하고 서비스가 발급한 토큰·만료시각을 응답한다")
+    @DisplayName("익명 세션 시작 성공 시 201을 반환하고 서비스가 발급한 토큰·만료시각을 응답한다")
     void start_success() throws Exception {
         // when: 인증 없이 익명 세션 시작 API 호출 (인증이 필요 없는 공개 엔드포인트)
         var result = mockMvc.perform(post("/api/v1/anon/start"));
 
-        // then: 200 반환 + 서비스 결과가 응답 JSON으로 매핑되고 세션 발급을 서비스에 위임
-        result.andExpect(status().isOk())
+        // then: 항상 새 세션을 만드는 호출이므로 201 + 서비스 결과가 응답 JSON으로 매핑되고 세션 발급을 서비스에 위임
+        result.andExpect(status().isCreated())
                 .andExpect(jsonPath("$.anonSessionToken").value(TOKEN.toString()))
                 .andExpect(jsonPath("$.expiresAt").exists());
         then(anonService).should().start();
@@ -67,8 +67,8 @@ class AnonControllerUnitTest {
         var result = mockMvc.perform(post("/api/v1/anon/start")
                 .header("Authorization", bogusAuthorization));
 
-        // then: 200 반환 + 기존 세션 조회(resolveByToken)는 일어나지 않고 새 세션만 발급
-        result.andExpect(status().isOk())
+        // then: 201 반환 + 기존 세션 조회(resolveByToken)는 일어나지 않고 새 세션만 발급
+        result.andExpect(status().isCreated())
                 .andExpect(jsonPath("$.anonSessionToken").value(TOKEN.toString()));
         then(anonService).should().start();
         then(anonService).should(never()).resolveByToken(any());

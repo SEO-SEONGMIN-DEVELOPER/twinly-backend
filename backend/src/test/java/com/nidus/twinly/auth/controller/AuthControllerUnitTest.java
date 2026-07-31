@@ -319,7 +319,7 @@ class AuthControllerUnitTest {
     }
 
     @Test
-    @DisplayName("회원가입 성공 시 200과 액세스·리프레시 토큰을 반환하고 익명 세션 스냅샷으로 서비스를 호출한다")
+    @DisplayName("회원가입 성공 시 201과 액세스·리프레시 토큰을 반환하고 익명 세션 스냅샷으로 서비스를 호출한다")
     void signup_success() throws Exception {
         // given: 서비스가 액세스·리프레시 토큰을 반환
         given(authService.signup(any()))
@@ -329,8 +329,8 @@ class AuthControllerUnitTest {
         var result = mockMvc.perform(post("/api/v1/auth/signup")
                 .header("Authorization", "Bearer " + ANON_TOKEN));
 
-        // then: 200 + 토큰 JSON 반환 + 익명 세션 스냅샷으로 서비스에 위임
-        result.andExpect(status().isOk())
+        // then: 유저를 새로 만드는 호출이므로 201 + 토큰 JSON 반환 + 익명 세션 스냅샷으로 서비스에 위임
+        result.andExpect(status().isCreated())
                 .andExpect(jsonPath("$.accessToken").value("access-token"))
                 .andExpect(jsonPath("$.refreshToken").value("refresh-token"))
                 .andExpect(jsonPath("$.accessExpiresAt").exists())

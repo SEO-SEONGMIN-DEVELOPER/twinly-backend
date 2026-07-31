@@ -32,7 +32,7 @@ class AnonIntegrationTest extends AbstractIntegrationTest {
 
         // when: 인증 헤더 없이 익명 세션 시작 API 호출 (인증이 필요 없는 공개 엔드포인트)
         String body = mockMvc.perform(post("/api/v1/anon/start"))
-                .andExpect(status().isOk())
+                .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.anonSessionToken").isString())
                 .andExpect(jsonPath("$.expiresAt").isString())
                 .andReturn().getResponse().getContentAsString();
@@ -56,10 +56,10 @@ class AnonIntegrationTest extends AbstractIntegrationTest {
 
         // when: 익명 세션 시작 API를 연속으로 두 번 호출
         String firstBody = mockMvc.perform(post("/api/v1/anon/start"))
-                .andExpect(status().isOk())
+                .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         String secondBody = mockMvc.perform(post("/api/v1/anon/start"))
-                .andExpect(status().isOk())
+                .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
 
         // then: 서로 다른 토큰이 발급되고 DB의 익명 세션 행이 2건 늘어난다 (token 유니크 제약 통과)

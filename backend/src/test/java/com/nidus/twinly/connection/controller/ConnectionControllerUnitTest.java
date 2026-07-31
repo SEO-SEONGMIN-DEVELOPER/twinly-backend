@@ -54,7 +54,7 @@ class ConnectionControllerUnitTest {
     }
 
     @Test
-    @DisplayName("연결 토큰 발급 성공 시 200과 티켓 정보를 반환하고 인증 유저 id·커맨드로 서비스를 호출한다")
+    @DisplayName("연결 토큰 발급 성공 시 201과 티켓 정보를 반환하고 인증 유저 id·커맨드로 서비스를 호출한다")
     void token_success() throws Exception {
         // given: 서비스가 WS 타입 티켓 발급 결과를 반환
         UUID ticket = UUID.fromString("11111111-2222-3333-4444-555555555555");
@@ -68,8 +68,8 @@ class ConnectionControllerUnitTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"connectionType\":\"WS\"}"));
 
-        // then: 200 반환 + 서비스 결과가 응답 JSON으로 매핑 + 인증 유저 id·커맨드로 서비스에 위임
-        result.andExpect(status().isOk())
+        // then: 항상 새 티켓을 만드는 호출이므로 201 + 서비스 결과가 응답 JSON으로 매핑 + 인증 유저 id·커맨드로 서비스에 위임
+        result.andExpect(status().isCreated())
                 .andExpect(jsonPath("$.ticket").value(ticket.toString()))
                 .andExpect(jsonPath("$.connectionType").value("WS"))
                 .andExpect(jsonPath("$.expiresAt").value(expiresAt.toString()));

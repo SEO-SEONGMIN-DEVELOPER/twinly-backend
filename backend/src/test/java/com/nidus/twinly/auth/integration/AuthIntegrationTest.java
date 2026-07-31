@@ -108,7 +108,7 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
         // when: 익명 세션 토큰을 Bearer로 붙여 회원가입 API 호출
         mockMvc.perform(post("/api/v1/auth/signup")
                         .header("Authorization", "Bearer " + anonToken))
-                .andExpect(status().isOk())
+                .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.accessToken").exists())
                 .andExpect(jsonPath("$.refreshToken").exists())
                 .andExpect(jsonPath("$.accessExpiresAt").exists())
@@ -209,7 +209,7 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
         // when: 회원가입 API 호출
         mockMvc.perform(post("/api/v1/auth/signup")
                         .header("Authorization", "Bearer " + anonToken))
-                .andExpect(status().isOk());
+                .andExpect(status().isCreated());
 
         // then: 익명 세션과 자식 인증 세션이 모두 삭제된다
         // (이 조회가 anon_sessions 쿼리 스페이스를 건드려 auto-flush를 유발하므로, 삭제 순서가 잘못되면 여기서 FK 위반이 드러난다)
