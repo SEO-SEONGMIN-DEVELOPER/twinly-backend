@@ -23,8 +23,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ReportService {
 
-    private static final Boolean AUTO_BLOCK = true;
-
     private final ReportRepository reportRepository;
     private final BlockRepository blockRepository;
     private final AiUtteranceReportRepository aiUtteranceReportRepository;
@@ -46,11 +44,11 @@ public class ReportService {
             reportRepository.save(Report.create(userId, reportedUserId, command.reason(), command.detail()));
         }
 
-        if (AUTO_BLOCK && !blockRepository.existsByUserIdAndBlockedUserId(userId, reportedUserId)) {
+        if (!blockRepository.existsByUserIdAndBlockedUserId(userId, reportedUserId)) {
             blockRepository.save(Block.create(userId, reportedUserId));
         }
 
-        return new ReportUserResult(AUTO_BLOCK);
+        return new ReportUserResult(true);
     }
 
     @Transactional
