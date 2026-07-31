@@ -79,6 +79,7 @@ public enum ErrorCode {
     // 신고
     CANNOT_REPORT_SELF(HttpStatus.UNPROCESSABLE_CONTENT, "자기 자신을 신고할 수 없습니다."),
     SCENE_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 씬입니다."),
+    NOT_SCENE_OWNER(HttpStatus.FORBIDDEN, "본인의 씬이 아닙니다."),
     SCENE_TARGET_MISMATCH(HttpStatus.UNPROCESSABLE_CONTENT, "대상과 씬이 일치하지 않습니다."),
 
     // 차단

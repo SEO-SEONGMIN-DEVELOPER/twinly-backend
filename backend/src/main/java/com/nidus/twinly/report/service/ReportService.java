@@ -1,6 +1,7 @@
 package com.nidus.twinly.report.service;
 
 import com.nidus.twinly.activity.entity.Scene;
+import com.nidus.twinly.activity.repository.ScenePartnerRepository;
 import com.nidus.twinly.activity.repository.SceneRepository;
 import com.nidus.twinly.block.entity.Block;
 import com.nidus.twinly.block.repository.BlockRepository;
@@ -27,6 +28,7 @@ public class ReportService {
     private final BlockRepository blockRepository;
     private final AiUtteranceReportRepository aiUtteranceReportRepository;
     private final SceneRepository sceneRepository;
+    private final ScenePartnerRepository scenePartnerRepository;
 
     @Transactional
     public ReportUserResult reportUser(Long userId, ReportUserCommand command) {
@@ -58,7 +60,12 @@ public class ReportService {
 
         Scene scene = sceneRepository.findById(sceneId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SCENE_NOT_FOUND));
-        if (!scene.getUserId().equals(reportedUserId)) {
+
+        if (!scene.getUserId().equals(userId)) {
+            throw new BusinessException(ErrorCode.NOT_SCENE_OWNER);
+        }
+
+        if (!scenePartnerRepository.existsBySceneIdAndUserId(sceneId, reportedUserId)) {
             throw new BusinessException(ErrorCode.SCENE_TARGET_MISMATCH);
         }
 

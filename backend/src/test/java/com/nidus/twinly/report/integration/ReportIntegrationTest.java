@@ -2,6 +2,8 @@ package com.nidus.twinly.report.integration;
 
 import com.nidus.twinly.activity.domain.SceneType;
 import com.nidus.twinly.activity.entity.Scene;
+import com.nidus.twinly.activity.entity.ScenePartner;
+import com.nidus.twinly.activity.repository.ScenePartnerRepository;
 import com.nidus.twinly.activity.repository.SceneRepository;
 import com.nidus.twinly.block.repository.BlockRepository;
 import com.nidus.twinly.report.domain.ReportReason;
@@ -39,6 +41,9 @@ class ReportIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     AiUtteranceReportRepository aiUtteranceReportRepository;
+
+    @Autowired
+    ScenePartnerRepository scenePartnerRepository;
 
     @Autowired
     SceneRepository sceneRepository;
@@ -89,12 +94,13 @@ class ReportIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("AI 발화 신고 성공: 실제 씬 소유자 검증을 통과하여 ai_utterance_reports 행이 생성된다")
+    @DisplayName("AI 발화 신고 성공: 내 활동에 등장한 상대를 신고하면 ai_utterance_reports 행이 생성된다")
     void aiUtterance_success_end_to_end() throws Exception {
-        // given: 실제 유저 2명과 피신고자가 소유한 실제 씬 저장 (씬 소유자 검증을 통과해야 함)
+        // given: 씬은 조회 API에서 항상 조회자 소유로만 내려간다. 화면에서 신고하는 실제 상태를 그대로 만든다
         User me = saveUser();
         User target = saveUser();
-        Scene scene = saveScene(target.getId());
+        Scene scene = saveScene(me.getId());
+        saveScenePartner(scene.getId(), target.getId());
 
         // when: 신고자의 실제 액세스 토큰으로 AI 발화 신고 API 호출 (id는 문자열로 전달)
         mockMvc.perform(post("/api/v1/reports/ai-utterances")
@@ -115,6 +121,15 @@ class ReportIntegrationTest extends AbstractIntegrationTest {
         assertThat(saved.getUtteranceText()).isEqualTo("부적절한 발언");
         assertThat(saved.getReason()).isEqualTo("HARASSMENT");
         assertThat(saved.getStatus()).isEqualTo(ReportStatus.PENDING);
+    }
+
+    /** 씬에 등장한 상대(scene_partners)를 저장한다. */
+    private void saveScenePartner(Long sceneId, Long userId) {
+        ScenePartner partner = BeanUtils.instantiateClass(ScenePartner.class);
+        ReflectionTestUtils.setField(partner, "sceneId", sceneId);
+        ReflectionTestUtils.setField(partner, "userId", userId);
+        ReflectionTestUtils.setField(partner, "createdAt", Instant.now());
+        scenePartnerRepository.save(partner);
     }
 
     /** 해당 유저가 소유한 실제 Scene을 DB에 저장한다. (팩토리/세터가 없어 리플렉션으로 필드를 채운다) */

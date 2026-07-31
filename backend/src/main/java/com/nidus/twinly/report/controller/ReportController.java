@@ -30,6 +30,7 @@ public class ReportController {
     }
 
     @ApiResponses({
+            @ApiResponse(responseCode = "403", description = "NOT_SCENE_OWNER"),
             @ApiResponse(responseCode = "404", description = "SCENE_NOT_FOUND"),
             @ApiResponse(responseCode = "422", description = "SCENE_TARGET_MISMATCH")
     })

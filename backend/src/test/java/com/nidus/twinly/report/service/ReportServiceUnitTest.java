@@ -1,6 +1,7 @@
 package com.nidus.twinly.report.service;
 
 import com.nidus.twinly.activity.entity.Scene;
+import com.nidus.twinly.activity.repository.ScenePartnerRepository;
 import com.nidus.twinly.activity.repository.SceneRepository;
 import com.nidus.twinly.block.entity.Block;
 import com.nidus.twinly.block.repository.BlockRepository;
@@ -47,6 +48,9 @@ class ReportServiceUnitTest {
 
     @Mock
     SceneRepository sceneRepository;
+
+    @Mock
+    ScenePartnerRepository scenePartnerRepository;
 
     @InjectMocks
     ReportService reportService;
@@ -123,12 +127,31 @@ class ReportServiceUnitTest {
     }
 
     @Test
-    @DisplayName("AI 발화 신고 시 씬 소유자가 신고 대상과 다르면 SCENE_TARGET_MISMATCH 예외가 발생하고 저장하지 않는다")
-    void aiUtterance_scene_target_mismatch_throws() {
-        // given: 씬의 소유자가 신고 대상(2)이 아닌 다른 유저(99)
+    @DisplayName("AI 발화 신고 시 남의 씬이면 NOT_SCENE_OWNER 예외가 발생하고 저장하지 않는다")
+    void aiUtterance_not_scene_owner_throws() {
+        // given: 씬의 주인이 신고자(1)가 아닌 다른 유저(99). 씬은 조회 API에서 항상 조회자 소유로만 내려간다
         Scene scene = mock(Scene.class);
         given(scene.getUserId()).willReturn(99L);
         given(sceneRepository.findById(77L)).willReturn(Optional.of(scene));
+
+        // when & then: 남의 씬 id를 찍어 신고할 수 없다
+        assertThatThrownBy(() -> reportService.reportAiUtterance(
+                1L, new ReportAiUtteranceCommand(2L, 77L, "부적절한 발언", "HARASSMENT")))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.NOT_SCENE_OWNER);
+
+        then(aiUtteranceReportRepository).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("AI 발화 신고 시 신고 대상이 그 씬의 참여자가 아니면 SCENE_TARGET_MISMATCH 예외가 발생하고 저장하지 않는다")
+    void aiUtterance_scene_target_mismatch_throws() {
+        // given: 내 씬이지만 신고 대상(2)이 그 씬에 등장하지 않음
+        Scene scene = mock(Scene.class);
+        given(scene.getUserId()).willReturn(1L);
+        given(sceneRepository.findById(77L)).willReturn(Optional.of(scene));
+        given(scenePartnerRepository.existsBySceneIdAndUserId(77L, 2L)).willReturn(false);
 
         // when & then: SCENE_TARGET_MISMATCH 예외 발생 + 저장 안 함
         assertThatThrownBy(() -> reportService.reportAiUtterance(
@@ -141,12 +164,13 @@ class ReportServiceUnitTest {
     }
 
     @Test
-    @DisplayName("AI 발화 신고 시 씬 소유자가 신고 대상과 일치하면 PENDING 상태로 신고를 저장한다")
+    @DisplayName("AI 발화 신고 시 내 씬에 등장한 상대를 신고하면 PENDING 상태로 신고를 저장한다")
     void aiUtterance_success_saves_report() {
-        // given: 씬(77)의 소유자가 신고 대상(2)과 일치
+        // given: 씬(77)은 내 것이고 신고 대상(2)이 그 씬의 참여자다
         Scene scene = mock(Scene.class);
-        given(scene.getUserId()).willReturn(2L);
+        given(scene.getUserId()).willReturn(1L);
         given(sceneRepository.findById(77L)).willReturn(Optional.of(scene));
+        given(scenePartnerRepository.existsBySceneIdAndUserId(77L, 2L)).willReturn(true);
 
         // when: AI 발화 신고
         reportService.reportAiUtterance(1L, new ReportAiUtteranceCommand(2L, 77L, "부적절한 발언", "HARASSMENT"));
