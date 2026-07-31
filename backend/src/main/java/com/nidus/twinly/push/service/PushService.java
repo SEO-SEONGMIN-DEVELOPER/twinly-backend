@@ -22,6 +22,10 @@ public class PushService {
                         device -> device.reregister(userId, command.deviceModel(), command.fcmToken()),
                         () -> deviceRepository.save(Device.create(userId, command.deviceId(), command.deviceModel(), command.fcmToken()))
                 );
+
+        deviceRepository.findAllByUserIdAndPushToken(userId, command.fcmToken()).stream()
+                .filter(device -> !device.getDeviceId().equals(command.deviceId()))
+                .forEach(Device::revokeToken);
     }
 
     @Transactional
