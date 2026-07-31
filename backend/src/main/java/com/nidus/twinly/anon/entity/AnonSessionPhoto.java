@@ -42,6 +42,7 @@ public class AnonSessionPhoto {
 
     public static AnonSessionPhoto create(Long anonSessionId, PhotoType type, String key, Integer xPos, Integer yPos, Integer width, Integer height) {
         AnonSessionPhoto photo = new AnonSessionPhoto();
+        Instant now = Instant.now();
 
         photo.anonSessionId = anonSessionId;
         photo.type = type;
@@ -50,8 +51,8 @@ public class AnonSessionPhoto {
         photo.yPos = yPos;
         photo.width = width;
         photo.height = height;
-        photo.uploadedAt = Instant.now();
-        photo.createdAt = Instant.now();
+        photo.uploadedAt = now;
+        photo.createdAt = now;
 
         return photo;
     }

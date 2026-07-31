@@ -29,11 +29,12 @@ public class SeasonParticipation {
 
     public static SeasonParticipation create(Long userId, Long seasonId) {
         SeasonParticipation participation = new SeasonParticipation();
+        Instant now = Instant.now();
 
         participation.userId = userId;
         participation.seasonId = seasonId;
-        participation.participatedInAt = Instant.now();
-        participation.createdAt = Instant.now();
+        participation.participatedInAt = now;
+        participation.createdAt = now;
 
         return participation;
     }

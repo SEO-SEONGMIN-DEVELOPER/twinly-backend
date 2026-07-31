@@ -41,6 +41,7 @@ public class Chat {
 
     public static Chat create(String clientMsgId, Long roomId, Long senderUserId, Long receiverUserId, ChatMessageType type, String message) {
         Chat chat = new Chat();
+        Instant now = Instant.now();
 
         chat.clientMsgId = clientMsgId;
         chat.roomId = roomId;
@@ -48,8 +49,8 @@ public class Chat {
         chat.receiverUserId = receiverUserId;
         chat.type = type;
         chat.message = message;
-        chat.sentAt = Instant.now();
-        chat.createdAt = Instant.now();
+        chat.sentAt = now;
+        chat.createdAt = now;
 
         return chat;
     }
