@@ -586,19 +586,18 @@ class PeopleServiceUnitTest {
     }
 
     @Test
-    @DisplayName("이벤트 상세는 해당 상대가 참여한 씬만 남기고 첫 씬의 version을 사용한다")
+    @DisplayName("이벤트 상세는 상대가 참여한 씬만 쿼리로 걸러 받고 첫 씬의 version을 사용한다")
     void event_filters_scenes_by_partner() {
         given(userRepository.existsById(20L)).willReturn(true);
-        // given: 같은 날 씬 2개 중 100번만 상대(20)가 참여
+        // given: 상대(20)가 참여한 씬만 조인 쿼리가 돌려준다. 그날 다른 씬은 애초에 로드되지 않는다
         LocalDate date = LocalDate.of(2026, 7, 20);
-        given(sceneRepository.findAllByUserIdAndDate(ME, date))
+        given(sceneRepository.findAllByUserIdAndWithPartnerUserIdAndDateIn(ME, 20L, List.of(date)))
                 .willReturn(List.of(
-                        scene(100L, ME, date, "v1", "학교 복도", SceneType.ACTION, "복도를 함께 걸었다", "설렜다", null),
-                        scene(200L, ME, date, "v2", "도서관", SceneType.ACTION, "혼자 공부했다", null, null)));
-        given(scenePartnerRepository.findAllBySceneIdIn(List.of(100L, 200L)))
-                .willReturn(List.of(scenePartner(100L, 20L), scenePartner(200L, 30L)));
-        given(userRepository.findAllById(List.of(20L, 30L)))
-                .willReturn(List.of(user(20L, "김", "철수"), user(30L, "박", "영희")));
+                        scene(100L, ME, date, "v1", "학교 복도", SceneType.ACTION, "복도를 함께 걸었다", "설렜다", null)));
+        given(scenePartnerRepository.findAllBySceneIdIn(List.of(100L)))
+                .willReturn(List.of(scenePartner(100L, 20L)));
+        given(userRepository.findAllById(List.of(20L)))
+                .willReturn(List.of(user(20L, "김", "철수")));
 
         // when: 이벤트 상세 조회
         PeopleEventResult result = peopleService.event(ME, 20L, date);
@@ -624,16 +623,15 @@ class PeopleServiceUnitTest {
     @DisplayName("이벤트 상세의 profilePhotos는 남은 씬의 with에 등장한 유저만 담는다")
     void event_maps_profile_photos_of_remaining_scenes() {
         given(userRepository.existsById(20L)).willReturn(true);
-        // given: 상대(20)가 참여한 씬에는 30도 함께 있고, 상대가 없는 씬에는 40만 참여
+        // given: 상대(20)가 참여한 씬에는 30도 함께 있다. 상대가 없는 씬(40만 참여)은 쿼리 단계에서 빠진다
         LocalDate date = LocalDate.of(2026, 7, 20);
-        given(sceneRepository.findAllByUserIdAndDate(ME, date))
+        given(sceneRepository.findAllByUserIdAndWithPartnerUserIdAndDateIn(ME, 20L, List.of(date)))
                 .willReturn(List.of(
-                        scene(100L, ME, date, "v1", "학교 복도", SceneType.ACTION, "함께 걸었다", "설렜다", null),
-                        scene(200L, ME, date, "v1", "도서관", SceneType.ACTION, "다른 사람과 있었다", null, null)));
-        given(scenePartnerRepository.findAllBySceneIdIn(List.of(100L, 200L)))
-                .willReturn(List.of(scenePartner(100L, 20L), scenePartner(100L, 30L), scenePartner(200L, 40L)));
-        given(userRepository.findAllById(List.of(20L, 30L, 40L)))
-                .willReturn(List.of(user(20L, "김", "철수"), user(30L, "박", "영희"), user(40L, "이", "민수")));
+                        scene(100L, ME, date, "v1", "학교 복도", SceneType.ACTION, "함께 걸었다", "설렜다", null)));
+        given(scenePartnerRepository.findAllBySceneIdIn(List.of(100L)))
+                .willReturn(List.of(scenePartner(100L, 20L), scenePartner(100L, 30L)));
+        given(userRepository.findAllById(List.of(20L, 30L)))
+                .willReturn(List.of(user(20L, "김", "철수"), user(30L, "박", "영희")));
         given(photoRepository.findAllByUserIdInAndType(List.of(20L, 30L), PhotoType.PROFILE))
                 .willReturn(List.of(Photo.create(20L, PhotoType.PROFILE, "profile/20/key", 10, 20, 100, 200, Instant.now())));
         given(cloudFrontService.getSignedUrl("profile/20/key")).willReturn("https://cdn.example.com/signed20");
@@ -641,7 +639,7 @@ class PeopleServiceUnitTest {
         // when: 이벤트 상세 조회
         PeopleEventResult result = peopleService.event(ME, 20L, date);
 
-        // then: 필터로 빠진 씬의 40은 제외되고, 사진이 없는 30은 profilePhoto가 null
+        // then: 쿼리에서 빠진 씬의 40은 애초에 조회되지 않고, 사진이 없는 30은 profilePhoto가 null
         assertThat(result.profilePhotos()).containsExactly(
                 new PeopleEventProfilePhotoResult(20L, new ProfilePhotoInfo("profile/20/key", "https://cdn.example.com/signed20",
                         new PhotoPosInfo(new PhotoPosInfo.StartPos(10, 20), 100, 200))),

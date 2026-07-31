@@ -377,16 +377,12 @@ public class PeopleService {
             throw new BusinessException(ErrorCode.USER_NOT_FOUND);
         }
 
-        List<Scene> myScenes = sceneRepository.findAllByUserIdAndDate(userId, date);
+        List<Scene> scenes = sceneRepository.findAllByUserIdAndWithPartnerUserIdAndDateIn(userId, partnerUserId, List.of(date));
 
-        List<Long> sceneIds = myScenes.stream().map(Scene::getId).toList();
+        List<Long> sceneIds = scenes.stream().map(Scene::getId).toList();
         List<ScenePartner> scenePartners = scenePartnerRepository.findAllBySceneIdIn(sceneIds);
         Map<Long, List<Long>> partnerUserIdsBySceneId = scenePartners.stream()
                 .collect(Collectors.groupingBy(ScenePartner::getSceneId, Collectors.mapping(ScenePartner::getUserId, Collectors.toList())));
-
-        List<Scene> scenes = myScenes.stream()
-                .filter(scene -> partnerUserIdsBySceneId.getOrDefault(scene.getId(), List.of()).contains(partnerUserId))
-                .toList();
 
         List<Long> speakerUserIds = scenePartners.stream().map(ScenePartner::getUserId).distinct().toList();
         Map<Long, User> userById = userRepository.findAllById(speakerUserIds).stream()
