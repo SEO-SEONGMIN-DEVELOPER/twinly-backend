@@ -1,32 +1,24 @@
-logging:
-  file:
-    name: logs/app.log
-
 spring:
-  config:
-    import: optional:file:../.env[.properties]
   application:
     name: twinly
+  profiles:
+    default: local
   datasource:
-    url: jdbc:mysql://localhost:3306/${MYSQL_DB}?characterEncoding=UTF-8&serverTimezone=UTC
-    username: ${MYSQL_USER}
-    password: ${MYSQL_PASSWORD}
+    url: jdbc:mysql://${DB_HOST}:${DB_PORT:3306}/${DB_NAME}?characterEncoding=UTF-8&serverTimezone=UTC
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
       ddl-auto: validate
-    show-sql: true
     open-in-view: false
-    properties:
-      hibernate:
-        format_sql: true
 
 springdoc:
   swagger-ui:
     enabled: false
 
 springwolf:
-  enabled: true
+  enabled: false
   docket:
     base-package: com.nidus.twinly
     info:
