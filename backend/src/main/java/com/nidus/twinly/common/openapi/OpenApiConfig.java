@@ -5,8 +5,12 @@ import com.nidus.twinly.anon.dto.snapshot.AnonSessionSnapshot;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.user.annotation.CurrentUser;
 import com.nidus.twinly.user.dto.header.UserInfo;
+import io.swagger.v3.core.converter.AnnotatedType;
+import io.swagger.v3.core.converter.ModelConverters;
+import io.swagger.v3.core.converter.ResolvedSchema;
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.media.Content;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.responses.ApiResponse;
 import io.swagger.v3.oas.models.responses.ApiResponses;
@@ -18,8 +22,13 @@ import org.springdoc.core.utils.SpringDocUtils;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.MethodParameter;
+import org.springframework.core.annotation.AnnotatedElementUtils;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.method.HandlerMethod;
 
+import java.lang.reflect.Type;
 import java.util.*;
 import java.util.regex.Pattern;
 
@@ -90,6 +99,50 @@ public class OpenApiConfig {
 
             return operation;
         };
+    }
+
+    @Bean
+    public OperationCustomizer defaultSuccessResponseCustomizer() {
+        return (operation, handlerMethod) -> {
+            ApiResponses responses = operation.getResponses();
+            if (responses == null) {
+                responses = new ApiResponses();
+                operation.setResponses(responses);
+            }
+
+            boolean hasSuccess = responses.keySet().stream().anyMatch(status -> status.startsWith("2"));
+            if (hasSuccess) {
+                return operation;
+            }
+
+            responses.addApiResponse(successStatus(handlerMethod), successResponse(handlerMethod));
+
+            return operation;
+        };
+    }
+
+    private String successStatus(HandlerMethod handlerMethod) {
+        ResponseStatus responseStatus = AnnotatedElementUtils.findMergedAnnotation(handlerMethod.getMethod(), ResponseStatus.class);
+
+        return String.valueOf(responseStatus != null ? responseStatus.code().value() : HttpStatus.OK.value());
+    }
+
+    private ApiResponse successResponse(HandlerMethod handlerMethod) {
+        ApiResponse response = new ApiResponse().description("OK");
+
+        Type returnType = handlerMethod.getMethod().getGenericReturnType();
+        if (returnType == void.class || returnType == Void.class) {
+            return response;
+        }
+
+        ResolvedSchema resolved = ModelConverters.getInstance()
+                .resolveAsResolvedSchema(new AnnotatedType(returnType).resolveAsRef(true));
+        if (resolved == null || resolved.schema == null) {
+            return response;
+        }
+
+        return response.content(new Content()
+                .addMediaType(MediaType.APPLICATION_JSON_VALUE, new io.swagger.v3.oas.models.media.MediaType().schema(resolved.schema)));
     }
 
     private List<ErrorCode> resolveAuth401(HandlerMethod handlerMethod) {

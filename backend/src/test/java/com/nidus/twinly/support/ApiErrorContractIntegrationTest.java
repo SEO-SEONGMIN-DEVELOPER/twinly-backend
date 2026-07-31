@@ -1,10 +1,14 @@
 package com.nidus.twinly.support;
 
+import com.jayway.jsonpath.JsonPath;
 import com.nidus.twinly.common.web.ErrorCode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -33,6 +37,37 @@ class ApiErrorContractIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(post("/api/v1/onboarding/survey-questions"))
                 .andExpect(status().isMethodNotAllowed())
                 .andExpect(jsonPath("$.code").value("METHOD_NOT_ALLOWED"));
+    }
+
+    @Test
+    @DisplayName("API 문서의 모든 오퍼레이션에 성공(2xx) 응답이 있다")
+    void api_docs_expose_success_response_for_every_operation() throws Exception {
+        String json = mockMvc.perform(get("/v3/api-docs"))
+                .andReturn().getResponse().getContentAsString();
+
+        Map<String, Map<String, Object>> paths = JsonPath.read(json, "$.paths");
+
+        List<String> missing = new ArrayList<>();
+        int checked = 0;
+        for (var pathEntry : paths.entrySet()) {
+            for (var operationEntry : pathEntry.getValue().entrySet()) {
+                if (!(operationEntry.getValue() instanceof Map<?, ?> operation)
+                        || !(operation.get("responses") instanceof Map<?, ?> responses)) {
+                    continue;
+                }
+                checked++;
+                boolean hasSuccess = responses.keySet().stream()
+                        .anyMatch(status -> String.valueOf(status).startsWith("2"));
+                if (!hasSuccess) {
+                    missing.add(operationEntry.getKey().toUpperCase() + " " + pathEntry.getKey());
+                }
+            }
+        }
+
+        // 메서드에 @ApiResponse를 하나라도 선언하면 springdoc이 기본 성공 응답을 넣지 않는다.
+        // 오류 코드를 채우다 성공 계약이 통째로 사라진 전례가 있어, 그 자리를 여기서 지킨다.
+        assertThat(missing).as("성공 응답이 없는 오퍼레이션").isEmpty();
+        assertThat(checked).isGreaterThan(0);
     }
 
     @Test
