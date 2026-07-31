@@ -34,57 +34,17 @@ class PushServiceUnitTest {
     PushService pushService;
 
     @Test
-    @DisplayName("등록: 같은 deviceId의 기기가 없으면 userId/deviceId/모델/토큰으로 새 Device를 저장한다")
-    void register_new_device_saves() {
-        // given: 해당 deviceId로 등록된 기기가 없음
-        given(deviceRepository.findByDeviceId(DEVICE_ID)).willReturn(Optional.empty());
+    @DisplayName("등록: 조회 없이 upsert 한 번으로 저장한다 (동시 등록이 유니크 위반으로 500이 되지 않게)")
+    void register_delegates_to_upsert() {
+        // given: 같은 토큰을 든 다른 행이 없음
         given(deviceRepository.findAllByUserIdAndPushToken(1L, "fcm-token-abc")).willReturn(List.of());
 
         // when: 푸시 토큰 등록
         pushService.register(1L, new PushTokenRegisterCommand(DEVICE_ID, "iPhone 15 Pro", "fcm-token-abc"));
 
-        // then: 요청 값 그대로 새 Device가 저장됨
-        ArgumentCaptor<Device> captor = ArgumentCaptor.forClass(Device.class);
-        then(deviceRepository).should().save(captor.capture());
-        Device saved = captor.getValue();
-        assertThat(saved.getUserId()).isEqualTo(1L);
-        assertThat(saved.getDeviceId()).isEqualTo(DEVICE_ID);
-        assertThat(saved.getDeviceModel()).isEqualTo("iPhone 15 Pro");
-        assertThat(saved.getPushToken()).isEqualTo("fcm-token-abc");
-    }
-
-    @Test
-    @DisplayName("등록: 같은 deviceId의 기기가 이미 있으면 새로 저장하지 않고 모델·토큰을 갱신한다")
-    void register_existing_device_reregisters() {
-        // given: 같은 유저가 이미 등록해 둔 기기가 존재
-        Device existing = Device.create(1L, DEVICE_ID, "iPhone 14", "old-token");
-        given(deviceRepository.findByDeviceId(DEVICE_ID)).willReturn(Optional.of(existing));
-        given(deviceRepository.findAllByUserIdAndPushToken(1L, "new-token")).willReturn(List.of(existing));
-
-        // when: 같은 deviceId로 다시 등록
-        pushService.register(1L, new PushTokenRegisterCommand(DEVICE_ID, "iPhone 15 Pro", "new-token"));
-
-        // then: insert 없이 기존 행의 모델·토큰만 갱신 (더티 체킹에 맡김). 자기 행은 정리 대상에서 제외된다
+        // then: 조회-후-저장(check-then-act)이 아니라 원자적 upsert로 위임된다
+        then(deviceRepository).should().upsert(1L, DEVICE_ID, "iPhone 15 Pro", "fcm-token-abc");
         then(deviceRepository).should(never()).save(any());
-        assertThat(existing.getDeviceModel()).isEqualTo("iPhone 15 Pro");
-        assertThat(existing.getPushToken()).isEqualTo("new-token");
-    }
-
-    @Test
-    @DisplayName("등록: 다른 유저가 등록한 기기면 소유자를 나로 덮어쓴다")
-    void register_existing_device_of_other_user_overwrites_owner() {
-        // given: 같은 기기를 유저 2가 쓰고 있던 상태 (같은 폰에서 계정 전환)
-        Device existing = Device.create(2L, DEVICE_ID, "iPhone 15 Pro", "shared-token");
-        given(deviceRepository.findByDeviceId(DEVICE_ID)).willReturn(Optional.of(existing));
-        given(deviceRepository.findAllByUserIdAndPushToken(1L, "shared-token")).willReturn(List.of(existing));
-
-        // when: 유저 1이 같은 deviceId로 등록
-        pushService.register(1L, new PushTokenRegisterCommand(DEVICE_ID, "iPhone 15 Pro", "shared-token"));
-
-        // then: 행이 늘지 않고 소유자와 토큰이 유저 1로 넘어간다 (이전 유저에게는 더 이상 배달되지 않는다)
-        then(deviceRepository).should(never()).save(any());
-        assertThat(existing.getUserId()).isEqualTo(1L);
-        assertThat(existing.getPushToken()).isEqualTo("shared-token");
     }
 
     @Test
@@ -92,14 +52,12 @@ class PushServiceUnitTest {
     void register_clears_same_token_on_my_other_rows() {
         // given: deviceId만 다른 내 옛 행이 같은 토큰을 들고 있음 (클라이언트가 deviceId를 새로 만든 경우)
         Device myStaleRow = Device.create(1L, OTHER_DEVICE_ID, "iPhone 15 Pro", "shared-token");
-        given(deviceRepository.findByDeviceId(DEVICE_ID)).willReturn(Optional.empty());
         given(deviceRepository.findAllByUserIdAndPushToken(1L, "shared-token")).willReturn(List.of(myStaleRow));
 
         // when: 새 deviceId로 같은 토큰을 등록
         pushService.register(1L, new PushTokenRegisterCommand(DEVICE_ID, "iPhone 15 Pro", "shared-token"));
 
-        // then: 새 행이 생기고 옛 행의 토큰이 비워져 같은 기기에 두 번 발송되지 않는다
-        then(deviceRepository).should().save(any(Device.class));
+        // then: 옛 행의 토큰이 비워져 같은 기기에 두 번 발송되지 않는다
         assertThat(myStaleRow.getPushToken()).isNull();
     }
 
