@@ -2,8 +2,8 @@ package com.nidus.twinly.legal.service;
 
 import com.nidus.twinly.legal.dto.result.LegalPoliciesItemResult;
 import com.nidus.twinly.legal.dto.result.LegalPoliciesResult;
-import com.nidus.twinly.legal.entity.Policy;
 import com.nidus.twinly.legal.entity.PolicyName;
+import com.nidus.twinly.support.TestPolicySummary;
 import com.nidus.twinly.legal.repository.PolicyNameRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -110,15 +110,8 @@ class LegalServiceUnitTest {
         return policyName;
     }
 
-    private Policy policy(Long policyNameId, Integer version, String url, Boolean isRequired) {
-        Policy policy = BeanUtils.instantiateClass(Policy.class);
-        ReflectionTestUtils.setField(policy, "policyNameId", policyNameId);
-        ReflectionTestUtils.setField(policy, "version", version);
-        ReflectionTestUtils.setField(policy, "content", "content-v" + version);
-        ReflectionTestUtils.setField(policy, "url", url);
-        ReflectionTestUtils.setField(policy, "isRequired", isRequired);
-        ReflectionTestUtils.setField(policy, "effectiveAt", Instant.parse("2025-01-01T00:00:00Z"));
-        ReflectionTestUtils.setField(policy, "createdAt", Instant.now());
-        return policy;
+    private TestPolicySummary policy(Long policyNameId, Integer version, String url, Boolean isRequired) {
+        return new TestPolicySummary(policyNameId * 100 + version, policyNameId, version, url, isRequired,
+                Instant.parse("2025-01-01T00:00:00Z"));
     }
 }

@@ -20,7 +20,7 @@ import com.nidus.twinly.common.survey.SurveyOptionName;
 import com.nidus.twinly.common.survey.SurveyQuestion;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
-import com.nidus.twinly.legal.entity.Policy;
+import com.nidus.twinly.legal.repository.PolicyRepository.PolicySummary;
 import com.nidus.twinly.legal.service.PolicyCatalog;
 import com.nidus.twinly.legal.service.PolicyCatalog.PolicyKey;
 import com.nidus.twinly.onboarding.dto.command.*;
@@ -201,7 +201,7 @@ public class OnboardingService {
 
         List<String> policyNameIdentifiers = command.grants().stream().map(grant -> grant.policyId()).toList();
 
-        Map<PolicyKey, Policy> policyByKey = policyCatalog.loadByKey(policyNameIdentifiers);
+        Map<PolicyKey, PolicySummary> policyByKey = policyCatalog.loadByKey(policyNameIdentifiers);
 
         Set<Long> alreadyAgreedPolicyIds = anonSessionAgreementRepository.findAllByAnonSessionIdAndRevokedAtIsNull(anonSessionId).stream()
                 .map(AnonSessionAgreement::getPolicyId)
@@ -210,7 +210,7 @@ public class OnboardingService {
         Instant now = Instant.now();
         List<AnonSessionAgreement> agreements = command.grants().stream()
                 .map(grant -> {
-                    Policy policy = policyByKey.get(new PolicyKey(grant.policyId(), grant.version()));
+                    PolicySummary policy = policyByKey.get(new PolicyKey(grant.policyId(), grant.version()));
                     if (policy == null) {
                         throw new BusinessException(ErrorCode.POLICY_NOT_FOUND);
                     }
@@ -229,11 +229,11 @@ public class OnboardingService {
 
         List<String> policyNameIdentifiers = command.grants().stream().map(grant -> grant.policyId()).toList();
 
-        Map<PolicyKey, Policy> policyByKey = policyCatalog.loadByKey(policyNameIdentifiers);
+        Map<PolicyKey, PolicySummary> policyByKey = policyCatalog.loadByKey(policyNameIdentifiers);
 
-        List<Policy> policies = command.grants().stream()
+        List<PolicySummary> policies = command.grants().stream()
                 .map(grant -> {
-                    Policy policy = policyByKey.get(new PolicyKey(grant.policyId(), grant.version()));
+                    PolicySummary policy = policyByKey.get(new PolicyKey(grant.policyId(), grant.version()));
                     if (policy == null) {
                         throw new BusinessException(ErrorCode.POLICY_NOT_FOUND);
                     }
@@ -245,7 +245,7 @@ public class OnboardingService {
             throw new BusinessException(ErrorCode.REQUIRED_POLICY_REVOKE_DENIED);
         }
 
-        List<Long> policyIdsToRevoke = policies.stream().map(Policy::getId).toList();
+        List<Long> policyIdsToRevoke = policies.stream().map(PolicySummary::getId).toList();
         if (!policyIdsToRevoke.isEmpty()) {
             anonSessionAgreementRepository.revokeWithPreviousVersionsByAnonSessionIdAndPolicyIdIn(anonSessionId, policyIdsToRevoke);
         }

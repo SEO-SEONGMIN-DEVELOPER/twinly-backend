@@ -221,14 +221,14 @@ public class PeopleService {
             throw new BusinessException(ErrorCode.INVALID_DATE_RANGE, "조회 시작일이 종료일보다 늦습니다: from=%s, to=%s".formatted(from, to));
         }
 
+        int currentIntimacy = relationshipRepository.findLatestByUserIdAndPartnerUserId(userId, partnerUserId)
+                .map(Relationship::getIntimacy)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RELATIONSHIP_NOT_FOUND));
+
         List<Relationship> relationships = relationshipRepository
                 .findAllByUserIdAndPartnerUserIdAndDateBetweenOrderByDateAsc(userId, partnerUserId, from, to);
 
         List<PeopleIntimacySeriesItemResult> series = downsample(bucketByResolution(relationships, resolution, from), maxPoints);
-
-        int currentIntimacy = relationshipRepository.findLatestByUserIdAndPartnerUserId(userId, partnerUserId)
-                .map(Relationship::getIntimacy)
-                .orElseThrow(() -> new BusinessException(ErrorCode.RELATIONSHIP_NOT_FOUND));
 
         return new PeopleIntimacySeriesResult(currentIntimacy, series);
     }
@@ -302,7 +302,7 @@ public class PeopleService {
         Map<LocalDate, Integer> deltaByDate = new HashMap<>();
         Map<LocalDate, String> changeByDate = new HashMap<>();
         Relationship previous = null;
-        for (Relationship current : relationshipRepository.findAllByUserIdAndPartnerUserIdOrderByDateAsc(userId, partnerUserId)) {
+        for (Relationship current : relationshipsForDelta(userId, partnerUserId, pageDates)) {
             if (previous != null) {
                 deltaByDate.put(current.getDate(), current.getIntimacy() - previous.getIntimacy());
 
@@ -331,6 +331,15 @@ public class PeopleService {
         LocalDate nextCursor = hasMore ? pageDates.get(pageDates.size() - 1) : null;
 
         return new PeopleEventsResult(partnerResult, events, new PeopleEventsPageResult(nextCursor, hasMore));
+    }
+
+    private List<Relationship> relationshipsForDelta(Long userId, Long partnerUserId, List<LocalDate> pageDates) {
+        if (pageDates.isEmpty()) {
+            return List.of();
+        }
+
+        return relationshipRepository.findForDeltaRange(
+                userId, partnerUserId, pageDates.get(pageDates.size() - 1), pageDates.get(0));
     }
 
     private String preview(Scene scene) {

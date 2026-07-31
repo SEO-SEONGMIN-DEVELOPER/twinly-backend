@@ -24,7 +24,7 @@ import com.nidus.twinly.common.survey.SurveyOptionName;
 import com.nidus.twinly.common.survey.SurveyQuestion;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
-import com.nidus.twinly.legal.entity.Policy;
+import com.nidus.twinly.legal.repository.PolicyRepository.PolicySummary;
 import com.nidus.twinly.legal.service.PolicyCatalog;
 import com.nidus.twinly.legal.service.PolicyCatalog.PolicyKey;
 import com.nidus.twinly.onboarding.dto.command.OnboardingBasicInfoCommand;
@@ -501,7 +501,7 @@ class OnboardingServiceUnitTest {
     @DisplayName("동의 등록은 policyId+version으로 찾은 정책 id로 동의 이력을 저장한다")
     void grantConsents_saves_agreements() {
         // given: terms_of_service v1 정책이 존재하고, 기존 동의 이력은 없음
-        Policy policy = mock(Policy.class);
+        PolicySummary policy = mock(PolicySummary.class);
         given(policy.getId()).willReturn(10L);
         given(policyCatalog.loadByKey(List.of("terms_of_service")))
                 .willReturn(Map.of(new PolicyKey("terms_of_service", 1), policy));
@@ -524,7 +524,7 @@ class OnboardingServiceUnitTest {
     @DisplayName("이미 동의한 정책은 동의 이력을 중복 저장하지 않는다")
     void grantConsents_skips_already_agreed_policy() {
         // given: 이미 policyId=10에 동의한 이력이 있음
-        Policy policy = mock(Policy.class);
+        PolicySummary policy = mock(PolicySummary.class);
         given(policy.getId()).willReturn(10L);
         given(policyCatalog.loadByKey(List.of("terms_of_service")))
                 .willReturn(Map.of(new PolicyKey("terms_of_service", 1), policy));
@@ -563,7 +563,7 @@ class OnboardingServiceUnitTest {
     @DisplayName("동의 철회는 선택 정책이면 이전 버전까지 포함해 철회를 위임한다")
     void revokeConsents_revokes_optional_policy() {
         // given: 선택(비필수) 정책 marketing v2
-        Policy policy = mock(Policy.class);
+        PolicySummary policy = mock(PolicySummary.class);
         given(policy.getId()).willReturn(20L);
         given(policy.getIsRequired()).willReturn(false);
         given(policyCatalog.loadByKey(List.of("marketing")))
@@ -582,7 +582,7 @@ class OnboardingServiceUnitTest {
     @DisplayName("필수 정책을 철회하려 하면 REQUIRED_POLICY_REVOKE_DENIED 예외가 발생하고 철회하지 않는다")
     void revokeConsents_required_policy_throws() {
         // given: 필수 정책 terms_of_service v1
-        Policy policy = mock(Policy.class);
+        PolicySummary policy = mock(PolicySummary.class);
         given(policy.getIsRequired()).willReturn(true);
         given(policyCatalog.loadByKey(List.of("terms_of_service")))
                 .willReturn(Map.of(new PolicyKey("terms_of_service", 1), policy));

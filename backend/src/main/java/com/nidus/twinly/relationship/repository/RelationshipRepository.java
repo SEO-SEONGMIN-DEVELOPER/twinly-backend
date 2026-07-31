@@ -54,5 +54,17 @@ public interface RelationshipRepository extends JpaRepository<Relationship, Long
 
     List<Relationship> findAllByUserIdAndPartnerUserIdAndDateBetweenOrderByDateAsc(Long userId, Long partnerUserId, LocalDate from, LocalDate to);
 
-    List<Relationship> findAllByUserIdAndPartnerUserIdOrderByDateAsc(Long userId, Long partnerUserId);
+    @Query("""
+            SELECT r FROM Relationship r
+            WHERE r.userId = :userId AND r.partnerUserId = :partnerUserId
+              AND r.date <= :to
+              AND (r.date >= :from OR r.date = (
+                    SELECT MAX(p.date) FROM Relationship p
+                    WHERE p.userId = :userId AND p.partnerUserId = :partnerUserId AND p.date < :from))
+            ORDER BY r.date ASC
+            """)
+    List<Relationship> findForDeltaRange(@Param("userId") Long userId,
+                                         @Param("partnerUserId") Long partnerUserId,
+                                         @Param("from") LocalDate from,
+                                         @Param("to") LocalDate to);
 }

@@ -2,7 +2,7 @@ package com.nidus.twinly.legal.service;
 
 import com.nidus.twinly.legal.dto.result.LegalPoliciesItemResult;
 import com.nidus.twinly.legal.dto.result.LegalPoliciesResult;
-import com.nidus.twinly.legal.entity.Policy;
+import com.nidus.twinly.legal.repository.PolicyRepository.PolicySummary;
 import com.nidus.twinly.legal.entity.PolicyName;
 import com.nidus.twinly.legal.repository.PolicyNameRepository;
 import lombok.RequiredArgsConstructor;
@@ -24,11 +24,11 @@ public class LegalService {
         List<PolicyName> policyNames = policyNameRepository.findAllByIsDeprecatedFalse();
         List<Long> policyNameIds = policyNames.stream().map(PolicyName::getId).toList();
 
-        Map<Long, Policy> latestByPolicyNameId = policyCatalog.loadLatestByPolicyNameId(policyNameIds);
+        Map<Long, PolicySummary> latestByPolicyNameId = policyCatalog.loadLatestByPolicyNameId(policyNameIds);
 
         List<LegalPoliciesItemResult> policies = policyNames.stream()
                 .map(policyName -> {
-                    Policy latest = latestByPolicyNameId.get(policyName.getId());
+                    PolicySummary latest = latestByPolicyNameId.get(policyName.getId());
                     return new LegalPoliciesItemResult(
                             policyName.getIdentifier(),
                             policyName.getName(),

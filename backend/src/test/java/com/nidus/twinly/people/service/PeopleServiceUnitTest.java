@@ -443,7 +443,7 @@ class PeopleServiceUnitTest {
     }
 
     @Test
-    @DisplayName("관계 기록이 전혀 없으면 RELATIONSHIP_NOT_FOUND 예외가 발생한다")
+    @DisplayName("관계 기록이 전혀 없으면 구간 조회·집계 전에 RELATIONSHIP_NOT_FOUND 예외가 발생한다")
     void intimacySeries_without_relationship_throws() {
         // when & then: 최신 관계 기록이 없으면 RELATIONSHIP_NOT_FOUND 예외 발생
         assertThatThrownBy(() -> peopleService.intimacySeries(
@@ -451,6 +451,10 @@ class PeopleServiceUnitTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.RELATIONSHIP_NOT_FOUND);
+
+        // then: 버려질 구간 조회와 버킷팅을 수행하지 않고 조기 실패한다
+        then(relationshipRepository).should(never())
+                .findAllByUserIdAndPartnerUserIdAndDateBetweenOrderByDateAsc(any(), any(), any(), any());
     }
 
     // ------------------------------------------------------------------ events()
@@ -478,7 +482,7 @@ class PeopleServiceUnitTest {
                 .willReturn(List.of(day));
         given(sceneRepository.findAllByUserIdAndWithPartnerUserIdAndDateIn(ME, 20L, List.of(day)))
                 .willReturn(List.of(scene(200L, ME, day, "v1", "학교 복도", SceneType.DIALOGUE, null, null, brokenJson)));
-        given(relationshipRepository.findAllByUserIdAndPartnerUserIdOrderByDateAsc(ME, 20L)).willReturn(List.of());
+        given(relationshipRepository.findForDeltaRange(ME, 20L, day, day)).willReturn(List.of());
         willThrow(new StreamConstraintsException("깨진 JSON"))
                 .given(objectMapper).readValue(eq(brokenJson), any(TypeReference.class));
 
@@ -489,6 +493,33 @@ class PeopleServiceUnitTest {
         assertThat(result.events()).hasSize(1);
         assertThat(result.events().getFirst().place()).isEqualTo("학교 복도");
         assertThat(result.events().getFirst().preview()).isNull();
+    }
+
+    @Test
+    @DisplayName("이벤트 목록의 첫 날짜 변화량은 페이지 구간 밖의 직전 관계 기록을 기준으로 계산된다")
+    void events_delta_uses_relationship_before_page_range() {
+        // given: 페이지에는 7/20만 담기지만, 직전 기록은 사흘 전인 7/17이다 (관계 기록은 날짜가 연속이 아니다)
+        LocalDate before = LocalDate.of(2026, 7, 17);
+        LocalDate day = LocalDate.of(2026, 7, 20);
+
+        given(userRepository.findById(20L)).willReturn(Optional.of(user(20L, "김", "철수")));
+        given(relationshipRepository.findLatestByUserIdAndPartnerUserId(ME, 20L))
+                .willReturn(Optional.of(relationship(ME, 20L, day, 35, "{}")));
+        given(sceneRepository.findDistinctDatesFromCursorByUserIdAndWithPartnerUserId(ME, 20L, null, 21))
+                .willReturn(List.of(day));
+        given(sceneRepository.findAllByUserIdAndWithPartnerUserIdAndDateIn(ME, 20L, List.of(day)))
+                .willReturn(List.of(scene(100L, ME, day, "v1", "카페", SceneType.ACTION, "커피를 마셨다", "즐거웠다", null)));
+        given(relationshipRepository.findForDeltaRange(ME, 20L, day, day))
+                .willReturn(List.of(
+                        relationship(ME, 20L, before, 10, "{}"),
+                        relationship(ME, 20L, day, 35, "{}")));
+
+        // when: 이벤트 목록 조회
+        PeopleEventsResult result = peopleService.events(ME, 20L, null, null);
+
+        // then: 구간 밖 직전 기록(10)과의 차이로 변화량이 채워진다. 구간만 조회하면 이 값이 null이 된다
+        assertThat(result.events()).hasSize(1);
+        assertThat(result.events().getFirst().intimacyDelta()).isEqualTo(25);
     }
 
     @Test
@@ -508,7 +539,7 @@ class PeopleServiceUnitTest {
                 .willReturn(List.of(
                         scene(100L, ME, day2, "v1", "카페", SceneType.ACTION, "커피를 마셨다", "즐거웠다", null),
                         scene(200L, ME, day1, "v1", "학교 복도", SceneType.DIALOGUE, null, null, linesJson)));
-        given(relationshipRepository.findAllByUserIdAndPartnerUserIdOrderByDateAsc(ME, 20L))
+        given(relationshipRepository.findForDeltaRange(ME, 20L, day1, day2))
                 .willReturn(List.of(
                         relationship(ME, 20L, day1, 10, "{}"),
                         relationship(ME, 20L, day2, 35, "{}")));

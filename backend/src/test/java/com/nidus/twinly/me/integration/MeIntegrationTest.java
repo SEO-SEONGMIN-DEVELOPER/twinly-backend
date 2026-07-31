@@ -232,11 +232,14 @@ class MeIntegrationTest extends AbstractIntegrationTest {
 
         // then: DB에서 다시 읽어도 탈퇴 신청이 취소되어 있고, 상태 조회의 isDeleted도 false로 내려옴
         flushAndClear();
-        assertThat(userRepository.findById(me.getId()).orElseThrow().getWithdrawalRequestedAt()).isNull();
+        User restored = userRepository.findById(me.getId()).orElseThrow();
+        assertThat(restored.getWithdrawalRequestedAt()).isNull();
+        assertThat(restored.getWithdrawalScheduledAt()).isNull();
         mockMvc.perform(get("/api/v1/me/status")
                         .header("Authorization", bearer(me.getId())))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.withdrawal.isDeleted").value(false));
+                .andExpect(jsonPath("$.withdrawal.isDeleted").value(false))
+                .andExpect(jsonPath("$.withdrawal.recoverableUntil").doesNotExist());
     }
 
     @Test

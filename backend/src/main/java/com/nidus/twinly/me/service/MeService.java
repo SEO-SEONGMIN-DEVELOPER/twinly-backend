@@ -15,7 +15,7 @@ import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.legal.entity.Agreement;
-import com.nidus.twinly.legal.entity.Policy;
+import com.nidus.twinly.legal.repository.PolicyRepository.PolicySummary;
 import com.nidus.twinly.legal.entity.PolicyName;
 import com.nidus.twinly.legal.repository.AgreementRepository;
 import com.nidus.twinly.legal.repository.PolicyNameRepository;
@@ -191,7 +191,7 @@ public class MeService {
         List<PolicyName> policyNames = policyNameRepository.findAllByIsDeprecatedFalse();
         List<Long> policyNameIds = policyNames.stream().map(PolicyName::getId).toList();
 
-        Map<Long, Policy> currentByPolicyNameId = policyCatalog.loadLatestByPolicyNameId(policyNameIds);
+        Map<Long, PolicySummary> currentByPolicyNameId = policyCatalog.loadLatestByPolicyNameId(policyNameIds);
 
         Map<Long, Agreement> agreementByPolicyId = agreementRepository.findAllByUserIdAndRevokedAtIsNull(userId).stream()
                 .collect(Collectors.toMap(
@@ -201,7 +201,7 @@ public class MeService {
 
         List<MeConsentsItemResult> consents = policyNames.stream()
                 .map(policyName -> {
-                    Policy current = currentByPolicyNameId.get(policyName.getId());
+                    PolicySummary current = currentByPolicyNameId.get(policyName.getId());
                     Agreement agreement = current != null ? agreementByPolicyId.get(current.getId()) : null;
                     return new MeConsentsItemResult(
                             policyName.getIdentifier(),
@@ -221,7 +221,7 @@ public class MeService {
     public void grantConsents(Long userId, MeGrantConsentsCommand command) {
         List<String> policyNameIdentifiers = command.grants().stream().map(grant -> grant.policyId()).toList();
 
-        Map<PolicyKey, Policy> policyByKey = policyCatalog.loadByKey(policyNameIdentifiers);
+        Map<PolicyKey, PolicySummary> policyByKey = policyCatalog.loadByKey(policyNameIdentifiers);
 
         Set<Long> alreadyAgreedPolicyIds = agreementRepository.findAllByUserIdAndRevokedAtIsNull(userId).stream()
                 .map(Agreement::getPolicyId)
@@ -230,7 +230,7 @@ public class MeService {
         Instant now = Instant.now();
         List<Agreement> agreements = command.grants().stream()
                 .map(grant -> {
-                    Policy policy = policyByKey.get(new PolicyKey(grant.policyId(), grant.version()));
+                    PolicySummary policy = policyByKey.get(new PolicyKey(grant.policyId(), grant.version()));
                     if (policy == null) {
                         throw new BusinessException(ErrorCode.POLICY_NOT_FOUND);
                     }
@@ -247,11 +247,11 @@ public class MeService {
     public void revokeConsents(Long userId, MeRevokeConsentsCommand command) {
         List<String> policyNameIdentifiers = command.grants().stream().map(grant -> grant.policyId()).toList();
 
-        Map<PolicyKey, Policy> policyByKey = policyCatalog.loadByKey(policyNameIdentifiers);
+        Map<PolicyKey, PolicySummary> policyByKey = policyCatalog.loadByKey(policyNameIdentifiers);
 
-        List<Policy> policies = command.grants().stream()
+        List<PolicySummary> policies = command.grants().stream()
                 .map(grant -> {
-                    Policy policy = policyByKey.get(new PolicyKey(grant.policyId(), grant.version()));
+                    PolicySummary policy = policyByKey.get(new PolicyKey(grant.policyId(), grant.version()));
                     if (policy == null) {
                         throw new BusinessException(ErrorCode.POLICY_NOT_FOUND);
                     }
@@ -263,7 +263,7 @@ public class MeService {
             throw new BusinessException(ErrorCode.REQUIRED_POLICY_REVOKE_DENIED);
         }
 
-        List<Long> policyIdsToRevoke = policies.stream().map(Policy::getId).toList();
+        List<Long> policyIdsToRevoke = policies.stream().map(PolicySummary::getId).toList();
         if (!policyIdsToRevoke.isEmpty()) {
             agreementRepository.revokeWithPreviousVersionsByUserIdAndPolicyIdIn(userId, policyIdsToRevoke);
         }

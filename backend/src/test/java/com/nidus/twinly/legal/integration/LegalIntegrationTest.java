@@ -61,7 +61,7 @@ class LegalIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.policies[0].isRequired").value(true));
 
         // then: 조회 API이므로 DB의 정책 버전 4건은 그대로 남아 있다
-        assertThat(policyRepository.findAllByPolicyNameIdIn(List.of(termsId, deprecatedId))).hasSize(4);
+        assertThat(policyRepository.findAllProjectedByPolicyNameIdIn(List.of(termsId, deprecatedId))).hasSize(4);
     }
 
     @Test
