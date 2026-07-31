@@ -12,34 +12,24 @@ REST 74개 오퍼레이션(springdoc `/v3/api-docs` 기준, springwolf 문서 3�
 
 | 태스크 | 테스트 수 | 실패 |
 |---|---|---|
-| `./gradlew test` (단위/슬라이스) | 411 | **0** |
-| `./gradlew integrationTest` (통합, Testcontainers) | 132 | **0** |
+| `./gradlew test` (단위/슬라이스) | 429 | **0** |
+| `./gradlew integrationTest` (통합, Testcontainers) | 144 | **0** |
 
 통합 커버리지는 REST 74/74다.
 
 > 통합 테스트는 로컬 `.env`의 암호화 키를 필요로 한다. 키가 없으면 `AesGcmEncryptor` 생성에 실패해
 > 컨텍스트 기동 단계에서 전부 죽는다. CI에 붙일 때 시크릿 주입이 선행되어야 한다.
 
-## 남은 항목 (35건)
+## 남은 항목 (2건)
 
 | 문서 | 항목 | high | medium | low/info |
 |---|---:|---:|---:|---:|
-| [chat](chat.md) | 5 | 0 | 2 | 3 |
-| [people](people.md) | 5 | 0 | 2 | 3 |
-| [auth](auth.md) | 4 | 0 | 2 | 2 |
-| [push](push.md) | 3 | 0 | 1 | 2 |
-| [anon](anon.md) | 2 | 0 | 0 | 2 |
-| [block](block.md) | 2 | 0 | 0 | 2 |
-| [connection-websocket](connection-websocket.md) | 2 | 0 | 0 | 2 |
-| [connection](connection.md) | 2 | 0 | 1 | 1 |
-| [legal](legal.md) | 2 | 0 | 0 | 2 |
-| [onboarding](onboarding.md) | 2 | 0 | 0 | 2 |
-| [report](report.md) | 2 | 0 | 0 | 2 |
-| [chat-websocket](chat-websocket.md) | 1 | 0 | 0 | 1 |
-| [main](main.md) | 1 | 0 | 1 | 0 |
-| [me](me.md) | 1 | 0 | 1 | 0 |
-| [season](season.md) | 1 | 0 | 0 | 1 |
-| **합계** | **35** | **0** | **10** | **25** |
+| [people](people.md) | 1 | 0 | 0 | 1 |
+| [push](push.md) | 1 | 0 | 0 | 1 |
+| **합계** | **2** | **0** | **0** | **2** |
+
+둘 다 묶음에서 "지금은 미룬다"로 남긴 것이다. people은 그날 씬을 전부 로드해 메모리에서 거르는 성능 이슈(B6),
+push는 기기 동시 등록의 check-then-act 경합(B12)이다. 트래픽이 붙기 전에는 체감되지 않는다.
 
 ## 다음 개발 항목 (발견사항 아님)
 
@@ -70,8 +60,9 @@ REST 74개 오퍼레이션(springdoc `/v3/api-docs` 기준, springwolf 문서 3�
 
 - `notifyDraining` 호출처가 없다. 배포 시 "곧 연결이 끊긴다"고 예고하는 용도라 **무중단 배포 절차가 정해져야** 붙일 수 있다
 - 인메모리 `SimpleBroker` + 로컬 `SimpUserRegistry`라 인스턴스가 2대 이상이면 팬아웃이 절반만 나간다 (미검증). 배포 형태(단일 인스턴스 / 오토스케일)에 달렸다
+- 팬아웃이 접속자 수만큼 호출 스레드에서 동기 루프로 돈다 (구 connection-websocket 3). **비동기로 돌리는 게 답이 아니라, 루프가 필요한 구조인지가 먼저다.** control 메시지는 모든 접속자에게 같은 내용이 가므로 개인 큐가 아니라 `/topic` 브로드캐스트가 맞을 수 있고, 그러면 루프 자체가 사라진다. 호출처가 없어 측정할 대상도 없다
 
-둘 다 진행 중인 배포 작업과 함께 판단하는 것이 맞다.
+셋 다 진행 중인 배포 작업과 함께 판단하는 것이 맞다.
 
 ### D. 남용 제어·정리 (auth 3·5·6, anon 1, connection 1)
 
@@ -92,7 +83,7 @@ REST 74개 오퍼레이션(springdoc `/v3/api-docs` 기준, springwolf 문서 3�
 ## 일괄 처리 묶음
 
 도메인별로 하나씩 고치면 변경이 흩어지고 같은 판단을 여러 번 반복하게 된다.
-**원인과 수정 방법이 같은 것끼리 묶어** 한 번에 처리한다. B15와 B8 잔여는 개발 항목으로 옮겼다. **묶음은 모두 닫혔고, 남은 것은 개별 항목뿐이다.**
+**원인과 수정 방법이 같은 것끼리 묶어** 한 번에 처리한다. B15와 B8 잔여는 개발 항목으로 옮겼다. **묶음과 개별 항목이 모두 닫혔고, 남은 2건은 묶음에서 "지금은 미룬다"로 남긴 성능·경합 항목이다.**
 
 각 묶음은 커밋 하나 단위로 잡을 수 있게 나누었다. 우선순위는 위에서 아래 순이다.
 
@@ -109,6 +100,13 @@ REST 74개 오퍼레이션(springdoc `/v3/api-docs` 기준, springwolf 문서 3�
 | 시행 중인 버전이 없는 약관은 `version`·`url`·`isRequired`가 `null`로 내려간다 (구 legal #4) | 현행 유지. 응답에서 빼면 "약관이 목록에 안 보인다"는 운영 사고가 조용히 묻히고, 500으로 막으면 약관 하나 때문에 온보딩 전체가 멈춘다. 동작은 `LegalServiceUnitTest.policies_excludes_versions_not_yet_effective`로 고정했다 |
 | `@Modifying` 네이티브 UPDATE 후 영속성 컨텍스트가 stale (구 chat #6 / connection #5, **B13**) | 두 호출부 모두 UPDATE 뒤에 그 엔티티를 다시 읽지 않아 실제 오동작이 없다. 제안됐던 `flushAutomatically`는 **근거 자체가 틀렸다** — 측정해 보니 Hibernate가 네이티브 쿼리 실행 전에 이미 auto-flush 한다(`FlushMode.AUTO`는 네이티브 SQL을 해석하지 못해 전체를 flush). `clearAutomatically`는 컨텍스트를 통째로 비워, 이후 엔티티 수정이 **예외 없이 조용히 유실**될 수 있다. 보이는 문제(stale read)를 안 보이는 문제(lost update)로 바꾸는 거라 붙이지 않는다. 벌크 연산 뒤 같은 엔티티를 다시 읽는 곳(`AnonSessionPersonaElementRepository`)에만 붙어 있는 현 상태가 맞다 |
 | 설문 **중간** 문항을 다시 답해도 페르소나가 갱신되지 않는다 | 페르소나 변환 트리거가 "마지막 문항"이라 중간 문항 재답변은 답변만 갱신되고 페르소나는 그대로다. 마지막 문항까지 다시 진행하면 차원 단위 치환으로 정합성이 회복되므로, 온보딩을 끝낸 사용자에게는 드러나지 않는다 |
+| 익명 세션 만료 판정이 `expiresAt`과 같은 순간을 유효로 본다 (구 anon #3) | 마이크로초 경계라 재현이 불가능하고 의미 차이도 없다. 같은 패턴이 6곳(`AnonService`·`AuthService` 3·`CodeVerificationService`·`MeService`)에 **일관되게** 있어, 한 곳만 바꾸면 규칙이 갈린다. 일관성이 깨진 게 아니므로 두는 편이 낫다 |
+| 차단 이력이 없어도 `DELETE /blocks/{userId}`가 200 (구 block #2) | B2 규칙("내 소유 행이 없으면 200")과 일치한다. 바로 위 `block()`도 이미 차단된 상대면 조용히 반환해 대칭이고, 계약은 `BlockIntegrationTest`로 고정돼 있다 |
+| 멱등 재전송이 committed만 돌려주고 `ChatMessageCreatedEvent`를 다시 발행하지 않는다 (구 chat-websocket #5) | 원 문서의 근거("재발행하면 상대에게 중복 프레임")는 **틀렸다** — 페이로드의 `message.id`가 원본과 같아 `id`로 dedupe하면 무해하다. 진짜 근거는 **재발행이 반쪽짜리 복구**라는 점이다. 유실은 재연결 구간 전체에서 일어나는데 재전송으로 메워지는 건 자기가 보낸 1건뿐이라, 넣으면 "재전송하면 복구된다"는 오해만 만든다. 대신 그 사실과 dedupe 키를 AsyncAPI 채널 설명에 명시했다 |
+| `INVALID_ANON_SESSION` 분기가 사실상 도달 불가 (구 onboarding #2) | 리졸버가 넘기는 것은 **값 객체**(`AnonSessionSnapshot`)인데 `basicInfo`는 엔티티를 수정해야 해 재조회가 필요하다. 같은 트랜잭션이라 1차 캐시에서 나오므로 쿼리도 두 번 나가지 않는다. 분기를 지우면 **다른 클래스(리졸버)의 런타임 동작에 기댄 가정**만 남아 조용히 깨진다. `AUTO_BLOCK`의 죽은 분기를 지운 것과 다른 이유가 여기 있다 — 그쪽은 같은 파일의 상수라 컴파일 타임에 불가능이 확정된다 |
+| 기기 등록 응답으로 신규·갱신을 구분할 수 없다 (구 push #4) | 클라이언트가 이 구분을 쓸 화면이 없다. 그리고 이 API는 upsert라 호출이 무엇을 했는지 응답으로 단정할 수 없어, 같은 이유로 201도 주지 않았다. 필요해지는 시점(예: "새 기기 로그인" 알림)에는 응답 필드가 아니라 서버 알림이 답일 가능성이 크다 |
+| 미등록·타인 `deviceId` 해제도 200 (구 push #5) | B2 규칙대로 내 소유 행이므로 200이고, 조회 조건에 `userId`가 들어가 남의 기기는 잡히지도 않는다. 로그아웃 시 호출되는 API라 재시도·중복 로그아웃이 흔해 멱등이 특히 중요하다. 관측용 `log.warn`도 붙이지 않았다 — 읽을 관측 체계가 없고 정상 흐름에서도 찍혀 노이즈가 된다 |
+| 리소스를 생성하는 POST 다수가 여전히 200 (구 anon #2의 나머지) | 항상 새 리소스를 만드는 3개(`/anon/start`, `/auth/signup`, `/connection-tokens`)만 201로 바꿨다. 나머지 생성 POST는 전부 멱등이거나 upsert라 **아무것도 만들지 않았는데 201을 주면 응답이 거짓말**이 된다 |
 
 ### 사실이 아니게 된 항목 (코드가 이미 바뀜)
 
@@ -329,11 +327,13 @@ DTO·Command·서비스 계층은 그대로다.
 | me | 5 | `DELETE /api/v1/me/consents` → `POST /api/v1/me/consents/revoke` |
 | onboarding | 6 | `DELETE /api/v1/onboarding/consents` → `POST /api/v1/onboarding/consents/revoke` |
 
-### 개별 처리 (35건)
+### ~~개별 처리 (34건)~~ — 처리 완료
 
-위 묶음에 들어가지 않는 항목들이다. 각 도메인 문서를 참조한다.
-`(미검증)` 표시가 붙은 것은 **고치기 전에 재현부터 확인해야 한다.** 이번 라운드에서 high로 분류됐던
-"빈 `IN` 절" 항목이 실제로는 결함이 아니었던 전례가 있다.
+묶음에 들어가지 않는 항목들을 하나씩 검수했다. **고친 것 24건, 판단으로 닫은 것 8건, 개발 항목 이관 1건,
+오진 1건.** 상세는 아래 7차 참조.
+
+검수 방식은 앞선 라운드와 달랐다. **문서에 적힌 발견사항을 그대로 믿지 않고 매번 코드를 다시 읽었고**,
+그 결과 문서가 낡았거나 근거가 틀린 것이 여러 건 나왔다. `(미검증)` 표시가 붙은 것은 실행해서 재현부터 확인했다.
 
 ## 처리 완료
 
@@ -376,6 +376,7 @@ DTO·Command·서비스 계층은 그대로다.
 | 기록된 내용 | 확인 결과 |
 |---|---|
 | 매칭 0건 유저의 목록 조회 시 네이티브 쿼리의 빈 `IN` 절이 SQL 오류를 낸다 (미검증) | **오진.** 현재 스택(Hibernate 7 + MySQL)에서 정상 동작. 운영 코드는 그대로 두고 경계 테스트만 남김 (`ChatIntegrationTest.rooms_when_no_match_returns_empty_list`) |
+| 만료 시각을 앱 시계로 저장하고 DB 시계로 판정해 TTL 60초가 9시간이 될 수 있다 (구 connection #1, 미검증) | **오진.** JVM을 Asia/Seoul, DB 세션을 `+09:00`으로 둔 상태에서 실측했더니 저장값은 UTC 벽시계 그대로였고 TTL도 60초였다. 운영 코드는 그대로 두고, 이 동작이 의도인지 우연인지가 코드에 드러나지 않아 경계 테스트로 남겼다 (`ConnectionIntegrationTest.expiresAt_is_stored_in_utc_regardless_of_db_session_time_zone`) |
 
 ## 이번 라운드들에서 확인한 것
 
@@ -426,6 +427,60 @@ B2·B3·B11을 처리했다. 셋 다 "규칙이 정해져 있지 않아 API마�
 
 **호환성이 깨지는 변경이다.** 경로와 메서드가 함께 바뀌므로 클라이언트가 동시에 나가야 한다.
 구 경로를 한동안 남겨 두는 선택지는 취하지 않았다. 아직 클라이언트 배포 전이라 이중 유지 비용이 이득보다 크다.
+
+### 7차 — 개별 항목 34건 검수 (2026-07-31 ~ 08-01)
+
+묶음에 들어가지 않은 34건을 하나씩 검수했다. **문서를 믿지 않고 매번 코드를 다시 읽은 것**이 이 라운드의 방식이고,
+그 덕에 문서가 낡았거나 근거가 틀린 것이 여러 건 드러났다.
+
+| 내용 | 회귀 테스트 |
+|---|---|
+| 복구 후에도 `withdrawalScheduledAt`이 남아 상태 응답이 오염됨 | `MeServiceUnitTest.restore_clears_recoverable_until`, `MeIntegrationTest.restore_end_to_end` |
+| 메인 배지가 채팅 목록의 가시성 규칙(`left_at`·`is_hidden`·차단)을 보지 않음 | `ChatIntegrationTest.unreadChatRoomCount_agrees_with_visible_rooms_in_list` |
+| 친밀도 시계열 `from`/`to`가 오프셋을 무시해 하루가 밀림 | `PeopleControllerUnitTest`의 날짜 바인딩·400 케이스 |
+| 온보딩 프로필이 비면 signup이 NPE로 500 | `AuthServiceUnitTest`·`AuthIntegrationTest`의 `PROFILE_NOT_COMPLETED` 케이스 |
+| 참여 행이 없을 때 hide/leave만 500 (read/enter는 404) | `ChatServiceUnitTest`의 404 케이스 + 멱등 케이스 2건 |
+| 같은 FCM 토큰이 여러 기기 행에 남아 중복 발송 | `PushServiceUnitTest`·`PushIntegrationTest`의 토큰 단일성 케이스 |
+| 인증 완료 토큰이 30분간 재사용 가능하고 재확인으로 무한 연장됨 | `CodeVerificationServiceUnitTest` 2건 (TTL 5분, 재확인 시 토큰 유지) |
+| 리프레시가 DB `expires_at`을 읽지 않음 | `AuthServiceUnitTest.refresh_with_expired_stored_token_throws` |
+| 종료된 방에도 메시지가 저장됨 | `ChatServiceUnitTest.sendMessage_closed_room_throws`, WS 매핑 테스트 |
+| 이벤트 목록이 관계 이력 전체를 매 요청 로딩 | `PeopleServiceUnitTest.events_delta_uses_relationship_before_page_range` |
+| 정책 조회가 쓰지 않는 `content`(TEXT)까지 로딩 | 기존 legal·me 통합 테스트 (결과 불변 확인) |
+| 404로 끝날 시계열 요청이 집계를 다 하고 실패 | `PeopleServiceUnitTest`의 조기 실패 단정 |
+| `sent_at` 동률 2건이면 방 목록 전체가 500 | `ChatIntegrationTest.rooms_when_two_messages_share_sent_at_returns_latest_by_id` |
+| 정책 목록 순서가 DB 반환 순서에 좌우됨 | `LegalIntegrationTest.policies_are_ordered_by_id_end_to_end` |
+| 본문 길이 검사가 인가보다 먼저라 방 존재가 유추됨 | `ChatServiceUnitTest.sendMessage_over_limit_to_unknown_room_throws_room_not_found` |
+| WEEK 버킷 대표값이 그 주 첫 값이라 그래프가 뒤처짐 | `PeopleServiceUnitTest`의 WEEK 케이스 (마지막 점 == `currentIntimacy`) |
+| 요청 바디 enum만 대소문자를 구분 | `ConnectionIntegrationTest.token_with_lowercase_connection_type_end_to_end` |
+| 읽음 처리 REST가 확정된 포인터를 버림 | `ChatIntegrationTest.readMessages_backwards_returns_confirmed_pointer` |
+| 한 이벤트의 두 시각이 `Instant.now()` 두 번 호출로 어긋남 | `SeasonParticipationTest`·`ChatTest`·`AnonSessionPhotoTest` |
+| 자기 호출이라 걸리지 않는 `@Transactional` | (동작 불변) `private`으로 내려 오해 경로 차단 |
+| notifier만 `common.websocket`에 있어 의존 방향이 거꾸로 | (이동만) 기존 테스트 통과 |
+| 차단 0건일 때도 조립을 수행 | `BlockIntegrationTest.blockList_when_no_block_returns_empty_list` |
+| `AUTO_BLOCK` 상수가 만든 죽은 분기 | 기존 report 단위·통합 테스트 |
+| 항상 새 리소스를 만드는 POST 3개가 200 | 각 컨트롤러·통합 테스트의 201 단정 |
+
+**검수 중 새로 발견한 결함 2건**
+
+| 내용 | 회귀 테스트 |
+|---|---|
+| `@ApiResponse`를 선언한 오퍼레이션 48개에서 성공(2xx) 응답이 문서에서 통째로 사라짐 | `ApiErrorContractIntegrationTest.api_docs_expose_success_response_for_every_operation` |
+| AI 발화 신고가 **운영에서 항상 422** — 씬 소유자와 신고 대상을 비교하는데, 씬은 조회 API에서 항상 조회자 소유로만 내려간다 | `ReportServiceUnitTest` 3건, `ReportIntegrationTest.aiUtterance_success_end_to_end` |
+
+앞의 것은 4차에서 오류 코드를 채우려고 단 애노테이션이 **성공 계약을 지운** 결과다. springdoc은 `@ApiResponse`가
+있으면 **암묵적** 기본 성공 응답을 넣지 않는다(`@ResponseStatus`로 명시하면 넣는다). 48곳에 애노테이션을 다는
+대신 커스터마이저 한 곳에서 채우도록 했다 — 그래야 "새로 `@ApiResponse`를 달 때 `@ResponseStatus`도 같이 달아야
+한다"는 기억해야 할 규칙 자체가 없어진다.
+
+뒤의 것은 **테스트가 잘못된 전제를 정답으로 고정**하고 있어 더 숨겨져 있었다. 통합 테스트 픽스처가 피신고자
+소유의 씬을 직접 만들었는데, 그건 어떤 조회 API로도 만들어지지 않는 상태다. **픽스처를 조회 API가 실제로
+만들어내는 상태로 구성해야** 이런 것이 드러난다.
+
+**함께 처리한 것**: 트랜잭션 경계 기본값을 나머지 4개 서비스(`me`·`onboarding`·`block`·`activity`)로 넓혔다.
+B7의 근거가 "누락이 반복된다"였는데 발견사항이 올라온 6개만 고쳐 두면 같은 함정이 남기 때문이다.
+`readOnly`가 쓰기를 삼키면 예외 없이 UPDATE가 사라지므로, 정적 대조에 더해 `propagation = NOT_SUPPORTED`로
+바깥 트랜잭션을 끈 프로브로 실제 반영을 확인했고, 쓰기 메서드의 애노테이션을 일부러 떼어 프로브가 유실을
+잡는 것까지 확인한 뒤 지웠다.
 
 ## 도메인별 문서
 

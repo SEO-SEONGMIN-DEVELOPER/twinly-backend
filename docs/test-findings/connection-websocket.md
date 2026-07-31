@@ -41,16 +41,6 @@
 
 ## 발견된 운영 코드 문제 (수정하지 않음)
 
-### 1. 팬아웃이 호출 스레드에서 동기 루프로 돈다 (미검증)
-- **증상**: `simpUserRegistry.getUsers().forEach(...)` 로 접속자 수만큼 `convertAndSendToUser` 를 **호출 스레드에서 순차 실행**한다. 접속자가 수만 명이면 호출 스레드가 그동안 잡히고, 종료 훅에서 호출할 경우 graceful shutdown 이 늘어진다.
-- **근거 코드 위치**: `backend/src/main/java/com/nidus/twinly/common/websocket/notifier/ConnectionControlNotifier.java:32`
-- **심각도**: **low** (현재 규모에서는 문제되지 않는다)
-- **제안**: 지금은 그대로 둔다. 접속자 규모가 커지면 브로드캐스트 destination(`convertAndSend("/topic/...")`)으로 바꾸거나 별도 스레드로 빼는 것을 검토한다. 다만 개인화가 필요 없는 control 메시지라면 애초에 `/topic` 이 더 맞는 구조다 — **개인 큐 팬아웃을 택한 이유가 있는지 한 번 점검할 가치는 있다.**
+---
 
-### 2. 클래스는 `common.websocket`, payload/enum은 `connection` 패키지에 있어 소속이 갈린다
-- **증상**: `ConnectionControlNotifier` 는 `common.websocket.notifier` 에 있는데 그것이 다루는 `ConnectionDrainingPayload` 와 `ConnectionDrainingReason` 은 `connection` 도메인 패키지에 있다. 다른 도메인(chat)은 notifier도 도메인 패키지 안에 있다.
-- **근거 코드 위치**:
-  - `backend/src/main/java/com/nidus/twinly/common/websocket/notifier/ConnectionControlNotifier.java:1`
-  - `backend/src/main/java/com/nidus/twinly/connection/dto/websocket/ConnectionDrainingPayload.java:1`
-- **심각도**: **low** (동작에 영향 없음. 다만 "이 코드 어디 있지"를 매번 헷갈리게 한다)
-- **제안**: `connection.notifier` 로 옮겨 `ChatNotifier` 와 배치 규칙을 맞추거나, 반대로 "WS 인프라 성격이라 common에 둔다"를 규칙으로 명시한다. 어느 쪽이든 **규칙이 하나면 된다.** 테스트도 운영 패키지를 미러링하므로 지금은 테스트가 `common/websocket/notifier` 에 있다.
+**남은 항목 없음.** 기록돼 있던 발견사항은 모두 처리되었거나 판단으로 닫혔다. 이력은 [_summary.md](_summary.md) 참조.

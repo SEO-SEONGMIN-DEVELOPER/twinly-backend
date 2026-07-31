@@ -35,15 +35,6 @@
 
 ---
 
-## PUT /api/v1/season/participation
-
-### 1. `SeasonParticipation.create`가 `Instant.now()`를 두 번 호출한다
-
-- **증상**: `participatedInAt`과 `createdAt`이 서로 다른 시각(수 마이크로초~밀리초 차이)으로 저장된다. 동일 이벤트의 두 시각이 어긋나 로그·통계 대조 시 혼란을 준다.
-- **재현 조건**: 참가 성공 후 두 컬럼 값 비교.
-- **근거 코드 위치**: `backend/src/main/java/com/nidus/twinly/season/entity/SeasonParticipation.java:35`
-- **심각도**: low
-- **제안**: `Instant now = Instant.now();`를 한 번만 구해 두 필드에 대입한다.
-
 ---
 
+**남은 항목 없음.** 기록돼 있던 발견사항은 모두 처리되었거나 판단으로 닫혔다. 이력은 [_summary.md](_summary.md) 참조.

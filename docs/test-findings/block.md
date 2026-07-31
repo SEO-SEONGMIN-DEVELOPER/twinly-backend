@@ -37,17 +37,6 @@
 
 ## 발견사항
 
-### 1. `blockList`가 N+1은 아니지만, 차단이 없을 때도 `findAllById([])`를 호출한다
+---
 
-- **증상**: `BlockService.blockList`는 차단 목록이 비어 있어도 `userRepository.findAllById(List.of())`를 호출한다.
-  Spring Data JPA는 빈 컬렉션이면 쿼리를 생략하므로 실제 부하는 없지만, 의도가 코드에 드러나지 않는다.
-- **근거 코드 위치**: `backend/src/main/java/com/nidus/twinly/block/service/BlockService.java:52`
-- **심각도**: info (동작 결함 아님)
-- **제안**: 조기 반환으로 의도를 명시하면 읽기 쉬워진다. 지금 당장 고칠 필요는 없다.
-
-### 2. `unblock`은 존재 여부와 무관하게 항상 200이다 (의도된 멱등)
-
-- **증상**: 차단 이력이 없어도 `DELETE`가 200을 반환한다. 이는 결함이 아니라 멱등 설계로 판단되며,
-  통합 테스트로 그 계약을 고정해 두었다.
-- **근거 코드 위치**: `backend/src/main/java/com/nidus/twinly/block/service/BlockService.java:38`
-- **심각도**: info
+**남은 항목 없음.** 기록돼 있던 발견사항은 모두 처리되었거나 판단으로 닫혔다. 이력은 [_summary.md](_summary.md) 참조.

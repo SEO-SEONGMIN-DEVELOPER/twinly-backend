@@ -54,8 +54,6 @@
 
 ## 발견된 운영 코드 문제 (수정하지 않음)
 
-### 1. 멱등 재전송 경로는 committed만 돌려주고 created 이벤트를 다시 발행하지 않는다
-- **증상**: 같은 `clientMsgId` 로 재전송하면 저장된 메시지를 찾아 committed를 돌려주지만 `ChatMessageCreatedEvent` 는 발행하지 않는다. 중복 저장 방지 측면에서는 옳지만, **첫 전송 때 `/user/queue/chat/rooms/{roomId}` 프레임을 놓친 클라이언트는 재전송으로도 복구되지 않는다.**
-- **근거 코드 위치**: `backend/src/main/java/com/nidus/twinly/chat/service/ChatService.java:85-94`
-- **심각도**: **low** (설계 판단 사항. 프레임 유실 복구는 원래 재연결 후 REST 재조회로 하는 것이 정석이다)
-- **제안**: 현 설계 유지가 합리적이다. 다만 "프레임 유실 시 복구는 REST 재조회로 한다"를 API 문서에 명시해 두면 클라이언트가 WS만 믿지 않게 된다.
+---
+
+**남은 항목 없음.** 기록돼 있던 발견사항은 모두 처리되었거나 판단으로 닫혔다. 이력은 [_summary.md](_summary.md) 참조.
