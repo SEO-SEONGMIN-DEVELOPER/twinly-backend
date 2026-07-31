@@ -1,9 +1,9 @@
-package com.nidus.twinly.common.websocket.notifier;
+package com.nidus.twinly.connection.notifier;
 
-import com.nidus.twinly.connection.domain.ConnectionDrainingReason;
 import com.nidus.twinly.common.websocket.domain.WebSocketBodyType;
-import com.nidus.twinly.connection.dto.websocket.ConnectionDrainingPayload;
 import com.nidus.twinly.common.websocket.dto.WebSocketControlBody;
+import com.nidus.twinly.connection.domain.ConnectionDrainingReason;
+import com.nidus.twinly.connection.dto.websocket.ConnectionDrainingPayload;
 import io.github.springwolf.bindings.stomp.annotations.StompAsyncOperationBinding;
 import io.github.springwolf.core.asyncapi.annotations.AsyncOperation;
 import io.github.springwolf.core.asyncapi.annotations.AsyncPublisher;

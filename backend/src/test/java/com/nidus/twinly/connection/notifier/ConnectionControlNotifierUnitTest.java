@@ -1,4 +1,4 @@
-package com.nidus.twinly.common.websocket.notifier;
+package com.nidus.twinly.connection.notifier;
 
 import com.nidus.twinly.common.websocket.domain.WebSocketBodyKind;
 import com.nidus.twinly.common.websocket.domain.WebSocketBodyType;

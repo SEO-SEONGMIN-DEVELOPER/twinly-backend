@@ -3,7 +3,7 @@ package com.nidus.twinly.connection.integration;
 import com.nidus.twinly.common.websocket.domain.WebSocketBodyKind;
 import com.nidus.twinly.common.websocket.domain.WebSocketBodyType;
 import com.nidus.twinly.common.websocket.dto.WebSocketControlBody;
-import com.nidus.twinly.common.websocket.notifier.ConnectionControlNotifier;
+import com.nidus.twinly.connection.notifier.ConnectionControlNotifier;
 import com.nidus.twinly.connection.domain.ConnectionDrainingReason;
 import com.nidus.twinly.connection.repository.ConnectionTicketRepository;
 import com.nidus.twinly.support.AbstractWebSocketIntegrationTest;
