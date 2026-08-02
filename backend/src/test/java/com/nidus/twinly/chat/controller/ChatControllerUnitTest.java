@@ -34,6 +34,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.Instant;
 import java.util.List;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -258,6 +259,7 @@ class ChatControllerUnitTest {
                 .willReturn(new ChatMessagesResult(
                         10L,
                         List.of(new ChatMessageItemResult(77L, ChatSenderType.ME, "hello", SENT_AT, "client-1")),
+                        66L,
                         new ChatMessagesPageResult(70L, true)
                 ));
 
@@ -273,6 +275,7 @@ class ChatControllerUnitTest {
                 .andExpect(jsonPath("$.messages[0].messageId").value("77"))
                 .andExpect(jsonPath("$.messages[0].senderType").value("me"))
                 .andExpect(jsonPath("$.messages[0].text").value("hello"))
+                .andExpect(jsonPath("$.lastReadMessageId").value("66"))
                 .andExpect(jsonPath("$.page.nextCursor").value("70"))
                 .andExpect(jsonPath("$.page.hasMore").value(true));
         then(chatService).should().messages(1L, 10L, 55L, 5);
@@ -283,15 +286,16 @@ class ChatControllerUnitTest {
     void messages_without_cursor_and_limit() throws Exception {
         // given: 서비스가 빈 페이지를 반환
         given(chatService.messages(eq(1L), eq(10L), any(), any()))
-                .willReturn(new ChatMessagesResult(10L, List.of(), new ChatMessagesPageResult(null, false)));
+                .willReturn(new ChatMessagesResult(10L, List.of(), null, new ChatMessagesPageResult(null, false)));
 
         // when: 쿼리 파라미터 없이 메시지 목록 조회 API 호출
         var result = mockMvc.perform(get("/api/v1/chat/rooms/{roomId}/messages", "10")
                 .header("Authorization", AUTH_HEADER));
 
-        // then: 200 반환 + cursor/limit 모두 null로 위임
+        // then: 200 반환 + 상대가 아직 아무것도 읽지 않았으면 lastReadMessageId는 null + cursor/limit 모두 null로 위임
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.messages.length()").value(0))
+                .andExpect(jsonPath("$.lastReadMessageId").value(nullValue()))
                 .andExpect(jsonPath("$.page.hasMore").value(false));
         then(chatService).should().messages(1L, 10L, null, null);
     }

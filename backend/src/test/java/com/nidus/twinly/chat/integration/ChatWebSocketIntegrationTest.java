@@ -25,6 +25,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.messaging.simp.stomp.StompSession;
 
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -263,6 +264,102 @@ class ChatWebSocketIntegrationTest extends AbstractWebSocketIntegrationTest {
 
         deviceA.disconnect();
         deviceB.disconnect();
+    }
+
+    @Test
+    @DisplayName("읽음 전파 e2e: 내가 읽으면 상대의 방 큐로 chat.read.advanced 이벤트가 가고, 읽은 본인에게는 가지 않는다")
+    void readAdvanced_event_goes_to_partner_only() throws Exception {
+        // given: 두 유저가 모두 참여 중인 방 + 상대가 보낸 메시지 1건
+        saveCurrentSeason();
+        User me = saveUser();
+        User partner = saveUser();
+        long matchId = saveMatch(me.getId(), partner.getId());
+        ChatRoom room = chatRoomRepository.save(ChatRoom.create(matchId));
+        chatRoomParticipationRepository.save(ChatRoomParticipation.create(room.getId(), me.getId()));
+        chatRoomParticipationRepository.save(ChatRoomParticipation.create(room.getId(), partner.getId()));
+        Chat received = chatRepository.save(
+                Chat.create("cmid-partner", room.getId(), partner.getId(), me.getId(), ChatMessageType.TEXT, "먼저 보냄"));
+
+        // given: 두 유저가 각자 STOMP로 접속해 같은 방 큐를 구독
+        StompSession mySession = connect(issueWsTicket(me.getId()));
+        StompSession partnerSession = connect(issueWsTicket(partner.getId()));
+
+        BlockingQueue<WebSocketEventBody> myRoomQueue =
+                subscribe(mySession, "/user/queue/chat/rooms/" + room.getId(), WebSocketEventBody.class);
+        BlockingQueue<WebSocketEventBody> partnerRoomQueue =
+                subscribe(partnerSession, "/user/queue/chat/rooms/" + room.getId(), WebSocketEventBody.class);
+
+        // when: 내가 상대 메시지를 읽음 처리
+        mySession.send("/app/chat/read", new WebSocketRequestBody<>(
+                1, WebSocketBodyKind.COMMAND, WebSocketBodyType.CHAT_READ_ADVANCE, "command-read-adv-1",
+                new ChatReadAdvancePayload(room.getId(), received.getId())));
+
+        // then: 상대의 방 큐로 chat.read.advanced 이벤트가 도착하고 봉투는 event 규약을 따른다
+        WebSocketEventBody advanced = partnerRoomQueue.poll(5, TimeUnit.SECONDS);
+        assertThat(advanced).isNotNull();
+        assertThat(advanced.type()).isEqualTo(WebSocketBodyType.CHAT_READ_ADVANCED);
+        assertThat(advanced.v()).isEqualTo(1);
+        assertThat(advanced.kind()).isEqualTo(WebSocketBodyKind.EVENT);
+        assertThat(advanced.eventId()).isNotBlank();
+        assertThat(advanced.occurredAt()).isNotNull();
+
+        // then: 페이로드에 방 id와 내가 읽은 위치가 문자열 id로 담긴다
+        @SuppressWarnings("unchecked")
+        Map<String, Object> payload = (Map<String, Object>) advanced.payload();
+        assertThat(payload.get("roomId")).isEqualTo(String.valueOf(room.getId()));
+        assertThat(payload.get("lastReadMessageId")).isEqualTo(String.valueOf(received.getId()));
+
+        // then: 읽은 본인에게는 아무 이벤트도 가지 않는다 (상대 프레임 도착을 확인한 뒤 검사)
+        assertThat(myRoomQueue).isEmpty();
+
+        mySession.disconnect();
+        partnerSession.disconnect();
+    }
+
+    @Test
+    @DisplayName("읽음 전파 e2e: 같은 위치로 다시 읽음 처리하면 상대에게 이벤트가 다시 가지 않는다")
+    void readAdvanced_event_is_not_republished_when_pointer_does_not_move() throws Exception {
+        // given: 두 유저가 참여 중인 방 + 상대가 보낸 메시지 2건
+        saveCurrentSeason();
+        User me = saveUser();
+        User partner = saveUser();
+        long matchId = saveMatch(me.getId(), partner.getId());
+        ChatRoom room = chatRoomRepository.save(ChatRoom.create(matchId));
+        chatRoomParticipationRepository.save(ChatRoomParticipation.create(room.getId(), me.getId()));
+        chatRoomParticipationRepository.save(ChatRoomParticipation.create(room.getId(), partner.getId()));
+        Chat first = chatRepository.save(
+                Chat.create("cmid-p1", room.getId(), partner.getId(), me.getId(), ChatMessageType.TEXT, "1"));
+        Chat second = chatRepository.save(
+                Chat.create("cmid-p2", room.getId(), partner.getId(), me.getId(), ChatMessageType.TEXT, "2"));
+
+        StompSession mySession = connect(issueWsTicket(me.getId()));
+        StompSession partnerSession = connect(issueWsTicket(partner.getId()));
+
+        BlockingQueue<WebSocketEventBody> partnerRoomQueue =
+                subscribe(partnerSession, "/user/queue/chat/rooms/" + room.getId(), WebSocketEventBody.class);
+
+        // when: 2번까지 읽은 뒤, 뒤늦게 도착한 중복 명령으로 1번까지 다시 읽음 처리
+        mySession.send("/app/chat/read", new WebSocketRequestBody<>(
+                1, WebSocketBodyKind.COMMAND, WebSocketBodyType.CHAT_READ_ADVANCE, "command-read-adv-2",
+                new ChatReadAdvancePayload(room.getId(), second.getId())));
+
+        WebSocketEventBody advanced = partnerRoomQueue.poll(5, TimeUnit.SECONDS);
+        assertThat(advanced).isNotNull();
+
+        mySession.send("/app/chat/read", new WebSocketRequestBody<>(
+                1, WebSocketBodyKind.COMMAND, WebSocketBodyType.CHAT_READ_ADVANCE, "command-read-adv-3",
+                new ChatReadAdvancePayload(room.getId(), first.getId())));
+
+        // then: 위치가 뒤로 가지 않으므로 상대 화면을 흔들 두 번째 프레임은 오지 않는다
+        assertThat(partnerRoomQueue.poll(1, TimeUnit.SECONDS)).isNull();
+
+        // then: DB 커서도 앞선 값을 유지한다
+        ChatRoomParticipation participation =
+                chatRoomParticipationRepository.findByRoomIdAndUserId(room.getId(), me.getId()).orElseThrow();
+        assertThat(participation.getLastReadMessageId()).isEqualTo(second.getId());
+
+        mySession.disconnect();
+        partnerSession.disconnect();
     }
 
     /** seasons/matches는 팩토리·세터가 없어 네이티브로 insert 한다 (JdbcTemplate은 autocommit이라 커밋됨). */

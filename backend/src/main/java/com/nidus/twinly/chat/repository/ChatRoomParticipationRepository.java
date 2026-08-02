@@ -17,7 +17,7 @@ public interface ChatRoomParticipationRepository extends JpaRepository<ChatRoomP
 
     List<ChatRoomParticipation> findAllByRoomIdIn(List<Long> roomIds);
 
-    @Modifying
+    @Modifying(clearAutomatically = true)
     @Query(value = """
             UPDATE chat_room_participations
             SET last_read_message_id = :lastMessageId

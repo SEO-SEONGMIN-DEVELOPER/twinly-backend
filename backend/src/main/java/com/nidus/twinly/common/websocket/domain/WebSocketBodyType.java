@@ -12,6 +12,7 @@ public enum WebSocketBodyType {
     @JsonProperty("chat.message.rejected") CHAT_MESSAGE_REJECTED,
     @JsonProperty("chat.read.committed") CHAT_READ_COMMITTED,
     @JsonProperty("chat.read.rejected") CHAT_READ_REJECTED,
+    @JsonProperty("chat.read.advanced") CHAT_READ_ADVANCED,
     @JsonProperty("chat.changed") CHAT_CHANGED,
     @JsonProperty("season.changed") SEASON_CHANGED,
     @JsonProperty("connection.draining") CONNECTION_DRAINING

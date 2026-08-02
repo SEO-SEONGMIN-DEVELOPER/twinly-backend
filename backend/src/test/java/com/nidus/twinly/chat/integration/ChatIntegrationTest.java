@@ -294,6 +294,36 @@ class ChatIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("메시지 목록 조회의 lastReadMessageId는 상대가 읽은 위치를 문자열로 내려주고, 상대가 안 읽었으면 null이다")
+    void messages_returns_partner_last_read_message_id_end_to_end() throws Exception {
+        // given: 내가 2건 보냈고, 나만 두 번째까지 읽음 처리한 상태 (상대는 아직 안 읽음)
+        Fixture fixture = saveChatRoomFixture();
+        chatRepository.save(Chat.create("c-1", fixture.roomId(),
+                fixture.me().getId(), fixture.partner().getId(), ChatMessageType.TEXT, "첫 번째"));
+        Chat second = chatRepository.save(Chat.create("c-2", fixture.roomId(),
+                fixture.me().getId(), fixture.partner().getId(), ChatMessageType.TEXT, "두 번째"));
+        chatRoomParticipationRepository.advanceReadPointer(fixture.roomId(), fixture.me().getId(), second.getId());
+        flushAndClear();
+
+        // when: 내 토큰으로 메시지 목록 조회
+        mockMvc.perform(get("/api/v1/chat/rooms/{roomId}/messages", fixture.roomId().toString())
+                        .header("Authorization", bearer(fixture.me().getId())))
+                // then: 내 읽음 위치가 아니라 상대의 위치를 보므로 아직 null
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lastReadMessageId").doesNotExist());
+
+        // when: 상대가 두 번째까지 읽음 처리한 뒤 다시 조회
+        chatRoomParticipationRepository.advanceReadPointer(fixture.roomId(), fixture.partner().getId(), second.getId());
+        flushAndClear();
+
+        mockMvc.perform(get("/api/v1/chat/rooms/{roomId}/messages", fixture.roomId().toString())
+                        .header("Authorization", bearer(fixture.me().getId())))
+                // then: 상대가 읽은 메시지 id가 문자열로 내려옴
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lastReadMessageId").value(second.getId().toString()));
+    }
+
+    @Test
     @DisplayName("메시지 목록 조회 성공: limit보다 많으면 hasMore=true와 nextCursor가 응답된다")
     void messages_with_limit_paging_end_to_end() throws Exception {
         // given: 메시지 2건을 저장하고 limit=1로 조회

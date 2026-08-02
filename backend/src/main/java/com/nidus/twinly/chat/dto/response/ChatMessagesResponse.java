@@ -9,6 +9,8 @@ public record ChatMessagesResponse(
         @JsonFormat(shape = JsonFormat.Shape.STRING)
         Long roomId,
         List<ChatMessageItemResponse> messages,
+        @JsonFormat(shape = JsonFormat.Shape.STRING)
+        Long lastReadMessageId,
         ChatMessagesPageResponse page
 ) {
 
@@ -16,6 +18,7 @@ public record ChatMessagesResponse(
         return new ChatMessagesResponse(
                 result.roomId(),
                 result.messages().stream().map(ChatMessageItemResponse::from).toList(),
+                result.lastReadMessageId(),
                 ChatMessagesPageResponse.from(result.page())
         );
     }

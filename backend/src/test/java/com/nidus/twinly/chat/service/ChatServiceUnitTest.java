@@ -17,6 +17,7 @@ import com.nidus.twinly.chat.entity.Chat;
 import com.nidus.twinly.chat.entity.ChatRoom;
 import com.nidus.twinly.chat.entity.ChatRoomParticipation;
 import com.nidus.twinly.chat.event.ChatMessageCreatedEvent;
+import com.nidus.twinly.chat.event.ChatReadAdvancedEvent;
 import com.nidus.twinly.chat.repository.ChatRepository;
 import com.nidus.twinly.chat.repository.ChatRoomParticipationRepository;
 import com.nidus.twinly.chat.repository.ChatRoomRepository;
@@ -398,6 +399,49 @@ class ChatServiceUnitTest {
     }
 
     @Test
+    @DisplayName("메시지 목록의 lastReadMessageId는 내 읽음 위치가 아니라 상대의 읽음 위치를 내려준다")
+    void messages_returns_partner_last_read_message_id() {
+        // given: 나는 100까지 읽었고 상대는 55까지 읽은 상태
+        given(chatRoomRepository.findById(ROOM_ID)).willReturn(Optional.of(room(ROOM_ID, MATCH_ID)));
+        given(matchRepository.findById(MATCH_ID)).willReturn(Optional.of(match(MATCH_ID, ME, PARTNER, CURRENT_SEASON_ID)));
+
+        ChatRoomParticipation mine = participation(ROOM_ID, ME);
+        ReflectionTestUtils.setField(mine, "lastReadMessageId", 100L);
+        given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, ME)).willReturn(Optional.of(mine));
+
+        ChatRoomParticipation theirs = participation(ROOM_ID, PARTNER);
+        ReflectionTestUtils.setField(theirs, "lastReadMessageId", 55L);
+        given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, PARTNER)).willReturn(Optional.of(theirs));
+
+        given(chatRepository.findBeforeCursorByRoomId(ROOM_ID, null, 11)).willReturn(List.of());
+
+        // when: 메시지 목록 조회
+        ChatMessagesResult result = chatService.messages(ME, ROOM_ID, null, 10);
+
+        // then: 상대가 읽은 위치인 55가 나감 (내 위치 100이 아님)
+        assertThat(result.lastReadMessageId()).isEqualTo(55L);
+    }
+
+    @Test
+    @DisplayName("상대가 아직 아무것도 읽지 않았으면 메시지 목록의 lastReadMessageId는 null이다")
+    void messages_returns_null_when_partner_never_read() {
+        // given: 상대 참여 정보에 읽음 이력이 없음
+        given(chatRoomRepository.findById(ROOM_ID)).willReturn(Optional.of(room(ROOM_ID, MATCH_ID)));
+        given(matchRepository.findById(MATCH_ID)).willReturn(Optional.of(match(MATCH_ID, ME, PARTNER, CURRENT_SEASON_ID)));
+        given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, ME))
+                .willReturn(Optional.of(participation(ROOM_ID, ME)));
+        given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, PARTNER))
+                .willReturn(Optional.of(participation(ROOM_ID, PARTNER)));
+        given(chatRepository.findBeforeCursorByRoomId(ROOM_ID, null, 11)).willReturn(List.of());
+
+        // when: 메시지 목록 조회
+        ChatMessagesResult result = chatService.messages(ME, ROOM_ID, null, 10);
+
+        // then: 읽음 표시를 그릴 수 없는 상태를 null로 구분해 내려줌
+        assertThat(result.lastReadMessageId()).isNull();
+    }
+
+    @Test
     @DisplayName("읽음 처리 정상: 읽음 포인터 전진을 위임하고 확정된 마지막 메시지 id를 반환한다")
     void readMessages_advances_pointer() {
         // given: 읽음 이력이 없는 참여 정보와 해당 방에 존재하는 메시지
@@ -406,32 +450,110 @@ class ChatServiceUnitTest {
         given(chatRepository.existsByIdAndRoomId(77L, ROOM_ID)).willReturn(true);
         given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, ME))
                 .willReturn(Optional.of(participation(ROOM_ID, ME)));
+        given(chatRoomParticipationRepository.advanceReadPointer(ROOM_ID, ME, 77L)).willReturn(1);
 
         // when: 77번 메시지까지 읽음 처리
         ChatReadMessagesResult result = chatService.readMessages(ME, ROOM_ID, new ChatReadMessagesCommand(77L));
 
-        // then: 리포지토리에 포인터 전진을 위임하고 확정값으로 77을 반환
-        then(chatRoomParticipationRepository).should().advanceReadPointer(ROOM_ID, ME, 77L);
+        // then: 조건부 UPDATE가 실제로 갱신했으므로 요청값이 그대로 확정값이 되고, 포인터를 되읽지 않는다
         assertThat(result.roomId()).isEqualTo(ROOM_ID);
         assertThat(result.lastMessageId()).isEqualTo(77L);
+        then(chatRoomParticipationRepository).should().findByRoomIdAndUserId(ROOM_ID, ME);
     }
 
     @Test
-    @DisplayName("이미 더 뒤까지 읽었으면 읽음 포인터를 되돌리지 않고 기존 값을 확정값으로 반환한다")
+    @DisplayName("이미 더 뒤까지 읽었으면 갱신 건수 0을 보고 DB의 현재 포인터를 다시 읽어 확정값으로 반환한다")
     void readMessages_does_not_regress_pointer() {
-        // given: 이미 100번까지 읽은 참여 정보
+        // given: 조건부 UPDATE가 아무 행도 바꾸지 못하고, DB의 현재 포인터는 100
         given(chatRoomRepository.findById(ROOM_ID)).willReturn(Optional.of(room(ROOM_ID, MATCH_ID)));
         given(matchRepository.findById(MATCH_ID)).willReturn(Optional.of(match(MATCH_ID, ME, PARTNER, CURRENT_SEASON_ID)));
         given(chatRepository.existsByIdAndRoomId(77L, ROOM_ID)).willReturn(true);
         ChatRoomParticipation participation = participation(ROOM_ID, ME);
         ReflectionTestUtils.setField(participation, "lastReadMessageId", 100L);
         given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, ME)).willReturn(Optional.of(participation));
+        given(chatRoomParticipationRepository.advanceReadPointer(ROOM_ID, ME, 77L)).willReturn(0);
 
         // when: 더 앞선 77번으로 읽음 처리 요청
         ChatReadMessagesResult result = chatService.readMessages(ME, ROOM_ID, new ChatReadMessagesCommand(77L));
 
-        // then: 확정값은 기존 100 유지
+        // then: UPDATE 이전에 읽어둔 값이 아니라 DB를 다시 읽은 값으로 확정한다 (동시 요청 시 역행 방지)
         assertThat(result.lastMessageId()).isEqualTo(100L);
+
+        // then: 위치가 실제로 이동하지 않았으므로 상대에게 알리지 않는다 (재전송 시 상대 화면이 흔들리지 않도록)
+        then(eventPublisher).should(never()).publishEvent(any(ChatReadAdvancedEvent.class));
+    }
+
+    @Test
+    @DisplayName("갱신 건수가 0인데 읽음 이력도 없으면 참여 정보 없음으로 오판하지 않고 null을 확정값으로 반환한다")
+    void readMessages_when_not_advanced_and_never_read_returns_null() {
+        // given: 갱신은 0건인데 포인터가 아직 비어 있는 상태 (동시 요청이 겹친 순간)
+        given(chatRoomRepository.findById(ROOM_ID)).willReturn(Optional.of(room(ROOM_ID, MATCH_ID)));
+        given(matchRepository.findById(MATCH_ID)).willReturn(Optional.of(match(MATCH_ID, ME, PARTNER, CURRENT_SEASON_ID)));
+        given(chatRepository.existsByIdAndRoomId(77L, ROOM_ID)).willReturn(true);
+        given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, ME))
+                .willReturn(Optional.of(participation(ROOM_ID, ME)));
+        given(chatRoomParticipationRepository.advanceReadPointer(ROOM_ID, ME, 77L)).willReturn(0);
+
+        // when: 읽음 처리
+        ChatReadMessagesResult result = chatService.readMessages(ME, ROOM_ID, new ChatReadMessagesCommand(77L));
+
+        // then: 포인터가 비어 있는 것과 참여 정보가 없는 것을 구분해, 예외 대신 null을 돌려준다
+        assertThat(result.lastMessageId()).isNull();
+    }
+
+    @Test
+    @DisplayName("읽음 위치가 전진하면 읽은 본인을 제외한 활성 참여자에게 알릴 이벤트를 발행한다")
+    void readMessages_publishes_read_advanced_event_to_partner_only() {
+        // given: 읽음 이력이 없는 내 참여 정보와 활성 상태인 두 참여자
+        given(chatRoomRepository.findById(ROOM_ID)).willReturn(Optional.of(room(ROOM_ID, MATCH_ID)));
+        given(matchRepository.findById(MATCH_ID)).willReturn(Optional.of(match(MATCH_ID, ME, PARTNER, CURRENT_SEASON_ID)));
+        given(chatRepository.existsByIdAndRoomId(77L, ROOM_ID)).willReturn(true);
+        given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, ME))
+                .willReturn(Optional.of(participation(ROOM_ID, ME)));
+        given(chatRoomParticipationRepository.advanceReadPointer(ROOM_ID, ME, 77L)).willReturn(1);
+        given(chatRoomParticipationRepository.findAllByRoomId(ROOM_ID)).willReturn(List.of(
+                participation(ROOM_ID, ME),
+                participation(ROOM_ID, PARTNER)
+        ));
+
+        // when: 77번 메시지까지 읽음 처리
+        chatService.readMessages(ME, ROOM_ID, new ChatReadMessagesCommand(77L));
+
+        // then: 상대만 대상으로 확정된 읽음 위치가 담긴 이벤트가 발행됨
+        ArgumentCaptor<ChatReadAdvancedEvent> captor = ArgumentCaptor.forClass(ChatReadAdvancedEvent.class);
+        then(eventPublisher).should().publishEvent(captor.capture());
+
+        ChatReadAdvancedEvent event = captor.getValue();
+        assertThat(event.roomId()).isEqualTo(ROOM_ID);
+        assertThat(event.lastReadMessageId()).isEqualTo(77L);
+        assertThat(event.targetUserIds()).containsExactly(PARTNER);
+    }
+
+    @Test
+    @DisplayName("상대가 방을 나갔으면 읽음 위치가 전진해도 알릴 대상이 없어 이벤트를 발행하지 않는다")
+    void readMessages_without_active_partner_does_not_publish() {
+        // given: 상대가 이미 방을 나가 활성 참여자가 나뿐인 상태
+        given(chatRoomRepository.findById(ROOM_ID)).willReturn(Optional.of(room(ROOM_ID, MATCH_ID)));
+        given(matchRepository.findById(MATCH_ID)).willReturn(Optional.of(match(MATCH_ID, ME, PARTNER, CURRENT_SEASON_ID)));
+        given(chatRepository.existsByIdAndRoomId(77L, ROOM_ID)).willReturn(true);
+        given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, ME))
+                .willReturn(Optional.of(participation(ROOM_ID, ME)));
+
+        given(chatRoomParticipationRepository.advanceReadPointer(ROOM_ID, ME, 77L)).willReturn(1);
+
+        ChatRoomParticipation left = participation(ROOM_ID, PARTNER);
+        left.leave();
+        given(chatRoomParticipationRepository.findAllByRoomId(ROOM_ID)).willReturn(List.of(
+                participation(ROOM_ID, ME),
+                left
+        ));
+
+        // when: 77번 메시지까지 읽음 처리
+        chatService.readMessages(ME, ROOM_ID, new ChatReadMessagesCommand(77L));
+
+        // then: 읽음 처리 자체는 성공하되 이벤트는 발행되지 않음
+        then(chatRoomParticipationRepository).should().advanceReadPointer(ROOM_ID, ME, 77L);
+        then(eventPublisher).should(never()).publishEvent(any(ChatReadAdvancedEvent.class));
     }
 
     @Test

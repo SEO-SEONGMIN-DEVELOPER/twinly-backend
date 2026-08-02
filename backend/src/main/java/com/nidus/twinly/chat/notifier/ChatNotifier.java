@@ -4,9 +4,11 @@ import com.nidus.twinly.chat.domain.ChatSenderType;
 import com.nidus.twinly.chat.dto.websocket.ChatChangedPayload;
 import com.nidus.twinly.chat.dto.websocket.ChatMessageCreatedPayload;
 import com.nidus.twinly.chat.dto.websocket.ChatMessagePayload;
+import com.nidus.twinly.chat.dto.websocket.ChatReadAdvancedPayload;
 import com.nidus.twinly.chat.entity.Chat;
 import com.nidus.twinly.chat.event.ChatChangedEvent;
 import com.nidus.twinly.chat.event.ChatMessageCreatedEvent;
+import com.nidus.twinly.chat.event.ChatReadAdvancedEvent;
 import com.nidus.twinly.common.websocket.domain.WebSocketBodyType;
 import com.nidus.twinly.common.websocket.dto.WebSocketEventBody;
 import io.github.springwolf.bindings.stomp.annotations.StompAsyncOperationBinding;
@@ -58,6 +60,17 @@ public class ChatNotifier {
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onChatReadAdvanced(ChatReadAdvancedEvent event) {
+        String encodedRoomId = encodePathSegment(String.valueOf(event.roomId()));
+
+        for (Long targetUserId : event.targetUserIds()) {
+            publishReadAdvanced(targetUserId, encodedRoomId,
+                    WebSocketEventBody.of(WebSocketBodyType.CHAT_READ_ADVANCED,
+                            new ChatReadAdvancedPayload(event.roomId(), event.lastReadMessageId())));
+        }
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onChatChanged(ChatChangedEvent event) {
         for (Long participantUserId : event.participantUserIds()) {
             publishChatChanged(participantUserId,
@@ -67,14 +80,21 @@ public class ChatNotifier {
 
     @AsyncPublisher(operation = @AsyncOperation(
             channelName = ROOM_OUTBOUND_CHANNEL,
-            description = """
-                    채팅방에 새 메시지가 생성됨 (참여자별로 senderType이 me/them으로 다르게 전달된다).
-                    프레임을 놓쳤다면 같은 clientMsgId로 재전송해도 이 프레임은 다시 오지 않는다. 재연결 후 REST 메시지 목록 재조회로 복구한다.
-                    message.id는 재전송 시에도 동일하므로 클라이언트는 id 기준으로 중복을 제거한다."""
+            description = "채팅방에 생성된 새 메시지 (senderType은 수신자 기준 me/them)"
     ))
     @StompAsyncOperationBinding
     public void publishMessageCreated(Long userId, String encodedRoomId,
                                       @Payload WebSocketEventBody<ChatMessageCreatedPayload> body) {
+        messagingTemplate.convertAndSendToUser(String.valueOf(userId), ROOM_DESTINATION_PREFIX + encodedRoomId, body);
+    }
+
+    @AsyncPublisher(operation = @AsyncOperation(
+            channelName = ROOM_OUTBOUND_CHANNEL,
+            description = "상대가 읽은 마지막 메시지 id (읽음 표시 갱신)"
+    ))
+    @StompAsyncOperationBinding
+    public void publishReadAdvanced(Long userId, String encodedRoomId,
+                                    @Payload WebSocketEventBody<ChatReadAdvancedPayload> body) {
         messagingTemplate.convertAndSendToUser(String.valueOf(userId), ROOM_DESTINATION_PREFIX + encodedRoomId, body);
     }
 

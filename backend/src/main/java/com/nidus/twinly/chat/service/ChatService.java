@@ -19,6 +19,7 @@ import com.nidus.twinly.common.photo.ProfilePhotoInfo;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.chat.event.ChatMessageCreatedEvent;
+import com.nidus.twinly.chat.event.ChatReadAdvancedEvent;
 import com.nidus.twinly.match.entity.Match;
 import com.nidus.twinly.match.repository.MatchRepository;
 import com.nidus.twinly.relationship.domain.RelationshipSpecificType;
@@ -371,8 +372,12 @@ public class ChatService {
         Match match = matchRepository.findById(room.getMatchId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.MATCH_NOT_FOUND));
 
-        checkUserInMatch(match, userId);
+        Long partnerUserId = resolvePartnerId(match, userId);
         getActiveParticipation(roomId, userId);
+
+        Long lastReadMessageId = chatRoomParticipationRepository.findByRoomIdAndUserId(roomId, partnerUserId)
+                .map(ChatRoomParticipation::getLastReadMessageId)
+                .orElse(null);
 
         int effectiveLimit = limit != null ? limit : DEFAULT_MESSAGES_LIMIT;
 
@@ -394,7 +399,7 @@ public class ChatService {
 
         Long nextCursor = hasMore ? pageChats.getLast().getId() : null;
 
-        return new ChatMessagesResult(roomId, messages, new ChatMessagesPageResult(nextCursor, hasMore));
+        return new ChatMessagesResult(roomId, messages, lastReadMessageId, new ChatMessagesPageResult(nextCursor, hasMore));
     }
 
     @Transactional
@@ -407,19 +412,33 @@ public class ChatService {
 
         checkUserInMatch(match, userId);
 
-        ChatRoomParticipation participation = getActiveParticipation(roomId, userId);
+        getActiveParticipation(roomId, userId);
 
         if (!chatRepository.existsByIdAndRoomId(command.lastMsgId(), roomId)) {
             throw new BusinessException(ErrorCode.MESSAGE_NOT_IN_ROOM);
         }
 
-        Long before = participation.getLastReadMessageId();
+        int advanced = chatRoomParticipationRepository.advanceReadPointer(roomId, userId, command.lastMsgId());
 
-        chatRoomParticipationRepository.advanceReadPointer(roomId, userId, command.lastMsgId());
+        if (advanced == 0) {
+            return new ChatReadMessagesResult(roomId, currentReadPointer(roomId, userId));
+        }
 
-        Long confirmed = (before == null || before < command.lastMsgId()) ? command.lastMsgId() : before;
+        List<Long> targetUserIds = activeParticipantIds(chatRoomParticipationRepository.findAllByRoomId(roomId)).stream()
+                .filter(participantUserId -> !participantUserId.equals(userId))
+                .toList();
 
-        return new ChatReadMessagesResult(roomId, confirmed);
+        if (!targetUserIds.isEmpty()) {
+            eventPublisher.publishEvent(new ChatReadAdvancedEvent(roomId, command.lastMsgId(), targetUserIds));
+        }
+
+        return new ChatReadMessagesResult(roomId, command.lastMsgId());
+    }
+
+    private Long currentReadPointer(Long roomId, Long userId) {
+        return chatRoomParticipationRepository.findByRoomIdAndUserId(roomId, userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.CHAT_PARTICIPATION_NOT_FOUND))
+                .getLastReadMessageId();
     }
 
     @Transactional
