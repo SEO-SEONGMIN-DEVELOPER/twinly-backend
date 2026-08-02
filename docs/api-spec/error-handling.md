@@ -71,7 +71,7 @@ try {
 
 ---
 
-## 3. 에러 코드 카탈로그 (전체 61개)
+## 3. 에러 코드 카탈로그 (전체 62개)
 
 ### 공통
 | code | HTTP | 의미 |
@@ -105,6 +105,7 @@ try {
 | `VERIFICATION_CODE_EXPIRED` | 410 | 인증번호가 만료되었습니다. |
 | `VERIFICATION_EXPIRED` | 410 | 인증이 만료되었습니다. |
 | `VERIFICATION_CODE_MISMATCH` | 422 | 인증번호가 일치하지 않습니다. |
+| `EMAIL_DOMAIN_NOT_SUPPORTED` | 422 | 가입할 수 없는 이메일 도메인입니다. |
 | `SMS_VERIFICATION_NOT_COMPLETED` | 422 | SMS 인증이 완료되지 않았습니다. |
 | `EMAIL_VERIFICATION_NOT_COMPLETED` | 422 | 이메일 인증이 완료되지 않았습니다. |
 | `PROFILE_NOT_COMPLETED` | 422 | 가입에 필요한 프로필 정보가 완성되지 않았습니다. |

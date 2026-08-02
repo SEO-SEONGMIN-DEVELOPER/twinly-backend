@@ -12,6 +12,144 @@
 
 ---
 
+## 2026-08-02 (2)
+
+### 1. 읽음 표시가 실시간으로 전파됩니다 (`chat.read.advanced` 추가)
+
+지금까지 상대가 내 메시지를 읽었는지 알 방법이 없었습니다. 두 가지가 추가됩니다. 기존 필드·이벤트는 그대로라 **호환성은 깨지지 않습니다.**
+
+#### 1-1. `GET /api/v1/chat/rooms/{roomId}/messages` 응답에 `lastReadMessageId` 추가
+
+`messages`와 `page` 사이에 들어갑니다.
+
+```json
+{
+  "roomId": "1024",
+  "messages": [ ... ],
+  "lastReadMessageId": "88123",
+  "page": { "nextCursor": null, "hasMore": false }
+}
+```
+
+**`lastReadMessageId`는 "내"가 아니라 "상대"가 읽은 마지막 메시지 id입니다.** 이 id 이하의 내 메시지에 읽음 표시를 그리시면 됩니다. 상대가 아직 아무것도 읽지 않았으면 `null`입니다.
+
+#### 1-2. 새 WebSocket 이벤트 `chat.read.advanced`
+
+| 항목 | 값 |
+|---|---|
+| destination | `/user/queue/chat/rooms/{encodedRoomId}` (기존 방 큐, 추가 구독 불필요) |
+| type | `chat.read.advanced` |
+| envelope | 기존 `RealtimeEvent` 그대로 (`v:1`, `kind:'event'`, `eventId`, `occurredAt`) |
+
+```json
+{ "roomId": "1024", "lastReadMessageId": "88123" }
+```
+
+발행 조건은 두 가지입니다.
+
+- **읽은 본인에게는 가지 않습니다.** 방의 다른 활성 참여자에게만 갑니다. 내 읽음 처리 결과는 기존대로 `chat.read.committed`로 받으세요.
+- **읽음 위치가 실제로 전진했을 때만 발행됩니다.** 같은 위치로 다시 읽음 처리하거나 뒤로 가는 요청은 프레임을 만들지 않습니다.
+
+#### 받은 값을 그대로 반영하시면 됩니다
+
+**크기 비교로 걸러내실 필요가 없습니다.** 서버가 발행 순서 유지(`preservePublishOrder`)와 값의 단조 증가를 함께 보장합니다.
+
+오히려 **직접 비교하지 마세요.** id는 문자열이라 `"1000" > "999"`가 `false`가 되어, 999→1000처럼 자릿수가 바뀌는 순간 새 값을 버리고 읽음 표시가 멈춥니다. 꼭 비교해야 한다면 `BigInt`를 쓰세요.
+
+프레임을 놓쳤을 때의 복구 경로는 기존 원칙 그대로입니다 — 실시간 이벤트는 빠른 알림일 뿐이고, 진짜 출처는 REST입니다. 재연결 후 `GET /messages`의 `lastReadMessageId`로 맞추면 완전히 복구됩니다. 별도의 읽음 전용 조회 API를 만들지 않은 이유이기도 합니다.
+
+#### 프론트 체크리스트
+
+- [ ] 방 진입·재연결 시 `GET /messages`의 `lastReadMessageId`로 읽음 표시 초기화
+- [ ] `chat.read.advanced` 수신 시 받은 값을 그대로 반영 (문자열 크기 비교 금지)
+- [ ] 추가 구독 불필요 — 기존 `/user/queue/chat/rooms/{roomId}`에서 `type`으로 분기
+
+자세한 처리 방법은 [websocket-client-guide.md](websocket-client-guide.md) 7-A장에 있습니다.
+
+---
+
+## 2026-08-02
+
+### 1. **BREAKING** — 학과 입력이 기본 정보에서 빠지고, 학교 선택 → 이메일 인증 → 학과 선택 흐름으로 바뀝니다
+
+온보딩 순서가 바뀝니다. 학과는 더 이상 기본 정보 단계에서 받지 않고, **이메일 인증을 마친 뒤** 별도 단계에서 받습니다.
+
+```
+학교 선택 → 이메일 입력 → 코드 입력 → 학과 선택
+```
+
+학교 선택 단계를 둔 이유는, 가입 가능한 학교를 보여주고 **선택한 학교의 이메일 도메인을 앱이 자동 입력·고정**하기 위해서입니다. 유저가 도메인을 직접 입력하지 않습니다.
+
+#### 1-1. `PUT /api/v1/onboarding/basic-info`에서 `affiliation`이 제거됩니다
+
+| 변경 전 | 변경 후 |
+|---|---|
+| `familyName`, `givenName`, `gender`, `affiliation`, `affiliationNumber`, `birthDate` | `familyName`, `givenName`, `gender`, `affiliationNumber`, `birthDate` |
+
+`affiliation`을 계속 보내도 무시됩니다(400은 아닙니다). 다만 학과는 아래 `POST /api/v1/onboarding/affiliation`으로 보내지 않으면 저장되지 않고, 회원가입 시 `422 PROFILE_NOT_COMPLETED`가 납니다.
+
+#### 1-2. `GET /api/v1/onboarding/schools` (신규) — 가입 가능한 학교 목록
+
+인증 헤더가 필요 없습니다. 학교 이름순으로 내려옵니다.
+
+```json
+{
+  "schools": [
+    { "schoolName": "니두스대학교", "domain": "nidus.ac.kr" }
+  ]
+}
+```
+
+목록에 없는 학교는 가입할 수 없으므로, 자유 입력 fallback을 두지 마세요. 로딩 실패 시에는 재시도 UI로 처리합니다.
+
+#### 1-3. `POST /api/v1/auth/onboarding/email/send`에 서버 측 도메인 검증이 추가됩니다
+
+이메일 도메인이 `schools`에 없으면 인증번호를 보내지 않고 **422 `EMAIL_DOMAIN_NOT_SUPPORTED`** 를 반환합니다. 지금까지는 앱 UI로만 막혀 있었습니다.
+
+> 개발 빌드의 "풀 이메일 직접 입력" 우회 경로도 이 검증에 걸립니다. 테스트용 도메인이 필요하면 `schools`에 추가해야 합니다.
+
+#### 1-4. `GET /api/v1/onboarding/affiliations` (신규) — 인증한 학교의 학과 목록
+
+익명 세션 토큰이 필요합니다. **요청 파라미터는 없습니다.** 서버가 해당 세션에서 인증 완료된 이메일의 도메인으로 학교를 판별해 내려줍니다.
+
+```json
+{
+  "affiliations": ["경영학과", "컴퓨터공학과"]
+}
+```
+
+이메일 인증을 마치지 않은 상태로 호출하면 `422 EMAIL_VERIFICATION_NOT_COMPLETED`가 납니다.
+
+#### 1-5. `POST /api/v1/onboarding/affiliation` (신규) — 학과 저장
+
+```
+POST /api/v1/onboarding/affiliation
+Authorization: Bearer {anonSessionToken}
+Content-Type: application/json
+
+{ "affiliation": "컴퓨터공학과" }
+```
+
+성공 시 `200 OK`, 바디 없음. **서버는 목록 일치 여부를 검증하지 않습니다.** 신설 학과 대응을 위해 검색 결과에 없는 값도 자유 입력으로 보낼 수 있습니다. 다만 빈 문자열·공백만은 `400`입니다.
+
+#### 왜 바꿨는지
+
+이메일 도메인 검증이 앱에만 있었습니다. 앱 UI를 거치지 않은 직접 호출로 아무 도메인이나 인증번호를 받을 수 있었고, 그대로 가입까지 이어졌습니다. 학교를 서버가 알고 있어야 막을 수 있어 `schools`를 서버로 옮겼습니다.
+
+학과를 이메일 인증 뒤로 미룬 것은 그 결과입니다. 학교가 정해지기 전에는 보여줄 학과 목록을 특정할 수 없습니다. 반대로 인증이 끝나면 학교가 확정되므로, 학과 목록 조회에 **요청 파라미터가 필요 없습니다.** 클라이언트가 보낸 학교 식별자를 믿지 않아도 되고, 앱과 서버가 서로 다른 학교를 가리킬 여지도 없습니다.
+
+학과는 목록 검증을 하지 않습니다. 신설·개편 학과가 서버 데이터보다 먼저 생기는 일이 잦은데, 이때 검증을 걸면 가입 자체가 막힙니다. 학교(도메인)는 가입 자격이라 엄격하게, 학과는 프로필 항목이라 느슨하게 두는 편이 사고 비용이 낮다고 봤습니다.
+
+#### 프론트 체크리스트
+
+- [ ] 기본 정보 단계에서 `affiliation` 필드 제거 (5단계 → 4단계)
+- [ ] 이메일 입력 전 학교 선택 화면 추가 (`GET /schools`, 검색 지원, 자유 입력 없음)
+- [ ] 선택한 학교의 도메인 자동 입력·고정 (수정하려면 뒤로 가서 학교 재선택)
+- [ ] 이메일 발송 시 `422 EMAIL_DOMAIN_NOT_SUPPORTED` 처리
+- [ ] 이메일 인증 후 학과 선택 화면 추가 (`GET /affiliations` → `POST /affiliation`)
+
+---
+
 ## 2026-07-30
 
 ### 1. **BREAKING** — 약관 동의 철회 엔드포인트가 이동했습니다

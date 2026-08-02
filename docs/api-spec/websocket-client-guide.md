@@ -139,7 +139,7 @@ connect(ticket);
 | 주소 | 용도 |
 |---|---|
 | `/user/queue/chat/index` | 채팅방 목록 갱신 신호 |
-| `/user/queue/chat/rooms/{roomId}` | 특정 방의 새 메시지 |
+| `/user/queue/chat/rooms/{roomId}` | 특정 방의 새 메시지, 상대의 읽음 위치 이동 |
 | `/user/queue/chat/commands` | 내가 보낸 커맨드의 처리 결과 |
 | `/user/queue/connection/control` | **연결 제어 신호 (6장)** |
 
@@ -338,6 +338,51 @@ async function refetchAfterReconnect() {
 > **실시간 이벤트는 "빠른 알림"일 뿐이고, 데이터의 진짜 출처는 항상 REST API입니다.**
 
 이 원칙은 `chat.changed` 이벤트의 설계에도 이미 반영되어 있습니다. 이 이벤트는 변경된 내용을 담고 있지 않고 **`roomId`만** 담고 있습니다. "이 방이 바뀌었으니 다시 조회하라"는 신호이지, 데이터 전달 수단이 아닙니다.
+
+읽음 표시도 같은 원칙을 따릅니다. `chat.read.advanced`를 놓쳐도 `GET /api/v1/chat/rooms/{roomId}/messages`의 `lastReadMessageId`로 복구됩니다.
+
+---
+
+## 7-A. 읽음 표시 (`chat.read.advanced`)
+
+### 7-A-1. 언제 오는가
+
+**상대가 메시지를 읽어 읽음 위치가 앞으로 이동했을 때**, 그 방을 구독 중인 나에게 옵니다. 내가 읽음 처리했을 때 나에게는 오지 않습니다 (내 결과는 `/user/queue/chat/commands`의 `chat.read.committed`로 옵니다).
+
+```json
+{
+  "v": 1,
+  "kind": "event",
+  "type": "chat.read.advanced",
+  "eventId": "...",
+  "occurredAt": "...",
+  "payload": {
+    "roomId": "1024",
+    "lastReadMessageId": "88123"
+  }
+}
+```
+
+`lastReadMessageId`는 **상대가 읽은 마지막 메시지 id**입니다. 이 id 이하의 내 메시지에 읽음 표시를 그리시면 됩니다.
+
+### 7-A-2. 받은 값을 그대로 반영하시면 됩니다
+
+**서버가 순서와 단조 증가를 보장합니다.** 받은 `lastReadMessageId`를 그대로 저장하세요.
+
+```ts
+setPartnerLastRead(payload.lastReadMessageId);
+```
+
+크기 비교로 걸러내실 필요가 없습니다. 오히려 **직접 비교하지 마세요.** id는 문자열이라 `"1000" > "999"`가 `false`가 되어, 999→1000처럼 자릿수가 바뀌는 순간 새 값을 버리게 됩니다. 꼭 비교해야 한다면 `BigInt(a) > BigInt(b)`를 쓰세요.
+
+서버가 보장하는 것은 두 가지입니다.
+
+- **프레임이 발행 순서대로 도착합니다.** 100 다음에 105를 발행했다면 그 순서로 갑니다.
+- **뒤로 가는 값은 발행되지 않습니다.** 읽음 위치가 실제로 전진했을 때만 프레임이 나가므로, 재시도로 같은 커서를 여러 번 보내도 중복 프레임이 오지 않습니다.
+
+### 7-A-3. 초기값과 복구
+
+방에 들어갈 때와 재연결 직후에는 `GET /api/v1/chat/rooms/{roomId}/messages` 응답의 **`lastReadMessageId`** 로 초기화합니다. 같은 의미의 값이고, 상대가 아직 아무것도 읽지 않았으면 `null`입니다.
 
 ---
 
