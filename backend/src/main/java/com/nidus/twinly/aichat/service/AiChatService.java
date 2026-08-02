@@ -37,8 +37,6 @@ public class AiChatService {
         Long anonSessionId = anonSessionSnapshot.id();
         int turnIndex = 0;
 
-        // 이미 시작된 세션이면 저장된 첫 질문을 그대로 돌려준다.
-        // 모델 호출 전에 검사해야 재요청마다 비용이 새지 않는다.
         Optional<AiChat> started = aiChatRepository
                 .findByAnonSessionIdAndTurnIndexAndSender(anonSessionId, turnIndex, AiChatSender.AI);
         if (started.isPresent()) {
@@ -84,8 +82,6 @@ public class AiChatService {
         AiChat aiQuestion = aiChatRepository.findByAnonSessionIdAndTurnIndexAndSender(anonSessionId, command.turnIndex(), AiChatSender.AI)
                 .orElseThrow(() -> new BusinessException(ErrorCode.AI_QUESTION_NOT_FOUND, "해당 턴의 AI 질문이 존재하지 않습니다: " + command.turnIndex()));
 
-        // 이미 답한 턴이면 그때 만들어 둔 다음 질문을 그대로 돌려준다.
-        // 답변 저장과 다음 질문 생성이 같은 트랜잭션이라, 답변이 있으면 다음 질문도 반드시 있다.
         if (aiChatRepository.findByAnonSessionIdAndTurnIndexAndSender(anonSessionId, command.turnIndex(), AiChatSender.USER).isPresent()) {
             if (command.turnIndex() >= MAX_TURN_INDEX) {
                 return new OnboardingAiChatMessageResult(LAST_MESSAGE, command.turnIndex(), true);

@@ -432,7 +432,6 @@ public class MeService {
         question.answer(command.answer());
     }
 
-    /** 이미 처리된 망설임에 대한 재요청이 직전과 같은 내용인지 판정한다. (같으면 재전송으로 보고 멱등 처리) */
     private boolean isSameHandling(Question question, MeHesitationsAnswerCommand command) {
         if (Boolean.TRUE.equals(command.skipped())) {
             return Boolean.TRUE.equals(question.getIsSkipped());
