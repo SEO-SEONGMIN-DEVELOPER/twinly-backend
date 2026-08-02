@@ -7,6 +7,7 @@ import com.nidus.twinly.legal.repository.PolicyRepository;
 import com.nidus.twinly.support.AbstractIntegrationTest;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.BeanUtils;
@@ -31,6 +32,17 @@ class LegalIntegrationTest extends AbstractIntegrationTest {
 
     @PersistenceContext
     EntityManager entityManager;
+
+    /**
+     * V2 마이그레이션이 넣는 운영 정책명 6건을 비운다.
+     * 아래 테스트들은 응답 배열 전체를 단언하므로, 픽스처 외의 행이 있으면 개수와 순서가 어긋난다.
+     * 베이스 클래스가 @Transactional 이라 이 삭제는 테스트가 끝나면 롤백된다.
+     */
+    @BeforeEach
+    void clearSeededPolicyNames() {
+        policyRepository.deleteAllInBatch();
+        policyNameRepository.deleteAllInBatch();
+    }
 
     @Test
     @DisplayName("정책 목록 조회: 폐기된 정책명은 빠지고, 시행일이 지난 최신 버전이 실제 DB에서 조회되어 응답된다")

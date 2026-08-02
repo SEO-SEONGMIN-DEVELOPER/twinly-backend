@@ -27,6 +27,7 @@ import com.nidus.twinly.user.entity.Photo;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.PhotoRepository;
 import jakarta.persistence.EntityManager;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.BeanUtils;
@@ -92,6 +93,18 @@ class MeIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     AppNotificationFeedRepository appNotificationFeedRepository;
 
+    /**
+     * V2 마이그레이션이 넣는 운영 정책명 6건을 비운다.
+     * consents 배열의 첫 항목을 단언하는 테스트는 시드 행이 id가 더 작아 앞자리를 뺏긴다.
+     * 이 클래스에는 @Transactional 을 끄는 테스트가 있어 @BeforeEach 로 두면 삭제가 커밋되므로,
+     * 필요한 테스트에서만 호출한다.
+     */
+    private void clearSeededPolicyNames() {
+        agreementRepository.deleteAllInBatch();
+        policyRepository.deleteAllInBatch();
+        policyNameRepository.deleteAllInBatch();
+    }
+
     @Test
     @DisplayName("탈퇴 신청: 실제 유저·JWT 인증·MockMvc·DB까지 관통하여 탈퇴 신청 시각과 예정 시각이 기록된다")
     void withdraw_end_to_end() throws Exception {
@@ -115,6 +128,7 @@ class MeIntegrationTest extends AbstractIntegrationTest {
     @DisplayName("약관 동의: 동의 등록 후 목록 조회까지 관통하여 agreement 행이 생성되고 isGranted가 true로 내려온다")
     void grantConsents_and_list_end_to_end() throws Exception {
         // given: 실제 유저 + 발효된 필수 약관 1건 저장
+        clearSeededPolicyNames();
         User me = saveUser();
         PolicyName policyName = policyNameRepository.save(policyName("서비스 이용약관", "terms_of_service"));
         Policy policy = policyRepository.save(policy(policyName.getId(), 1, "https://policy/tos/1", true));
@@ -302,6 +316,7 @@ class MeIntegrationTest extends AbstractIntegrationTest {
     @DisplayName("약관 동의 철회: 선택 정책이면 동의 이력이 철회되어 조회에서 isGranted가 false가 된다")
     void revokeConsents_end_to_end() throws Exception {
         // given: 선택 정책에 이미 동의한 실제 유저
+        clearSeededPolicyNames();
         User me = saveUser();
         PolicyName name = policyNameRepository.save(policyName("마케팅 수신 동의", "marketing"));
         Policy policy = policyRepository.save(policy(name.getId(), 1, "https://example.com/marketing", false));
