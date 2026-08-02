@@ -159,6 +159,12 @@ class ActivityServiceUnitTest {
         assertThat(bubble.text()).isEqualTo("안녕");
     }
 
+    /*
+     * [멘토링 피드백]
+     * 정상 / 실패 / 경계값
+     * 잘못된 input이 실패하는지도 테스트로 작성
+     */
+
     @Test
     @DisplayName("lines JSON이 손상되어도 그 씬의 대사만 비우고 하루치 조회는 성공한다")
     void activity_broken_lines_json_does_not_fail_whole_day() {

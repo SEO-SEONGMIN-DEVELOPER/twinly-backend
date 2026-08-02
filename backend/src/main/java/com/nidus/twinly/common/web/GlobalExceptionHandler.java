@@ -20,6 +20,37 @@ import org.springframework.web.server.ResponseStatusException;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    /*
+     * [멘토링 피드백]
+     * - 에러 메시지 로그 어떻게 뜨는지 확인
+     * - 세부 타입을 에러 코드 번호로 세분화해서 나중에 에러 볼 때 가독성 높이기
+     */
+
+    /*
+     * [멘토링 피드백]
+     * CI/CD: 앱 / 백엔드 / AI 별로 어떻게 구분해서 올릴지 방법 찾아보기
+     */
+
+    /*
+     * [멘토링 피드백]
+     * API 명세서 자동 생성을 AI가 검수하게끔 플로우 만들기
+     */
+
+    /*
+     * [멘토링 피드백]
+     * 테스트 서버 자동 스케일링 이용하기
+     */
+
+    /*
+     * [멘토링 피드백]
+     * iac, 테라폼, 플로미 배워서 적용해보기 (코드로 인프라 설정)
+     */
+
+    /*
+     * [멘토링 피드백]
+     * subnet 대역이 간격이 떨어져있도록 (나중에 키울 때 )
+     */
+
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ErrorResponse> handleBusinessException(BusinessException e) {
         ErrorCode errorCode = e.getErrorCode();
