@@ -3,6 +3,7 @@ services:
     image: ${ECR_REGISTRY}/twinly:${IMAGE_TAG}
     ports:
       - "8080:8080"
+      - "8081:8081"
     env_file:
       - .env
     restart: unless-stopped
