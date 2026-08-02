@@ -26,6 +26,7 @@ import com.nidus.twinly.common.jwt.JwtService;
 import com.nidus.twinly.common.solapi.SolapiService;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
+import com.nidus.twinly.school.service.SchoolCatalog;
 import com.nidus.twinly.user.entity.PersonaElement;
 import com.nidus.twinly.user.entity.Photo;
 import com.nidus.twinly.user.entity.User;
@@ -56,6 +57,7 @@ public class AuthService {
     private final SolapiService solapiService;
     private final JwtService jwtService;
     private final VerificationService verificationService;
+    private final SchoolCatalog schoolCatalog;
 
     private final VerificationSessionRepository verificationSessionRepository;
     private final AnonSessionVerificationSessionRepository anonSessionVerificationSessionRepository;
@@ -74,6 +76,8 @@ public class AuthService {
 
     @Transactional
     public AuthEmailSendResult onboardingEmailSend(AnonSessionSnapshot anonSessionSnapshot, AuthEmailSendCommand command) {
+        schoolCatalog.requireSupportedDomain(command.email());
+
         String code = generateCode();
         Instant codeExpiresAt = Instant.now().plus(CODE_EXPIRES_MINUTES, ChronoUnit.MINUTES);
 

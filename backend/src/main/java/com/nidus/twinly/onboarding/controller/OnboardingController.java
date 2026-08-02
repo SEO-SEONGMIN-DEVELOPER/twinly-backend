@@ -5,11 +5,13 @@ import com.nidus.twinly.anon.annotation.CurrentAnonSession;
 import com.nidus.twinly.anon.dto.snapshot.AnonSessionSnapshot;
 import com.nidus.twinly.onboarding.dto.command.*;
 import com.nidus.twinly.onboarding.dto.request.*;
+import com.nidus.twinly.onboarding.dto.response.OnboardingAffiliationsResponse;
 import com.nidus.twinly.onboarding.dto.response.OnboardingAiChatMessageResponse;
 import com.nidus.twinly.onboarding.dto.response.OnboardingAiChatStartResponse;
 import com.nidus.twinly.onboarding.dto.response.OnboardingProfileNicknameCheckResponse;
 import com.nidus.twinly.onboarding.dto.response.OnboardingProfilePhotoCommitResponse;
 import com.nidus.twinly.onboarding.dto.response.OnboardingProfilePhotoPresignResponse;
+import com.nidus.twinly.onboarding.dto.response.OnboardingSchoolsResponse;
 import com.nidus.twinly.onboarding.dto.response.OnboardingSurveyQuestionResponse;
 import com.nidus.twinly.onboarding.service.OnboardingService;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -118,5 +120,24 @@ public class OnboardingController {
     public void revokeConsents(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
                                @Valid @RequestBody OnboardingRevokeConsentsRequest request) {
         onboardingService.revokeConsents(anonSessionSnapshot, OnboardingRevokeConsentsCommand.from(request));
+    }
+
+    @GetMapping("/api/v1/onboarding/schools")
+    public OnboardingSchoolsResponse schools() {
+        return OnboardingSchoolsResponse.from(onboardingService.schools());
+    }
+
+    @ApiResponses({
+            @ApiResponse(responseCode = "422", description = "EMAIL_VERIFICATION_NOT_COMPLETED, EMAIL_DOMAIN_NOT_SUPPORTED")
+    })
+    @GetMapping("/api/v1/onboarding/affiliations")
+    public OnboardingAffiliationsResponse affiliations(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot) {
+        return OnboardingAffiliationsResponse.from(onboardingService.affiliations(anonSessionSnapshot));
+    }
+
+    @PostMapping("/api/v1/onboarding/affiliation")
+    public void affiliation(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
+                            @Valid @RequestBody OnboardingAffiliationRequest request) {
+        onboardingService.affiliation(anonSessionSnapshot, OnboardingAffiliationCommand.from(request));
     }
 }

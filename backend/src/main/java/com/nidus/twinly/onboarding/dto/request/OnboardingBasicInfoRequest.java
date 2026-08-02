@@ -12,7 +12,6 @@ public record OnboardingBasicInfoRequest(
         @NotBlank @Size(max = 50) String familyName,
         @NotBlank @Size(max = 50) String givenName,
         @NotNull Gender gender,
-        @NotBlank @Size(max = 50) String affiliation,
         @NotBlank @Size(max = 50) String affiliationNumber,
         @NotNull @Past LocalDate birthDate
 ) {

@@ -9,6 +9,9 @@ import com.nidus.twinly.anon.repository.AnonSessionAgreementRepository;
 import com.nidus.twinly.anon.repository.AnonSessionPersonaElementRepository;
 import com.nidus.twinly.anon.repository.AnonSessionPhotoRepository;
 import com.nidus.twinly.anon.repository.AnonSessionRepository;
+import com.nidus.twinly.auth.entity.AnonSessionVerificationSession;
+import com.nidus.twinly.auth.repository.AnonSessionVerificationSessionRepository;
+import com.nidus.twinly.common.domain.VerificationType;
 import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.common.photo.PhotoPosInfo;
 import com.nidus.twinly.common.photo.PhotoType;
@@ -24,11 +27,19 @@ import com.nidus.twinly.legal.repository.PolicyRepository.PolicySummary;
 import com.nidus.twinly.legal.service.PolicyCatalog;
 import com.nidus.twinly.legal.service.PolicyCatalog.PolicyKey;
 import com.nidus.twinly.onboarding.dto.command.*;
+import com.nidus.twinly.onboarding.dto.result.OnboardingAffiliationsResult;
 import com.nidus.twinly.onboarding.dto.result.OnboardingProfileNicknameCheckResult;
 import com.nidus.twinly.onboarding.dto.result.OnboardingProfilePhotoCommitResult;
 import com.nidus.twinly.onboarding.dto.result.OnboardingProfilePhotoPresignResult;
+import com.nidus.twinly.onboarding.dto.result.OnboardingSchoolsItemResult;
+import com.nidus.twinly.onboarding.dto.result.OnboardingSchoolsResult;
 import com.nidus.twinly.onboarding.entity.SurveyAnswer;
 import com.nidus.twinly.onboarding.repository.SurveyAnswerRepository;
+import com.nidus.twinly.school.entity.School;
+import com.nidus.twinly.school.entity.SchoolAffiliation;
+import com.nidus.twinly.school.repository.SchoolAffiliationRepository;
+import com.nidus.twinly.school.repository.SchoolRepository;
+import com.nidus.twinly.school.service.SchoolCatalog;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -55,8 +66,12 @@ public class OnboardingService {
 
     private final PresignService presignService;
     private final PhotoCommitService photoCommitService;
+    private final SchoolCatalog schoolCatalog;
 
     private final AnonSessionRepository anonSessionRepository;
+    private final AnonSessionVerificationSessionRepository anonSessionVerificationSessionRepository;
+    private final SchoolRepository schoolRepository;
+    private final SchoolAffiliationRepository schoolAffiliationRepository;
     private final AnonSessionPhotoRepository anonSessionPhotoRepository;
     private final AnonSessionPersonaElementRepository anonSessionPersonaElementRepository;
     private final AnonSessionAgreementRepository anonSessionAgreementRepository;
@@ -75,7 +90,6 @@ public class OnboardingService {
         anonSession.changeFamilyName(command.familyName());
         anonSession.changeGivenName(command.givenName());
         anonSession.changeGender(command.gender());
-        anonSession.changeAffiliation(command.affiliation());
         anonSession.changeAffiliationNumber(command.affiliationNumber());
         anonSession.changeBirthDate(command.birthDate().toString());
     }
@@ -267,5 +281,38 @@ public class OnboardingService {
         }
 
         return trimmed;
+    }
+
+    public OnboardingSchoolsResult schools() {
+        List<OnboardingSchoolsItemResult> schools = schoolRepository.findAllByOrderByNameAsc().stream()
+                .map(school -> new OnboardingSchoolsItemResult(school.getName(), school.getDomain()))
+                .toList();
+
+        return new OnboardingSchoolsResult(schools);
+    }
+
+    public OnboardingAffiliationsResult affiliations(AnonSessionSnapshot anonSessionSnapshot) {
+        School school = schoolCatalog.findByEmail(verifiedEmail(anonSessionSnapshot.id()));
+
+        List<String> affiliations = schoolAffiliationRepository.findAllBySchoolIdOrderByNameAsc(school.getId()).stream()
+                .map(SchoolAffiliation::getName)
+                .toList();
+
+        return new OnboardingAffiliationsResult(affiliations);
+    }
+
+    @Transactional
+    public void affiliation(AnonSessionSnapshot anonSessionSnapshot, OnboardingAffiliationCommand command) {
+        AnonSession anonSession = anonSessionRepository.findById(anonSessionSnapshot.id())
+                .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_ANON_SESSION));
+
+        anonSession.changeAffiliation(command.affiliation().trim());
+    }
+
+    private String verifiedEmail(Long anonSessionId) {
+        return anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(anonSessionId, VerificationType.EMAIL)
+                .filter(session -> session.getVerifiedAt() != null)
+                .map(AnonSessionVerificationSession::getContact)
+                .orElseThrow(() -> new BusinessException(ErrorCode.EMAIL_VERIFICATION_NOT_COMPLETED));
     }
 }

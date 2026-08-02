@@ -13,6 +13,7 @@ import com.nidus.twinly.common.survey.SurveyOptionName;
 import com.nidus.twinly.common.survey.SurveyQuestion;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
+import com.nidus.twinly.onboarding.dto.command.OnboardingAffiliationCommand;
 import com.nidus.twinly.onboarding.dto.command.OnboardingAiChatMessageCommand;
 import com.nidus.twinly.onboarding.dto.command.OnboardingBasicInfoCommand;
 import com.nidus.twinly.onboarding.dto.command.OnboardingGrantConsentsCommand;
@@ -25,11 +26,14 @@ import com.nidus.twinly.onboarding.dto.command.OnboardingProfilePhotoPresignComm
 import com.nidus.twinly.onboarding.dto.command.OnboardingRevokeConsentsCommand;
 import com.nidus.twinly.onboarding.dto.command.OnboardingRevokeConsentsItemCommand;
 import com.nidus.twinly.onboarding.dto.command.OnboardingSurveyAnswerCommand;
+import com.nidus.twinly.onboarding.dto.result.OnboardingAffiliationsResult;
 import com.nidus.twinly.onboarding.dto.result.OnboardingAiChatMessageResult;
 import com.nidus.twinly.onboarding.dto.result.OnboardingAiChatStartResult;
 import com.nidus.twinly.onboarding.dto.result.OnboardingProfileNicknameCheckResult;
 import com.nidus.twinly.onboarding.dto.result.OnboardingProfilePhotoCommitResult;
 import com.nidus.twinly.onboarding.dto.result.OnboardingProfilePhotoPresignResult;
+import com.nidus.twinly.onboarding.dto.result.OnboardingSchoolsItemResult;
+import com.nidus.twinly.onboarding.dto.result.OnboardingSchoolsResult;
 import com.nidus.twinly.onboarding.service.OnboardingService;
 import com.nidus.twinly.user.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
@@ -105,6 +109,78 @@ class OnboardingControllerUnitTest {
     }
 
     @Test
+    @DisplayName("학교 목록 조회는 익명 세션 없이도 200과 schools 배열을 반환한다")
+    void schools_success() throws Exception {
+        // given: 가입 가능한 학교 1곳
+        given(onboardingService.schools()).willReturn(new OnboardingSchoolsResult(
+                List.of(new OnboardingSchoolsItemResult("니두스대학교", "nidus.ac.kr"))));
+
+        // when: 인증 헤더 없이 학교 목록 API 호출 (이메일 입력 전 단계라 세션 유무와 무관)
+        var result = mockMvc.perform(get("/api/v1/onboarding/schools"));
+
+        // then: 앱이 도메인을 고정 입력할 수 있도록 이름과 도메인이 함께 나감
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.schools[0].schoolName").value("니두스대학교"))
+                .andExpect(jsonPath("$.schools[0].domain").value("nidus.ac.kr"));
+    }
+
+    @Test
+    @DisplayName("학과 목록 조회 성공 시 200과 affiliations 배열을 반환하고 익명 세션으로 서비스를 호출한다")
+    void affiliations_success() throws Exception {
+        // given: 인증한 학교의 학과 2개
+        given(onboardingService.affiliations(ANON_SESSION))
+                .willReturn(new OnboardingAffiliationsResult(List.of("경영학과", "컴퓨터공학과")));
+
+        // when: 익명 세션 인증 상태로 학과 목록 API 호출 (요청 파라미터 없음)
+        var result = mockMvc.perform(get("/api/v1/onboarding/affiliations")
+                .header("Authorization", ANON_BEARER));
+
+        // then: 200 반환 + 문자열 배열로 응답
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.affiliations[0]").value("경영학과"))
+                .andExpect(jsonPath("$.affiliations[1]").value("컴퓨터공학과"));
+        then(onboardingService).should().affiliations(ANON_SESSION);
+    }
+
+    @Test
+    @DisplayName("학과 입력 성공 시 200을 반환하고 익명 세션과 커맨드로 서비스를 호출한다")
+    void affiliation_success() throws Exception {
+        // when: 익명 세션 인증 상태로 학과 입력 API 호출
+        var result = mockMvc.perform(post("/api/v1/onboarding/affiliation")
+                .header("Authorization", ANON_BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .characterEncoding("UTF-8")
+                .content("""
+                        {
+                          "affiliation": "컴퓨터공학과"
+                        }
+                        """));
+
+        // then: 200 반환 + 익명 세션 스냅샷과 변환된 커맨드로 서비스에 위임
+        result.andExpect(status().isOk());
+        then(onboardingService).should().affiliation(ANON_SESSION, new OnboardingAffiliationCommand("컴퓨터공학과"));
+    }
+
+    @Test
+    @DisplayName("학과 입력에 affiliation이 비어 있으면 400을 반환하고 서비스를 호출하지 않는다")
+    void affiliation_with_blank_value_returns_400() throws Exception {
+        // when: 공백만 담아 학과 입력 API 호출
+        var result = mockMvc.perform(post("/api/v1/onboarding/affiliation")
+                .header("Authorization", ANON_BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .characterEncoding("UTF-8")
+                .content("""
+                        {
+                          "affiliation": "   "
+                        }
+                        """));
+
+        // then: 자유 입력이라도 빈 값은 막는다
+        result.andExpect(status().isBadRequest());
+        then(onboardingService).should(never()).affiliation(any(), any());
+    }
+
+    @Test
     @DisplayName("기본 정보 입력 성공 시 200을 반환하고 익명 세션과 요청 값으로 만든 커맨드로 서비스를 호출한다")
     void basicInfo_success() throws Exception {
         // when: 익명 세션 인증 상태로 기본 정보 입력 API 호출
@@ -117,7 +193,6 @@ class OnboardingControllerUnitTest {
                           "familyName": "홍",
                           "givenName": "길동",
                           "gender": "male",
-                          "affiliation": "니두스대학교",
                           "affiliationNumber": "2024001",
                           "birthDate": "2000-01-01"
                         }
@@ -126,7 +201,7 @@ class OnboardingControllerUnitTest {
         // then: 200 반환 + 익명 세션 스냅샷과 변환된 커맨드로 서비스에 위임
         result.andExpect(status().isOk());
         then(onboardingService).should().basicInfo(ANON_SESSION, new OnboardingBasicInfoCommand(
-                "홍", "길동", Gender.MALE, "니두스대학교", "2024001", LocalDate.of(2000, 1, 1)));
+                "홍", "길동", Gender.MALE, "2024001", LocalDate.of(2000, 1, 1)));
     }
 
     @Test

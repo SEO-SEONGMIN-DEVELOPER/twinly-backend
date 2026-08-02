@@ -22,7 +22,10 @@ public class AuthController {
 
     private final AuthService authService;
 
-    @ApiResponse(responseCode = "502", description = "EMAIL_SEND_FAILED")
+    @ApiResponses({
+            @ApiResponse(responseCode = "422", description = "EMAIL_DOMAIN_NOT_SUPPORTED"),
+            @ApiResponse(responseCode = "502", description = "EMAIL_SEND_FAILED")
+    })
     @PostMapping("/api/v1/auth/onboarding/email/send")
     public AuthEmailSendResponse onboardingEmailSend(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
                                                      @Valid @RequestBody AuthEmailSendRequest request) {

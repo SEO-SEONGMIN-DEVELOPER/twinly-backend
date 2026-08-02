@@ -33,6 +33,7 @@ import com.nidus.twinly.common.solapi.SolapiService;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.legal.repository.AgreementRepository;
+import com.nidus.twinly.school.service.SchoolCatalog;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.PersonaElementRepository;
 import com.nidus.twinly.user.repository.PhotoRepository;
@@ -61,6 +62,7 @@ import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 
@@ -137,6 +139,9 @@ class AuthServiceUnitTest {
     @Mock
     BlindIndexHasher blindIndexHasher;
 
+    @Mock
+    SchoolCatalog schoolCatalog;
+
     @InjectMocks
     AuthService authService;
 
@@ -188,6 +193,23 @@ class AuthServiceUnitTest {
         assertThat(existing.getVerificationToken()).isNotEqualTo(oldToken);
         assertThat(existing.getVerifiedAt()).isNull();
         assertThat(result.emailVerificationToken()).isEqualTo(existing.getVerificationToken());
+    }
+
+    @Test
+    @DisplayName("온보딩 이메일 발송: 가입 가능한 학교의 도메인이 아니면 인증 세션을 만들지도, 메일을 보내지도 않는다")
+    void onboardingEmailSend_with_unsupported_domain_throws() {
+        // given: 학교 목록에 없는 도메인
+        willThrow(new BusinessException(ErrorCode.EMAIL_DOMAIN_NOT_SUPPORTED)).given(schoolCatalog).requireSupportedDomain(EMAIL);
+
+        // when & then: EMAIL_DOMAIN_NOT_SUPPORTED 예외가 발생
+        assertThatThrownBy(() -> authService.onboardingEmailSend(SNAPSHOT, new AuthEmailSendCommand(EMAIL)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.EMAIL_DOMAIN_NOT_SUPPORTED);
+
+        // then: 도메인 검증이 코드 발급보다 앞서므로 저장·발송이 일어나지 않음
+        then(anonSessionVerificationSessionRepository).should(never()).save(any());
+        then(sesService).should(never()).send(anyString(), anyString(), anyString());
     }
 
     @Test

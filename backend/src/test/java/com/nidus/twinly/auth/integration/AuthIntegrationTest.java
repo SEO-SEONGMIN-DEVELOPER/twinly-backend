@@ -20,6 +20,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -31,6 +32,7 @@ import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willDoNothing;
+import static org.mockito.Mockito.never;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -52,13 +54,17 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     BlindIndexHasher blindIndexHasher;
 
+    @Autowired
+    JdbcTemplate jdbcTemplate;
+
     @Test
     @DisplayName("온보딩 이메일 인증번호 발송: 실제 익명 세션 인증을 통과해 인증 세션이 DB에 생성되고 코드가 메일로 나간다")
     void onboarding_email_send_end_to_end() throws Exception {
-        // given: 실제 익명 세션을 DB에 저장하고, 외부 메일 발송은 목으로 차단
+        // given: 실제 익명 세션과 가입 가능한 학교를 DB에 저장하고, 외부 메일 발송은 목으로 차단
         UUID anonToken = UUID.randomUUID();
         AnonSession anonSession = anonSessionRepository.save(
                 AnonSession.create(anonToken, Instant.now().plus(Duration.ofDays(1))));
+        saveSchool("니두스대학교", "nidus.ac.kr");
         willDoNothing().given(sesService).send(anyString(), anyString(), anyString());
 
         // when: 익명 세션 토큰을 Bearer로 붙여 온보딩 이메일 발송 API 호출
@@ -66,7 +72,7 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
                         .header("Authorization", "Bearer " + anonToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"email":"onboarding@test.com"}
+                                {"email":"onboarding@nidus.ac.kr"}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.emailVerificationToken").exists())
@@ -77,12 +83,38 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
         AnonSessionVerificationSession session = anonSessionVerificationSessionRepository
                 .findByAnonSessionIdAndType(anonSession.getId(), VerificationType.EMAIL)
                 .orElseThrow();
-        assertThat(session.getContact()).isEqualTo("onboarding@test.com");
+        assertThat(session.getContact()).isEqualTo("onboarding@nidus.ac.kr");
         assertThat(session.getCode()).hasSize(6).containsOnlyDigits();
         assertThat(session.getVerifiedAt()).isNull();
         assertThat(responseBody).contains(session.getVerificationToken().toString());
 
-        then(sesService).should().send(eq("onboarding@test.com"), anyString(), contains(session.getCode()));
+        then(sesService).should().send(eq("onboarding@nidus.ac.kr"), anyString(), contains(session.getCode()));
+    }
+
+    @Test
+    @DisplayName("온보딩 이메일 인증번호 발송: 가입 가능한 학교 도메인이 아니면 422를 반환하고 인증 세션도 메일도 생기지 않는다")
+    void onboarding_email_send_with_unsupported_domain_returns_422() throws Exception {
+        // given: 학교 목록에는 니두스대학교만 등록되어 있음
+        UUID anonToken = UUID.randomUUID();
+        AnonSession anonSession = anonSessionRepository.save(
+                AnonSession.create(anonToken, Instant.now().plus(Duration.ofDays(1))));
+        saveSchool("니두스대학교", "nidus.ac.kr");
+
+        // when: 목록에 없는 도메인으로 발송 요청 (앱 UI를 우회한 직접 호출)
+        mockMvc.perform(post("/api/v1/auth/onboarding/email/send")
+                        .header("Authorization", "Bearer " + anonToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"someone@gmail.com"}
+                                """))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value(ErrorCode.EMAIL_DOMAIN_NOT_SUPPORTED.name()));
+
+        // then: 인증 세션이 생기지 않고 메일도 나가지 않음
+        assertThat(anonSessionVerificationSessionRepository
+                .findByAnonSessionIdAndType(anonSession.getId(), VerificationType.EMAIL))
+                .isEmpty();
+        then(sesService).should(never()).send(anyString(), anyString(), anyString());
     }
 
     @Test
@@ -586,6 +618,11 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
     }
 
     /** 지정한 전화번호·이메일로 실제 users 행을 만든다 (블라인드 인덱스 해시 포함). */
+    /** 가입 가능한 학교를 직접 insert한다. (운영에서도 마이그레이션 SQL로 주입되는 카탈로그 데이터) */
+    private void saveSchool(String name, String domain) {
+        jdbcTemplate.update("INSERT INTO schools (name, domain) VALUES (?, ?)", name, domain);
+    }
+
     private User saveUserWith(String phone, String email) {
         return userRepository.save(User.create(
                 "nick-" + phone,

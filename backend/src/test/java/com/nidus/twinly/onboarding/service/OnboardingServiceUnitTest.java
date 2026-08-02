@@ -9,7 +9,10 @@ import com.nidus.twinly.anon.repository.AnonSessionAgreementRepository;
 import com.nidus.twinly.anon.repository.AnonSessionPersonaElementRepository;
 import com.nidus.twinly.anon.repository.AnonSessionPhotoRepository;
 import com.nidus.twinly.anon.repository.AnonSessionRepository;
+import com.nidus.twinly.auth.entity.AnonSessionVerificationSession;
+import com.nidus.twinly.auth.repository.AnonSessionVerificationSessionRepository;
 import com.nidus.twinly.common.domain.Gender;
+import com.nidus.twinly.common.domain.VerificationType;
 import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.common.photo.PhotoPosInfo;
 import com.nidus.twinly.common.photo.PhotoType;
@@ -27,6 +30,7 @@ import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.legal.repository.PolicyRepository.PolicySummary;
 import com.nidus.twinly.legal.service.PolicyCatalog;
 import com.nidus.twinly.legal.service.PolicyCatalog.PolicyKey;
+import com.nidus.twinly.onboarding.dto.command.OnboardingAffiliationCommand;
 import com.nidus.twinly.onboarding.dto.command.OnboardingBasicInfoCommand;
 import com.nidus.twinly.onboarding.dto.command.OnboardingGrantConsentsCommand;
 import com.nidus.twinly.onboarding.dto.command.OnboardingGrantConsentsItemCommand;
@@ -38,13 +42,23 @@ import com.nidus.twinly.onboarding.dto.command.OnboardingProfilePhotoPresignComm
 import com.nidus.twinly.onboarding.dto.command.OnboardingRevokeConsentsCommand;
 import com.nidus.twinly.onboarding.dto.command.OnboardingRevokeConsentsItemCommand;
 import com.nidus.twinly.onboarding.dto.command.OnboardingSurveyAnswerCommand;
+import com.nidus.twinly.onboarding.dto.result.OnboardingAffiliationsResult;
 import com.nidus.twinly.onboarding.dto.result.OnboardingProfileNicknameCheckResult;
 import com.nidus.twinly.onboarding.dto.result.OnboardingProfilePhotoCommitResult;
 import com.nidus.twinly.onboarding.dto.result.OnboardingProfilePhotoPresignResult;
+import com.nidus.twinly.onboarding.dto.result.OnboardingSchoolsItemResult;
+import com.nidus.twinly.onboarding.dto.result.OnboardingSchoolsResult;
 import com.nidus.twinly.onboarding.entity.SurveyAnswer;
 import com.nidus.twinly.onboarding.repository.SurveyAnswerRepository;
+import com.nidus.twinly.school.entity.School;
+import com.nidus.twinly.school.entity.SchoolAffiliation;
+import com.nidus.twinly.school.repository.SchoolAffiliationRepository;
+import com.nidus.twinly.school.repository.SchoolRepository;
+import com.nidus.twinly.school.service.SchoolCatalog;
 import com.nidus.twinly.user.repository.UserRepository;
+import org.springframework.beans.BeanUtils;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -124,13 +138,25 @@ class OnboardingServiceUnitTest {
     @Mock
     SurveyLoader surveyLoader;
 
+    @Mock
+    SchoolCatalog schoolCatalog;
+
+    @Mock
+    SchoolRepository schoolRepository;
+
+    @Mock
+    SchoolAffiliationRepository schoolAffiliationRepository;
+
+    @Mock
+    AnonSessionVerificationSessionRepository anonSessionVerificationSessionRepository;
+
     @InjectMocks
     OnboardingService onboardingService;
 
     // ---------- basic-info ----------
 
     @Test
-    @DisplayName("기본 정보 입력 시 익명 세션의 이름·성별·소속·생년월일이 갱신된다")
+    @DisplayName("기본 정보 입력 시 익명 세션의 이름·성별·학번·생년월일이 갱신된다")
     void basicInfo_updates_anon_session() {
         // given: 아직 아무 정보도 없는 익명 세션
         AnonSession anonSession = AnonSession.create(UUID.randomUUID(), Instant.now().plusSeconds(3600));
@@ -138,15 +164,29 @@ class OnboardingServiceUnitTest {
 
         // when: 기본 정보 입력
         onboardingService.basicInfo(ANON_SESSION, new OnboardingBasicInfoCommand(
-                "홍", "길동", Gender.MALE, "니두스대학교", "2024001", LocalDate.of(2000, 1, 1)));
+                "홍", "길동", Gender.MALE, "2024001", LocalDate.of(2000, 1, 1)));
 
         // then: 세션 엔티티의 각 필드가 갱신되고 생년월일은 문자열로 저장됨
         assertThat(anonSession.getFamilyName()).isEqualTo("홍");
         assertThat(anonSession.getGivenName()).isEqualTo("길동");
         assertThat(anonSession.getGender()).isEqualTo(Gender.MALE);
-        assertThat(anonSession.getAffiliation()).isEqualTo("니두스대학교");
         assertThat(anonSession.getAffiliationNumber()).isEqualTo("2024001");
         assertThat(anonSession.getBirthDate()).isEqualTo("2000-01-01");
+    }
+
+    @Test
+    @DisplayName("기본 정보 입력은 학과를 건드리지 않는다")
+    void basicInfo_does_not_touch_affiliation() {
+        // given: 학과가 아직 비어 있는 익명 세션
+        AnonSession anonSession = AnonSession.create(UUID.randomUUID(), Instant.now().plusSeconds(3600));
+        given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(anonSession));
+
+        // when: 기본 정보 입력
+        onboardingService.basicInfo(ANON_SESSION, new OnboardingBasicInfoCommand(
+                "홍", "길동", Gender.MALE, "2024001", LocalDate.of(2000, 1, 1)));
+
+        // then: 학과는 별도 단계에서 채워지므로 여전히 비어 있음
+        assertThat(anonSession.getAffiliation()).isNull();
     }
 
     @Test
@@ -157,10 +197,106 @@ class OnboardingServiceUnitTest {
 
         // when & then: INVALID_ANON_SESSION 예외 발생
         assertThatThrownBy(() -> onboardingService.basicInfo(ANON_SESSION, new OnboardingBasicInfoCommand(
-                "홍", "길동", Gender.MALE, "니두스대학교", "2024001", LocalDate.of(2000, 1, 1))))
+                "홍", "길동", Gender.MALE, "2024001", LocalDate.of(2000, 1, 1))))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.INVALID_ANON_SESSION);
+    }
+
+    // ---------- 학교/학과 ----------
+
+    @Test
+    @DisplayName("학교 목록 조회는 저장된 학교의 이름과 이메일 도메인을 그대로 반환한다")
+    void schools_returns_name_and_domain() {
+        // given: 가입 가능한 학교 1곳이 등록되어 있음
+        given(schoolRepository.findAllByOrderByNameAsc()).willReturn(List.of(school(1L, "니두스대학교", "nidus.ac.kr")));
+
+        // when: 학교 목록 조회
+        OnboardingSchoolsResult result = onboardingService.schools();
+
+        // then: 앱이 도메인을 자동 입력할 수 있도록 이름과 도메인이 함께 나감
+        assertThat(result.schools()).containsExactly(new OnboardingSchoolsItemResult("니두스대학교", "nidus.ac.kr"));
+    }
+
+    @Test
+    @DisplayName("학과 목록은 인증 완료된 이메일이 속한 학교의 학과만 반환한다")
+    void affiliations_returns_affiliations_of_verified_school() {
+        // given: 이메일 인증이 끝난 세션과, 그 도메인에 해당하는 학교의 학과 2개
+        given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.EMAIL))
+                .willReturn(Optional.of(verifiedEmailSession("student@nidus.ac.kr")));
+        given(schoolCatalog.findByEmail("student@nidus.ac.kr")).willReturn(school(1L, "니두스대학교", "nidus.ac.kr"));
+        given(schoolAffiliationRepository.findAllBySchoolIdOrderByNameAsc(1L))
+                .willReturn(List.of(schoolAffiliation("경영학과"), schoolAffiliation("컴퓨터공학과")));
+
+        // when: 학과 목록 조회
+        OnboardingAffiliationsResult result = onboardingService.affiliations(ANON_SESSION);
+
+        // then: 요청 파라미터 없이 서버가 판별한 학교의 학과가 이름만 담겨 나감
+        assertThat(result.affiliations()).containsExactly("경영학과", "컴퓨터공학과");
+    }
+
+    @Test
+    @DisplayName("이메일 인증을 마치지 않은 세션이 학과 목록을 조회하면 EMAIL_VERIFICATION_NOT_COMPLETED 예외가 발생한다")
+    void affiliations_when_email_not_verified_throws() {
+        // given: 인증번호는 받았지만 아직 확인하지 않은 세션
+        AnonSessionVerificationSession notVerified = AnonSessionVerificationSession.create(
+                VerificationType.EMAIL, ANON_SESSION_ID, "student@nidus.ac.kr", "123456", Instant.now().plusSeconds(60));
+        given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.EMAIL))
+                .willReturn(Optional.of(notVerified));
+
+        // when & then: 학교를 특정할 수 없으므로 거절
+        assertThatThrownBy(() -> onboardingService.affiliations(ANON_SESSION))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.EMAIL_VERIFICATION_NOT_COMPLETED);
+    }
+
+    @Test
+    @DisplayName("학과 입력은 목록에 없는 값이어도 저장하고 앞뒤 공백을 제거한다")
+    void affiliation_saves_free_text() {
+        // given: 학과가 비어 있는 익명 세션
+        AnonSession anonSession = AnonSession.create(UUID.randomUUID(), Instant.now().plusSeconds(3600));
+        given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(anonSession));
+
+        // when: 목록에 없는 신설 학과를 자유 입력
+        onboardingService.affiliation(ANON_SESSION, new OnboardingAffiliationCommand("  신설학과 "));
+
+        // then: 목록 일치 검증 없이 저장되고 공백은 제거됨
+        assertThat(anonSession.getAffiliation()).isEqualTo("신설학과");
+    }
+
+    @Test
+    @DisplayName("학과 입력 시 익명 세션이 없으면 INVALID_ANON_SESSION 예외가 발생한다")
+    void affiliation_when_session_not_found_throws() {
+        // given: 세션 조회 결과 없음
+        given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.empty());
+
+        // when & then: INVALID_ANON_SESSION 예외 발생
+        assertThatThrownBy(() -> onboardingService.affiliation(ANON_SESSION, new OnboardingAffiliationCommand("컴퓨터공학과")))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_ANON_SESSION);
+    }
+
+    private School school(Long id, String name, String domain) {
+        School school = BeanUtils.instantiateClass(School.class);
+        ReflectionTestUtils.setField(school, "id", id);
+        ReflectionTestUtils.setField(school, "name", name);
+        ReflectionTestUtils.setField(school, "domain", domain);
+        return school;
+    }
+
+    private SchoolAffiliation schoolAffiliation(String name) {
+        SchoolAffiliation affiliation = BeanUtils.instantiateClass(SchoolAffiliation.class);
+        ReflectionTestUtils.setField(affiliation, "name", name);
+        return affiliation;
+    }
+
+    private AnonSessionVerificationSession verifiedEmailSession(String email) {
+        AnonSessionVerificationSession session = AnonSessionVerificationSession.create(
+                VerificationType.EMAIL, ANON_SESSION_ID, email, "123456", Instant.now().plusSeconds(60));
+        session.verify();
+        return session;
     }
 
     // ---------- survey ----------

@@ -11,8 +11,11 @@ import com.nidus.twinly.anon.repository.AnonSessionAgreementRepository;
 import com.nidus.twinly.anon.repository.AnonSessionPersonaElementRepository;
 import com.nidus.twinly.anon.repository.AnonSessionPhotoRepository;
 import com.nidus.twinly.anon.repository.AnonSessionRepository;
+import com.nidus.twinly.auth.entity.AnonSessionVerificationSession;
+import com.nidus.twinly.auth.repository.AnonSessionVerificationSessionRepository;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
 import com.nidus.twinly.common.domain.Gender;
+import com.nidus.twinly.common.domain.VerificationType;
 import com.nidus.twinly.common.photo.PhotoType;
 import com.nidus.twinly.common.survey.SurveyOptionName;
 import com.nidus.twinly.common.web.ErrorCode;
@@ -66,6 +69,9 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     AnonSessionPhotoRepository anonSessionPhotoRepository;
 
+    @Autowired
+    AnonSessionVerificationSessionRepository anonSessionVerificationSessionRepository;
+
     // CloudFront 서명 URL 생성은 실제 키가 필요하므로 목으로 대체한다.
     @MockitoBean
     CloudFrontService cloudFrontService;
@@ -92,7 +98,6 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
                                   "familyName": "홍",
                                   "givenName": "길동",
                                   "gender": "male",
-                                  "affiliation": "니두스대학교",
                                   "affiliationNumber": "2024001",
                                   "birthDate": "2000-01-01"
                                 }
@@ -105,9 +110,89 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
         assertThat(reloaded.getFamilyName()).isEqualTo("홍");
         assertThat(reloaded.getGivenName()).isEqualTo("길동");
         assertThat(reloaded.getGender()).isEqualTo(Gender.MALE);
-        assertThat(reloaded.getAffiliation()).isEqualTo("니두스대학교");
         assertThat(reloaded.getAffiliationNumber()).isEqualTo("2024001");
         assertThat(reloaded.getBirthDate()).isEqualTo("2000-01-01");
+    }
+
+    @Test
+    @DisplayName("학교 목록: 인증 헤더 없이도 DB에 등록된 학교가 이름순으로 내려온다")
+    void schools_end_to_end() throws Exception {
+        // given: 가입 가능한 학교 2곳을 이름 역순으로 저장
+        saveSchool("트윈리대학교", "twinly.ac.kr");
+        saveSchool("니두스대학교", "nidus.ac.kr");
+        flushAndClear();
+
+        // when: 인증 없이 학교 목록 조회
+        var result = mockMvc.perform(get("/api/v1/onboarding/schools"));
+
+        // then: 이름순으로 정렬되어 이름·도메인이 함께 내려온다
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.schools[0].schoolName").value("니두스대학교"))
+                .andExpect(jsonPath("$.schools[0].domain").value("nidus.ac.kr"))
+                .andExpect(jsonPath("$.schools[1].schoolName").value("트윈리대학교"));
+    }
+
+    @Test
+    @DisplayName("학과 목록: 요청 파라미터 없이 인증된 이메일의 학교 학과만 내려오고 다른 학교 학과는 섞이지 않는다")
+    void affiliations_end_to_end() throws Exception {
+        // given: 학교 2곳과 각각의 학과, 그리고 니두스대학교 이메일로 인증을 마친 익명 세션
+        Long nidusId = saveSchool("니두스대학교", "nidus.ac.kr");
+        saveSchoolAffiliation(nidusId, "컴퓨터공학과");
+        saveSchoolAffiliation(nidusId, "경영학과");
+        Long twinlyId = saveSchool("트윈리대학교", "twinly.ac.kr");
+        saveSchoolAffiliation(twinlyId, "의예과");
+
+        AnonSession session = saveAnonSession();
+        saveVerifiedEmailSession(session.getId(), "student@nidus.ac.kr");
+        flushAndClear();
+
+        // when: 익명 세션 토큰만 붙여 학과 목록 조회
+        var result = mockMvc.perform(get("/api/v1/onboarding/affiliations")
+                .header("Authorization", anonBearer(session)));
+
+        // then: 인증한 학교의 학과만 이름순으로 내려온다
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.affiliations.length()").value(2))
+                .andExpect(jsonPath("$.affiliations[0]").value("경영학과"))
+                .andExpect(jsonPath("$.affiliations[1]").value("컴퓨터공학과"));
+    }
+
+    @Test
+    @DisplayName("학과 목록: 이메일 인증을 마치지 않았으면 422 EMAIL_VERIFICATION_NOT_COMPLETED를 반환한다")
+    void affiliations_without_verified_email_returns_422() throws Exception {
+        // given: 인증 세션이 전혀 없는 익명 세션
+        AnonSession session = saveAnonSession();
+        flushAndClear();
+
+        // when: 학과 목록 조회
+        var result = mockMvc.perform(get("/api/v1/onboarding/affiliations")
+                .header("Authorization", anonBearer(session)));
+
+        // then: 학교를 특정할 수 없으므로 거절
+        result.andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value(ErrorCode.EMAIL_VERIFICATION_NOT_COMPLETED.name()));
+    }
+
+    @Test
+    @DisplayName("학과 입력: 목록에 없는 학과도 저장되어 익명 세션의 암호화 컬럼에 반영된다")
+    void affiliation_end_to_end() throws Exception {
+        // given: 실제 익명 세션 저장
+        AnonSession session = saveAnonSession();
+
+        // when: 학교 학과 목록에 없는 신설 학과를 자유 입력
+        mockMvc.perform(post("/api/v1/onboarding/affiliation")
+                        .header("Authorization", anonBearer(session))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content("""
+                                {"affiliation": "인공지능학과"}
+                                """))
+                .andExpect(status().isOk());
+
+        // then: 목록 일치 검증 없이 DB에 저장됨
+        flushAndClear();
+        assertThat(anonSessionRepository.findById(session.getId()).orElseThrow().getAffiliation())
+                .isEqualTo("인공지능학과");
     }
 
     @Test
@@ -538,6 +623,30 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
     /** 익명 세션 토큰(UUID)으로 Authorization 헤더 값을 만든다. */
     private String anonBearer(AnonSession session) {
         return "Bearer " + session.getToken();
+    }
+
+    /** 학교를 직접 insert하고 schools.id를 반환한다. (운영에서도 마이그레이션 SQL로 주입되는 카탈로그 데이터) */
+    private Long saveSchool(String name, String domain) {
+        jdbcTemplate.update("INSERT INTO schools (name, domain) VALUES (?, ?)", name, domain);
+        return jdbcTemplate.queryForObject("SELECT id FROM schools WHERE domain = ?", Long.class, domain);
+    }
+
+    /** 특정 학교의 학과를 직접 insert한다. */
+    private void saveSchoolAffiliation(Long schoolId, String name) {
+        jdbcTemplate.update("INSERT INTO school_affiliations (school_id, name) VALUES (?, ?)", schoolId, name);
+    }
+
+    /** 이메일 인증까지 끝난 인증 세션을 직접 insert한다. (학과 목록 조회가 인증된 학교를 요구한다) */
+    private void saveVerifiedEmailSession(Long anonSessionId, String email) {
+        anonSessionVerificationSessionRepository.save(
+                verifiedEmailSession(anonSessionId, email));
+    }
+
+    private AnonSessionVerificationSession verifiedEmailSession(Long anonSessionId, String email) {
+        AnonSessionVerificationSession session = AnonSessionVerificationSession.create(
+                VerificationType.EMAIL, anonSessionId, email, "123456", Instant.now().plus(Duration.ofMinutes(5)));
+        session.verify();
+        return session;
     }
 
     /** 정책명 + 정책 버전을 직접 insert하고 policies.id를 반환한다. (엔티티에 생성 팩토리가 없어 SQL로 픽스처 구성) */

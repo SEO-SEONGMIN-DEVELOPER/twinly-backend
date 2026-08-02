@@ -9,12 +9,11 @@ public record OnboardingBasicInfoCommand(
         String familyName,
         String givenName,
         Gender gender,
-        String affiliation,
         String affiliationNumber,
         LocalDate birthDate
 ) {
 
     public static OnboardingBasicInfoCommand from(OnboardingBasicInfoRequest request) {
-        return new OnboardingBasicInfoCommand(request.familyName(), request.givenName(), request.gender(), request.affiliation(), request.affiliationNumber(), request.birthDate());
+        return new OnboardingBasicInfoCommand(request.familyName(), request.givenName(), request.gender(), request.affiliationNumber(), request.birthDate());
     }
 }
