@@ -1,6 +1,6 @@
 package com.nidus.twinly.auth.controller;
 
-import com.nidus.twinly.anon.annotation.CurrentAnonSession;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.nidus.twinly.anon.dto.snapshot.AnonSessionSnapshot;
 import com.nidus.twinly.auth.dto.command.*;
 import com.nidus.twinly.auth.dto.request.*;
@@ -27,7 +27,7 @@ public class AuthController {
             @ApiResponse(responseCode = "502", description = "EMAIL_SEND_FAILED")
     })
     @PostMapping("/api/v1/auth/onboarding/email/send")
-    public AuthEmailSendResponse onboardingEmailSend(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
+    public AuthEmailSendResponse onboardingEmailSend(@AuthenticationPrincipal AnonSessionSnapshot anonSessionSnapshot,
                                                      @Valid @RequestBody AuthEmailSendRequest request) {
         return AuthEmailSendResponse.from(authService.onboardingEmailSend(anonSessionSnapshot, AuthEmailSendCommand.from(request)));
     }
@@ -38,14 +38,14 @@ public class AuthController {
             @ApiResponse(responseCode = "422", description = "VERIFICATION_CODE_MISMATCH")
     })
     @PostMapping("/api/v1/auth/onboarding/email/verify")
-    public void onboardingEmailVerify(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
+    public void onboardingEmailVerify(@AuthenticationPrincipal AnonSessionSnapshot anonSessionSnapshot,
                                       @Valid @RequestBody AuthEmailVerifyRequest request) {
         authService.onboardingEmailVerify(anonSessionSnapshot, AuthEmailVerifyCommand.from(request));
     }
 
     @ApiResponse(responseCode = "502", description = "SMS_SEND_FAILED")
     @PostMapping("/api/v1/auth/onboarding/sms/send")
-    public AuthSmsSendResponse onboardingSmsSend(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
+    public AuthSmsSendResponse onboardingSmsSend(@AuthenticationPrincipal AnonSessionSnapshot anonSessionSnapshot,
                                                  @Valid @RequestBody AuthSmsSendRequest request) {
         return AuthSmsSendResponse.from(authService.onboardingSmsSend(anonSessionSnapshot, AuthSmsSendCommand.from(request)));
     }
@@ -56,7 +56,7 @@ public class AuthController {
             @ApiResponse(responseCode = "422", description = "VERIFICATION_CODE_MISMATCH")
     })
     @PostMapping("/api/v1/auth/onboarding/sms/verify")
-    public void onboardingSmsVerify(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot,
+    public void onboardingSmsVerify(@AuthenticationPrincipal AnonSessionSnapshot anonSessionSnapshot,
                                     @Valid @RequestBody AuthSmsVerifyRequest request) {
         authService.onboardingSmsVerify(anonSessionSnapshot, AuthSmsVerifyCommand.from(request));
     }
@@ -106,7 +106,7 @@ public class AuthController {
     })
     @ResponseStatus(HttpStatus.CREATED)
     @PostMapping("/api/v1/auth/signup")
-    public AuthSignupResponse signup(@CurrentAnonSession AnonSessionSnapshot anonSessionSnapshot) {
+    public AuthSignupResponse signup(@AuthenticationPrincipal AnonSessionSnapshot anonSessionSnapshot) {
         return AuthSignupResponse.from(authService.signup(anonSessionSnapshot));
     }
 

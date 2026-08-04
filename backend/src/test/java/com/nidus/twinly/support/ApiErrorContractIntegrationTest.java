@@ -4,6 +4,7 @@ import com.jayway.jsonpath.JsonPath;
 import com.nidus.twinly.common.web.ErrorCode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -26,9 +27,18 @@ class ApiErrorContractIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("존재하지 않는 경로는 500이 아니라 404 NOT_FOUND로 응답한다")
     void unknown_path_returns_404() throws Exception {
-        mockMvc.perform(get("/api/v1/does-not-exist"))
+        mockMvc.perform(get("/api/v1/does-not-exist")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(saveUser().getId())))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("인증 없이 존재하지 않는 경로를 요청하면 경로 존재 여부를 알리지 않고 401로 응답한다")
+    void unknown_path_without_auth_returns_401() throws Exception {
+        mockMvc.perform(get("/api/v1/does-not-exist"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value(ErrorCode.UNAUTHORIZED.name()));
     }
 
     @Test
@@ -128,6 +138,25 @@ class ApiErrorContractIntegrationTest extends AbstractIntegrationTest {
                     .as("오퍼레이션의 %s 응답에 전역 라우팅 코드가 섞였다: %s", matcher.group(1), matcher.group(2))
                     .doesNotContain("NOT_FOUND", "METHOD_NOT_ALLOWED");
         }
+    }
+
+    @Test
+    @DisplayName("문서의 인증 방식은 principal 타입으로 판별되어 유저 API는 jwtAuth, 익명 세션 API는 anonSessionAuth로 표기된다")
+    void api_docs_mark_security_scheme_by_principal_type() throws Exception {
+        String json = mockMvc.perform(get("/v3/api-docs"))
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(JsonPath.<List<Map<String, Object>>>read(json, "$.paths['/api/v1/me/status'].get.security"))
+                .singleElement()
+                .satisfies(requirement -> assertThat(requirement).containsKey("jwtAuth"));
+
+        assertThat(JsonPath.<List<Map<String, Object>>>read(json, "$.paths['/api/v1/onboarding/interests'].post.security"))
+                .singleElement()
+                .satisfies(requirement -> assertThat(requirement).containsKey("anonSessionAuth"));
+
+        assertThat(JsonPath.<Object>read(json, "$.paths['/api/v1/legal/policies'].get").toString())
+                .as("공개 API에는 인증 방식이 표기되지 않는다")
+                .doesNotContain("jwtAuth", "anonSessionAuth");
     }
 
     private String description(String json, String path, String status) {

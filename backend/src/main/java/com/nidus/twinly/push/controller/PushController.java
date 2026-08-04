@@ -4,7 +4,7 @@ import jakarta.validation.Valid;
 import com.nidus.twinly.push.dto.command.PushTokenRegisterCommand;
 import com.nidus.twinly.push.dto.request.PushTokenRegisterRequest;
 import com.nidus.twinly.push.service.PushService;
-import com.nidus.twinly.user.annotation.CurrentUser;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.nidus.twinly.user.dto.header.UserInfo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -22,13 +22,13 @@ public class PushController {
     private final PushService pushService;
 
     @PostMapping("/api/v1/push/tokens")
-    public void register(@CurrentUser UserInfo userInfo,
+    public void register(@AuthenticationPrincipal UserInfo userInfo,
                       @Valid @RequestBody PushTokenRegisterRequest request) {
         pushService.register(userInfo.id(), PushTokenRegisterCommand.from(request));
     }
 
     @DeleteMapping("/api/v1/push/tokens/{deviceId}")
-    public void revoke(@CurrentUser UserInfo userInfo,
+    public void revoke(@AuthenticationPrincipal UserInfo userInfo,
                        @PathVariable UUID deviceId) {
         pushService.revoke(userInfo.id(), deviceId);
     }

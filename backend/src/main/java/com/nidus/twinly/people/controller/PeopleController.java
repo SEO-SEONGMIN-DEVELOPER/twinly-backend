@@ -9,7 +9,7 @@ import com.nidus.twinly.people.dto.response.PeopleLearnedFactsResponse;
 import com.nidus.twinly.people.dto.response.PeopleProfileResponse;
 import com.nidus.twinly.people.dto.response.PeopleResponse;
 import com.nidus.twinly.people.service.PeopleService;
-import com.nidus.twinly.user.annotation.CurrentUser;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.nidus.twinly.user.dto.header.UserInfo;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -32,7 +32,7 @@ public class PeopleController {
     private final PeopleService peopleService;
 
     @GetMapping("/api/v1/people")
-    public PeopleResponse people(@CurrentUser UserInfo userInfo,
+    public PeopleResponse people(@AuthenticationPrincipal UserInfo userInfo,
                                     @RequestParam(required = false) String cursor,
                                     @RequestParam(required = false) @Min(1) @Max(100) Integer limit) {
         return PeopleResponse.from(peopleService.people(userInfo.id(), RequestId.toLongOrNull(cursor, "cursor"), limit));
@@ -40,21 +40,21 @@ public class PeopleController {
 
     @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND")
     @GetMapping("/api/v1/people/{userId}/profile")
-    public PeopleProfileResponse profile(@CurrentUser UserInfo userInfo,
+    public PeopleProfileResponse profile(@AuthenticationPrincipal UserInfo userInfo,
                                          @PathVariable("userId") String partnerUserId) {
         return PeopleProfileResponse.from(peopleService.profile(userInfo.id(), RequestId.toLong(partnerUserId, "userId")));
     }
 
     @ApiResponse(responseCode = "404", description = "ENCOUNTER_NOT_FOUND")
     @PutMapping("/api/v1/people/{userId}/favorite")
-    public void favorite(@CurrentUser UserInfo userInfo,
+    public void favorite(@AuthenticationPrincipal UserInfo userInfo,
                           @PathVariable("userId") String partnerUserId) {
         peopleService.favorite(userInfo.id(), RequestId.toLong(partnerUserId, "userId"));
     }
 
     @ApiResponse(responseCode = "404", description = "ENCOUNTER_NOT_FOUND")
     @DeleteMapping("/api/v1/people/{userId}/favorite")
-    public void deleteFavorite(@CurrentUser UserInfo userInfo,
+    public void deleteFavorite(@AuthenticationPrincipal UserInfo userInfo,
                                 @PathVariable("userId") String partnerUserId) {
         peopleService.deleteFavorite(userInfo.id(), RequestId.toLong(partnerUserId, "userId"));
     }
@@ -64,7 +64,7 @@ public class PeopleController {
             @ApiResponse(responseCode = "404", description = "RELATIONSHIP_NOT_FOUND")
     })
     @GetMapping("/api/v1/people/{userId}/intimacy-series")
-    public PeopleIntimacySeriesResponse intimacySeries(@CurrentUser UserInfo userInfo,
+    public PeopleIntimacySeriesResponse intimacySeries(@AuthenticationPrincipal UserInfo userInfo,
                                                        @PathVariable("userId") String partnerUserId,
                                                        @RequestParam LocalDate from,
                                                        @RequestParam LocalDate to,
@@ -75,7 +75,7 @@ public class PeopleController {
 
     @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND")
     @GetMapping("/api/v1/people/{userId}/events")
-    public PeopleEventsResponse events(@CurrentUser UserInfo userInfo,
+    public PeopleEventsResponse events(@AuthenticationPrincipal UserInfo userInfo,
                                        @PathVariable("userId") String partnerUserId,
                                        @RequestParam(required = false) LocalDate cursor,
                                        @RequestParam(required = false) @Min(1) @Max(100) Integer limit) {
@@ -84,7 +84,7 @@ public class PeopleController {
 
     @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND")
     @GetMapping("/api/v1/people/{userId}/events/{date}")
-    public PeopleEventResponse event(@CurrentUser UserInfo userInfo,
+    public PeopleEventResponse event(@AuthenticationPrincipal UserInfo userInfo,
                                      @PathVariable("userId") String partnerUserId,
                                      @PathVariable LocalDate date) {
         return PeopleEventResponse.from(peopleService.event(userInfo.id(), RequestId.toLong(partnerUserId, "userId"), date));
@@ -92,7 +92,7 @@ public class PeopleController {
 
     @ApiResponse(responseCode = "404", description = "RELATIONSHIP_NOT_FOUND")
     @GetMapping("/api/v1/people/{userId}/learned-facts")
-    public PeopleLearnedFactsResponse learnedFacts(@CurrentUser UserInfo userInfo,
+    public PeopleLearnedFactsResponse learnedFacts(@AuthenticationPrincipal UserInfo userInfo,
                                                    @PathVariable("userId") String partnerUserId) {
         return PeopleLearnedFactsResponse.from(peopleService.learnedFacts(userInfo.id(), RequestId.toLong(partnerUserId, "userId")));
     }

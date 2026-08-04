@@ -1,9 +1,7 @@
 package com.nidus.twinly.common.openapi;
 
-import com.nidus.twinly.anon.annotation.CurrentAnonSession;
 import com.nidus.twinly.anon.dto.snapshot.AnonSessionSnapshot;
 import com.nidus.twinly.common.web.ErrorCode;
-import com.nidus.twinly.user.annotation.CurrentUser;
 import com.nidus.twinly.user.dto.header.UserInfo;
 import io.swagger.v3.core.converter.AnnotatedType;
 import io.swagger.v3.core.converter.ModelConverters;
@@ -23,6 +21,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.MethodParameter;
 import org.springframework.core.annotation.AnnotatedElementUtils;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -61,15 +60,20 @@ public class OpenApiConfig {
     public OperationCustomizer securityOperationCustomizer() {
         return (operation, handlerMethod) -> {
             for (MethodParameter parameter : handlerMethod.getMethodParameters()) {
-                if (parameter.hasParameterAnnotation(CurrentUser.class)) {
+                if (isPrincipalOfType(parameter, UserInfo.class)) {
                     operation.addSecurityItem(new SecurityRequirement().addList(JWT_SCHEME));
-                } else if (parameter.hasParameterAnnotation(CurrentAnonSession.class)) {
+                } else if (isPrincipalOfType(parameter, AnonSessionSnapshot.class)) {
                     operation.addSecurityItem(new SecurityRequirement().addList(ANON_SESSION_SCHEME));
                 }
             }
 
             return operation;
         };
+    }
+
+    private boolean isPrincipalOfType(MethodParameter parameter, Class<?> principalType) {
+        return parameter.hasParameterAnnotation(AuthenticationPrincipal.class)
+                && principalType.equals(parameter.getParameterType());
     }
 
     private static final List<ErrorCode> USER_AUTH_401 = List.of(
@@ -147,10 +151,10 @@ public class OpenApiConfig {
 
     private List<ErrorCode> resolveAuth401(HandlerMethod handlerMethod) {
         for (MethodParameter parameter : handlerMethod.getMethodParameters()) {
-            if (parameter.hasParameterAnnotation(CurrentUser.class)) {
+            if (isPrincipalOfType(parameter, UserInfo.class)) {
                 return USER_AUTH_401;
             }
-            if (parameter.hasParameterAnnotation(CurrentAnonSession.class)) {
+            if (isPrincipalOfType(parameter, AnonSessionSnapshot.class)) {
                 return ANON_AUTH_401;
             }
         }

@@ -1,6 +1,6 @@
 package com.nidus.twinly.anon.resolver;
 
-import com.nidus.twinly.anon.annotation.CurrentAnonSession;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.nidus.twinly.anon.service.AnonService;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;

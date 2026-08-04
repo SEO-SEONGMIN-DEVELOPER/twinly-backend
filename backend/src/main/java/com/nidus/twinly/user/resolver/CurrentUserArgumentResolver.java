@@ -2,7 +2,7 @@ package com.nidus.twinly.user.resolver;
 
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
-import com.nidus.twinly.user.annotation.CurrentUser;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.nidus.twinly.user.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.MethodParameter;

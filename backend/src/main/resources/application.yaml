@@ -84,6 +84,9 @@ solapi:
 jwt:
   secret-key: ${JWT_SECRET_KEY}
 
+admin:
+  api-token: ${ADMIN_API_TOKEN:}
+
 anon:
   session-ttl: 14d
 

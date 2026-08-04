@@ -5,7 +5,7 @@ import com.nidus.twinly.connection.dto.command.ConnectionTokenCommand;
 import com.nidus.twinly.connection.dto.request.ConnectionTokenRequest;
 import com.nidus.twinly.connection.dto.response.ConnectionTokenResponse;
 import com.nidus.twinly.connection.service.ConnectionService;
-import com.nidus.twinly.user.annotation.CurrentUser;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.nidus.twinly.user.dto.header.UserInfo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -22,7 +22,7 @@ public class ConnectionController {
 
     @ResponseStatus(HttpStatus.CREATED)
     @PostMapping("/api/v1/connection-tokens")
-    public ConnectionTokenResponse token(@CurrentUser UserInfo userInfo,
+    public ConnectionTokenResponse token(@AuthenticationPrincipal UserInfo userInfo,
                                          @Valid @RequestBody ConnectionTokenRequest request) {
         return ConnectionTokenResponse.from(connectionService.token(userInfo.id(), ConnectionTokenCommand.from(request)));
     }

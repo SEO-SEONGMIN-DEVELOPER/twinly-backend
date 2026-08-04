@@ -12,7 +12,7 @@ import com.nidus.twinly.chat.dto.response.ChatRoomsResponse;
 import com.nidus.twinly.chat.dto.response.ChatSendMessageResponse;
 import com.nidus.twinly.chat.service.ChatService;
 import com.nidus.twinly.common.web.RequestId;
-import com.nidus.twinly.user.annotation.CurrentUser;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.nidus.twinly.user.dto.header.UserInfo;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -39,7 +39,7 @@ public class ChatController {
             @ApiResponse(responseCode = "422", description = "MESSAGE_LENGTH_EXCEEDED")
     })
     @PostMapping("/api/v1/chat/rooms/{roomId}/messages")
-    public ChatSendMessageResponse sendMessage(@CurrentUser UserInfo userInfo,
+    public ChatSendMessageResponse sendMessage(@AuthenticationPrincipal UserInfo userInfo,
                                                @PathVariable String roomId,
                                                @Valid @RequestBody ChatSendMessageRequest request) {
         return ChatSendMessageResponse.from(chatService.sendMessage(userInfo.id(), RequestId.toLong(roomId, "roomId"), ChatSendMessageCommand.from(request)));
@@ -47,7 +47,7 @@ public class ChatController {
 
     @ApiResponse(responseCode = "403", description = "NOT_MATCH_PARTICIPANT")
     @GetMapping("/api/v1/chat/rooms")
-    public ChatRoomsResponse rooms(@CurrentUser UserInfo userInfo) {
+    public ChatRoomsResponse rooms(@AuthenticationPrincipal UserInfo userInfo) {
         return ChatRoomsResponse.from(chatService.rooms(userInfo.id()));
     }
 
@@ -56,7 +56,7 @@ public class ChatController {
             @ApiResponse(responseCode = "404", description = "ROOM_NOT_FOUND, MATCH_NOT_FOUND, USER_NOT_FOUND")
     })
     @GetMapping("/api/v1/chat/rooms/{roomId}")
-    public ChatRoomDetailResponse roomDetail(@CurrentUser UserInfo userInfo,
+    public ChatRoomDetailResponse roomDetail(@AuthenticationPrincipal UserInfo userInfo,
                                              @PathVariable String roomId) {
         return ChatRoomDetailResponse.from(chatService.roomDetail(userInfo.id(), RequestId.toLong(roomId, "roomId")));
     }
@@ -66,7 +66,7 @@ public class ChatController {
             @ApiResponse(responseCode = "404", description = "ROOM_NOT_FOUND, MATCH_NOT_FOUND, USER_NOT_FOUND")
     })
     @PostMapping("/api/v1/chat/rooms/{roomId}/enter")
-    public ChatRoomDetailResponse enterRoom(@CurrentUser UserInfo userInfo,
+    public ChatRoomDetailResponse enterRoom(@AuthenticationPrincipal UserInfo userInfo,
                                         @PathVariable String roomId) {
         return ChatRoomDetailResponse.from(chatService.enterRoom(userInfo.id(), RequestId.toLong(roomId, "roomId")));
     }
@@ -76,7 +76,7 @@ public class ChatController {
             @ApiResponse(responseCode = "404", description = "ROOM_NOT_FOUND, MATCH_NOT_FOUND, CHAT_PARTICIPATION_NOT_FOUND")
     })
     @PostMapping("/api/v1/chat/rooms/{roomId}/hide")
-    public void hideRoom(@CurrentUser UserInfo userInfo,
+    public void hideRoom(@AuthenticationPrincipal UserInfo userInfo,
                      @PathVariable String roomId) {
         chatService.hideRoom(userInfo.id(), RequestId.toLong(roomId, "roomId"));
     }
@@ -86,7 +86,7 @@ public class ChatController {
             @ApiResponse(responseCode = "404", description = "ROOM_NOT_FOUND, MATCH_NOT_FOUND")
     })
     @GetMapping("/api/v1/chat/rooms/{roomId}/messages")
-    public ChatMessagesResponse messages(@CurrentUser UserInfo userInfo,
+    public ChatMessagesResponse messages(@AuthenticationPrincipal UserInfo userInfo,
                                          @PathVariable String roomId,
                                          @RequestParam(required = false) String cursor,
                                          @RequestParam(required = false) @Min(1) @Max(100) Integer limit) {
@@ -99,7 +99,7 @@ public class ChatController {
             @ApiResponse(responseCode = "422", description = "MESSAGE_NOT_IN_ROOM")
     })
     @PostMapping("/api/v1/chat/rooms/{roomId}/read")
-    public ChatReadMessagesResponse readMessages(@CurrentUser UserInfo userInfo,
+    public ChatReadMessagesResponse readMessages(@AuthenticationPrincipal UserInfo userInfo,
                      @PathVariable String roomId,
                      @Valid @RequestBody ChatReadMessagesRequest request) {
         return ChatReadMessagesResponse.from(
@@ -111,7 +111,7 @@ public class ChatController {
             @ApiResponse(responseCode = "404", description = "ROOM_NOT_FOUND, MATCH_NOT_FOUND, CHAT_PARTICIPATION_NOT_FOUND")
     })
     @PostMapping("/api/v1/chat/rooms/{roomId}/leave")
-    public void leaveRoom(@CurrentUser UserInfo userInfo,
+    public void leaveRoom(@AuthenticationPrincipal UserInfo userInfo,
                           @PathVariable String roomId) {
         chatService.leaveRoom(userInfo.id(), RequestId.toLong(roomId, "roomId"));
     }

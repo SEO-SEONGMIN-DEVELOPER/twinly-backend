@@ -35,7 +35,7 @@ import com.nidus.twinly.me.dto.response.MeWithdrawResponse;
 import com.nidus.twinly.me.service.MeService;
 import com.nidus.twinly.notification.domain.AppNotificationFeedType;
 import com.nidus.twinly.notification.domain.NotificationType;
-import com.nidus.twinly.user.annotation.CurrentUser;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.nidus.twinly.user.domain.DisclosureField;
 import com.nidus.twinly.user.dto.header.UserInfo;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -61,7 +61,7 @@ public class MeController {
 
     @ApiResponse(responseCode = "415", description = "UNSUPPORTED_IMAGE_TYPE")
     @PostMapping("/api/v1/me/profile/photo/presign")
-    public MeProfilePhotoPresignResponse profilePhotoPresign(@CurrentUser UserInfo userInfo,
+    public MeProfilePhotoPresignResponse profilePhotoPresign(@AuthenticationPrincipal UserInfo userInfo,
                                                               @Valid @RequestBody MeProfilePhotoPresignRequest request) {
         return MeProfilePhotoPresignResponse.from(meService.profilePhotoPresign(userInfo.id(), MeProfilePhotoPresignCommand.from(request)));
     }
@@ -71,26 +71,26 @@ public class MeController {
             @ApiResponse(responseCode = "422", description = "UPLOAD_NOT_COMPLETED")
     })
     @PostMapping("/api/v1/me/profile/photo/commit")
-    public MeProfilePhotoCommitResponse profilePhotoCommit(@CurrentUser UserInfo userInfo,
+    public MeProfilePhotoCommitResponse profilePhotoCommit(@AuthenticationPrincipal UserInfo userInfo,
                                                             @Valid @RequestBody MeProfilePhotoCommitRequest request) {
         return MeProfilePhotoCommitResponse.from(meService.profilePhotoCommit(userInfo.id(), MeProfilePhotoCommitCommand.from(request)));
     }
 
     @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND")
     @DeleteMapping("/api/v1/me")
-    public MeWithdrawResponse withdraw(@CurrentUser UserInfo userInfo) {
+    public MeWithdrawResponse withdraw(@AuthenticationPrincipal UserInfo userInfo) {
         return MeWithdrawResponse.from(meService.withdraw(userInfo.id()));
     }
 
     @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND")
     @GetMapping("/api/v1/me/profile-edit-view")
-    public MeProfileEditViewResponse profileEditView(@CurrentUser UserInfo userInfo) {
+    public MeProfileEditViewResponse profileEditView(@AuthenticationPrincipal UserInfo userInfo) {
         return MeProfileEditViewResponse.from(meService.profileEditView(userInfo.id()));
     }
 
     @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND")
     @PatchMapping("/api/v1/me/profile")
-    public void profile(@CurrentUser UserInfo userInfo,
+    public void profile(@AuthenticationPrincipal UserInfo userInfo,
                         @Valid @RequestBody MeProfileRequest request) {
         meService.profile(userInfo.id(), MeProfileCommand.from(request));
     }
@@ -100,18 +100,18 @@ public class MeController {
             @ApiResponse(responseCode = "422", description = "WITHDRAWAL_RECOVERY_EXPIRED")
     })
     @PostMapping("/api/v1/me/restore")
-    public void restore(@CurrentUser UserInfo userInfo) {
+    public void restore(@AuthenticationPrincipal UserInfo userInfo) {
         meService.restore(userInfo.id());
     }
 
     @GetMapping("/api/v1/me/consents")
-    public MeConsentsResponse consents(@CurrentUser UserInfo userInfo) {
+    public MeConsentsResponse consents(@AuthenticationPrincipal UserInfo userInfo) {
         return MeConsentsResponse.from(meService.consents(userInfo.id()));
     }
 
     @ApiResponse(responseCode = "404", description = "POLICY_NOT_FOUND")
     @PostMapping("/api/v1/me/consents")
-    public void grantConsents(@CurrentUser UserInfo userInfo,
+    public void grantConsents(@AuthenticationPrincipal UserInfo userInfo,
                               @Valid @RequestBody MeGrantConsentsRequest request) {
         meService.grantConsents(userInfo.id(), MeGrantConsentsCommand.from(request));
     }
@@ -121,37 +121,37 @@ public class MeController {
             @ApiResponse(responseCode = "404", description = "POLICY_NOT_FOUND")
     })
     @PostMapping("/api/v1/me/consents/revoke")
-    public void revokeConsents(@CurrentUser UserInfo userInfo,
+    public void revokeConsents(@AuthenticationPrincipal UserInfo userInfo,
                                @Valid @RequestBody MeRevokeConsentsRequest request) {
         meService.revokeConsents(userInfo.id(), MeRevokeConsentsCommand.from(request));
     }
 
     @GetMapping("/api/v1/me/push-notifications")
-    public MePushNotificationsResponse pushNotifications(@CurrentUser UserInfo userInfo) {
+    public MePushNotificationsResponse pushNotifications(@AuthenticationPrincipal UserInfo userInfo) {
         return MePushNotificationsResponse.from(meService.pushNotifications(userInfo.id()));
     }
 
     @PatchMapping("/api/v1/me/push-notifications/{type}")
-    public void changePushNotifications(@CurrentUser UserInfo userInfo,
+    public void changePushNotifications(@AuthenticationPrincipal UserInfo userInfo,
                                         @PathVariable NotificationType type,
                                         @Valid @RequestBody MeChangePushNotificationsRequest request) {
         meService.changePushNotifications(userInfo.id(), type, MeChangePushNotificationsCommand.from(request));
     }
 
     @GetMapping("/api/v1/me/profile/visibility-settings")
-    public MeProfileVisibilitySettingsResponse profileVisibilitySettings(@CurrentUser UserInfo userInfo) {
+    public MeProfileVisibilitySettingsResponse profileVisibilitySettings(@AuthenticationPrincipal UserInfo userInfo) {
         return MeProfileVisibilitySettingsResponse.from(meService.profileVisibilitySettings(userInfo.id()));
     }
 
     @PatchMapping("/api/v1/me/profile/visibility-settings/{type}")
-    public void changeProfileVisibilitySetting(@CurrentUser UserInfo userInfo,
+    public void changeProfileVisibilitySetting(@AuthenticationPrincipal UserInfo userInfo,
                                         @PathVariable DisclosureField type,
                                         @Valid @RequestBody MeChangeProfileVisibilitySettingRequest request) {
         meService.changeProfileVisibilitySetting(userInfo.id(), type, MeChangeProfileVisibilitySettingCommand.from(request));
     }
 
     @GetMapping("/api/v1/me/app-notifications/feeds")
-    public MeAppNotificationsFeedsResponse appNotificationsFeeds(@CurrentUser UserInfo userInfo,
+    public MeAppNotificationsFeedsResponse appNotificationsFeeds(@AuthenticationPrincipal UserInfo userInfo,
                                                                  @RequestParam(required = false) Boolean unreadOnly,
                                                                  @RequestParam(required = false) AppNotificationFeedType type,
                                                                  @RequestParam(required = false) @Min(1) @Max(100) Integer limit) {
@@ -160,30 +160,30 @@ public class MeController {
 
     @ApiResponse(responseCode = "404", description = "APP_NOTIFICATION_NOT_FOUND")
     @PostMapping("/api/v1/me/app-notifications/{appNotificationId}/read")
-    public void appNotificationsRead(@CurrentUser UserInfo userInfo,
+    public void appNotificationsRead(@AuthenticationPrincipal UserInfo userInfo,
                                      @PathVariable String appNotificationId) {
         meService.appNotificationsRead(userInfo.id(), RequestId.toLong(appNotificationId, "appNotificationId"));
     }
 
     @PostMapping("/api/v1/me/app-notifications/read-all")
-    public void appNotificationsReadAll(@CurrentUser UserInfo userInfo,
+    public void appNotificationsReadAll(@AuthenticationPrincipal UserInfo userInfo,
                                         @Valid @RequestBody MeAppNotificationsReadAllRequest request) {
         meService.appNotificationsReadAll(userInfo.id(), MeAppNotificationsReadAllCommand.from(request));
     }
 
     @GetMapping("/api/v1/me/app-notifications/unread-count")
-    public MeAppNotificationsUnreadCountResponse appNotificationsUnreadCount(@CurrentUser UserInfo userInfo) {
+    public MeAppNotificationsUnreadCountResponse appNotificationsUnreadCount(@AuthenticationPrincipal UserInfo userInfo) {
         return MeAppNotificationsUnreadCountResponse.from(meService.appNotificationsUnreadCount(userInfo.id()));
     }
 
     @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND")
     @GetMapping("/api/v1/me/status")
-    public MeStatusResponse status(@CurrentUser UserInfo userInfo) {
+    public MeStatusResponse status(@AuthenticationPrincipal UserInfo userInfo) {
         return MeStatusResponse.from(meService.status(userInfo.id()));
     }
 
     @GetMapping("/api/v1/me/hesitations")
-    public MeHesitationsResponse hesitations(@CurrentUser UserInfo userInfo,
+    public MeHesitationsResponse hesitations(@AuthenticationPrincipal UserInfo userInfo,
                                              @RequestParam HesitationDuration duration,
                                              @RequestParam HesitationStatus status) {
         return MeHesitationsResponse.from(meService.hesitations(userInfo.id(), duration, status));
@@ -196,7 +196,7 @@ public class MeController {
             @ApiResponse(responseCode = "422", description = "HESITATION_ANSWER_EMPTY, HESITATION_ANSWER_NOT_IN_OPTIONS")
     })
     @PostMapping("/api/v1/me/hesitations/{hesitationId}/answer")
-    public void hesitationsAnswer(@CurrentUser UserInfo userInfo,
+    public void hesitationsAnswer(@AuthenticationPrincipal UserInfo userInfo,
                                   @PathVariable String hesitationId,
                                   @Valid @RequestBody MeHesitationsAnswerRequest request) {
         meService.hesitationsAnswer(userInfo.id(), RequestId.toLong(hesitationId, "hesitationId"), MeHesitationsAnswerCommand.from(request));

@@ -7,7 +7,7 @@ import com.nidus.twinly.report.dto.request.ReportAiUtteranceRequest;
 import com.nidus.twinly.report.dto.request.ReportUserRequest;
 import com.nidus.twinly.report.dto.response.ReportUserResponse;
 import com.nidus.twinly.report.service.ReportService;
-import com.nidus.twinly.user.annotation.CurrentUser;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.nidus.twinly.user.dto.header.UserInfo;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -24,7 +24,7 @@ public class ReportController {
 
     @ApiResponse(responseCode = "422", description = "CANNOT_REPORT_SELF")
     @PostMapping("/api/v1/reports/users")
-    public ReportUserResponse reportUser(@CurrentUser UserInfo userInfo,
+    public ReportUserResponse reportUser(@AuthenticationPrincipal UserInfo userInfo,
                                          @Valid @RequestBody ReportUserRequest request) {
         return ReportUserResponse.from(reportService.reportUser(userInfo.id(), ReportUserCommand.from(request)));
     }
@@ -35,7 +35,7 @@ public class ReportController {
             @ApiResponse(responseCode = "422", description = "SCENE_TARGET_MISMATCH")
     })
     @PostMapping("/api/v1/reports/ai-utterances")
-    public void reportAiUtterance(@CurrentUser UserInfo userInfo,
+    public void reportAiUtterance(@AuthenticationPrincipal UserInfo userInfo,
                                   @Valid @RequestBody ReportAiUtteranceRequest request) {
         reportService.reportAiUtterance(userInfo.id(), ReportAiUtteranceCommand.from(request));
     }
