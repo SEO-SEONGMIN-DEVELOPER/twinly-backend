@@ -1,14 +1,13 @@
 package com.nidus.twinly.legal.dto.response;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
 import com.nidus.twinly.legal.dto.result.LegalPoliciesItemResult;
 
 public record LegalPoliciesItemResponse(
         String policyId,
         String title,
-        @JsonFormat(shape = JsonFormat.Shape.STRING)
-        Integer version,
+        String version,
         String url,
+        Boolean requiresAgreement,
         Boolean isRequired
 ) {
 
@@ -18,6 +17,7 @@ public record LegalPoliciesItemResponse(
                 result.title(),
                 result.version(),
                 result.url(),
+                result.requiresAgreement(),
                 result.isRequired()
         );
     }

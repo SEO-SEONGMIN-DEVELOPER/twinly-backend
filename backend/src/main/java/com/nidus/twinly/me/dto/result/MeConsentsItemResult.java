@@ -5,8 +5,9 @@ import java.time.Instant;
 public record MeConsentsItemResult(
         String policyId,
         String title,
-        Integer version,
+        String version,
         String url,
+        Boolean requiresAgreement,
         Boolean isRequired,
         Boolean isGranted,
         Instant grantedAt

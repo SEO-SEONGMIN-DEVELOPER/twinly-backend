@@ -1,6 +1,5 @@
 package com.nidus.twinly.me.dto.response;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
 import com.nidus.twinly.me.dto.result.MeConsentsItemResult;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -9,11 +8,11 @@ import java.time.Instant;
 public record MeConsentsItemResponse(
         String policyId,
         String title,
-        @JsonFormat(shape = JsonFormat.Shape.STRING)
         @Schema(nullable = true)
-        Integer version,
+        String version,
         @Schema(nullable = true)
         String url,
+        Boolean requiresAgreement,
         @Schema(nullable = true)
         Boolean isRequired,
         Boolean isGranted,
@@ -27,6 +26,7 @@ public record MeConsentsItemResponse(
                 result.title(),
                 result.version(),
                 result.url(),
+                result.requiresAgreement(),
                 result.isRequired(),
                 result.isGranted(),
                 result.grantedAt()

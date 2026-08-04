@@ -33,6 +33,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -298,7 +299,7 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
     void grantConsents_end_to_end() throws Exception {
         // given: 실제 익명 세션과 정책(terms_of_service v1) 픽스처를 DB에 저장
         AnonSession session = saveAnonSession();
-        Long policyId = savePolicy("terms_of_service", "서비스 이용약관", 1, true);
+        Long policyId = savePolicy("terms_of_service", "서비스 이용약관", "1", true);
 
         // when: 익명 세션 토큰으로 동의 등록 API 호출 (version은 문자열로 전달)
         mockMvc.perform(post("/api/v1/onboarding/consents")
@@ -475,7 +476,7 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
         // given: 실제 익명 세션 + S3 업로드 완료·CloudFront 서명 URL을 목으로 대체
         AnonSession session = saveAnonSession();
         String key = "profile/%d/photo-1".formatted(session.getId());
-        given(s3Service.exists(key)).willReturn(true);
+        given(s3Service.contentLength(key)).willReturn(Optional.of(1024L));
         given(cloudFrontService.getSignedUrl(key)).willReturn("https://cdn.example.com/" + key);
 
         // when: 익명 세션 토큰으로 commit API 호출
@@ -573,7 +574,7 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
     void revokeConsents_end_to_end() throws Exception {
         // given: 선택(is_required=false) 정책에 이미 동의한 익명 세션
         AnonSession session = saveAnonSession();
-        Long policyId = savePolicy("marketing", "마케팅 수신 동의", 1, false);
+        Long policyId = savePolicy("marketing", "마케팅 수신 동의", "1", false);
         anonSessionAgreementRepository.save(AnonSessionAgreement.create(session.getId(), policyId, Instant.now()));
         flushAndClear();
 
@@ -596,7 +597,7 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
     void revokeConsents_when_required_policy_returns_403() throws Exception {
         // given: 필수(is_required=true) 정책에 이미 동의한 익명 세션
         AnonSession session = saveAnonSession();
-        Long policyId = savePolicy("terms_of_service", "서비스 이용약관", 1, true);
+        Long policyId = savePolicy("terms_of_service", "서비스 이용약관", "1", true);
         anonSessionAgreementRepository.save(AnonSessionAgreement.create(session.getId(), policyId, Instant.now()));
         flushAndClear();
 
@@ -650,16 +651,16 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
     }
 
     /** 정책명 + 정책 버전을 직접 insert하고 policies.id를 반환한다. (엔티티에 생성 팩토리가 없어 SQL로 픽스처 구성) */
-    private Long savePolicy(String identifier, String name, Integer version, boolean isRequired) {
-        jdbcTemplate.update("INSERT INTO policy_names (name, identifier, is_deprecated) VALUES (?, ?, ?)",
-                name, identifier, false);
+    private Long savePolicy(String identifier, String name, String version, boolean isRequired) {
+        jdbcTemplate.update("INSERT INTO policy_names (name, identifier, requires_agreement, is_deprecated) VALUES (?, ?, ?, ?)",
+                name, identifier, true, false);
         Long policyNameId = jdbcTemplate.queryForObject(
                 "SELECT id FROM policy_names WHERE identifier = ?", Long.class, identifier);
         jdbcTemplate.update("""
-                        INSERT INTO policies (policy_name_id, version, content, url, is_required, effective_at)
-                        VALUES (?, ?, ?, ?, ?, UTC_TIMESTAMP(6))
+                        INSERT INTO policies (policy_name_id, version, `key`, is_required, effective_at)
+                        VALUES (?, ?, ?, ?, UTC_TIMESTAMP(6))
                         """,
-                policyNameId, version, "약관 본문", "https://example.com/" + identifier, isRequired);
+                policyNameId, version, "legal/" + identifier + "/v" + version + ".html", isRequired);
         return jdbcTemplate.queryForObject(
                 "SELECT id FROM policies WHERE policy_name_id = ? AND version = ?", Long.class, policyNameId, version);
     }

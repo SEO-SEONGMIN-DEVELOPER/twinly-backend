@@ -21,13 +21,11 @@ public class Policy {
 
     private Long policyNameId;
 
-    private Integer version;
+    @Column(length = 20)
+    private String version;
 
-    @Column(columnDefinition = "TEXT")
-    private String content;
-
-    @Column(columnDefinition = "TEXT")
-    private String url;
+    @Column(name = "`key`", columnDefinition = "TEXT")
+    private String key;
 
     private Boolean isRequired;
 

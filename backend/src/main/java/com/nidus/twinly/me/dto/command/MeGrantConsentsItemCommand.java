@@ -4,7 +4,7 @@ import com.nidus.twinly.me.dto.request.MeGrantConsentsItemRequest;
 
 public record MeGrantConsentsItemCommand(
         String policyId,
-        Integer version
+        String version
 ) {
 
     public static MeGrantConsentsItemCommand from(MeGrantConsentsItemRequest request) {

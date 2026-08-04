@@ -163,7 +163,7 @@ public class OnboardingService {
     @Transactional
     public OnboardingProfilePhotoCommitResult profilePhotoCommit(AnonSessionSnapshot anonSessionSnapshot, OnboardingProfilePhotoCommitCommand command) {
         Long anonSessionId = anonSessionSnapshot.id();
-        String photoUrl = photoCommitService.commitProfilePhoto(anonSessionId, command.key());
+        String photoUrl = photoCommitService.commitProfilePhoto(anonSessionId, command.key()).photoUrl();
 
         PhotoPosInfo position = command.position();
         anonSessionPhotoRepository.findByAnonSessionIdAndType(anonSessionId, PhotoType.PROFILE)

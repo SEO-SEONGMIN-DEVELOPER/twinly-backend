@@ -43,12 +43,12 @@ class PolicyCatalogUnitTest {
         given(policyNameRepository.findAllByIdentifierIn(List.of("terms_of_service")))
                 .willReturn(List.of(policyName(1L, "terms_of_service")));
         given(policyRepository.findAllProjectedByPolicyNameIdIn(anyList())).willReturn(List.of(
-                policy(1L, 1, Instant.parse("2024-01-01T00:00:00Z")),
-                policy(1L, 2, Instant.parse("2025-01-01T00:00:00Z"))));
+                policy(101L, 1L, "1", Instant.parse("2024-01-01T00:00:00Z")),
+                policy(102L, 1L, "2", Instant.parse("2025-01-01T00:00:00Z"))));
 
         // then: 구버전 클라이언트가 v1을 보내도 처리할 수 있도록 두 버전 모두 남는다
         assertThat(policyCatalog.loadByKey(List.of("terms_of_service")))
-                .containsOnlyKeys(new PolicyKey("terms_of_service", 1), new PolicyKey("terms_of_service", 2));
+                .containsOnlyKeys(new PolicyKey("terms_of_service", "1"), new PolicyKey("terms_of_service", "2"));
     }
 
     @Test
@@ -58,14 +58,14 @@ class PolicyCatalogUnitTest {
         given(policyNameRepository.findAllByIdentifierIn(List.of("terms_of_service")))
                 .willReturn(List.of(policyName(1L, "terms_of_service")));
         given(policyRepository.findAllProjectedByPolicyNameIdIn(anyList())).willReturn(List.of(
-                policy(1L, 1, Instant.now().minus(1, ChronoUnit.DAYS)),
-                policy(1L, 2, Instant.now().plus(1, ChronoUnit.DAYS))));
+                policy(101L, 1L, "1", Instant.now().minus(1, ChronoUnit.DAYS)),
+                policy(102L, 1L, "2", Instant.now().plus(1, ChronoUnit.DAYS))));
 
         // when: 동의 대상 정책 조회
         Map<PolicyKey, PolicySummary> result = policyCatalog.loadByKey(List.of("terms_of_service"));
 
         // then: 미래 버전 v2는 빠지고 이미 시행된 v1만 남는다
-        assertThat(result).containsOnlyKeys(new PolicyKey("terms_of_service", 1));
+        assertThat(result).containsOnlyKeys(new PolicyKey("terms_of_service", "1"));
     }
 
     @Test
@@ -75,7 +75,7 @@ class PolicyCatalogUnitTest {
         given(policyNameRepository.findAllByIdentifierIn(List.of("terms_of_service")))
                 .willReturn(List.of(policyName(1L, "terms_of_service")));
         given(policyRepository.findAllProjectedByPolicyNameIdIn(anyList()))
-                .willReturn(List.of(policy(1L, 1, null)));
+                .willReturn(List.of(policy(101L, 1L, "1", null)));
 
         // when: 동의 대상 정책 조회
         Map<PolicyKey, PolicySummary> result = policyCatalog.loadByKey(List.of("terms_of_service"));
@@ -89,32 +89,32 @@ class PolicyCatalogUnitTest {
     void loadLatestByPolicyNameId_picks_latest_effective_version() {
         // given: 이용약관에 시행 중인 v1(2024)·v2(2025)와 아직 시행 전인 v3가 존재
         given(policyRepository.findAllProjectedByPolicyNameIdIn(List.of(1L))).willReturn(List.of(
-                policy(1L, 1, Instant.parse("2024-01-01T00:00:00Z")),
-                policy(1L, 2, Instant.parse("2025-01-01T00:00:00Z")),
-                policy(1L, 3, Instant.now().plus(1, ChronoUnit.DAYS))));
+                policy(101L, 1L, "1", Instant.parse("2024-01-01T00:00:00Z")),
+                policy(102L, 1L, "2", Instant.parse("2025-01-01T00:00:00Z")),
+                policy(103L, 1L, "3", Instant.now().plus(1, ChronoUnit.DAYS))));
 
         // when: 정책명별 노출 버전 조회
         Map<Long, PolicySummary> result = policyCatalog.loadLatestByPolicyNameId(List.of(1L));
 
         // then: 미래 버전 v3는 제외되고 시행 중인 최신 v2가 선택된다
         assertThat(result).containsOnlyKeys(1L);
-        assertThat(result.get(1L).getVersion()).isEqualTo(2);
+        assertThat(result.get(1L).getVersion()).isEqualTo("2");
     }
 
     @Test
-    @DisplayName("정책명별 노출 버전도 시행일이 같으면 더 큰 버전 번호로 결정한다")
-    void loadLatestByPolicyNameId_breaks_effective_at_tie_by_version() {
-        // given: 시행일이 동일한 v2와 v3가 존재하고 리포지토리가 v3를 먼저 돌려줌
+    @DisplayName("정책명별 노출 버전도 시행일이 같으면 나중에 등록된 판으로 결정한다")
+    void loadLatestByPolicyNameId_breaks_effective_at_tie_by_id() {
+        // given: 시행일이 동일한 v2와 v3가 존재하고 리포지토리가 나중에 등록된 v3를 먼저 돌려줌
         Instant sameEffectiveAt = Instant.parse("2025-01-01T00:00:00Z");
         given(policyRepository.findAllProjectedByPolicyNameIdIn(List.of(1L))).willReturn(List.of(
-                policy(1L, 3, sameEffectiveAt),
-                policy(1L, 2, sameEffectiveAt)));
+                policy(103L, 1L, "3", sameEffectiveAt),
+                policy(102L, 1L, "2", sameEffectiveAt)));
 
         // when: 정책명별 노출 버전 조회
         Map<Long, PolicySummary> result = policyCatalog.loadLatestByPolicyNameId(List.of(1L));
 
         // then: 조회 순서와 무관하게 항상 v3로 결정된다 (약관 조회와 동의 여부 판정이 같은 버전을 본다)
-        assertThat(result.get(1L).getVersion()).isEqualTo(3);
+        assertThat(result.get(1L).getVersion()).isEqualTo("3");
     }
 
     @Test
@@ -122,7 +122,7 @@ class PolicyCatalogUnitTest {
     void loadLatestByPolicyNameId_excludes_policy_name_without_effective_version() {
         // given: 시행일이 설정되지 않은 버전만 존재
         given(policyRepository.findAllProjectedByPolicyNameIdIn(List.of(1L)))
-                .willReturn(List.of(policy(1L, 1, null)));
+                .willReturn(List.of(policy(101L, 1L, "1", null)));
 
         // when: 정책명별 노출 버전 조회
         Map<Long, PolicySummary> result = policyCatalog.loadLatestByPolicyNameId(List.of(1L));
@@ -140,8 +140,8 @@ class PolicyCatalogUnitTest {
         return policyName;
     }
 
-    private TestPolicySummary policy(Long policyNameId, Integer version, Instant effectiveAt) {
-        return new TestPolicySummary(policyNameId * 100 + version, policyNameId, version,
+    private TestPolicySummary policy(Long id, Long policyNameId, String version, Instant effectiveAt) {
+        return new TestPolicySummary(id, policyNameId, version,
                 "https://cdn.twinly.app/v" + version + ".html", true, effectiveAt);
     }
 }

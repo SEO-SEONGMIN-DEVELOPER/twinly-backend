@@ -4,7 +4,7 @@ import com.nidus.twinly.me.dto.request.MeRevokeConsentsItemRequest;
 
 public record MeRevokeConsentsItemCommand(
         String policyId,
-        Integer version
+        String version
 ) {
 
     public static MeRevokeConsentsItemCommand from(MeRevokeConsentsItemRequest request) {

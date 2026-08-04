@@ -7,6 +7,8 @@ import com.nidus.twinly.legal.service.LegalService;
 import com.nidus.twinly.user.service.UserService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import com.nidus.twinly.common.security.SecurityConfig;
+import org.springframework.context.annotation.Import;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -21,6 +23,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(LegalController.class)
+@Import(SecurityConfig.class)
 class LegalControllerUnitTest {
 
     @Autowired
@@ -29,8 +32,7 @@ class LegalControllerUnitTest {
     @MockitoBean
     LegalService legalService;
 
-    // LegalController가 직접 쓰진 않지만, WebMvcConfig가 두 resolver를 모두 주입받고
-    // 각 resolver가 이 서비스에 의존하므로 슬라이스 기동에 필수.
+    // SecurityConfig가 JWT·익명 세션 필터를 함께 만들고 각 필터가 이 서비스에 의존하므로 슬라이스 기동에 둘 다 필수.
     @MockitoBean
     UserService userService;
 
@@ -45,8 +47,9 @@ class LegalControllerUnitTest {
                 new LegalPoliciesItemResult(
                         "terms_of_service",
                         "서비스 이용약관",
-                        2,
-                        "https://cdn.twinly.app/terms/v2.html",
+                        "2",
+                        "https://cdn.twinly.app/legal/terms/v2.html",
+                        true,
                         true))));
 
         // when: 인증 헤더 없이 정책 목록 조회 API 호출
@@ -58,7 +61,8 @@ class LegalControllerUnitTest {
                 .andExpect(jsonPath("$.policies[0].policyId").value("terms_of_service"))
                 .andExpect(jsonPath("$.policies[0].title").value("서비스 이용약관"))
                 .andExpect(jsonPath("$.policies[0].version").value("2"))
-                .andExpect(jsonPath("$.policies[0].url").value("https://cdn.twinly.app/terms/v2.html"))
+                .andExpect(jsonPath("$.policies[0].url").value("https://cdn.twinly.app/legal/terms/v2.html"))
+                .andExpect(jsonPath("$.policies[0].requiresAgreement").value(true))
                 .andExpect(jsonPath("$.policies[0].isRequired").value(true));
         then(legalService).should().policies();
     }
@@ -68,7 +72,7 @@ class LegalControllerUnitTest {
     void policies_without_effective_version() throws Exception {
         // given: 서비스가 버전 정보 없는(시행 전) 정책 1건을 반환
         given(legalService.policies()).willReturn(new LegalPoliciesResult(List.of(
-                new LegalPoliciesItemResult("privacy_policy", "개인정보 처리방침", null, null, null))));
+                new LegalPoliciesItemResult("privacy_policy", "개인정보 처리방침", null, null, false, null))));
 
         // when: 정책 목록 조회 API 호출
         var result = mockMvc.perform(get("/api/v1/legal/policies"));
@@ -80,6 +84,7 @@ class LegalControllerUnitTest {
                 .andExpect(jsonPath("$.policies[0].title").value("개인정보 처리방침"))
                 .andExpect(jsonPath("$.policies[0].version").doesNotExist())
                 .andExpect(jsonPath("$.policies[0].url").doesNotExist())
+                .andExpect(jsonPath("$.policies[0].requiresAgreement").value(false))
                 .andExpect(jsonPath("$.policies[0].isRequired").doesNotExist());
     }
 

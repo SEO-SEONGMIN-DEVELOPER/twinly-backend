@@ -23,7 +23,7 @@ public interface AgreementRepository extends JpaRepository<Agreement, Long> {
                   FROM policies older
                   JOIN policies target ON target.policy_name_id = older.policy_name_id
                   WHERE target.id IN (:policyIds)
-                    AND older.version <= target.version
+                    AND older.id <= target.id
               )
             """, nativeQuery = true)
     void revokeWithPreviousVersionsByUserIdAndPolicyIdIn(@Param("userId") Long userId,

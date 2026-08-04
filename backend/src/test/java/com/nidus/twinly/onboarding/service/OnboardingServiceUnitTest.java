@@ -16,6 +16,7 @@ import com.nidus.twinly.common.domain.VerificationType;
 import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.common.photo.PhotoPosInfo;
 import com.nidus.twinly.common.photo.PhotoType;
+import com.nidus.twinly.common.presign.PhotoCommitResult;
 import com.nidus.twinly.common.presign.PhotoCommitService;
 import com.nidus.twinly.common.presign.PhotoPresignResult;
 import com.nidus.twinly.common.presign.PresignService;
@@ -456,7 +457,7 @@ class OnboardingServiceUnitTest {
     void profilePhotoCommit_first_time_saves_photo() {
         // given: commit이 CDN URL을 반환하고 기존 프로필 사진은 없음
         given(photoCommitService.commitProfilePhoto(ANON_SESSION_ID, "profile/1/abc"))
-                .willReturn("https://cdn.example.com/profile/1/abc");
+                .willReturn(new PhotoCommitResult("https://cdn.example.com/profile/1/abc", 1024L));
         given(anonSessionPhotoRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, PhotoType.PROFILE))
                 .willReturn(Optional.empty());
 
@@ -485,7 +486,7 @@ class OnboardingServiceUnitTest {
         // given: 이미 프로필 사진이 존재
         AnonSessionPhoto existing = AnonSessionPhoto.create(ANON_SESSION_ID, PhotoType.PROFILE, "profile/1/old", 0, 0, 100, 100);
         given(photoCommitService.commitProfilePhoto(ANON_SESSION_ID, "profile/1/new"))
-                .willReturn("https://cdn.example.com/profile/1/new");
+                .willReturn(new PhotoCommitResult("https://cdn.example.com/profile/1/new", 1024L));
         given(anonSessionPhotoRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, PhotoType.PROFILE))
                 .willReturn(Optional.of(existing));
 
@@ -640,13 +641,13 @@ class OnboardingServiceUnitTest {
         PolicySummary policy = mock(PolicySummary.class);
         given(policy.getId()).willReturn(10L);
         given(policyCatalog.loadByKey(List.of("terms_of_service")))
-                .willReturn(Map.of(new PolicyKey("terms_of_service", 1), policy));
+                .willReturn(Map.of(new PolicyKey("terms_of_service", "1"), policy));
         given(anonSessionAgreementRepository.findAllByAnonSessionIdAndRevokedAtIsNull(ANON_SESSION_ID))
                 .willReturn(List.of());
 
         // when: 동의 등록
         onboardingService.grantConsents(ANON_SESSION, new OnboardingGrantConsentsCommand(
-                List.of(new OnboardingGrantConsentsItemCommand("terms_of_service", 1))));
+                List.of(new OnboardingGrantConsentsItemCommand("terms_of_service", "1"))));
 
         // then: 해당 정책 id로 동의 이력이 저장됨
         ArgumentCaptor<List<AnonSessionAgreement>> captor = ArgumentCaptor.captor();
@@ -663,13 +664,13 @@ class OnboardingServiceUnitTest {
         PolicySummary policy = mock(PolicySummary.class);
         given(policy.getId()).willReturn(10L);
         given(policyCatalog.loadByKey(List.of("terms_of_service")))
-                .willReturn(Map.of(new PolicyKey("terms_of_service", 1), policy));
+                .willReturn(Map.of(new PolicyKey("terms_of_service", "1"), policy));
         given(anonSessionAgreementRepository.findAllByAnonSessionIdAndRevokedAtIsNull(ANON_SESSION_ID))
                 .willReturn(List.of(AnonSessionAgreement.create(ANON_SESSION_ID, 10L, Instant.now())));
 
         // when: 같은 정책에 다시 동의
         onboardingService.grantConsents(ANON_SESSION, new OnboardingGrantConsentsCommand(
-                List.of(new OnboardingGrantConsentsItemCommand("terms_of_service", 1))));
+                List.of(new OnboardingGrantConsentsItemCommand("terms_of_service", "1"))));
 
         // then: 저장 대상이 비어 있음 (멱등)
         ArgumentCaptor<List<AnonSessionAgreement>> captor = ArgumentCaptor.captor();
@@ -687,7 +688,7 @@ class OnboardingServiceUnitTest {
 
         // when & then: POLICY_NOT_FOUND 예외 발생 + 저장 안 함
         assertThatThrownBy(() -> onboardingService.grantConsents(ANON_SESSION, new OnboardingGrantConsentsCommand(
-                List.of(new OnboardingGrantConsentsItemCommand("terms_of_service", 99)))))
+                List.of(new OnboardingGrantConsentsItemCommand("terms_of_service", "99")))))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.POLICY_NOT_FOUND);
@@ -703,11 +704,11 @@ class OnboardingServiceUnitTest {
         given(policy.getId()).willReturn(20L);
         given(policy.getIsRequired()).willReturn(false);
         given(policyCatalog.loadByKey(List.of("marketing")))
-                .willReturn(Map.of(new PolicyKey("marketing", 2), policy));
+                .willReturn(Map.of(new PolicyKey("marketing", "2"), policy));
 
         // when: 동의 철회
         onboardingService.revokeConsents(ANON_SESSION, new OnboardingRevokeConsentsCommand(
-                List.of(new OnboardingRevokeConsentsItemCommand("marketing", 2))));
+                List.of(new OnboardingRevokeConsentsItemCommand("marketing", "2"))));
 
         // then: 해당 정책 id로 철회 쿼리에 위임
         then(anonSessionAgreementRepository).should()
@@ -721,11 +722,11 @@ class OnboardingServiceUnitTest {
         PolicySummary policy = mock(PolicySummary.class);
         given(policy.getIsRequired()).willReturn(true);
         given(policyCatalog.loadByKey(List.of("terms_of_service")))
-                .willReturn(Map.of(new PolicyKey("terms_of_service", 1), policy));
+                .willReturn(Map.of(new PolicyKey("terms_of_service", "1"), policy));
 
         // when & then: REQUIRED_POLICY_REVOKE_DENIED 예외 발생 + 철회 쿼리 호출 안 함
         assertThatThrownBy(() -> onboardingService.revokeConsents(ANON_SESSION, new OnboardingRevokeConsentsCommand(
-                List.of(new OnboardingRevokeConsentsItemCommand("terms_of_service", 1)))))
+                List.of(new OnboardingRevokeConsentsItemCommand("terms_of_service", "1")))))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.REQUIRED_POLICY_REVOKE_DENIED);
@@ -742,7 +743,7 @@ class OnboardingServiceUnitTest {
 
         // when & then: 마스터 데이터에 없는 정책이므로 조용히 무시하지 않고 404로 거절
         assertThatThrownBy(() -> onboardingService.revokeConsents(ANON_SESSION,
-                new OnboardingRevokeConsentsCommand(List.of(new OnboardingRevokeConsentsItemCommand("unknown", 1)))))
+                new OnboardingRevokeConsentsCommand(List.of(new OnboardingRevokeConsentsItemCommand("unknown", "1")))))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.POLICY_NOT_FOUND);

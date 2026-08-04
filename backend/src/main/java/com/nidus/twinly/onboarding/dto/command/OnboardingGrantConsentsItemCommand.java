@@ -4,7 +4,7 @@ import com.nidus.twinly.onboarding.dto.request.OnboardingGrantConsentsItemReques
 
 public record OnboardingGrantConsentsItemCommand(
         String policyId,
-        Integer version
+        String version
 ) {
 
     public static OnboardingGrantConsentsItemCommand from(OnboardingGrantConsentsItemRequest request) {

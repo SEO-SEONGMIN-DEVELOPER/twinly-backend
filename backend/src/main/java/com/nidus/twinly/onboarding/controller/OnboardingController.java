@@ -1,7 +1,6 @@
 package com.nidus.twinly.onboarding.controller;
 
 import com.nidus.twinly.aichat.service.AiChatService;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.nidus.twinly.anon.dto.snapshot.AnonSessionSnapshot;
 import com.nidus.twinly.onboarding.dto.command.*;
 import com.nidus.twinly.onboarding.dto.request.*;
@@ -18,6 +17,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;

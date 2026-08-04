@@ -19,8 +19,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class PolicyCatalog {
 
-    private static final Comparator<PolicySummary> BY_EFFECTIVE_AT_THEN_VERSION =
-            Comparator.comparing(PolicySummary::getEffectiveAt).thenComparing(PolicySummary::getVersion);
+    private static final Comparator<PolicySummary> BY_EFFECTIVE_AT_THEN_ID =
+            Comparator.comparing(PolicySummary::getEffectiveAt).thenComparing(PolicySummary::getId);
 
     private final PolicyRepository policyRepository;
     private final PolicyNameRepository policyNameRepository;
@@ -36,7 +36,7 @@ public class PolicyCatalog {
                 .collect(Collectors.toMap(
                         PolicySummary::getPolicyNameId,
                         Function.identity(),
-                        BinaryOperator.maxBy(BY_EFFECTIVE_AT_THEN_VERSION)));
+                        BinaryOperator.maxBy(BY_EFFECTIVE_AT_THEN_ID)));
     }
 
     public Map<PolicyKey, PolicySummary> loadByKey(List<String> policyNameIdentifiers) {
@@ -51,6 +51,6 @@ public class PolicyCatalog {
                         Function.identity()));
     }
 
-    public record PolicyKey(String identifier, Integer version) {
+    public record PolicyKey(String identifier, String version) {
     }
 }

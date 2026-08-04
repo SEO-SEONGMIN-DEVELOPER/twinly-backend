@@ -1,5 +1,6 @@
 package com.nidus.twinly.legal.service;
 
+import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
 import com.nidus.twinly.legal.dto.result.LegalPoliciesItemResult;
 import com.nidus.twinly.legal.dto.result.LegalPoliciesResult;
 import com.nidus.twinly.legal.repository.PolicyRepository.PolicySummary;
@@ -19,6 +20,7 @@ public class LegalService {
 
     private final PolicyNameRepository policyNameRepository;
     private final PolicyCatalog policyCatalog;
+    private final CloudFrontService cloudFrontService;
 
     public LegalPoliciesResult policies() {
         List<PolicyName> policyNames = policyNameRepository.findAllByIsDeprecatedFalseOrderByIdAsc();
@@ -33,7 +35,8 @@ public class LegalService {
                             policyName.getIdentifier(),
                             policyName.getName(),
                             latest != null ? latest.getVersion() : null,
-                            latest != null ? latest.getUrl() : null,
+                            latest != null ? cloudFrontService.getPublicUrl(latest.getKey()) : null,
+                            policyName.getRequiresAgreement(),
                             latest != null ? latest.getIsRequired() : null);
                 })
                 .toList();

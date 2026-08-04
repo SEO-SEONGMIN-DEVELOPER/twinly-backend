@@ -1,5 +1,6 @@
 package com.nidus.twinly.legal.integration;
 
+import com.nidus.twinly.common.aws.cloudfront.CloudFrontProperties;
 import com.nidus.twinly.legal.entity.Policy;
 import com.nidus.twinly.legal.entity.PolicyName;
 import com.nidus.twinly.legal.repository.PolicyNameRepository;
@@ -30,6 +31,9 @@ class LegalIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     PolicyRepository policyRepository;
 
+    @Autowired
+    CloudFrontProperties cloudFrontProperties;
+
     @PersistenceContext
     EntityManager entityManager;
 
@@ -49,12 +53,12 @@ class LegalIntegrationTest extends AbstractIntegrationTest {
     void policies_success_end_to_end() throws Exception {
         // given: 활성 정책명 1건(과거 시행 v1·v2, 미래 시행 v3)과 폐기된 정책명 1건(과거 시행 v1)을 실제 DB에 저장
         PolicyName terms = savePolicyName("terms_of_service", "서비스 이용약관", false);
-        savePolicy(terms.getId(), 1, "https://cdn.twinly.app/terms/v1.html", false, Instant.parse("2020-01-01T00:00:00Z"));
-        savePolicy(terms.getId(), 2, "https://cdn.twinly.app/terms/v2.html", true, Instant.parse("2021-01-01T00:00:00Z"));
-        savePolicy(terms.getId(), 3, "https://cdn.twinly.app/terms/v3.html", true, Instant.parse("2999-01-01T00:00:00Z"));
+        savePolicy(terms.getId(), "1", "legal/terms/v1.html", false, Instant.parse("2020-01-01T00:00:00Z"));
+        savePolicy(terms.getId(), "2", "legal/terms/v2.html", true, Instant.parse("2021-01-01T00:00:00Z"));
+        savePolicy(terms.getId(), "3", "legal/terms/v3.html", true, Instant.parse("2999-01-01T00:00:00Z"));
 
         PolicyName deprecated = savePolicyName("legacy_policy", "구 이용약관", true);
-        savePolicy(deprecated.getId(), 1, "https://cdn.twinly.app/legacy/v1.html", true, Instant.parse("2020-01-01T00:00:00Z"));
+        savePolicy(deprecated.getId(), "1", "legal/legacy/v1.html", true, Instant.parse("2020-01-01T00:00:00Z"));
 
         Long termsId = terms.getId();
         Long deprecatedId = deprecated.getId();
@@ -69,7 +73,7 @@ class LegalIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.policies[0].policyId").value("terms_of_service"))
                 .andExpect(jsonPath("$.policies[0].title").value("서비스 이용약관"))
                 .andExpect(jsonPath("$.policies[0].version").value("2"))
-                .andExpect(jsonPath("$.policies[0].url").value("https://cdn.twinly.app/terms/v2.html"))
+                .andExpect(jsonPath("$.policies[0].url").value("https://" + cloudFrontProperties.domain() + "/legal/terms/v2.html"))
                 .andExpect(jsonPath("$.policies[0].isRequired").value(true));
 
         // then: 조회 API이므로 DB의 정책 버전 4건은 그대로 남아 있다
@@ -81,7 +85,7 @@ class LegalIntegrationTest extends AbstractIntegrationTest {
     void policies_without_effective_version_end_to_end() throws Exception {
         // given: 활성 정책명 1건과 미래 시행 버전 1건만 실제 DB에 저장
         PolicyName privacy = savePolicyName("privacy_policy", "개인정보 처리방침", false);
-        savePolicy(privacy.getId(), 1, "https://cdn.twinly.app/privacy/v1.html", true, Instant.parse("2999-01-01T00:00:00Z"));
+        savePolicy(privacy.getId(), "1", "legal/privacy/v1.html", true, Instant.parse("2999-01-01T00:00:00Z"));
         flushAndClear();
 
         // when: 정책 목록 조회 API 호출
@@ -102,11 +106,11 @@ class LegalIntegrationTest extends AbstractIntegrationTest {
     void policies_are_ordered_by_id_end_to_end() throws Exception {
         // given: 이름 오름차순과 어긋나게 저장해 DB 반환 순서에 기대지 않았음을 드러낸다
         PolicyName third = savePolicyName("zzz_policy", "다 약관", false);
-        savePolicy(third.getId(), 1, "https://cdn.twinly.app/zzz/v1.html", true, Instant.parse("2020-01-01T00:00:00Z"));
+        savePolicy(third.getId(), "1", "legal/zzz/v1.html", true, Instant.parse("2020-01-01T00:00:00Z"));
         PolicyName second = savePolicyName("mmm_policy", "나 약관", false);
-        savePolicy(second.getId(), 1, "https://cdn.twinly.app/mmm/v1.html", true, Instant.parse("2020-01-01T00:00:00Z"));
+        savePolicy(second.getId(), "1", "legal/mmm/v1.html", true, Instant.parse("2020-01-01T00:00:00Z"));
         PolicyName first = savePolicyName("aaa_policy", "가 약관", false);
-        savePolicy(first.getId(), 1, "https://cdn.twinly.app/aaa/v1.html", true, Instant.parse("2020-01-01T00:00:00Z"));
+        savePolicy(first.getId(), "1", "legal/aaa/v1.html", true, Instant.parse("2020-01-01T00:00:00Z"));
         flushAndClear();
 
         // when: 정책 목록 조회 API 호출
@@ -130,16 +134,16 @@ class LegalIntegrationTest extends AbstractIntegrationTest {
         PolicyName policyName = BeanUtils.instantiateClass(PolicyName.class);
         ReflectionTestUtils.setField(policyName, "identifier", identifier);
         ReflectionTestUtils.setField(policyName, "name", name);
+        ReflectionTestUtils.setField(policyName, "requiresAgreement", true);
         ReflectionTestUtils.setField(policyName, "isDeprecated", deprecated);
         return policyNameRepository.save(policyName);
     }
 
-    private Policy savePolicy(Long policyNameId, Integer version, String url, Boolean isRequired, Instant effectiveAt) {
+    private Policy savePolicy(Long policyNameId, String version, String key, Boolean isRequired, Instant effectiveAt) {
         Policy policy = BeanUtils.instantiateClass(Policy.class);
         ReflectionTestUtils.setField(policy, "policyNameId", policyNameId);
         ReflectionTestUtils.setField(policy, "version", version);
-        ReflectionTestUtils.setField(policy, "content", "content-v" + version);
-        ReflectionTestUtils.setField(policy, "url", url);
+        ReflectionTestUtils.setField(policy, "key", key);
         ReflectionTestUtils.setField(policy, "isRequired", isRequired);
         ReflectionTestUtils.setField(policy, "effectiveAt", effectiveAt);
         ReflectionTestUtils.setField(policy, "createdAt", Instant.now());

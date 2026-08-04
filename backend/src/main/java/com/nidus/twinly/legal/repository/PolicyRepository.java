@@ -15,9 +15,9 @@ public interface PolicyRepository extends JpaRepository<Policy, Long> {
 
         Long getPolicyNameId();
 
-        Integer getVersion();
+        String getVersion();
 
-        String getUrl();
+        String getKey();
 
         Boolean getIsRequired();
 

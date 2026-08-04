@@ -4,7 +4,7 @@ import com.nidus.twinly.onboarding.dto.request.OnboardingRevokeConsentsItemReque
 
 public record OnboardingRevokeConsentsItemCommand(
         String policyId,
-        Integer version
+        String version
 ) {
 
     public static OnboardingRevokeConsentsItemCommand from(OnboardingRevokeConsentsItemRequest request) {

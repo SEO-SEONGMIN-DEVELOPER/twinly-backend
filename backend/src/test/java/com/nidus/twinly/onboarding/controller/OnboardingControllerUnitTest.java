@@ -39,6 +39,8 @@ import com.nidus.twinly.user.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import com.nidus.twinly.common.security.SecurityConfig;
+import org.springframework.context.annotation.Import;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
@@ -63,6 +65,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(OnboardingController.class)
+@Import(SecurityConfig.class)
 class OnboardingControllerUnitTest {
 
     private static final UUID ANON_TOKEN = UUID.fromString("11111111-1111-1111-1111-111111111111");
@@ -95,8 +98,7 @@ class OnboardingControllerUnitTest {
     @MockitoBean
     AiChatService aiChatService;
 
-    // OnboardingController는 @CurrentAnonSession만 쓰지만, WebMvcConfig가 두 resolver를 모두 주입받고
-    // 각 resolver가 이 서비스에 의존하므로 슬라이스 기동에 UserService mock도 필수.
+    // SecurityConfig가 JWT·익명 세션 필터를 함께 만들고 각 필터가 이 서비스에 의존하므로 슬라이스 기동에 둘 다 필수.
     @MockitoBean
     UserService userService;
 
@@ -589,7 +591,7 @@ class OnboardingControllerUnitTest {
         // then: 200 반환 + 문자열 version이 숫자로 매핑된 커맨드로 위임
         result.andExpect(status().isOk());
         then(onboardingService).should().grantConsents(ANON_SESSION, new OnboardingGrantConsentsCommand(
-                List.of(new OnboardingGrantConsentsItemCommand("terms_of_service", 1))));
+                List.of(new OnboardingGrantConsentsItemCommand("terms_of_service", "1"))));
     }
 
     @Test
@@ -622,7 +624,7 @@ class OnboardingControllerUnitTest {
         // then: 200 반환 + 변환된 커맨드로 서비스에 위임
         result.andExpect(status().isOk());
         then(onboardingService).should().revokeConsents(ANON_SESSION, new OnboardingRevokeConsentsCommand(
-                List.of(new OnboardingRevokeConsentsItemCommand("marketing", 2))));
+                List.of(new OnboardingRevokeConsentsItemCommand("marketing", "2"))));
     }
 
     @Test

@@ -23,5 +23,7 @@ public class PolicyName {
     @Column(length = 100)
     private String identifier;
 
+    private Boolean requiresAgreement;
+
     private Boolean isDeprecated;
 }
