@@ -5,9 +5,8 @@ import com.nidus.twinly.common.photo.PhotoPosInfo;
 import com.nidus.twinly.common.photo.ProfilePhotoInfo;
 import com.nidus.twinly.people.domain.IntimacyResolution;
 import com.nidus.twinly.people.dto.result.PeopleEventActionSceneResult;
-import com.nidus.twinly.people.dto.result.PeopleEventProfilePhotoResult;
 import com.nidus.twinly.people.dto.result.PeopleEventResult;
-import com.nidus.twinly.people.dto.result.PeopleEventSpeakerResult;
+import com.nidus.twinly.people.dto.result.PeopleEventUserInfoResult;
 import com.nidus.twinly.people.dto.result.PeopleEventsItemResult;
 import com.nidus.twinly.people.dto.result.PeopleEventsPageResult;
 import com.nidus.twinly.people.dto.result.PeopleEventsPartnerResult;
@@ -28,6 +27,8 @@ import com.nidus.twinly.user.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import com.nidus.twinly.common.security.SecurityConfig;
+import org.springframework.context.annotation.Import;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -38,6 +39,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 
+import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
@@ -50,6 +52,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(PeopleController.class)
+@Import(SecurityConfig.class)
 class PeopleControllerUnitTest {
 
     @Autowired
@@ -58,8 +61,7 @@ class PeopleControllerUnitTest {
     @MockitoBean
     PeopleService peopleService;
 
-    // PeopleController는 @CurrentUser만 쓰지만, WebMvcConfig가 두 resolver를 모두 주입받고
-    // 각 resolver가 이 서비스들에 의존하므로 슬라이스 기동에 둘 다 필수.
+    // SecurityConfig가 JWT·익명 세션 필터를 함께 만들고 각 필터가 이 서비스에 의존하므로 슬라이스 기동에 둘 다 필수.
     @MockitoBean
     UserService userService;
 
@@ -194,7 +196,7 @@ class PeopleControllerUnitTest {
                 .andExpect(jsonPath("$.userName").value("홍길동"))
                 .andExpect(jsonPath("$.profilePhoto").isEmpty())
                 .andExpect(jsonPath("$.intimacy").value(80))
-                .andExpect(jsonPath("$.relationshipType").value("best_friend"))
+                .andExpect(jsonPath("$.relationshipType").value("bestFriend"))
                 .andExpect(jsonPath("$.relationshipSpecificType").value("RELATIONSHIP_SPECIFIC_TYPE_3"))
                 .andExpect(jsonPath("$.isFavorited").value(true))
                 .andExpect(jsonPath("$.isHighlighted").doesNotExist())
@@ -394,10 +396,10 @@ class PeopleControllerUnitTest {
                                 OffsetDateTime.of(2026, 7, 20, 9, 0, 0, 0, ZoneOffset.ofHours(9)),
                                 OffsetDateTime.of(2026, 7, 20, 10, 0, 0, 0, ZoneOffset.ofHours(9)),
                                 "학교 복도",
-                                List.of(new PeopleEventSpeakerResult(42L, "홍길동")),
+                                List.of(42L),
                                 "복도를 함께 걸었다",
                                 "조금 설렜다")),
-                        List.of(new PeopleEventProfilePhotoResult(42L,
+                        List.of(new PeopleEventUserInfoResult(42L, "홍길동",
                                 new ProfilePhotoInfo("profile/42/key", "https://cdn.example.com/signed",
                                         new PhotoPosInfo(new PhotoPosInfo.StartPos(10, 20), 100, 200))))));
 
@@ -413,15 +415,15 @@ class PeopleControllerUnitTest {
                 .andExpect(jsonPath("$.scenes[0].sceneId").value("100"))
                 .andExpect(jsonPath("$.scenes[0].type").value("action"))
                 .andExpect(jsonPath("$.scenes[0].place").value("학교 복도"))
-                .andExpect(jsonPath("$.scenes[0].with[0].userId").value("42"))
-                .andExpect(jsonPath("$.scenes[0].with[0].userName").value("홍길동"))
+                .andExpect(jsonPath("$.scenes[0].with[0]", is("42")))
                 .andExpect(jsonPath("$.scenes[0].narration").value("복도를 함께 걸었다"))
                 .andExpect(jsonPath("$.scenes[0].mind").value("조금 설렜다"))
-                .andExpect(jsonPath("$.profilePhotos[0].userId").value("42"))
-                .andExpect(jsonPath("$.profilePhotos[0].profilePhoto.key").value("profile/42/key"))
-                .andExpect(jsonPath("$.profilePhotos[0].profilePhoto.photoUrl").value("https://cdn.example.com/signed"))
-                .andExpect(jsonPath("$.profilePhotos[0].profilePhoto.position.startPos.x").value(10))
-                .andExpect(jsonPath("$.profilePhotos[0].profilePhoto.position.height").value(200));
+                .andExpect(jsonPath("$.userInfos[0].userId").value("42"))
+                .andExpect(jsonPath("$.userInfos[0].userName").value("홍길동"))
+                .andExpect(jsonPath("$.userInfos[0].profilePhoto.key").value("profile/42/key"))
+                .andExpect(jsonPath("$.userInfos[0].profilePhoto.photoUrl").value("https://cdn.example.com/signed"))
+                .andExpect(jsonPath("$.userInfos[0].profilePhoto.position.startPos.x").value(10))
+                .andExpect(jsonPath("$.userInfos[0].profilePhoto.position.height").value(200));
         then(peopleService).should().event(1L, 42L, LocalDate.of(2026, 7, 20));
     }
 

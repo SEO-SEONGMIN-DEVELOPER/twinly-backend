@@ -13,7 +13,8 @@ public record ActivityDialogueSceneResponse(
         OffsetDateTime startsAt,
         OffsetDateTime endsAt,
         String place,
-        List<ActivitySpeakerResponse> with,
+        @JsonFormat(shape = JsonFormat.Shape.STRING)
+        List<Long> with,
         List<ActivityLineResponse> lines
 ) implements ActivitySceneResponse {
 
@@ -24,7 +25,7 @@ public record ActivityDialogueSceneResponse(
                 result.startsAt(),
                 result.endsAt(),
                 result.place(),
-                result.with().stream().map(ActivitySpeakerResponse::from).toList(),
+                result.with(),
                 result.lines().stream().map(ActivityLineResponse::from).toList()
         );
     }

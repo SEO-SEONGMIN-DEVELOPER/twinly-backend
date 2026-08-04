@@ -11,7 +11,7 @@ import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 @Entity
 @DynamicUpdate
@@ -34,9 +34,9 @@ public class Scene {
     @Column(columnDefinition = "TEXT")
     private String place;
 
-    private LocalDateTime startsAt;
+    private LocalTime startsAt;
 
-    private LocalDateTime endsAt;
+    private LocalTime endsAt;
 
     @Enumerated(EnumType.STRING)
     private SceneType type;
@@ -52,4 +52,39 @@ public class Scene {
     private String lines;
 
     private Instant createdAt;
+
+    public static Scene createAction(Long userId, LocalDate date, String version, String place,
+                                     LocalTime startsAt, LocalTime endsAt, String narration, String mind) {
+        Scene scene = newScene(userId, date, version, place, startsAt, endsAt, SceneType.ACTION);
+
+        scene.narration = narration;
+        scene.mind = mind;
+
+        return scene;
+    }
+
+    public static Scene createDialogue(Long userId, LocalDate date, String version, String place,
+                                       LocalTime startsAt, LocalTime endsAt, String lines) {
+        Scene scene = newScene(userId, date, version, place, startsAt, endsAt, SceneType.DIALOGUE);
+
+        scene.lines = lines;
+
+        return scene;
+    }
+
+    private static Scene newScene(Long userId, LocalDate date, String version, String place,
+                                  LocalTime startsAt, LocalTime endsAt, SceneType type) {
+        Scene scene = new Scene();
+
+        scene.userId = userId;
+        scene.date = date;
+        scene.version = version;
+        scene.place = place;
+        scene.startsAt = startsAt;
+        scene.endsAt = endsAt;
+        scene.type = type;
+        scene.createdAt = Instant.now();
+
+        return scene;
+    }
 }

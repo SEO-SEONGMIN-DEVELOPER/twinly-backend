@@ -1,9 +1,10 @@
-package com.nidus.twinly.people.dto.result;
+package com.nidus.twinly.activity.dto.result;
 
 import com.nidus.twinly.common.photo.ProfilePhotoInfo;
 
-public record PeopleEventProfilePhotoResult(
+public record ActivityUserInfoResult(
         Long userId,
+        String userName,
         ProfilePhotoInfo profilePhoto
 ) {
 }

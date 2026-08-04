@@ -12,6 +12,6 @@ public record ActivityResult(
         Instant serverNow,
         List<ActivitySceneResult> scenes,
         List<ActivityQuestionResult> questions,
-        List<ActivityProfilePhotoResult> profilePhotos
+        List<ActivityUserInfoResult> userInfos
 ) {
 }

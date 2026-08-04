@@ -8,6 +8,6 @@ public record PeopleEventResult(
         Long userId,
         String version,
         List<PeopleEventSceneResult> scenes,
-        List<PeopleEventProfilePhotoResult> profilePhotos
+        List<PeopleEventUserInfoResult> userInfos
 ) {
 }

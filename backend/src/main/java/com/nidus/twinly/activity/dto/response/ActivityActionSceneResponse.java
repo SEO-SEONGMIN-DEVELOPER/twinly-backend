@@ -2,6 +2,7 @@ package com.nidus.twinly.activity.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.nidus.twinly.activity.dto.result.ActivityActionSceneResult;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -13,7 +14,9 @@ public record ActivityActionSceneResponse(
         OffsetDateTime startsAt,
         OffsetDateTime endsAt,
         String place,
-        List<ActivitySpeakerResponse> with,
+        @JsonFormat(shape = JsonFormat.Shape.STRING)
+        @Schema(nullable = true)
+        List<Long> with,
         String narration,
         String mind
 ) implements ActivitySceneResponse {
@@ -25,7 +28,7 @@ public record ActivityActionSceneResponse(
                 result.startsAt(),
                 result.endsAt(),
                 result.place(),
-                result.with().stream().map(ActivitySpeakerResponse::from).toList(),
+                result.with(),
                 result.narration(),
                 result.mind()
         );

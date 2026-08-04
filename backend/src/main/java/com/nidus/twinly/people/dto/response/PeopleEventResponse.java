@@ -14,7 +14,7 @@ public record PeopleEventResponse(
         @Schema(nullable = true)
         String version,
         List<PeopleEventSceneResponse> scenes,
-        List<PeopleEventProfilePhotoResponse> profilePhotos
+        List<PeopleEventUserInfoResponse> userInfos
 ) {
 
     public static PeopleEventResponse from(PeopleEventResult result) {
@@ -23,7 +23,7 @@ public record PeopleEventResponse(
                 result.userId(),
                 result.version(),
                 result.scenes().stream().map(PeopleEventSceneResponse::from).toList(),
-                result.profilePhotos().stream().map(PeopleEventProfilePhotoResponse::from).toList()
+                result.userInfos().stream().map(PeopleEventUserInfoResponse::from).toList()
         );
     }
 }

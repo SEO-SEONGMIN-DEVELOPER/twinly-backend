@@ -1,20 +1,22 @@
 package com.nidus.twinly.activity.dto.response;
 
-import com.nidus.twinly.activity.dto.result.ActivityBubbleLineResult;
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.nidus.twinly.common.scene.SceneBubbleLine;
 
 public record ActivityBubbleLineResponse(
         String t,
-        ActivitySpeakerResponse speaker,
+        @JsonFormat(shape = JsonFormat.Shape.STRING)
+        Long userId,
         String action,
         String text
 ) implements ActivityLineResponse {
 
-    public static ActivityBubbleLineResponse from(ActivityBubbleLineResult result) {
+    public static ActivityBubbleLineResponse from(SceneBubbleLine line) {
         return new ActivityBubbleLineResponse(
-                result.t(),
-                ActivitySpeakerResponse.from(result.speaker()),
-                result.action(),
-                result.text()
+                line.t(),
+                line.userId(),
+                line.action(),
+                line.text()
         );
     }
 }

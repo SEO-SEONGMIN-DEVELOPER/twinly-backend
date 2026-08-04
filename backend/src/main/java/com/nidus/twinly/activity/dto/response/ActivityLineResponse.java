@@ -2,9 +2,9 @@ package com.nidus.twinly.activity.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
-import com.nidus.twinly.activity.dto.result.ActivityBubbleLineResult;
-import com.nidus.twinly.activity.dto.result.ActivityLineResult;
-import com.nidus.twinly.activity.dto.result.ActivityNarrationLineResult;
+import com.nidus.twinly.common.scene.SceneBubbleLine;
+import com.nidus.twinly.common.scene.SceneLine;
+import com.nidus.twinly.common.scene.SceneNarrationLine;
 
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.EXISTING_PROPERTY, property = "t")
 @JsonSubTypes({
@@ -13,10 +13,10 @@ import com.nidus.twinly.activity.dto.result.ActivityNarrationLineResult;
 })
 public sealed interface ActivityLineResponse permits ActivityNarrationLineResponse, ActivityBubbleLineResponse {
 
-    static ActivityLineResponse from(ActivityLineResult result) {
-        return switch (result) {
-            case ActivityNarrationLineResult r -> ActivityNarrationLineResponse.from(r);
-            case ActivityBubbleLineResult r -> ActivityBubbleLineResponse.from(r);
+    static ActivityLineResponse from(SceneLine line) {
+        return switch (line) {
+            case SceneNarrationLine l -> ActivityNarrationLineResponse.from(l);
+            case SceneBubbleLine l -> ActivityBubbleLineResponse.from(l);
         };
     }
 }

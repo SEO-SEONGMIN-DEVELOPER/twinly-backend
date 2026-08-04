@@ -2,9 +2,9 @@ package com.nidus.twinly.activity.controller;
 
 import com.nidus.twinly.activity.dto.response.ActivityResponse;
 import com.nidus.twinly.activity.service.ActivityService;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.nidus.twinly.user.dto.header.UserInfo;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;

@@ -1,20 +1,22 @@
 package com.nidus.twinly.people.dto.response;
 
-import com.nidus.twinly.people.dto.result.PeopleEventBubbleLineResult;
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.nidus.twinly.common.scene.SceneBubbleLine;
 
 public record PeopleEventBubbleLineResponse(
         String t,
-        PeopleEventSpeakerResponse speaker,
+        @JsonFormat(shape = JsonFormat.Shape.STRING)
+        Long userId,
         String action,
         String text
 ) implements PeopleEventLineResponse {
 
-    public static PeopleEventBubbleLineResponse from(PeopleEventBubbleLineResult result) {
+    public static PeopleEventBubbleLineResponse from(SceneBubbleLine line) {
         return new PeopleEventBubbleLineResponse(
-                result.t(),
-                PeopleEventSpeakerResponse.from(result.speaker()),
-                result.action(),
-                result.text()
+                line.t(),
+                line.userId(),
+                line.action(),
+                line.text()
         );
     }
 }

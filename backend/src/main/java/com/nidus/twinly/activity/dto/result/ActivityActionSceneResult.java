@@ -9,7 +9,7 @@ public record ActivityActionSceneResult(
         OffsetDateTime startsAt,
         OffsetDateTime endsAt,
         String place,
-        List<ActivitySpeakerResult> with,
+        List<Long> with,
         String narration,
         String mind
 ) implements ActivitySceneResult {

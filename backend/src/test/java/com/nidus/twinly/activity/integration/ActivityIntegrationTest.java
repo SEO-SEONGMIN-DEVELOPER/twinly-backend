@@ -20,7 +20,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 
@@ -58,7 +57,7 @@ class ActivityIntegrationTest extends AbstractIntegrationTest {
         User partner = saveUser();
 
         Scene scene = sceneRepository.save(actionScene(me.getId(), "v1", "학교 복도",
-                LocalDateTime.of(2026, 7, 26, 9, 0), LocalDateTime.of(2026, 7, 26, 10, 0),
+                LocalTime.of(9, 0), LocalTime.of(10, 0),
                 "복도를 천천히 걸었다", "조금 설레었다"));
         scenePartnerRepository.save(scenePartner(scene.getId(), partner.getId()));
         Question question = questionRepository.save(question(me.getId(), LocalTime.of(21, 30),
@@ -85,8 +84,11 @@ class ActivityIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.scenes[0].narration").value("복도를 천천히 걸었다"))
                 .andExpect(jsonPath("$.scenes[0].mind").value("조금 설레었다"))
                 .andExpect(jsonPath("$.scenes[0].with", hasSize(1)))
-                .andExpect(jsonPath("$.scenes[0].with[0].userId").value(partner.getId().toString()))
-                .andExpect(jsonPath("$.scenes[0].with[0].userName")
+                .andExpect(jsonPath("$.scenes[0].with[0]").value(partner.getId().toString()))
+                .andExpect(jsonPath("$.userInfos", hasSize(2)))
+                .andExpect(jsonPath("$.userInfos[0].userId").value(me.getId().toString()))
+                .andExpect(jsonPath("$.userInfos[1].userId").value(partner.getId().toString()))
+                .andExpect(jsonPath("$.userInfos[1].userName")
                         .value(partner.getFamilyName() + partner.getGivenName()))
                 .andExpect(jsonPath("$.questions", hasSize(1)))
                 .andExpect(jsonPath("$.questions[0].id").value(question.getId().toString()))
@@ -108,12 +110,12 @@ class ActivityIntegrationTest extends AbstractIntegrationTest {
         String linesJson = """
                 [
                   {"t":"narr","text":"교실이 조용해졌다"},
-                  {"t":"bubble","speaker":{"user_id":%d,"userName":"홍길동"},"action":"웃으며","text":"안녕"}
+                  {"t":"bubble","userId":%d,"action":"웃으며","text":"안녕"}
                 ]
                 """.formatted(partner.getId());
 
         Scene scene = sceneRepository.save(dialogueScene(me.getId(), "v1", "교실",
-                LocalDateTime.of(2026, 7, 26, 12, 0), LocalDateTime.of(2026, 7, 26, 12, 30), linesJson));
+                LocalTime.of(12, 0), LocalTime.of(12, 30), linesJson));
         scenePartnerRepository.save(scenePartner(scene.getId(), partner.getId()));
         flushAndClear();
 
@@ -127,8 +129,7 @@ class ActivityIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.scenes[0].type").value("dialogue"))
                 .andExpect(jsonPath("$.scenes[0].lines", hasSize(2)))
                 .andExpect(jsonPath("$.scenes[0].lines[0].text").value("교실이 조용해졌다"))
-                .andExpect(jsonPath("$.scenes[0].lines[1].speaker.userId").value(partner.getId().toString()))
-                .andExpect(jsonPath("$.scenes[0].lines[1].speaker.userName").value("홍길동"))
+                .andExpect(jsonPath("$.scenes[0].lines[1].userId").value(partner.getId().toString()))
                 .andExpect(jsonPath("$.scenes[0].lines[1].action").value("웃으며"))
                 .andExpect(jsonPath("$.scenes[0].lines[1].text").value("안녕"));
     }
@@ -144,13 +145,15 @@ class ActivityIntegrationTest extends AbstractIntegrationTest {
         var result = mockMvc.perform(get("/api/v1/activities/{date}", "2026-07-26")
                 .header("Authorization", bearer(me.getId())));
 
-        // then: 200 + version은 null, scenes/questions는 빈 배열
+        // then: 200 + version은 null, scenes/questions는 빈 배열이고 userInfos에는 조회자 본인만 남는다
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.userId").value(me.getId().toString()))
                 .andExpect(jsonPath("$.date").value("2026-07-26"))
                 .andExpect(jsonPath("$.version").doesNotExist())
                 .andExpect(jsonPath("$.scenes").isEmpty())
-                .andExpect(jsonPath("$.questions").isEmpty());
+                .andExpect(jsonPath("$.questions").isEmpty())
+                .andExpect(jsonPath("$.userInfos", hasSize(1)))
+                .andExpect(jsonPath("$.userInfos[0].userId").value(me.getId().toString()));
     }
 
     /** seasons는 엔티티에 생성 팩토리가 없어 네이티브 INSERT로 넣고, 현재 시즌이 되도록 is_active를 켠다. */
@@ -170,7 +173,7 @@ class ActivityIntegrationTest extends AbstractIntegrationTest {
     }
 
     private Scene actionScene(Long userId, String version, String place,
-                              LocalDateTime startsAt, LocalDateTime endsAt,
+                              LocalTime startsAt, LocalTime endsAt,
                               String narration, String mind) {
         Scene scene = newScene(userId, version, place, startsAt, endsAt, SceneType.ACTION);
         ReflectionTestUtils.setField(scene, "narration", narration);
@@ -179,7 +182,7 @@ class ActivityIntegrationTest extends AbstractIntegrationTest {
     }
 
     private Scene dialogueScene(Long userId, String version, String place,
-                                LocalDateTime startsAt, LocalDateTime endsAt, String lines) {
+                                LocalTime startsAt, LocalTime endsAt, String lines) {
         Scene scene = newScene(userId, version, place, startsAt, endsAt, SceneType.DIALOGUE);
         ReflectionTestUtils.setField(scene, "lines", lines, String.class);
         return scene;
@@ -188,7 +191,7 @@ class ActivityIntegrationTest extends AbstractIntegrationTest {
     // Scene/Question/ScenePartner는 protected 기본 생성자만 있고 생성 팩토리가 없으므로 리플렉션으로 픽스처를 만든다.
     // created_at 등 NOT NULL 컬럼은 반드시 채워야 INSERT가 통과한다.
     private Scene newScene(Long userId, String version, String place,
-                           LocalDateTime startsAt, LocalDateTime endsAt, SceneType type) {
+                           LocalTime startsAt, LocalTime endsAt, SceneType type) {
         Scene scene = BeanUtils.instantiateClass(Scene.class);
         ReflectionTestUtils.setField(scene, "userId", userId);
         ReflectionTestUtils.setField(scene, "date", DATE);
@@ -213,6 +216,7 @@ class ActivityIntegrationTest extends AbstractIntegrationTest {
         Question question = BeanUtils.instantiateClass(Question.class);
         ReflectionTestUtils.setField(question, "userId", userId);
         ReflectionTestUtils.setField(question, "date", DATE);
+        ReflectionTestUtils.setField(question, "version", "v1");
         ReflectionTestUtils.setField(question, "time", time);
         ReflectionTestUtils.setField(question, "type", type);
         ReflectionTestUtils.setField(question, "text", text);

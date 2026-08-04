@@ -9,7 +9,7 @@ public record PeopleEventActionSceneResult(
         OffsetDateTime startsAt,
         OffsetDateTime endsAt,
         String place,
-        List<PeopleEventSpeakerResult> with,
+        List<Long> with,
         String narration,
         String mind
 ) implements PeopleEventSceneResult {

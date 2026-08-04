@@ -1,5 +1,7 @@
 package com.nidus.twinly.activity.dto.result;
 
+import com.nidus.twinly.common.scene.SceneLine;
+
 import java.time.OffsetDateTime;
 import java.util.List;
 
@@ -9,7 +11,7 @@ public record ActivityDialogueSceneResult(
         OffsetDateTime startsAt,
         OffsetDateTime endsAt,
         String place,
-        List<ActivitySpeakerResult> with,
-        List<ActivityLineResult> lines
+        List<Long> with,
+        List<SceneLine> lines
 ) implements ActivitySceneResult {
 }

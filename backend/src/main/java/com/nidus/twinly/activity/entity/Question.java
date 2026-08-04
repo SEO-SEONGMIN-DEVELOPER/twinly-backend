@@ -27,6 +27,9 @@ public class Question {
 
     private LocalDate date;
 
+    @Column(columnDefinition = "TEXT")
+    private String version;
+
     @Column(nullable = false)
     private LocalTime time;
 
@@ -46,6 +49,23 @@ public class Question {
     private Boolean isSkipped;
 
     private Instant createdAt;
+
+    public static Question create(Long userId, LocalDate date, String version, LocalTime time, QuestionType type,
+                                  String text, List<String> options) {
+        Question question = new Question();
+
+        question.userId = userId;
+        question.date = date;
+        question.version = version;
+        question.time = time;
+        question.type = type;
+        question.text = text;
+        question.options = options;
+        question.isSkipped = false;
+        question.createdAt = Instant.now();
+
+        return question;
+    }
 
     public void answer(String choice) {
         this.choice = choice;

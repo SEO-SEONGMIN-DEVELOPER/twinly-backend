@@ -24,4 +24,14 @@ public class QuestionPartner {
     private Long userId;
 
     private Instant createdAt;
+
+    public static QuestionPartner create(Long questionId, Long userId) {
+        QuestionPartner questionPartner = new QuestionPartner();
+
+        questionPartner.questionId = questionId;
+        questionPartner.userId = userId;
+        questionPartner.createdAt = Instant.now();
+
+        return questionPartner;
+    }
 }

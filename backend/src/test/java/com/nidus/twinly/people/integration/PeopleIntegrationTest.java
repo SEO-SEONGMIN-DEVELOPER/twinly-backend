@@ -39,13 +39,13 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
     private static final LocalDate DAY_2 = LocalDate.of(2026, 7, 20);
 
     @Autowired
-    RelationshipRepository relationshipRepository;
-
-    @Autowired
     SceneRepository sceneRepository;
 
     @Autowired
     ScenePartnerRepository scenePartnerRepository;
+
+    @Autowired
+    RelationshipRepository relationshipRepository;
 
     @Autowired
     EncounterRepository encounterRepository;
@@ -81,7 +81,7 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.people[0].isHighlighted").doesNotExist())
                 .andExpect(jsonPath("$.people[1].userId").value(partner2.getId().toString()))
                 .andExpect(jsonPath("$.people[1].intimacy").value(80))
-                .andExpect(jsonPath("$.people[1].relationshipType").value("best_friend"))
+                .andExpect(jsonPath("$.people[1].relationshipType").value("bestFriend"))
                 .andExpect(jsonPath("$.page.hasMore").value(false))
                 .andExpect(jsonPath("$.page.nextCursor").isEmpty());
     }
@@ -125,7 +125,7 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.userId").value(partner.getId().toString()))
                 .andExpect(jsonPath("$.userName").value(partner.getFamilyName() + partner.getGivenName()))
                 .andExpect(jsonPath("$.intimacy").value(75))
-                .andExpect(jsonPath("$.relationshipType").value("best_friend"))
+                .andExpect(jsonPath("$.relationshipType").value("bestFriend"))
                 .andExpect(jsonPath("$.isFavorited").value(false))
                 .andExpect(jsonPath("$.isHighlighted").doesNotExist())
                 .andExpect(jsonPath("$.isBlocked").value(false))
@@ -261,8 +261,11 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.scenes[0].narration").value("복도를 함께 걸었다"))
                 .andExpect(jsonPath("$.scenes[0].mind").value("설렜다"))
                 .andExpect(jsonPath("$.scenes[0].with.length()").value(1))
-                .andExpect(jsonPath("$.scenes[0].with[0].userId").value(partner.getId().toString()))
-                .andExpect(jsonPath("$.scenes[0].with[0].userName").value(partner.getFamilyName() + partner.getGivenName()));
+                .andExpect(jsonPath("$.scenes[0].with[0]").value(partner.getId().toString()))
+                .andExpect(jsonPath("$.userInfos.length()").value(2))
+                .andExpect(jsonPath("$.userInfos[0].userId").value(me.getId().toString()))
+                .andExpect(jsonPath("$.userInfos[1].userId").value(partner.getId().toString()))
+                .andExpect(jsonPath("$.userInfos[1].userName").value(partner.getFamilyName() + partner.getGivenName()));
     }
 
     @Test
@@ -290,8 +293,10 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
         ReflectionTestUtils.setField(relationship, "userId", userId);
         ReflectionTestUtils.setField(relationship, "partnerUserId", partnerUserId);
         ReflectionTestUtils.setField(relationship, "date", date);
+        ReflectionTestUtils.setField(relationship, "version", "v1");
         ReflectionTestUtils.setField(relationship, "intimacy", intimacy);
         ReflectionTestUtils.setField(relationship, "partnerModel", partnerModel);
+        ReflectionTestUtils.setField(relationship, "updateTime", LocalTime.of(23, 0));
         ReflectionTestUtils.setField(relationship, "createdAt", Instant.now());
         return relationshipRepository.saveAndFlush(relationship);
     }
@@ -302,8 +307,8 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
         ReflectionTestUtils.setField(scene, "date", date);
         ReflectionTestUtils.setField(scene, "version", version);
         ReflectionTestUtils.setField(scene, "place", place);
-        ReflectionTestUtils.setField(scene, "startsAt", LocalDateTime.of(date, LocalTime.of(9, 0)));
-        ReflectionTestUtils.setField(scene, "endsAt", LocalDateTime.of(date, LocalTime.of(10, 0)));
+        ReflectionTestUtils.setField(scene, "startsAt", LocalTime.of(9, 0));
+        ReflectionTestUtils.setField(scene, "endsAt", LocalTime.of(10, 0));
         ReflectionTestUtils.setField(scene, "type", SceneType.ACTION);
         ReflectionTestUtils.setField(scene, "narration", narration);
         ReflectionTestUtils.setField(scene, "mind", mind);

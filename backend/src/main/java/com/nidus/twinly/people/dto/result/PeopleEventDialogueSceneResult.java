@@ -1,5 +1,7 @@
 package com.nidus.twinly.people.dto.result;
 
+import com.nidus.twinly.common.scene.SceneLine;
+
 import java.time.OffsetDateTime;
 import java.util.List;
 
@@ -9,7 +11,7 @@ public record PeopleEventDialogueSceneResult(
         OffsetDateTime startsAt,
         OffsetDateTime endsAt,
         String place,
-        List<PeopleEventSpeakerResult> with,
-        List<PeopleEventLineResult> lines
+        List<Long> with,
+        List<SceneLine> lines
 ) implements PeopleEventSceneResult {
 }

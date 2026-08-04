@@ -2,9 +2,9 @@ package com.nidus.twinly.people.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
-import com.nidus.twinly.people.dto.result.PeopleEventBubbleLineResult;
-import com.nidus.twinly.people.dto.result.PeopleEventLineResult;
-import com.nidus.twinly.people.dto.result.PeopleEventNarrationLineResult;
+import com.nidus.twinly.common.scene.SceneBubbleLine;
+import com.nidus.twinly.common.scene.SceneLine;
+import com.nidus.twinly.common.scene.SceneNarrationLine;
 
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.EXISTING_PROPERTY, property = "t")
 @JsonSubTypes({
@@ -13,10 +13,10 @@ import com.nidus.twinly.people.dto.result.PeopleEventNarrationLineResult;
 })
 public sealed interface PeopleEventLineResponse permits PeopleEventNarrationLineResponse, PeopleEventBubbleLineResponse {
 
-    static PeopleEventLineResponse from(PeopleEventLineResult result) {
-        return switch (result) {
-            case PeopleEventNarrationLineResult r -> PeopleEventNarrationLineResponse.from(r);
-            case PeopleEventBubbleLineResult r -> PeopleEventBubbleLineResponse.from(r);
+    static PeopleEventLineResponse from(SceneLine line) {
+        return switch (line) {
+            case SceneNarrationLine l -> PeopleEventNarrationLineResponse.from(l);
+            case SceneBubbleLine l -> PeopleEventBubbleLineResponse.from(l);
         };
     }
 }

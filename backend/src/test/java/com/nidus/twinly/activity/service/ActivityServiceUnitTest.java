@@ -3,13 +3,12 @@ package com.nidus.twinly.activity.service;
 import com.nidus.twinly.activity.domain.QuestionType;
 import com.nidus.twinly.activity.domain.SceneType;
 import com.nidus.twinly.activity.dto.result.ActivityActionSceneResult;
-import com.nidus.twinly.activity.dto.result.ActivityBubbleLineResult;
+import com.nidus.twinly.common.scene.SceneBubbleLine;
+import com.nidus.twinly.common.scene.SceneNarrationLine;
 import com.nidus.twinly.activity.dto.result.ActivityDialogueSceneResult;
-import com.nidus.twinly.activity.dto.result.ActivityNarrationLineResult;
-import com.nidus.twinly.activity.dto.result.ActivityProfilePhotoResult;
 import com.nidus.twinly.activity.dto.result.ActivityQuestionResult;
 import com.nidus.twinly.activity.dto.result.ActivityResult;
-import com.nidus.twinly.activity.dto.result.ActivitySpeakerResult;
+import com.nidus.twinly.activity.dto.result.ActivityUserInfoResult;
 import com.nidus.twinly.activity.entity.Question;
 import com.nidus.twinly.activity.entity.Scene;
 import com.nidus.twinly.activity.entity.ScenePartner;
@@ -39,7 +38,6 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -95,15 +93,16 @@ class ActivityServiceUnitTest {
     }
 
     @Test
-    @DisplayName("action 씬은 타입/장소/나레이션/속마음과 KST 시각, 동행 유저 이름까지 매핑하고 첫 씬의 version을 응답 version으로 쓴다")
+    @DisplayName("action 씬은 타입/장소/나레이션/속마음과 KST 시각, 동행 유저 id까지 매핑하고 첫 씬의 version을 응답 version으로 쓴다")
     void activity_maps_action_scene() {
         // given: 파트너 1명이 있는 action 씬 1개와 그 파트너 유저가 존재
         Scene scene = actionScene(10L, "v1", "학교 복도",
-                LocalDateTime.of(2026, 7, 26, 9, 0), LocalDateTime.of(2026, 7, 26, 10, 0),
+                LocalTime.of(9, 0), LocalTime.of(10, 0),
                 "복도를 천천히 걸었다", "조금 설레었다");
         given(sceneRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of(scene));
         given(scenePartnerRepository.findAllBySceneIdIn(List.of(10L))).willReturn(List.of(scenePartner(10L, 100L)));
-        given(userRepository.findAllById(List.of(100L))).willReturn(List.of(user(100L, "홍", "길동")));
+        given(userRepository.findAllById(List.of(USER_ID, 100L)))
+                .willReturn(List.of(user(USER_ID, "나", "자신"), user(100L, "홍", "길동")));
         given(questionRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of());
 
         // when: 활동 조회
@@ -124,7 +123,10 @@ class ActivityServiceUnitTest {
         assertThat(action.place()).isEqualTo("학교 복도");
         assertThat(action.narration()).isEqualTo("복도를 천천히 걸었다");
         assertThat(action.mind()).isEqualTo("조금 설레었다");
-        assertThat(action.with()).containsExactly(new ActivitySpeakerResult(100L, "홍길동"));
+        assertThat(action.with()).containsExactly(100L);
+        assertThat(result.userInfos()).containsExactly(
+                new ActivityUserInfoResult(USER_ID, "나자신", null),
+                new ActivityUserInfoResult(100L, "홍길동", null));
     }
 
     @Test
@@ -134,12 +136,13 @@ class ActivityServiceUnitTest {
         String linesJson = """
                 [
                   {"t":"narr","text":"교실이 조용해졌다"},
-                  {"t":"bubble","speaker":{"user_id":100,"userName":"홍길동"},"action":"웃으며","text":"안녕"}
+                  {"t":"bubble","userId":100,"action":"웃으며","text":"안녕"}
                 ]
                 """;
         Scene scene = dialogueScene(11L, "v1", "교실",
-                LocalDateTime.of(2026, 7, 26, 12, 0), LocalDateTime.of(2026, 7, 26, 12, 30), linesJson);
+                LocalTime.of(12, 0), LocalTime.of(12, 30), linesJson);
         given(sceneRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of(scene));
+        given(userRepository.findAllById(List.of(USER_ID))).willReturn(List.of(user(USER_ID, "나", "자신")));
         given(questionRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of());
 
         // when: 활동 조회
@@ -150,11 +153,11 @@ class ActivityServiceUnitTest {
         assertThat(dialogue.type()).isEqualTo("dialogue");
         assertThat(dialogue.lines()).hasSize(2);
 
-        ActivityNarrationLineResult narration = (ActivityNarrationLineResult) dialogue.lines().get(0);
+        SceneNarrationLine narration = (SceneNarrationLine) dialogue.lines().get(0);
         assertThat(narration.text()).isEqualTo("교실이 조용해졌다");
 
-        ActivityBubbleLineResult bubble = (ActivityBubbleLineResult) dialogue.lines().get(1);
-        assertThat(bubble.speaker()).isEqualTo(new ActivitySpeakerResult(100L, "홍길동"));
+        SceneBubbleLine bubble = (SceneBubbleLine) dialogue.lines().get(1);
+        assertThat(bubble.userId()).isEqualTo(100L);
         assertThat(bubble.action()).isEqualTo("웃으며");
         assertThat(bubble.text()).isEqualTo("안녕");
     }
@@ -170,8 +173,9 @@ class ActivityServiceUnitTest {
     void activity_broken_lines_json_does_not_fail_whole_day() {
         // given: lines에 배열이 아닌 JSON이 저장된 dialogue 씬
         Scene broken = dialogueScene(11L, "v1", "교실",
-                LocalDateTime.of(2026, 7, 26, 12, 0), LocalDateTime.of(2026, 7, 26, 12, 30), "{\"not\":\"an array\"}");
+                LocalTime.of(12, 0), LocalTime.of(12, 30), "{\"not\":\"an array\"}");
         given(sceneRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of(broken));
+        given(userRepository.findAllById(List.of(USER_ID))).willReturn(List.of(user(USER_ID, "나", "자신")));
         given(questionRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of());
 
         // when: 활동 조회
@@ -188,8 +192,9 @@ class ActivityServiceUnitTest {
     void activity_dialogue_with_null_lines_returns_empty_lines() {
         // given: lines가 저장되지 않은 dialogue 씬
         Scene scene = dialogueScene(11L, "v1", "교실",
-                LocalDateTime.of(2026, 7, 26, 12, 0), LocalDateTime.of(2026, 7, 26, 12, 30), null);
+                LocalTime.of(12, 0), LocalTime.of(12, 30), null);
         given(sceneRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of(scene));
+        given(userRepository.findAllById(List.of(USER_ID))).willReturn(List.of(user(USER_ID, "나", "자신")));
         given(questionRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of());
 
         // when: 활동 조회
@@ -205,6 +210,7 @@ class ActivityServiceUnitTest {
     void activity_maps_questions() {
         // given: 씬은 없고 PROMISE 질문 1개만 존재
         given(sceneRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of());
+        given(userRepository.findAllById(List.of(USER_ID))).willReturn(List.of(user(USER_ID, "나", "자신")));
         given(questionRepository.findAllByUserIdAndDate(USER_ID, DATE))
                 .willReturn(List.of(question(50L, LocalTime.of(21, 30), QuestionType.PROMISE,
                         "오늘 어땠어?", List.of("좋았어", "별로야"))));
@@ -228,6 +234,7 @@ class ActivityServiceUnitTest {
     void activity_without_scenes_returns_null_version() {
         // given: 해당 날짜에 씬도 질문도 없음
         given(sceneRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of());
+        given(userRepository.findAllById(List.of(USER_ID))).willReturn(List.of(user(USER_ID, "나", "자신")));
         given(questionRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of());
 
         // when: 활동 조회
@@ -241,19 +248,19 @@ class ActivityServiceUnitTest {
     }
 
     @Test
-    @DisplayName("profilePhotos는 with에 등장한 유저별로 한 건씩 담고, 사진이 없는 유저는 profilePhoto가 null이다")
-    void activity_maps_profile_photos_per_partner() {
+    @DisplayName("userInfos는 with에 등장한 유저별로 한 건씩 담고, 사진이 없는 유저는 profilePhoto가 null이다")
+    void activity_maps_user_infos_per_partner() {
         // given: 두 씬에 걸쳐 파트너 100(사진 있음), 200(사진 없음)이 등장하고 100은 두 씬 모두에 등장
         Scene first = actionScene(10L, "v1", "학교 복도",
-                LocalDateTime.of(2026, 7, 26, 9, 0), LocalDateTime.of(2026, 7, 26, 10, 0), "걸었다", "설레었다");
+                LocalTime.of(9, 0), LocalTime.of(10, 0), "걸었다", "설레었다");
         Scene second = actionScene(11L, "v1", "교실",
-                LocalDateTime.of(2026, 7, 26, 11, 0), LocalDateTime.of(2026, 7, 26, 12, 0), "앉았다", "무덤덤했다");
+                LocalTime.of(11, 0), LocalTime.of(12, 0), "앉았다", "무덤덤했다");
         given(sceneRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of(first, second));
         given(scenePartnerRepository.findAllBySceneIdIn(List.of(10L, 11L)))
                 .willReturn(List.of(scenePartner(10L, 100L), scenePartner(11L, 100L), scenePartner(11L, 200L)));
-        given(userRepository.findAllById(List.of(100L, 200L)))
-                .willReturn(List.of(user(100L, "홍", "길동"), user(200L, "김", "철수")));
-        given(photoRepository.findAllByUserIdInAndType(List.of(100L, 200L), PhotoType.PROFILE))
+        given(userRepository.findAllById(List.of(USER_ID, 100L, 200L)))
+                .willReturn(List.of(user(USER_ID, "나", "자신"), user(100L, "홍", "길동"), user(200L, "김", "철수")));
+        given(photoRepository.findAllByUserIdInAndType(List.of(USER_ID, 100L, 200L), PhotoType.PROFILE))
                 .willReturn(List.of(Photo.create(100L, PhotoType.PROFILE, "profile/100/key", 10, 20, 100, 200, Instant.now())));
         given(cloudFrontService.getSignedUrl("profile/100/key")).willReturn("https://cdn.example.com/signed100");
         given(questionRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of());
@@ -261,32 +268,35 @@ class ActivityServiceUnitTest {
         // when: 활동 조회
         ActivityResult result = activityService.activity(USER_ID, DATE);
 
-        // then: 여러 씬에 중복 등장한 유저도 한 건이고, key와 서명 URL이 함께 담긴다
-        assertThat(result.profilePhotos()).containsExactly(
-                new ActivityProfilePhotoResult(100L, new ProfilePhotoInfo("profile/100/key", "https://cdn.example.com/signed100",
+        // then: 조회자 본인이 맨 앞에 오고, 여러 씬에 중복 등장한 유저도 한 건이며, 이름과 key/서명 URL이 함께 담긴다
+        assertThat(result.userInfos()).containsExactly(
+                new ActivityUserInfoResult(USER_ID, "나자신", null),
+                new ActivityUserInfoResult(100L, "홍길동", new ProfilePhotoInfo("profile/100/key", "https://cdn.example.com/signed100",
                         new PhotoPosInfo(new PhotoPosInfo.StartPos(10, 20), 100, 200))),
-                new ActivityProfilePhotoResult(200L, null));
+                new ActivityUserInfoResult(200L, "김철수", null));
     }
 
     @Test
-    @DisplayName("동행 유저가 없으면 profilePhotos는 비어 있고 사진을 조회하지 않는다")
-    void activity_without_partners_returns_empty_profile_photos() {
+    @DisplayName("동행 유저가 없는 action 씬은 with가 null이고 userInfos에는 조회자 본인만 담긴다")
+    void activity_without_partners_returns_null_with() {
         // given: 동행자가 없는 씬 1개
         Scene scene = actionScene(10L, "v1", "집",
-                LocalDateTime.of(2026, 7, 26, 9, 0), LocalDateTime.of(2026, 7, 26, 10, 0), "쉬었다", "편안했다");
+                LocalTime.of(9, 0), LocalTime.of(10, 0), "쉬었다", "편안했다");
         given(sceneRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of(scene));
+        given(userRepository.findAllById(List.of(USER_ID))).willReturn(List.of(user(USER_ID, "나", "자신")));
         given(questionRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of());
 
         // when: 활동 조회
         ActivityResult result = activityService.activity(USER_ID, DATE);
 
-        // then: 빈 IN 절 조회로 DB를 때리지 않는다
-        assertThat(result.profilePhotos()).isEmpty();
-        then(photoRepository).should(never()).findAllByUserIdInAndType(any(), any());
+        // then: 빈 배열이 아니라 null로 내려가고, 본인 정보는 그대로 담긴다
+        ActivityActionSceneResult action = (ActivityActionSceneResult) result.scenes().get(0);
+        assertThat(action.with()).isNull();
+        assertThat(result.userInfos()).containsExactly(new ActivityUserInfoResult(USER_ID, "나자신", null));
     }
 
     private Scene actionScene(Long id, String version, String place,
-                              LocalDateTime startsAt, LocalDateTime endsAt,
+                              LocalTime startsAt, LocalTime endsAt,
                               String narration, String mind) {
         Scene scene = newScene(id, version, place, startsAt, endsAt, SceneType.ACTION);
         ReflectionTestUtils.setField(scene, "narration", narration);
@@ -295,7 +305,7 @@ class ActivityServiceUnitTest {
     }
 
     private Scene dialogueScene(Long id, String version, String place,
-                                LocalDateTime startsAt, LocalDateTime endsAt, String lines) {
+                                LocalTime startsAt, LocalTime endsAt, String lines) {
         Scene scene = newScene(id, version, place, startsAt, endsAt, SceneType.DIALOGUE);
         ReflectionTestUtils.setField(scene, "lines", lines, String.class);
         return scene;
@@ -303,7 +313,7 @@ class ActivityServiceUnitTest {
 
     // Scene은 protected 기본 생성자만 있으므로 리플렉션으로 인스턴스를 만들고 필드를 채운다.
     private Scene newScene(Long id, String version, String place,
-                           LocalDateTime startsAt, LocalDateTime endsAt, SceneType type) {
+                           LocalTime startsAt, LocalTime endsAt, SceneType type) {
         Scene scene = BeanUtils.instantiateClass(Scene.class);
         ReflectionTestUtils.setField(scene, "id", id);
         ReflectionTestUtils.setField(scene, "userId", USER_ID);

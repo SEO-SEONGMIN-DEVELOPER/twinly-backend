@@ -1,13 +1,12 @@
 package com.nidus.twinly.activity.controller;
 
 import com.nidus.twinly.activity.dto.result.ActivityActionSceneResult;
-import com.nidus.twinly.activity.dto.result.ActivityBubbleLineResult;
+import com.nidus.twinly.common.scene.SceneBubbleLine;
+import com.nidus.twinly.common.scene.SceneNarrationLine;
 import com.nidus.twinly.activity.dto.result.ActivityDialogueSceneResult;
-import com.nidus.twinly.activity.dto.result.ActivityNarrationLineResult;
-import com.nidus.twinly.activity.dto.result.ActivityProfilePhotoResult;
 import com.nidus.twinly.activity.dto.result.ActivityQuestionResult;
 import com.nidus.twinly.activity.dto.result.ActivityResult;
-import com.nidus.twinly.activity.dto.result.ActivitySpeakerResult;
+import com.nidus.twinly.activity.dto.result.ActivityUserInfoResult;
 import com.nidus.twinly.activity.service.ActivityService;
 import com.nidus.twinly.anon.service.AnonService;
 import com.nidus.twinly.common.photo.PhotoPosInfo;
@@ -17,6 +16,8 @@ import com.nidus.twinly.user.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import com.nidus.twinly.common.security.SecurityConfig;
+import org.springframework.context.annotation.Import;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -29,6 +30,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.startsWith;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -41,6 +43,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(ActivityController.class)
+@Import(SecurityConfig.class)
 class ActivityControllerUnitTest {
 
     private static final LocalDate DATE = LocalDate.of(2026, 7, 26);
@@ -52,8 +55,7 @@ class ActivityControllerUnitTest {
     @MockitoBean
     ActivityService activityService;
 
-    // ActivityController가 직접 쓰진 않지만, WebMvcConfig가 두 resolver를 모두 주입받고
-    // 각 resolver가 이 서비스에 의존하므로 슬라이스 기동에 필수.
+    // SecurityConfig가 JWT·익명 세션 필터를 함께 만들고 각 필터가 이 서비스에 의존하므로 슬라이스 기동에 둘 다 필수.
     @MockitoBean
     UserService userService;
 
@@ -92,16 +94,14 @@ class ActivityControllerUnitTest {
                 .andExpect(jsonPath("$.scenes[0].narration").value("복도를 천천히 걸었다"))
                 .andExpect(jsonPath("$.scenes[0].mind").value("조금 설레었다"))
                 .andExpect(jsonPath("$.scenes[0].with", hasSize(1)))
-                .andExpect(jsonPath("$.scenes[0].with[0].userId").value("100"))
-                .andExpect(jsonPath("$.scenes[0].with[0].userName").value("홍길동"))
+                .andExpect(jsonPath("$.scenes[0].with[0]", is("100")))
                 .andExpect(jsonPath("$.scenes[1].sceneId").value("11"))
                 .andExpect(jsonPath("$.scenes[1].type").value("dialogue"))
                 .andExpect(jsonPath("$.scenes[1].lines", hasSize(2)))
                 .andExpect(jsonPath("$.scenes[1].lines[0].t").value("narr"))
                 .andExpect(jsonPath("$.scenes[1].lines[0].text").value("교실이 조용해졌다"))
                 .andExpect(jsonPath("$.scenes[1].lines[1].t").value("bubble"))
-                .andExpect(jsonPath("$.scenes[1].lines[1].speaker.userId").value("100"))
-                .andExpect(jsonPath("$.scenes[1].lines[1].speaker.userName").value("홍길동"))
+                .andExpect(jsonPath("$.scenes[1].lines[1].userId", is("100")))
                 .andExpect(jsonPath("$.scenes[1].lines[1].action").value("웃으며"))
                 .andExpect(jsonPath("$.scenes[1].lines[1].text").value("안녕"))
                 .andExpect(jsonPath("$.questions", hasSize(1)))
@@ -111,12 +111,13 @@ class ActivityControllerUnitTest {
                 .andExpect(jsonPath("$.questions[0].text").value("오늘 어땠어?"))
                 .andExpect(jsonPath("$.questions[0].options", hasSize(2)))
                 .andExpect(jsonPath("$.questions[0].options[0]").value("좋았어"))
-                .andExpect(jsonPath("$.profilePhotos", hasSize(1)))
-                .andExpect(jsonPath("$.profilePhotos[0].userId").value("100"))
-                .andExpect(jsonPath("$.profilePhotos[0].profilePhoto.key").value("profile/100/key"))
-                .andExpect(jsonPath("$.profilePhotos[0].profilePhoto.photoUrl").value("https://cdn.example.com/signed"))
-                .andExpect(jsonPath("$.profilePhotos[0].profilePhoto.position.startPos.x").value(10))
-                .andExpect(jsonPath("$.profilePhotos[0].profilePhoto.position.height").value(200));
+                .andExpect(jsonPath("$.userInfos", hasSize(1)))
+                .andExpect(jsonPath("$.userInfos[0].userId").value("100"))
+                .andExpect(jsonPath("$.userInfos[0].userName").value("홍길동"))
+                .andExpect(jsonPath("$.userInfos[0].profilePhoto.key").value("profile/100/key"))
+                .andExpect(jsonPath("$.userInfos[0].profilePhoto.photoUrl").value("https://cdn.example.com/signed"))
+                .andExpect(jsonPath("$.userInfos[0].profilePhoto.position.startPos.x").value(10))
+                .andExpect(jsonPath("$.userInfos[0].profilePhoto.position.height").value(200));
 
         // then: 인증 유저 id(1)와 경로에서 LocalDate로 변환된 date로 서비스에 위임
         then(activityService).should().activity(1L, DATE);
@@ -146,7 +147,7 @@ class ActivityControllerUnitTest {
     }
 
     private ActivityResult sampleResult() {
-        ActivitySpeakerResult speaker = new ActivitySpeakerResult(100L, "홍길동");
+        Long userId = 100L;
 
         ActivityActionSceneResult action = new ActivityActionSceneResult(
                 10L,
@@ -154,7 +155,7 @@ class ActivityControllerUnitTest {
                 OffsetDateTime.of(2026, 7, 26, 9, 0, 0, 0, KST),
                 OffsetDateTime.of(2026, 7, 26, 10, 0, 0, 0, KST),
                 "학교 복도",
-                List.of(speaker),
+                List.of(userId),
                 "복도를 천천히 걸었다",
                 "조금 설레었다"
         );
@@ -165,10 +166,10 @@ class ActivityControllerUnitTest {
                 OffsetDateTime.of(2026, 7, 26, 12, 0, 0, 0, KST),
                 OffsetDateTime.of(2026, 7, 26, 12, 30, 0, 0, KST),
                 "교실",
-                List.of(speaker),
+                List.of(userId),
                 List.of(
-                        new ActivityNarrationLineResult("narr", "교실이 조용해졌다"),
-                        new ActivityBubbleLineResult("bubble", speaker, "웃으며", "안녕")
+                        new SceneNarrationLine("narr", "교실이 조용해졌다"),
+                        new SceneBubbleLine("bubble", userId, "웃으며", "안녕")
                 )
         );
 
@@ -180,10 +181,10 @@ class ActivityControllerUnitTest {
                 List.of("좋았어", "별로야")
         );
 
-        ActivityProfilePhotoResult profilePhoto = new ActivityProfilePhotoResult(100L,
+        ActivityUserInfoResult userInfo = new ActivityUserInfoResult(100L, "홍길동",
                 new ProfilePhotoInfo("profile/100/key", "https://cdn.example.com/signed",
                         new PhotoPosInfo(new PhotoPosInfo.StartPos(10, 20), 100, 200)));
 
-        return new ActivityResult(1L, 7L, DATE, "v1", Instant.now(), List.of(action, dialogue), List.of(question), List.of(profilePhoto));
+        return new ActivityResult(1L, 7L, DATE, "v1", Instant.now(), List.of(action, dialogue), List.of(question), List.of(userInfo));
     }
 }

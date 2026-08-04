@@ -8,6 +8,7 @@ import com.nidus.twinly.activity.repository.QuestionRepository;
 import com.nidus.twinly.activity.repository.ScenePartnerRepository;
 import com.nidus.twinly.activity.repository.SceneRepository;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
+import com.nidus.twinly.common.scene.SceneLine;
 import com.nidus.twinly.common.photo.PhotoType;
 import com.nidus.twinly.common.photo.ProfilePhotoInfo;
 import com.nidus.twinly.common.time.KstTimes;
@@ -31,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Slf4j
 @Service
@@ -55,12 +57,14 @@ public class ActivityService {
         Map<Long, List<Long>> partnerUserIdsBySceneId = scenePartners.stream()
                 .collect(Collectors.groupingBy(ScenePartner::getSceneId, Collectors.mapping(ScenePartner::getUserId, Collectors.toList())));
 
-        List<Long> allPartnerUserIds = scenePartners.stream().map(ScenePartner::getUserId).distinct().toList();
-        Map<Long, User> partnerUserById = userRepository.findAllById(allPartnerUserIds).stream()
+        List<Long> userInfoUserIds = Stream.concat(Stream.of(userId), scenePartners.stream().map(ScenePartner::getUserId))
+                .distinct()
+                .toList();
+        Map<Long, User> userById = userRepository.findAllById(userInfoUserIds).stream()
                 .collect(Collectors.toMap(User::getId, Function.identity()));
 
         List<ActivitySceneResult> sceneResults = scenes.stream()
-                .map(scene -> toSceneResult(scene, partnerUserIdsBySceneId.getOrDefault(scene.getId(), List.of()), partnerUserById))
+                .map(scene -> toSceneResult(scene, partnerUserIdsBySceneId.get(scene.getId())))
                 .toList();
 
         List<Question> questions = questionRepository.findAllByUserIdAndDate(userId, date);
@@ -76,17 +80,13 @@ public class ActivityService {
                 Instant.now(),
                 sceneResults,
                 questionResults,
-                toProfilePhotoResults(allPartnerUserIds, partnerUserById)
+                toUserInfoResults(userInfoUserIds, userById)
         );
     }
 
-    private ActivitySceneResult toSceneResult(Scene scene, List<Long> partnerUserIds, Map<Long, User> partnerUserById) {
-        List<ActivitySpeakerResult> with = partnerUserIds.stream()
-                .map(partnerUserId -> toSpeakerResult(partnerUserId, partnerUserById))
-                .toList();
-
-        OffsetDateTime startsAt = KstTimes.toKstOffsetDateTime(scene.getStartsAt());
-        OffsetDateTime endsAt = KstTimes.toKstOffsetDateTime(scene.getEndsAt());
+    private ActivitySceneResult toSceneResult(Scene scene, List<Long> with) {
+        OffsetDateTime startsAt = KstTimes.toKstOffsetDateTime(scene.getDate().atTime(scene.getStartsAt()));
+        OffsetDateTime endsAt = KstTimes.toKstOffsetDateTime(scene.getDate().atTime(scene.getEndsAt()));
 
         return switch (scene.getType()) {
             case ACTION -> new ActivityActionSceneResult(
@@ -111,36 +111,29 @@ public class ActivityService {
         };
     }
 
-    private List<ActivityProfilePhotoResult> toProfilePhotoResults(List<Long> partnerUserIds, Map<Long, User> partnerUserById) {
-        if (partnerUserIds.isEmpty()) {
-            return List.of();
-        }
-
-        List<Long> visiblePartnerUserIds = partnerUserIds.stream()
-                .filter(partnerUserId -> !partnerUserById.get(partnerUserId).isWithdrawn())
+    private List<ActivityUserInfoResult> toUserInfoResults(List<Long> userIds, Map<Long, User> userById) {
+        List<Long> visibleUserIds = userIds.stream()
+                .filter(userId -> !userById.get(userId).isWithdrawn())
                 .toList();
 
-        Map<Long, ProfilePhotoInfo> profilePhotoByUserId = photoRepository.findAllByUserIdInAndType(visiblePartnerUserIds, PhotoType.PROFILE).stream()
+        Map<Long, ProfilePhotoInfo> profilePhotoByUserId = photoRepository.findAllByUserIdInAndType(visibleUserIds, PhotoType.PROFILE).stream()
                 .collect(Collectors.toMap(Photo::getUserId, photo -> new ProfilePhotoInfo(photo.getKey(), cloudFrontService.getSignedUrl(photo.getKey()), photo.position())));
 
-        return partnerUserIds.stream()
-                .map(partnerUserId -> new ActivityProfilePhotoResult(partnerUserId, profilePhotoByUserId.get(partnerUserId)))
+        return userIds.stream()
+                .map(userId -> new ActivityUserInfoResult(
+                        userId,
+                        userById.get(userId).displayName(),
+                        profilePhotoByUserId.get(userId)))
                 .toList();
     }
 
-    private ActivitySpeakerResult toSpeakerResult(Long partnerUserId, Map<Long, User> partnerUserById) {
-        User partner = partnerUserById.get(partnerUserId);
-        String userName = partner.displayName();
-        return new ActivitySpeakerResult(partnerUserId, userName);
-    }
-
-    private List<ActivityLineResult> parseLines(Scene scene) {
+    private List<SceneLine> parseLines(Scene scene) {
         if (scene.getLines() == null) {
             return List.of();
         }
 
         try {
-            return objectMapper.readValue(scene.getLines(), new TypeReference<List<ActivityLineResult>>() {
+            return objectMapper.readValue(scene.getLines(), new TypeReference<List<SceneLine>>() {
             });
         } catch (JacksonException e) {
             log.warn("씬 대사 파싱에 실패해 빈 목록으로 대체합니다. sceneId={}", scene.getId(), e);

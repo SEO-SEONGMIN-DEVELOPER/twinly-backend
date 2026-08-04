@@ -13,7 +13,8 @@ public record PeopleEventDialogueSceneResponse(
         OffsetDateTime startsAt,
         OffsetDateTime endsAt,
         String place,
-        List<PeopleEventSpeakerResponse> with,
+        @JsonFormat(shape = JsonFormat.Shape.STRING)
+        List<Long> with,
         List<PeopleEventLineResponse> lines
 ) implements PeopleEventSceneResponse {
 
@@ -24,7 +25,7 @@ public record PeopleEventDialogueSceneResponse(
                 result.startsAt(),
                 result.endsAt(),
                 result.place(),
-                result.with().stream().map(PeopleEventSpeakerResponse::from).toList(),
+                result.with(),
                 result.lines().stream().map(PeopleEventLineResponse::from).toList()
         );
     }

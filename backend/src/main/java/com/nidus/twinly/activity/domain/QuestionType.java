@@ -1,6 +1,8 @@
 package com.nidus.twinly.activity.domain;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 public enum QuestionType {
-    PROMISE,
-    PERSONA
+    @JsonProperty("promise") PROMISE,
+    @JsonProperty("persona") PERSONA
 }

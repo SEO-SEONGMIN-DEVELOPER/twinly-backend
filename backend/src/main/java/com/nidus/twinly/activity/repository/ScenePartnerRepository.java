@@ -11,6 +11,8 @@ public interface ScenePartnerRepository extends JpaRepository<ScenePartner, Long
 
     List<ScenePartner> findAllBySceneIdIn(List<Long> sceneIds);
 
+    void deleteAllBySceneIdIn(List<Long> sceneIds);
+
     boolean existsBySceneIdAndUserId(Long sceneId, Long userId);
 
     @Query(value = """

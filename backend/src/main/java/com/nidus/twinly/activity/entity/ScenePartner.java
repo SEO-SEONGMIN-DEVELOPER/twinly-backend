@@ -24,4 +24,14 @@ public class ScenePartner {
     private Long userId;
 
     private Instant createdAt;
+
+    public static ScenePartner create(Long sceneId, Long userId) {
+        ScenePartner scenePartner = new ScenePartner();
+
+        scenePartner.sceneId = sceneId;
+        scenePartner.userId = userId;
+        scenePartner.createdAt = Instant.now();
+
+        return scenePartner;
+    }
 }

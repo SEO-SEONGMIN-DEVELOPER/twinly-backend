@@ -8,4 +8,6 @@ import java.util.List;
 public interface QuestionPartnerRepository extends JpaRepository<QuestionPartner, Long> {
 
     List<QuestionPartner> findAllByQuestionIdIn(List<Long> questionIds);
+
+    void deleteAllByQuestionIdIn(List<Long> questionIds);
 }

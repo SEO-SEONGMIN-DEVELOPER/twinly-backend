@@ -17,12 +17,11 @@ import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.match.entity.Match;
 import com.nidus.twinly.match.repository.MatchRepository;
+import com.nidus.twinly.common.scene.SceneNarrationLine;
 import com.nidus.twinly.people.domain.IntimacyResolution;
 import com.nidus.twinly.people.dto.result.PeopleEventActionSceneResult;
-import com.nidus.twinly.people.dto.result.PeopleEventNarrationLineResult;
-import com.nidus.twinly.people.dto.result.PeopleEventProfilePhotoResult;
 import com.nidus.twinly.people.dto.result.PeopleEventResult;
-import com.nidus.twinly.people.dto.result.PeopleEventSpeakerResult;
+import com.nidus.twinly.people.dto.result.PeopleEventUserInfoResult;
 import com.nidus.twinly.people.dto.result.PeopleEventsResult;
 import com.nidus.twinly.people.dto.result.PeopleIntimacySeriesItemResult;
 import com.nidus.twinly.people.dto.result.PeopleIntimacySeriesResult;
@@ -80,9 +79,6 @@ class PeopleServiceUnitTest {
     private static final Long ME = 1L;
 
     @Mock
-    RelationshipRepository relationshipRepository;
-
-    @Mock
     UserRepository userRepository;
 
     @Mock
@@ -99,6 +95,9 @@ class PeopleServiceUnitTest {
 
     @Mock
     SceneRepository sceneRepository;
+
+    @Mock
+    RelationshipRepository relationshipRepository;
 
     @Mock
     EncounterRepository encounterRepository;
@@ -340,6 +339,7 @@ class PeopleServiceUnitTest {
     void deleteFavorites_updates_preference() {
         // given: 이미 즐겨찾기된 상태
         given(encounterRepository.findByUserAIdAndUserBId(ME, 20L)).willReturn(Optional.of(encounter(9L, ME, 20L)));
+        given(encounterRepository.findByUserAIdAndUserBId(ME, 20L)).willReturn(Optional.of(encounter(9L, ME, 20L)));
         given(encounterPreferenceRepository.findByEncounterIdAndUserId(9L, ME))
                 .willReturn(Optional.of(preference(9L, ME, true)));
 
@@ -546,7 +546,7 @@ class PeopleServiceUnitTest {
                 .willReturn(List.of(
                         relationship(ME, 20L, day1, 10, "{}"),
                         relationship(ME, 20L, day2, 35, "{}")));
-        willReturn(List.of(new PeopleEventNarrationLineResult("narr", "안녕이라고 했다")))
+        willReturn(List.of(new SceneNarrationLine("narr", "안녕이라고 했다")))
                 .given(objectMapper).readValue(eq(linesJson), any(TypeReference.class));
 
         // when: 이벤트 목록 조회
@@ -596,8 +596,8 @@ class PeopleServiceUnitTest {
                         scene(100L, ME, date, "v1", "학교 복도", SceneType.ACTION, "복도를 함께 걸었다", "설렜다", null)));
         given(scenePartnerRepository.findAllBySceneIdIn(List.of(100L)))
                 .willReturn(List.of(scenePartner(100L, 20L)));
-        given(userRepository.findAllById(List.of(20L)))
-                .willReturn(List.of(user(20L, "김", "철수")));
+        given(userRepository.findAllById(List.of(ME, 20L)))
+                .willReturn(List.of(user(ME, "나", "자신"), user(20L, "김", "철수")));
 
         // when: 이벤트 상세 조회
         PeopleEventResult result = peopleService.event(ME, 20L, date);
@@ -615,13 +615,15 @@ class PeopleServiceUnitTest {
         assertThat(actionScene.place()).isEqualTo("학교 복도");
         assertThat(actionScene.narration()).isEqualTo("복도를 함께 걸었다");
         assertThat(actionScene.mind()).isEqualTo("설렜다");
-        assertThat(actionScene.with()).extracting(PeopleEventSpeakerResult::userId).containsExactly(20L);
-        assertThat(actionScene.with()).extracting(PeopleEventSpeakerResult::userName).containsExactly("김철수");
+        assertThat(actionScene.with()).containsExactly(20L);
+        assertThat(result.userInfos()).containsExactly(
+                new PeopleEventUserInfoResult(ME, "나자신", null),
+                new PeopleEventUserInfoResult(20L, "김철수", null));
     }
 
     @Test
-    @DisplayName("이벤트 상세의 profilePhotos는 남은 씬의 with에 등장한 유저만 담는다")
-    void event_maps_profile_photos_of_remaining_scenes() {
+    @DisplayName("이벤트 상세의 userInfos는 남은 씬의 with에 등장한 유저만 담는다")
+    void event_maps_user_infos_of_remaining_scenes() {
         given(userRepository.existsById(20L)).willReturn(true);
         // given: 상대(20)가 참여한 씬에는 30도 함께 있다. 상대가 없는 씬(40만 참여)은 쿼리 단계에서 빠진다
         LocalDate date = LocalDate.of(2026, 7, 20);
@@ -630,33 +632,37 @@ class PeopleServiceUnitTest {
                         scene(100L, ME, date, "v1", "학교 복도", SceneType.ACTION, "함께 걸었다", "설렜다", null)));
         given(scenePartnerRepository.findAllBySceneIdIn(List.of(100L)))
                 .willReturn(List.of(scenePartner(100L, 20L), scenePartner(100L, 30L)));
-        given(userRepository.findAllById(List.of(20L, 30L)))
-                .willReturn(List.of(user(20L, "김", "철수"), user(30L, "박", "영희")));
-        given(photoRepository.findAllByUserIdInAndType(List.of(20L, 30L), PhotoType.PROFILE))
+        given(userRepository.findAllById(List.of(ME, 20L, 30L)))
+                .willReturn(List.of(user(ME, "나", "자신"), user(20L, "김", "철수"), user(30L, "박", "영희")));
+        given(photoRepository.findAllByUserIdInAndType(List.of(ME, 20L, 30L), PhotoType.PROFILE))
                 .willReturn(List.of(Photo.create(20L, PhotoType.PROFILE, "profile/20/key", 10, 20, 100, 200, Instant.now())));
         given(cloudFrontService.getSignedUrl("profile/20/key")).willReturn("https://cdn.example.com/signed20");
 
         // when: 이벤트 상세 조회
         PeopleEventResult result = peopleService.event(ME, 20L, date);
 
-        // then: 쿼리에서 빠진 씬의 40은 애초에 조회되지 않고, 사진이 없는 30은 profilePhoto가 null
-        assertThat(result.profilePhotos()).containsExactly(
-                new PeopleEventProfilePhotoResult(20L, new ProfilePhotoInfo("profile/20/key", "https://cdn.example.com/signed20",
+        // then: 조회자 본인이 맨 앞에 오고, 쿼리에서 빠진 씬의 40은 애초에 조회되지 않으며, 사진이 없는 30은 profilePhoto가 null
+        assertThat(result.userInfos()).containsExactly(
+                new PeopleEventUserInfoResult(ME, "나자신", null),
+                new PeopleEventUserInfoResult(20L, "김철수", new ProfilePhotoInfo("profile/20/key", "https://cdn.example.com/signed20",
                         new PhotoPosInfo(new PhotoPosInfo.StartPos(10, 20), 100, 200))),
-                new PeopleEventProfilePhotoResult(30L, null));
+                new PeopleEventUserInfoResult(30L, "박영희", null));
     }
 
     @Test
     @DisplayName("해당 날짜에 씬이 없으면 빈 씬 목록과 null version을 반환한다")
     void event_without_scenes_returns_empty() {
         given(userRepository.existsById(20L)).willReturn(true);
+        given(userRepository.findAllById(List.of(ME))).willReturn(List.of(user(ME, "나", "자신")));
+
         // when: 씬이 없는 날짜로 이벤트 상세 조회
         PeopleEventResult result = peopleService.event(ME, 20L, LocalDate.of(2026, 7, 20));
 
-        // then: 빈 씬 목록 + version은 null
+        // then: 빈 씬 목록 + version은 null이고 userInfos에는 조회자 본인만 담긴다
         assertThat(result.scenes()).isEmpty();
         assertThat(result.version()).isNull();
         assertThat(result.userId()).isEqualTo(20L);
+        assertThat(result.userInfos()).containsExactly(new PeopleEventUserInfoResult(ME, "나자신", null));
     }
 
     // ------------------------------------------------------------ learnedFacts()
@@ -706,6 +712,12 @@ class PeopleServiceUnitTest {
         return relationship;
     }
 
+    private Encounter encounter(Long id, Long userId1, Long userId2) {
+        Encounter encounter = Encounter.create(userId1, userId2);
+        ReflectionTestUtils.setField(encounter, "id", id);
+        return encounter;
+    }
+
     private Scene scene(Long id, Long userId, LocalDate date, String version, String place,
                         SceneType type, String narration, String mind, String lines) {
         Scene scene = newInstance(Scene.class);
@@ -714,8 +726,8 @@ class PeopleServiceUnitTest {
         ReflectionTestUtils.setField(scene, "date", date);
         ReflectionTestUtils.setField(scene, "version", version);
         ReflectionTestUtils.setField(scene, "place", place);
-        ReflectionTestUtils.setField(scene, "startsAt", LocalDateTime.of(date, java.time.LocalTime.of(9, 0)));
-        ReflectionTestUtils.setField(scene, "endsAt", LocalDateTime.of(date, java.time.LocalTime.of(10, 0)));
+        ReflectionTestUtils.setField(scene, "startsAt", java.time.LocalTime.of(9, 0));
+        ReflectionTestUtils.setField(scene, "endsAt", java.time.LocalTime.of(10, 0));
         ReflectionTestUtils.setField(scene, "type", type);
         ReflectionTestUtils.setField(scene, "narration", narration);
         ReflectionTestUtils.setField(scene, "mind", mind);
@@ -742,12 +754,6 @@ class PeopleServiceUnitTest {
         ChatRoom chatRoom = ChatRoom.create(matchId);
         ReflectionTestUtils.setField(chatRoom, "id", id);
         return chatRoom;
-    }
-
-    private Encounter encounter(Long id, Long userId1, Long userId2) {
-        Encounter encounter = Encounter.create(userId1, userId2);
-        ReflectionTestUtils.setField(encounter, "id", id);
-        return encounter;
     }
 
     private EncounterPreference preference(Long encounterId, Long userId, boolean isFavorited) {
