@@ -6,6 +6,8 @@ import com.nidus.twinly.user.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import com.nidus.twinly.common.security.SecurityConfig;
+import org.springframework.context.annotation.Import;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -23,6 +25,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(AnonController.class)
+@Import(SecurityConfig.class)
 class AnonControllerUnitTest {
 
     private static final UUID TOKEN = UUID.fromString("11111111-2222-3333-4444-555555555555");
@@ -34,8 +37,7 @@ class AnonControllerUnitTest {
     @MockitoBean
     AnonService anonService;
 
-    // AnonController가 직접 쓰진 않지만, WebMvcConfig가 두 resolver를 모두 주입받고
-    // CurrentUserArgumentResolver가 UserService에 의존하므로 슬라이스 기동에 필수.
+    // SecurityConfig가 JWT·익명 세션 필터를 함께 만들고 각 필터가 이 서비스에 의존하므로 슬라이스 기동에 둘 다 필수.
     @MockitoBean
     UserService userService;
 
