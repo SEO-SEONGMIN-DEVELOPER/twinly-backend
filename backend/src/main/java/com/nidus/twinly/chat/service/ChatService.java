@@ -22,6 +22,7 @@ import com.nidus.twinly.chat.event.ChatMessageCreatedEvent;
 import com.nidus.twinly.chat.event.ChatReadAdvancedEvent;
 import com.nidus.twinly.match.entity.Match;
 import com.nidus.twinly.match.repository.MatchRepository;
+import com.nidus.twinly.notification.writer.AppNotificationFeedWriter;
 import com.nidus.twinly.relationship.domain.RelationshipSpecificType;
 import com.nidus.twinly.relationship.entity.Relationship;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
@@ -68,6 +69,7 @@ public class ChatService {
     private final DisclosureAgreementRepository disclosureAgreementRepository;
     private final BlockRepository blockRepository;
     private final CurrentSeasonReader currentSeasonReader;
+    private final AppNotificationFeedWriter appNotificationFeedWriter;
 
     private final ApplicationEventPublisher eventPublisher;
 
@@ -264,7 +266,7 @@ public class ChatService {
                 ),
                 new ChatRoomPartnerResult(
                         partner.getId(),
-                        partner.displayNickname(),
+                        partner.displayName(),
                         toProfilePhotoInfo(partner, partnerPhoto),
                         relationship != null ? relationship.getIntimacy() : 0,
                         partner.isWithdrawn()
@@ -319,7 +321,7 @@ public class ChatService {
                 ),
                 new ChatRoomDetailPartnerResult(
                         partner.getId(),
-                        partner.displayNickname(),
+                        partner.displayName(),
                         toProfilePhotoInfo(partner, partnerPhoto),
                         intimacy,
                         RelationshipSpecificType.fromIntimacy(intimacy),
@@ -342,11 +344,23 @@ public class ChatService {
         Match match = matchRepository.findById(room.getMatchId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.MATCH_NOT_FOUND));
 
-        checkUserInMatch(match, userId);
+        Long partnerUserId = resolvePartnerId(match, userId);
 
-        getActiveParticipation(roomId, userId).agree();
+        ChatRoomParticipation mine = getActiveParticipation(roomId, userId);
+        boolean firstAgreement = mine.getEntryAgreedAt() == null;
+        mine.agree();
+
+        if (firstAgreement && hasAgreed(roomId, partnerUserId)) {
+            appNotificationFeedWriter.writeChatReady(roomId, userId, partnerUserId);
+        }
 
         return roomDetail(userId, roomId);
+    }
+
+    private boolean hasAgreed(Long roomId, Long userId) {
+        return chatRoomParticipationRepository.findByRoomIdAndUserId(roomId, userId)
+                .map(participation -> participation.getEntryAgreedAt() != null)
+                .orElse(false);
     }
 
     @Transactional

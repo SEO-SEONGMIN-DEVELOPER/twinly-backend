@@ -5,7 +5,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 public enum RelationshipType {
     @JsonProperty("acquaintance") ACQUAINTANCE,
     @JsonProperty("friend")       FRIEND,
-    @JsonProperty("best_friend")  BEST_FRIEND;
+    @JsonProperty("bestFriend")   BEST_FRIEND;
 
     public static RelationshipType fromIntimacy(int intimacy) {
         if (intimacy < 30) {

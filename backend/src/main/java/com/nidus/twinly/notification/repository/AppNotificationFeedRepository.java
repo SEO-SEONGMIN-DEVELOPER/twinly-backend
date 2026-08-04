@@ -1,11 +1,13 @@
 package com.nidus.twinly.notification.repository;
 
+import com.nidus.twinly.notification.domain.AppNotificationFeedType;
 import com.nidus.twinly.notification.entity.AppNotificationFeed;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -14,6 +16,9 @@ public interface AppNotificationFeedRepository extends JpaRepository<AppNotifica
     int countByUserIdAndReadAtIsNull(Long userId);
 
     Optional<AppNotificationFeed> findByIdAndUserId(Long id, Long userId);
+
+    void deleteAllByUserIdAndTypeAndTargetUserIdAndSimulationDate(Long userId, AppNotificationFeedType type,
+                                                                  Long targetUserId, LocalDate simulationDate);
 
     @Query(value = """
             SELECT f.*

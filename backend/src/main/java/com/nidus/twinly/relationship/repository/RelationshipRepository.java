@@ -21,6 +21,17 @@ public interface RelationshipRepository extends JpaRepository<Relationship, Long
     Optional<Relationship> findLatestByUserIdAndPartnerUserId(@Param("userId") Long userId, @Param("partnerUserId") Long partnerUserId);
 
     @Query(value = """
+        SELECT r.*
+        FROM relationships r
+        WHERE r.user_id = :userId AND r.partner_user_id = :partnerUserId AND r.date < :date
+        ORDER BY r.date DESC
+        LIMIT 1
+        """, nativeQuery = true)
+    Optional<Relationship> findLatestByUserIdAndPartnerUserIdBeforeDate(@Param("userId") Long userId,
+                                                                       @Param("partnerUserId") Long partnerUserId,
+                                                                       @Param("date") LocalDate date);
+
+    @Query(value = """
             SELECT r.*
             FROM relationships r
             INNER JOIN (
@@ -53,6 +64,8 @@ public interface RelationshipRepository extends JpaRepository<Relationship, Long
                                           @Param("limit") Integer limit);
 
     List<Relationship> findAllByUserIdAndPartnerUserIdAndDateBetweenOrderByDateAsc(Long userId, Long partnerUserId, LocalDate from, LocalDate to);
+
+    void deleteAllByUserIdAndDate(Long userId, LocalDate date);
 
     @Query("""
             SELECT r FROM Relationship r

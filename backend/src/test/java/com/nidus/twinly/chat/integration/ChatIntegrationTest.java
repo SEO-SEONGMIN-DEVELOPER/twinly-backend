@@ -190,7 +190,7 @@ class ChatIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.entryStatus.myEntryAgreed").value(false))
                 .andExpect(jsonPath("$.entryStatus.partnerEntryAgreed").value(true))
                 .andExpect(jsonPath("$.partner.userId").value(fixture.partner().getId().toString()))
-                .andExpect(jsonPath("$.partner.userName").value(fixture.partner().getNickname()))
+                .andExpect(jsonPath("$.partner.userName").value(fixture.partner().displayName()))
                 .andExpect(jsonPath("$.isCurrentSeason").value(true));
     }
 

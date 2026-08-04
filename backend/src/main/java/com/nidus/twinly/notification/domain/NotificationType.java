@@ -1,7 +1,9 @@
 package com.nidus.twinly.notification.domain;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 public enum NotificationType {
-    EVENT,
-    CHAT,
-    MARKETING
+    @JsonProperty("event")     EVENT,
+    @JsonProperty("chat")      CHAT,
+    @JsonProperty("marketing") MARKETING
 }

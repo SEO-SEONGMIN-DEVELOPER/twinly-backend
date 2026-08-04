@@ -90,6 +90,9 @@ admin:
 anon:
   session-ttl: 14d
 
+chat:
+  room-intimacy-threshold: 70
+
 management:
   server:
     port: 8081
