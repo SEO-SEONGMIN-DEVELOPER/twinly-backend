@@ -3,6 +3,7 @@ package com.nidus.twinly.common.websocket.config;
 import com.nidus.twinly.common.websocket.handshake.ConnectionTicketHandshakeHandler;
 import com.nidus.twinly.common.websocket.interceptor.ConnectionTicketHandshakeInterceptor;
 import com.nidus.twinly.common.websocket.interceptor.WebSocketFrameValidationInterceptor;
+import com.nidus.twinly.common.websocket.interceptor.WebSocketOutboundFailureInterceptor;
 import com.nidus.twinly.connection.domain.ConnectionType;
 import com.nidus.twinly.connection.service.ConnectionService;
 import lombok.RequiredArgsConstructor;
@@ -35,11 +36,17 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final ConnectionService connectionService;
     private final WebSocketFrameValidationInterceptor frameValidationInterceptor;
+    private final WebSocketOutboundFailureInterceptor outboundFailureInterceptor;
     private final JsonMapper jsonMapper;
 
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
         registration.interceptors(frameValidationInterceptor);
+    }
+
+    @Override
+    public void configureClientOutboundChannel(ChannelRegistration registration) {
+        registration.interceptors(outboundFailureInterceptor);
     }
 
     @Override
