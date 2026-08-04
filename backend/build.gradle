@@ -51,6 +51,10 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-flyway'
     runtimeOnly 'org.flywaydb:flyway-mysql'
 
+    // Distributed lock
+    implementation 'net.javacrumbs.shedlock:shedlock-spring:6.6.0'
+    implementation 'net.javacrumbs.shedlock:shedlock-provider-jdbc-template:6.6.0'
+
     // Redis
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 

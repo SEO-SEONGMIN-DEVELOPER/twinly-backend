@@ -3,7 +3,6 @@ package com.nidus.twinly.user.entity;
 import org.hibernate.annotations.DynamicUpdate;
 import com.nidus.twinly.common.crypto.EncryptedStringConverter;
 import com.nidus.twinly.common.domain.Gender;
-import com.nidus.twinly.user.domain.AvatarPaletteColor;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -21,15 +20,14 @@ public class User {
 
     public static final String WITHDRAWN_NAME = "탈퇴한 사용자";
 
+    private static final int BIRTH_YEAR_LENGTH = 4;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @Column(columnDefinition = "TEXT")
     private String nickname;
-
-    @Enumerated(EnumType.STRING)
-    private AvatarPaletteColor avatarPaletteColor;
 
     @Convert(converter = EncryptedStringConverter.class)
     @Column(columnDefinition = "TEXT")
@@ -135,10 +133,6 @@ public class User {
         return isWithdrawn() ? WITHDRAWN_NAME : givenName;
     }
 
-    public String displayNickname() {
-        return isWithdrawn() ? WITHDRAWN_NAME : nickname;
-    }
-
     public void changeAffiliation(String affiliation, String affiliationHash) {
         this.affiliation = affiliation;
         this.affiliationHash = affiliationHash;
@@ -153,5 +147,26 @@ public class User {
     public void cancelWithdrawal() {
         this.withdrawalRequestedAt = null;
         this.withdrawalScheduledAt = null;
+    }
+
+    public void delete() {
+        this.nickname = null;
+        this.familyName = null;
+        this.familyNameHash = null;
+        this.givenName = null;
+        this.givenNameHash = null;
+        this.affiliationNumber = null;
+        this.affiliationNumberHash = null;
+        this.phoneNumber = null;
+        this.phoneNumberHash = null;
+        this.email = null;
+        this.emailHash = null;
+        this.birthDate = generalizeBirthDate(this.birthDate);
+        this.birthDateHash = null;
+        this.deletedAt = Instant.now();
+    }
+
+    private static String generalizeBirthDate(String birthDate) {
+        return birthDate == null ? null : birthDate.substring(0, BIRTH_YEAR_LENGTH);
     }
 }
