@@ -28,4 +28,15 @@ public class Match {
     private Long seasonId;
 
     private Instant createdAt;
+
+    public static Match create(Long userId1, Long userId2, Long seasonId) {
+        Match match = new Match();
+
+        match.userAId = Math.min(userId1, userId2);
+        match.userBId = Math.max(userId1, userId2);
+        match.seasonId = seasonId;
+        match.createdAt = Instant.now();
+
+        return match;
+    }
 }

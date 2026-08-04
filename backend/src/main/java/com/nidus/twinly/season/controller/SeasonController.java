@@ -2,10 +2,10 @@ package com.nidus.twinly.season.controller;
 
 import com.nidus.twinly.season.dto.response.SeasonParticipationResponse;
 import com.nidus.twinly.season.service.SeasonService;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.nidus.twinly.user.dto.header.UserInfo;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RestController;

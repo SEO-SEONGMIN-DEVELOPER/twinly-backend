@@ -6,8 +6,11 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface MatchRepository extends JpaRepository<Match, Long> {
+
+    Optional<Match> findByUserAIdAndUserBId(Long userAId, Long userBId);
 
     List<Match> findAllByUserAIdOrUserBId(Long userAId, Long userBId);
 

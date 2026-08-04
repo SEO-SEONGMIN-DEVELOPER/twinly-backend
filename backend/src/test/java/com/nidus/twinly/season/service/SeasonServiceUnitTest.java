@@ -2,11 +2,15 @@ package com.nidus.twinly.season.service;
 
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
+import com.nidus.twinly.season.dto.command.SeasonChangeCommand;
+import com.nidus.twinly.season.dto.result.SeasonChangeResult;
 import com.nidus.twinly.season.dto.result.SeasonParticipationResult;
 import com.nidus.twinly.season.entity.Season;
 import com.nidus.twinly.season.entity.SeasonParticipation;
+import com.nidus.twinly.season.event.SeasonChangedEvent;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.season.repository.SeasonParticipationRepository;
+import com.nidus.twinly.season.repository.SeasonRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -15,10 +19,12 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.BeanUtils;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -39,6 +45,12 @@ class SeasonServiceUnitTest {
 
     @Mock
     SeasonParticipationRepository seasonParticipationRepository;
+
+    @Mock
+    SeasonRepository seasonRepository;
+
+    @Mock
+    ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     SeasonService seasonService;
@@ -138,6 +150,69 @@ class SeasonServiceUnitTest {
         // then: 현재 시즌 id는 채워지고 참가 시각은 null
         assertThat(result.currentSeasonId()).isEqualTo(CURRENT_SEASON_ID);
         assertThat(result.participatedInAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("시즌 전환 시 기존 활성 시즌을 모두 비활성화하고 새 시즌을 활성 상태로 저장한다")
+    void changeSeason_deactivatesPreviousAndSavesNew() {
+        // given: 활성 시즌 두 개가 남아 있는 상태 (이상 데이터까지 함께 정리되어야 한다)
+        Season previous = joinableSeason();
+        Season strayActive = joinableSeason();
+        given(seasonRepository.findAllByIsActiveTrue()).willReturn(List.of(previous, strayActive));
+        given(seasonRepository.save(any(Season.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        Instant startedAt = Instant.parse("2026-09-01T00:00:00Z");
+        Instant endedAt = Instant.parse("2026-12-01T00:00:00Z");
+
+        // when
+        SeasonChangeResult result = seasonService.changeSeason(new SeasonChangeCommand(startedAt, endedAt));
+
+        // then: 기존 활성 시즌은 전부 꺼지고, 새 시즌만 활성이다
+        assertThat(previous.getIsActive()).isFalse();
+        assertThat(strayActive.getIsActive()).isFalse();
+
+        ArgumentCaptor<Season> saved = ArgumentCaptor.forClass(Season.class);
+        then(seasonRepository).should().save(saved.capture());
+        assertThat(saved.getValue().getIsActive()).isTrue();
+        assertThat(saved.getValue().getStartedAt()).isEqualTo(startedAt);
+        assertThat(saved.getValue().getEndedAt()).isEqualTo(endedAt);
+
+        assertThat(result.startedAt()).isEqualTo(startedAt);
+        assertThat(result.endedAt()).isEqualTo(endedAt);
+    }
+
+    @Test
+    @DisplayName("시즌 전환이 커밋될 수 있도록 SeasonChangedEvent를 발행한다")
+    void changeSeason_publishesSeasonChangedEvent() {
+        // given
+        given(seasonRepository.findAllByIsActiveTrue()).willReturn(List.of());
+        given(seasonRepository.save(any(Season.class))).willAnswer(invocation -> {
+            Season season = invocation.getArgument(0);
+            ReflectionTestUtils.setField(season, "id", 77L);
+            return season;
+        });
+
+        // when
+        seasonService.changeSeason(new SeasonChangeCommand(
+                Instant.parse("2026-09-01T00:00:00Z"), Instant.parse("2026-12-01T00:00:00Z")));
+
+        // then: 새 시즌 id를 담은 이벤트가 나가야 소켓 알림이 이어진다
+        then(eventPublisher).should().publishEvent(new SeasonChangedEvent(77L));
+    }
+
+    @Test
+    @DisplayName("시작 시각이 종료 시각보다 앞서지 않으면 INVALID_SEASON_PERIOD 예외가 발생하고 아무것도 저장하지 않는다")
+    void changeSeason_rejectsInvalidPeriod() {
+        // given: 시작과 종료가 같은 구간
+        Instant sameInstant = Instant.parse("2026-09-01T00:00:00Z");
+
+        // when & then
+        assertThatThrownBy(() -> seasonService.changeSeason(new SeasonChangeCommand(sameInstant, sameInstant)))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_SEASON_PERIOD);
+
+        then(seasonRepository).should(never()).save(any());
+        then(eventPublisher).should(never()).publishEvent(any(SeasonChangedEvent.class));
     }
 
     /** 지금이 참가 기간에 포함되는 시즌. */

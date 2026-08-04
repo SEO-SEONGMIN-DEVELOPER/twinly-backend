@@ -2,12 +2,17 @@ package com.nidus.twinly.season.service;
 
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
+import com.nidus.twinly.season.dto.command.SeasonChangeCommand;
+import com.nidus.twinly.season.dto.result.SeasonChangeResult;
 import com.nidus.twinly.season.dto.result.SeasonParticipationResult;
 import com.nidus.twinly.season.entity.Season;
 import com.nidus.twinly.season.entity.SeasonParticipation;
+import com.nidus.twinly.season.event.SeasonChangedEvent;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.season.repository.SeasonParticipationRepository;
+import com.nidus.twinly.season.repository.SeasonRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +25,23 @@ public class SeasonService {
 
     private final CurrentSeasonReader currentSeasonReader;
     private final SeasonParticipationRepository seasonParticipationRepository;
+    private final SeasonRepository seasonRepository;
+    private final ApplicationEventPublisher eventPublisher;
+
+    @Transactional
+    public SeasonChangeResult changeSeason(SeasonChangeCommand command) {
+        if (!command.startedAt().isBefore(command.endedAt())) {
+            throw new BusinessException(ErrorCode.INVALID_SEASON_PERIOD);
+        }
+
+        seasonRepository.findAllByIsActiveTrue().forEach(Season::deactivate);
+
+        Season season = seasonRepository.save(Season.create(command.startedAt(), command.endedAt()));
+
+        eventPublisher.publishEvent(new SeasonChangedEvent(season.getId()));
+
+        return new SeasonChangeResult(season.getId(), season.getStartedAt(), season.getEndedAt());
+    }
 
     @Transactional
     public void participateIn(Long userId) {

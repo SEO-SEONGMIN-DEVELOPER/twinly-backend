@@ -26,4 +26,19 @@ public class Season {
     private Boolean isActive;
 
     private Instant createdAt;
+
+    public static Season create(Instant startedAt, Instant endedAt) {
+        Season season = new Season();
+
+        season.startedAt = startedAt;
+        season.endedAt = endedAt;
+        season.isActive = true;
+        season.createdAt = Instant.now();
+
+        return season;
+    }
+
+    public void deactivate() {
+        this.isActive = false;
+    }
 }
