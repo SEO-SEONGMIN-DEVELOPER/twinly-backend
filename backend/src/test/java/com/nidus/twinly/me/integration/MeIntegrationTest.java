@@ -44,6 +44,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.startsWith;
@@ -131,7 +132,7 @@ class MeIntegrationTest extends AbstractIntegrationTest {
         clearSeededPolicyNames();
         User me = saveUser();
         PolicyName policyName = policyNameRepository.save(policyName("서비스 이용약관", "terms_of_service"));
-        Policy policy = policyRepository.save(policy(policyName.getId(), 1, "https://policy/tos/1", true));
+        Policy policy = policyRepository.save(policy(policyName.getId(), "1", "legal/tos/v1.html", true));
 
         // when: 약관 동의 API 호출
         mockMvc.perform(post("/api/v1/me/consents")
@@ -319,7 +320,7 @@ class MeIntegrationTest extends AbstractIntegrationTest {
         clearSeededPolicyNames();
         User me = saveUser();
         PolicyName name = policyNameRepository.save(policyName("마케팅 수신 동의", "marketing"));
-        Policy policy = policyRepository.save(policy(name.getId(), 1, "https://example.com/marketing", false));
+        Policy policy = policyRepository.save(policy(name.getId(), "1", "legal/tos/v1.html", false));
         agreementRepository.save(Agreement.create(me.getId(), policy.getId(), Instant.now()));
         flushAndClear();
 
@@ -347,7 +348,7 @@ class MeIntegrationTest extends AbstractIntegrationTest {
         // given: 필수 정책에 이미 동의한 실제 유저
         User me = saveUser();
         PolicyName name = policyNameRepository.save(policyName("서비스 이용약관", "terms_of_service"));
-        Policy policy = policyRepository.save(policy(name.getId(), 1, "https://example.com/terms", true));
+        Policy policy = policyRepository.save(policy(name.getId(), "1", "legal/tos/v1.html", true));
         agreementRepository.save(Agreement.create(me.getId(), policy.getId(), Instant.now()));
         flushAndClear();
 
@@ -364,6 +365,51 @@ class MeIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.code").value(ErrorCode.REQUIRED_POLICY_REVOKE_DENIED.name()));
         flushAndClear();
         assertThat(agreementRepository.findAllByUserIdAndRevokedAtIsNull(me.getId())).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("경로 변수 enum은 @JsonProperty에도 상수명에도 없는 표기를 거부한다")
+    void profileVisibility_rejects_undefined_path_variable() throws Exception {
+        // given: 컨버터는 @JsonProperty만 비교하지만, 스프링의 TypeConverterDelegate가
+        //        변환 실패 시 Enum.valueOf로 한 번 더 시도해 상수명(AFFILIATION_NUMBER)은 통과한다.
+        //        둘 다 아닌 표기가 실제로 막히는지 고정한다.
+        User me = saveUser();
+
+        // when: 계약에 없는 상수명 표기로 공개 설정 변경 API 호출
+        var result = mockMvc.perform(patch("/api/v1/me/profile/visibility-settings/{type}", "affiliation_number")
+                        .header("Authorization", bearer(me.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"isVisible": true}
+                                """));
+
+        // then: 400 INVALID_REQUEST로 거부된다
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(ErrorCode.INVALID_REQUEST.name()));
+    }
+
+    @Test
+    @DisplayName("경로 변수 enum은 API 문서에 노출되는 camelCase 표기(affiliationNumber)로 매핑된다")
+    void profileVisibility_accepts_documented_camel_case_path_variable() throws Exception {
+        // given: 경로 변수는 Jackson이 아니라 CaseInsensitiveEnumConverterFactory가 변환하므로
+        //        @JsonProperty를 읽지 않으면 문서대로 보낸 값이 400이 된다
+        User me = saveUser();
+
+        // when: springdoc이 문서화하는 값 그대로 공개 설정 변경 API 호출
+        mockMvc.perform(patch("/api/v1/me/profile/visibility-settings/{type}", "affiliationNumber")
+                        .header("Authorization", bearer(me.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"isVisible": true}
+                                """))
+                .andExpect(status().isOk());
+
+        // then: AFFILIATION_NUMBER로 매핑되어 실제로 반영된다
+        flushAndClear();
+        mockMvc.perform(get("/api/v1/me/profile/visibility-settings")
+                        .header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.affiliationNumberVisible").value(true));
     }
 
     @Test
@@ -563,7 +609,7 @@ class MeIntegrationTest extends AbstractIntegrationTest {
         // given: 실제 유저 + S3 업로드 완료·CloudFront 서명 URL을 목으로 대체
         User me = saveUser();
         String key = "profile/%d/photo-1".formatted(me.getId());
-        given(s3Service.exists(key)).willReturn(true);
+        given(s3Service.contentLength(key)).willReturn(Optional.of(1024L));
         given(cloudFrontService.getSignedUrl(key)).willReturn("https://cdn.example.com/" + key);
 
         // when: 실제 액세스 토큰으로 commit API 호출
@@ -599,7 +645,7 @@ class MeIntegrationTest extends AbstractIntegrationTest {
         String newKey = "profile/%d/photo-new".formatted(me.getId());
         Photo existing = photoRepository.save(
                 Photo.create(me.getId(), PhotoType.PROFILE, oldKey, 1, 2, 300, 400, Instant.now()));
-        given(s3Service.exists(newKey)).willReturn(true);
+        given(s3Service.contentLength(newKey)).willReturn(Optional.of(1024L));
         given(cloudFrontService.getSignedUrl(newKey)).willReturn("https://cdn.example.com/" + newKey);
 
         try {
@@ -632,6 +678,7 @@ class MeIntegrationTest extends AbstractIntegrationTest {
         Question question = BeanUtils.instantiateClass(Question.class);
         ReflectionTestUtils.setField(question, "userId", userId);
         ReflectionTestUtils.setField(question, "date", date);
+        ReflectionTestUtils.setField(question, "version", "v1");
         ReflectionTestUtils.setField(question, "time", LocalTime.of(21, 0));
         ReflectionTestUtils.setField(question, "type", QuestionType.PERSONA);
         ReflectionTestUtils.setField(question, "text", text);
@@ -652,16 +699,16 @@ class MeIntegrationTest extends AbstractIntegrationTest {
         PolicyName policyName = BeanUtils.instantiateClass(PolicyName.class);
         ReflectionTestUtils.setField(policyName, "name", name);
         ReflectionTestUtils.setField(policyName, "identifier", identifier);
+        ReflectionTestUtils.setField(policyName, "requiresAgreement", true);
         ReflectionTestUtils.setField(policyName, "isDeprecated", false);
         return policyName;
     }
 
-    private Policy policy(Long policyNameId, Integer version, String url, Boolean isRequired) {
+    private Policy policy(Long policyNameId, String version, String key, Boolean isRequired) {
         Policy policy = BeanUtils.instantiateClass(Policy.class);
         ReflectionTestUtils.setField(policy, "policyNameId", policyNameId);
         ReflectionTestUtils.setField(policy, "version", version);
-        ReflectionTestUtils.setField(policy, "content", "약관 본문");
-        ReflectionTestUtils.setField(policy, "url", url);
+        ReflectionTestUtils.setField(policy, "key", key);
         ReflectionTestUtils.setField(policy, "isRequired", isRequired);
         ReflectionTestUtils.setField(policy, "effectiveAt", Instant.now().minus(Duration.ofDays(1)));
         ReflectionTestUtils.setField(policy, "createdAt", Instant.now());

@@ -43,6 +43,8 @@ import com.nidus.twinly.user.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import com.nidus.twinly.common.security.SecurityConfig;
+import org.springframework.context.annotation.Import;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
@@ -68,6 +70,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(MeController.class)
+@Import(SecurityConfig.class)
 class MeControllerUnitTest {
 
     private static final String BEARER = "Bearer access-token";
@@ -79,8 +82,7 @@ class MeControllerUnitTest {
     @MockitoBean
     MeService meService;
 
-    // MeController가 직접 쓰진 않지만, WebMvcConfig가 두 resolver를 모두 주입받고
-    // 각 resolver가 이 서비스에 의존하므로 슬라이스 기동에 필수.
+    // SecurityConfig가 JWT·익명 세션 필터를 함께 만들고 각 필터가 이 서비스에 의존하므로 슬라이스 기동에 둘 다 필수.
     @MockitoBean
     UserService userService;
 
@@ -290,7 +292,7 @@ class MeControllerUnitTest {
         // given: 서비스가 약관 동의 항목 1건을 반환
         given(meService.consents(ME))
                 .willReturn(new MeConsentsResult(List.of(new MeConsentsItemResult(
-                        "terms_of_service", "서비스 이용약관", 2, "https://policy/tos", true, true,
+                        "terms_of_service", "서비스 이용약관", "2", "https://policy/tos", true, true, true,
                         Instant.parse("2026-07-01T00:00:00Z")))));
 
         // when: 약관 동의 목록 조회 API 호출
@@ -322,7 +324,7 @@ class MeControllerUnitTest {
         // then: 200 반환 + policyId·version 커맨드로 위임
         result.andExpect(status().isOk());
         then(meService).should().grantConsents(ME,
-                new MeGrantConsentsCommand(List.of(new MeGrantConsentsItemCommand("terms_of_service", 2))));
+                new MeGrantConsentsCommand(List.of(new MeGrantConsentsItemCommand("terms_of_service", "2"))));
     }
 
     @Test
@@ -355,7 +357,7 @@ class MeControllerUnitTest {
         // then: 200 반환 + policyId·version 커맨드로 위임
         result.andExpect(status().isOk());
         then(meService).should().revokeConsents(ME,
-                new MeRevokeConsentsCommand(List.of(new MeRevokeConsentsItemCommand("marketing", 1))));
+                new MeRevokeConsentsCommand(List.of(new MeRevokeConsentsItemCommand("marketing", "1"))));
     }
 
     // ---------------------------------------------------------------- 푸시 알림 설정

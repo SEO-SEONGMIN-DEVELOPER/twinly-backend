@@ -8,6 +8,8 @@ import com.nidus.twinly.common.crypto.BlindIndexHasher;
 import com.nidus.twinly.common.photo.PhotoPosInfo;
 import com.nidus.twinly.common.photo.PhotoType;
 import com.nidus.twinly.common.photo.ProfilePhotoInfo;
+import com.nidus.twinly.common.photo.ProfileThumbnailService;
+import com.nidus.twinly.common.presign.PhotoCommitResult;
 import com.nidus.twinly.common.presign.PhotoCommitService;
 import com.nidus.twinly.common.presign.PhotoPresignResult;
 import com.nidus.twinly.common.presign.PresignService;
@@ -93,6 +95,7 @@ public class MeService {
 
     private final PresignService presignService;
     private final PhotoCommitService photoCommitService;
+    private final ProfileThumbnailService profileThumbnailService;
     private final CloudFrontService cloudFrontService;
 
     private final BlindIndexHasher blindIndexHasher;
@@ -117,18 +120,27 @@ public class MeService {
 
     @Transactional
     public MeProfilePhotoCommitResult profilePhotoCommit(Long userId, MeProfilePhotoCommitCommand command) {
-        String photoUrl = photoCommitService.commitProfilePhoto(userId, command.key());
+        PhotoCommitResult commit = photoCommitService.commitProfilePhoto(userId, command.key());
 
         PhotoPosInfo position = command.position();
+        String thumbnailKey = profileThumbnailService.generate(command.key(), position, commit.sourceBytes());
+
         photoRepository.findByUserIdAndType(userId, PhotoType.PROFILE)
                 .ifPresentOrElse(
-                        photo -> photo.changePhoto(command.key(),
-                                position.startPos().x(), position.startPos().y(), position.width(), position.height()),
-                        () -> photoRepository.save(Photo.create(userId, PhotoType.PROFILE, command.key(),
-                                position.startPos().x(), position.startPos().y(), position.width(), position.height(), Instant.now()))
+                        photo -> {
+                            photo.changePhoto(command.key(),
+                                    position.startPos().x(), position.startPos().y(), position.width(), position.height());
+                            photo.changeThumbnailKey(thumbnailKey);
+                        },
+                        () -> {
+                            Photo photo = Photo.create(userId, PhotoType.PROFILE, command.key(),
+                                    position.startPos().x(), position.startPos().y(), position.width(), position.height(), Instant.now());
+                            photo.changeThumbnailKey(thumbnailKey);
+                            photoRepository.save(photo);
+                        }
                 );
 
-        return new MeProfilePhotoCommitResult(photoUrl, position);
+        return new MeProfilePhotoCommitResult(commit.photoUrl(), position);
     }
 
     @Transactional
@@ -208,7 +220,8 @@ public class MeService {
                             policyName.getIdentifier(),
                             policyName.getName(),
                             current != null ? current.getVersion() : null,
-                            current != null ? current.getUrl() : null,
+                            current != null ? cloudFrontService.getPublicUrl(current.getKey()) : null,
+                            policyName.getRequiresAgreement(),
                             current != null ? current.getIsRequired() : null,
                             agreement != null,
                             agreement != null ? agreement.getAgreedAt() : null);

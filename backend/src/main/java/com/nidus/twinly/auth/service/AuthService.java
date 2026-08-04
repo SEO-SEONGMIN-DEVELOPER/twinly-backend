@@ -23,6 +23,7 @@ import com.nidus.twinly.common.aws.ses.SesService;
 import com.nidus.twinly.common.crypto.BlindIndexHasher;
 import com.nidus.twinly.common.domain.VerificationType;
 import com.nidus.twinly.common.jwt.JwtService;
+import com.nidus.twinly.common.photo.ProfileThumbnailService;
 import com.nidus.twinly.common.solapi.SolapiService;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
@@ -73,6 +74,7 @@ public class AuthService {
     private final VerificationRepository verificationRepository;
 
     private final BlindIndexHasher blindIndexHasher;
+    private final ProfileThumbnailService profileThumbnailService;
 
     @Transactional
     public AuthEmailSendResult onboardingEmailSend(AnonSessionSnapshot anonSessionSnapshot, AuthEmailSendCommand command) {
@@ -261,18 +263,22 @@ public class AuthService {
 
         List<AnonSessionPhoto> anonSessionPhotos = anonSessionPhotoRepository.findAllByAnonSessionId(anonSessionId);
 
-        anonSessionPhotos.forEach(anonSessionPhoto -> photoRepository.save(
-                        Photo.create(
-                                user.getId(),
-                                anonSessionPhoto.getType(),
-                                anonSessionPhoto.getKey(),
-                                anonSessionPhoto.getXPos(),
-                                anonSessionPhoto.getYPos(),
-                                anonSessionPhoto.getWidth(),
-                                anonSessionPhoto.getHeight(),
-                                anonSessionPhoto.getUploadedAt()
-                        )
-                ));
+        anonSessionPhotos.forEach(anonSessionPhoto -> {
+            Photo photo = Photo.create(
+                    user.getId(),
+                    anonSessionPhoto.getType(),
+                    anonSessionPhoto.getKey(),
+                    anonSessionPhoto.getXPos(),
+                    anonSessionPhoto.getYPos(),
+                    anonSessionPhoto.getWidth(),
+                    anonSessionPhoto.getHeight(),
+                    anonSessionPhoto.getUploadedAt()
+            );
+            photo.changeThumbnailKey(
+                    profileThumbnailService.generate(anonSessionPhoto.getKey(), anonSessionPhoto.position()));
+
+            photoRepository.save(photo);
+        });
 
         anonSessionPhotoRepository.deleteAll(anonSessionPhotos);
 

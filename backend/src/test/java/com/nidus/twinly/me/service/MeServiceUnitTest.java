@@ -8,6 +8,8 @@ import com.nidus.twinly.common.crypto.BlindIndexHasher;
 import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.photo.PhotoPosInfo;
 import com.nidus.twinly.common.photo.PhotoType;
+import com.nidus.twinly.common.photo.ProfileThumbnailService;
+import com.nidus.twinly.common.presign.PhotoCommitResult;
 import com.nidus.twinly.common.presign.PhotoCommitService;
 import com.nidus.twinly.common.presign.PhotoPresignResult;
 import com.nidus.twinly.common.presign.PresignService;
@@ -107,6 +109,9 @@ class MeServiceUnitTest {
     PhotoCommitService photoCommitService;
 
     @Mock
+    ProfileThumbnailService profileThumbnailService;
+
+    @Mock
     CloudFrontService cloudFrontService;
 
     @Mock
@@ -172,7 +177,7 @@ class MeServiceUnitTest {
     @DisplayName("프로필 사진 commit 시 기존 사진이 있으면 새로 저장하지 않고 key·위치만 변경한다")
     void profilePhotoCommit_updates_existing_photo() {
         // given: 이미 프로필 사진이 등록된 상태
-        given(photoCommitService.commitProfilePhoto(ME, "profile/1/new")).willReturn("https://cdn/new.jpg");
+        given(photoCommitService.commitProfilePhoto(ME, "profile/1/new")).willReturn(new PhotoCommitResult("https://cdn/new.jpg", 1024L));
         Photo photo = Photo.create(ME, PhotoType.PROFILE, "profile/1/old", 0, 0, 100, 100, Instant.now());
         given(photoRepository.findByUserIdAndType(ME, PhotoType.PROFILE)).willReturn(Optional.of(photo));
 
@@ -195,7 +200,7 @@ class MeServiceUnitTest {
     @DisplayName("프로필 사진 commit 시 기존 사진이 없으면 PROFILE 타입 사진을 새로 저장한다")
     void profilePhotoCommit_saves_new_photo() {
         // given: 등록된 프로필 사진이 없는 상태
-        given(photoCommitService.commitProfilePhoto(ME, "profile/1/new")).willReturn("https://cdn/new.jpg");
+        given(photoCommitService.commitProfilePhoto(ME, "profile/1/new")).willReturn(new PhotoCommitResult("https://cdn/new.jpg", 1024L));
         given(photoRepository.findByUserIdAndType(ME, PhotoType.PROFILE)).willReturn(Optional.empty());
 
         // when: commit
@@ -419,10 +424,12 @@ class MeServiceUnitTest {
         PolicyName marketing = policyName(2L, "마케팅 수신 동의", "marketing");
         given(policyNameRepository.findAllByIsDeprecatedFalseOrderByIdAsc()).willReturn(List.of(tos, marketing));
 
-        PolicySummary tosV2 = policy(11L, 1L, 2, "https://policy/tos/2", true, now.minus(Duration.ofDays(1)));
-        PolicySummary marketingV1 = policy(20L, 2L, 1, "https://policy/marketing/1", false, now.minus(Duration.ofDays(5)));
+        PolicySummary tosV2 = policy(11L, 1L, "2", "legal/tos/v2.html", true, now.minus(Duration.ofDays(1)));
+        PolicySummary marketingV1 = policy(20L, 2L, "1", "legal/marketing/v1.html", false, now.minus(Duration.ofDays(5)));
         given(policyCatalog.loadLatestByPolicyNameId(List.of(1L, 2L)))
                 .willReturn(Map.of(1L, tosV2, 2L, marketingV1));
+        given(cloudFrontService.getPublicUrl("legal/tos/v2.html")).willReturn("https://cdn/legal/tos/v2.html");
+        given(cloudFrontService.getPublicUrl("legal/marketing/v1.html")).willReturn("https://cdn/legal/marketing/v1.html");
 
         Instant agreedAt = now.minus(Duration.ofHours(3));
         given(agreementRepository.findAllByUserIdAndRevokedAtIsNull(ME))
@@ -435,13 +442,13 @@ class MeServiceUnitTest {
         assertThat(result.consents()).hasSize(2);
         assertThat(result.consents().get(0).policyId()).isEqualTo("terms_of_service");
         assertThat(result.consents().get(0).title()).isEqualTo("서비스 이용약관");
-        assertThat(result.consents().get(0).version()).isEqualTo(2);
-        assertThat(result.consents().get(0).url()).isEqualTo("https://policy/tos/2");
+        assertThat(result.consents().get(0).version()).isEqualTo("2");
+        assertThat(result.consents().get(0).url()).isEqualTo("https://cdn/legal/tos/v2.html");
         assertThat(result.consents().get(0).isRequired()).isTrue();
         assertThat(result.consents().get(0).isGranted()).isTrue();
         assertThat(result.consents().get(0).grantedAt()).isEqualTo(agreedAt);
         assertThat(result.consents().get(1).policyId()).isEqualTo("marketing");
-        assertThat(result.consents().get(1).version()).isEqualTo(1);
+        assertThat(result.consents().get(1).version()).isEqualTo("1");
         assertThat(result.consents().get(1).isGranted()).isFalse();
         assertThat(result.consents().get(1).grantedAt()).isNull();
     }
@@ -454,7 +461,7 @@ class MeServiceUnitTest {
         given(agreementRepository.findAllByUserIdAndRevokedAtIsNull(ME)).willReturn(List.of());
 
         // when & then: POLICY_NOT_FOUND 예외 발생 + 저장 안 함
-        MeGrantConsentsCommand command = new MeGrantConsentsCommand(List.of(new MeGrantConsentsItemCommand("terms_of_service", 9)));
+        MeGrantConsentsCommand command = new MeGrantConsentsCommand(List.of(new MeGrantConsentsItemCommand("terms_of_service", "9")));
         assertThatThrownBy(() -> meService.grantConsents(ME, command))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
@@ -467,18 +474,18 @@ class MeServiceUnitTest {
     void grantConsents_skips_already_agreed() {
         // given: 이용약관 v2는 이미 동의, 마케팅 v1은 미동의
         Instant now = Instant.now();
-        PolicySummary tosV2 = policy(11L, 1L, 2, "https://policy/tos/2", true, now.minus(Duration.ofDays(1)));
-        PolicySummary marketingV1 = policy(20L, 2L, 1, "https://policy/marketing/1", false, now.minus(Duration.ofDays(5)));
+        PolicySummary tosV2 = policy(11L, 1L, "2", "https://policy/tos/2", true, now.minus(Duration.ofDays(1)));
+        PolicySummary marketingV1 = policy(20L, 2L, "1", "https://policy/marketing/1", false, now.minus(Duration.ofDays(5)));
         given(policyCatalog.loadByKey(List.of("terms_of_service", "marketing")))
-                .willReturn(Map.of(new PolicyKey("terms_of_service", 2), tosV2,
-                        new PolicyKey("marketing", 1), marketingV1));
+                .willReturn(Map.of(new PolicyKey("terms_of_service", "2"), tosV2,
+                        new PolicyKey("marketing", "1"), marketingV1));
         given(agreementRepository.findAllByUserIdAndRevokedAtIsNull(ME))
                 .willReturn(List.of(Agreement.create(ME, 11L, now.minus(Duration.ofHours(1)))));
 
         // when: 두 약관에 동의 요청
         meService.grantConsents(ME, new MeGrantConsentsCommand(List.of(
-                new MeGrantConsentsItemCommand("terms_of_service", 2),
-                new MeGrantConsentsItemCommand("marketing", 1))));
+                new MeGrantConsentsItemCommand("terms_of_service", "2"),
+                new MeGrantConsentsItemCommand("marketing", "1"))));
 
         // then: 마케팅 정책에 대한 Agreement만 저장
         ArgumentCaptor<List<Agreement>> captor = ArgumentCaptor.forClass(List.class);
@@ -492,12 +499,12 @@ class MeServiceUnitTest {
     @DisplayName("필수 약관을 철회하려 하면 REQUIRED_POLICY_REVOKE_DENIED 예외가 발생하고 철회 쿼리를 실행하지 않는다")
     void revokeConsents_required_policy_throws() {
         // given: 철회 대상에 필수 약관이 포함
-        PolicySummary tosV2 = policy(11L, 1L, 2, "https://policy/tos/2", true, Instant.now().minus(Duration.ofDays(1)));
+        PolicySummary tosV2 = policy(11L, 1L, "2", "https://policy/tos/2", true, Instant.now().minus(Duration.ofDays(1)));
         given(policyCatalog.loadByKey(List.of("terms_of_service")))
-                .willReturn(Map.of(new PolicyKey("terms_of_service", 2), tosV2));
+                .willReturn(Map.of(new PolicyKey("terms_of_service", "2"), tosV2));
 
         // when & then: REQUIRED_POLICY_REVOKE_DENIED 예외 발생 + 철회 쿼리 미실행
-        MeRevokeConsentsCommand command = new MeRevokeConsentsCommand(List.of(new MeRevokeConsentsItemCommand("terms_of_service", 2)));
+        MeRevokeConsentsCommand command = new MeRevokeConsentsCommand(List.of(new MeRevokeConsentsItemCommand("terms_of_service", "2")));
         assertThatThrownBy(() -> meService.revokeConsents(ME, command))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
@@ -509,12 +516,12 @@ class MeServiceUnitTest {
     @DisplayName("선택 약관만 철회하면 해당 정책 id로 이전 버전까지 철회하도록 위임한다")
     void revokeConsents_optional_policy_delegates() {
         // given: 철회 대상이 선택 약관 하나
-        PolicySummary marketingV1 = policy(20L, 2L, 1, "https://policy/marketing/1", false, Instant.now().minus(Duration.ofDays(5)));
+        PolicySummary marketingV1 = policy(20L, 2L, "1", "https://policy/marketing/1", false, Instant.now().minus(Duration.ofDays(5)));
         given(policyCatalog.loadByKey(List.of("marketing")))
-                .willReturn(Map.of(new PolicyKey("marketing", 1), marketingV1));
+                .willReturn(Map.of(new PolicyKey("marketing", "1"), marketingV1));
 
         // when: 철회 요청
-        meService.revokeConsents(ME, new MeRevokeConsentsCommand(List.of(new MeRevokeConsentsItemCommand("marketing", 1))));
+        meService.revokeConsents(ME, new MeRevokeConsentsCommand(List.of(new MeRevokeConsentsItemCommand("marketing", "1"))));
 
         // then: 해당 정책 id로 철회 위임
         then(agreementRepository).should().revokeWithPreviousVersionsByUserIdAndPolicyIdIn(ME, List.of(20L));
@@ -528,7 +535,7 @@ class MeServiceUnitTest {
 
         // when & then: 마스터 데이터에 없는 정책이므로 조용히 무시하지 않고 404로 거절
         assertThatThrownBy(() -> meService.revokeConsents(ME,
-                new MeRevokeConsentsCommand(List.of(new MeRevokeConsentsItemCommand("marketing", 9)))))
+                new MeRevokeConsentsCommand(List.of(new MeRevokeConsentsItemCommand("marketing", "9")))))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.POLICY_NOT_FOUND);
@@ -974,8 +981,8 @@ class MeServiceUnitTest {
         return policyName;
     }
 
-    private TestPolicySummary policy(Long id, Long policyNameId, Integer version, String url, Boolean isRequired, Instant effectiveAt) {
-        return new TestPolicySummary(id, policyNameId, version, url, isRequired, effectiveAt);
+    private TestPolicySummary policy(Long id, Long policyNameId, String version, String key, Boolean isRequired, Instant effectiveAt) {
+        return new TestPolicySummary(id, policyNameId, version, key, isRequired, effectiveAt);
     }
 
     private AppNotificationFeed feed(Long id, AppNotificationFeedType type, String title, String body,
