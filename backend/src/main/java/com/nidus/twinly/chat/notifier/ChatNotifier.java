@@ -11,12 +11,12 @@ import com.nidus.twinly.chat.event.ChatMessageCreatedEvent;
 import com.nidus.twinly.chat.event.ChatReadAdvancedEvent;
 import com.nidus.twinly.common.websocket.domain.WebSocketBodyType;
 import com.nidus.twinly.common.websocket.dto.WebSocketEventBody;
+import com.nidus.twinly.common.websocket.relay.WebSocketRelayPublisher;
 import io.github.springwolf.bindings.stomp.annotations.StompAsyncOperationBinding;
 import io.github.springwolf.core.asyncapi.annotations.AsyncOperation;
 import io.github.springwolf.core.asyncapi.annotations.AsyncPublisher;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.handler.annotation.Payload;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -34,7 +34,7 @@ public class ChatNotifier {
     private static final String ROOM_OUTBOUND_CHANNEL = "/user/queue/chat/rooms/{roomId}";
     private static final String INDEX_OUTBOUND_CHANNEL = "/user/queue/chat/index";
 
-    private final SimpMessagingTemplate messagingTemplate;
+    private final WebSocketRelayPublisher relayPublisher;
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onChatMessageCreated(ChatMessageCreatedEvent event) {
@@ -85,7 +85,7 @@ public class ChatNotifier {
     @StompAsyncOperationBinding
     public void publishMessageCreated(Long userId, String encodedRoomId,
                                       @Payload WebSocketEventBody<ChatMessageCreatedPayload> body) {
-        messagingTemplate.convertAndSendToUser(String.valueOf(userId), ROOM_DESTINATION_PREFIX + encodedRoomId, body);
+        relayPublisher.publishToUser(String.valueOf(userId), ROOM_DESTINATION_PREFIX + encodedRoomId, body);
     }
 
     @AsyncPublisher(operation = @AsyncOperation(
@@ -95,7 +95,7 @@ public class ChatNotifier {
     @StompAsyncOperationBinding
     public void publishReadAdvanced(Long userId, String encodedRoomId,
                                     @Payload WebSocketEventBody<ChatReadAdvancedPayload> body) {
-        messagingTemplate.convertAndSendToUser(String.valueOf(userId), ROOM_DESTINATION_PREFIX + encodedRoomId, body);
+        relayPublisher.publishToUser(String.valueOf(userId), ROOM_DESTINATION_PREFIX + encodedRoomId, body);
     }
 
     @AsyncPublisher(operation = @AsyncOperation(
@@ -104,7 +104,7 @@ public class ChatNotifier {
     ))
     @StompAsyncOperationBinding
     public void publishChatChanged(Long userId, @Payload WebSocketEventBody<ChatChangedPayload> body) {
-        messagingTemplate.convertAndSendToUser(String.valueOf(userId), INDEX_DESTINATION, body);
+        relayPublisher.publishToUser(String.valueOf(userId), INDEX_DESTINATION, body);
     }
 
     private String encodePathSegment(String value) {

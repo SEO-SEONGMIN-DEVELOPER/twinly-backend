@@ -18,7 +18,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
+import com.nidus.twinly.common.websocket.relay.WebSocketRelayPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
@@ -34,7 +34,7 @@ import static org.mockito.Mockito.never;
 class ChatNotifierUnitTest {
 
     @Mock
-    SimpMessagingTemplate messagingTemplate;
+    WebSocketRelayPublisher relayPublisher;
 
     @InjectMocks
     ChatNotifier chatNotifier;
@@ -52,8 +52,8 @@ class ChatNotifierUnitTest {
 
         // then: 발신자 "1"에게 ME + 원래 clientMsgId 로 전송
         ArgumentCaptor<WebSocketEventBody> senderCaptor = ArgumentCaptor.forClass(WebSocketEventBody.class);
-        then(messagingTemplate).should()
-                .convertAndSendToUser(eq("1"), eq("/queue/chat/rooms/10"), senderCaptor.capture());
+        then(relayPublisher).should()
+                .publishToUser(eq("1"), eq("/queue/chat/rooms/10"), senderCaptor.capture());
         assertThat(senderCaptor.getValue().type()).isEqualTo(WebSocketBodyType.CHAT_MESSAGE_CREATED);
         ChatMessageCreatedPayload toSender = (ChatMessageCreatedPayload) senderCaptor.getValue().payload();
         assertThat(toSender.message().senderType()).isEqualTo(ChatSenderType.ME);
@@ -62,8 +62,8 @@ class ChatNotifierUnitTest {
 
         // then: 수신자 "2"에게 THEM + clientMsgId 는 노출하지 않음(null)
         ArgumentCaptor<WebSocketEventBody> receiverCaptor = ArgumentCaptor.forClass(WebSocketEventBody.class);
-        then(messagingTemplate).should()
-                .convertAndSendToUser(eq("2"), eq("/queue/chat/rooms/10"), receiverCaptor.capture());
+        then(relayPublisher).should()
+                .publishToUser(eq("2"), eq("/queue/chat/rooms/10"), receiverCaptor.capture());
         ChatMessageCreatedPayload toReceiver = (ChatMessageCreatedPayload) receiverCaptor.getValue().payload();
         assertThat(toReceiver.message().senderType()).isEqualTo(ChatSenderType.THEM);
         assertThat(toReceiver.message().clientMsgId()).isNull();
@@ -80,8 +80,8 @@ class ChatNotifierUnitTest {
 
         // then: 상대(2)의 방 큐로 roomId·lastReadMessageId가 담긴 이벤트가 나감
         ArgumentCaptor<WebSocketEventBody> captor = ArgumentCaptor.forClass(WebSocketEventBody.class);
-        then(messagingTemplate).should()
-                .convertAndSendToUser(eq("2"), eq("/queue/chat/rooms/10"), captor.capture());
+        then(relayPublisher).should()
+                .publishToUser(eq("2"), eq("/queue/chat/rooms/10"), captor.capture());
         assertThat(captor.getValue().type()).isEqualTo(WebSocketBodyType.CHAT_READ_ADVANCED);
 
         ChatReadAdvancedPayload payload = (ChatReadAdvancedPayload) captor.getValue().payload();
@@ -89,8 +89,8 @@ class ChatNotifierUnitTest {
         assertThat(payload.lastReadMessageId()).isEqualTo(77L);
 
         // then: 읽은 본인(1)에게는 아무것도 나가지 않음
-        then(messagingTemplate).should(never())
-                .convertAndSendToUser(eq("1"), anyString(), any());
+        then(relayPublisher).should(never())
+                .publishToUser(eq("1"), anyString(), any());
     }
 
     @Test
@@ -105,8 +105,8 @@ class ChatNotifierUnitTest {
         // then: 두 참여자 각각의 /queue/chat/index 로 CHAT_CHANGED 전송 (roomId=10)
         for (String userId : List.of("1", "2")) {
             ArgumentCaptor<WebSocketEventBody> captor = ArgumentCaptor.forClass(WebSocketEventBody.class);
-            then(messagingTemplate).should()
-                    .convertAndSendToUser(eq(userId), eq("/queue/chat/index"), captor.capture());
+            then(relayPublisher).should()
+                    .publishToUser(eq(userId), eq("/queue/chat/index"), captor.capture());
             assertThat(captor.getValue().type()).isEqualTo(WebSocketBodyType.CHAT_CHANGED);
             assertThat(((ChatChangedPayload) captor.getValue().payload()).roomId()).isEqualTo(10L);
         }

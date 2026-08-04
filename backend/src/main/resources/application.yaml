@@ -8,6 +8,14 @@ spring:
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+      timeout: 1s
+      connect-timeout: 1s
+      repositories:
+        enabled: false
   jpa:
     hibernate:
       ddl-auto: validate
@@ -15,6 +23,10 @@ spring:
   jackson:
     mapper:
       accept-case-insensitive-enums: true
+
+logging:
+  pattern:
+    level: "%5p [${INSTANCE_ID:${HOSTNAME:local}}]"
 
 springdoc:
   swagger-ui:

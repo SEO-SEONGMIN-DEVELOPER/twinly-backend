@@ -25,6 +25,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 import org.springframework.web.socket.messaging.WebSocketStompClient;
+import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.mysql.MySQLContainer;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -53,11 +54,15 @@ import java.util.concurrent.atomic.AtomicInteger;
 public abstract class AbstractWebSocketIntegrationTest {
 
     @ServiceConnection
-    static final MySQLContainer MYSQL = new MySQLContainer("mysql:8.4")
+    protected static final MySQLContainer MYSQL = new MySQLContainer("mysql:8.4")
             .withCommand("--character-set-server=utf8mb4", "--collation-server=utf8mb4_0900_as_cs");
+
+    @ServiceConnection
+    protected static final GenericContainer<?> REDIS = new GenericContainer<>("redis:7.4").withExposedPorts(6379);
 
     static {
         MYSQL.start();
+        REDIS.start();
     }
 
     private static final long CONNECT_TIMEOUT_SECONDS = 5L;
@@ -118,11 +123,16 @@ public abstract class AbstractWebSocketIntegrationTest {
 
     /** 티켓으로 실제 STOMP 연결을 맺어 세션을 돌려준다. 자동 receipt를 켜 구독 확정을 기다릴 수 있게 한다. */
     protected StompSession connect(UUID ticket) throws Exception {
+        return connect(port, ticket);
+    }
+
+    /** 지정한 포트의 인스턴스로 STOMP 연결을 맺는다. 멀티 인스턴스 검증에서 두 번째 인스턴스에 붙을 때 쓴다. */
+    protected StompSession connect(int serverPort, UUID ticket) throws Exception {
         WebSocketStompClient stompClient = new WebSocketStompClient(new StandardWebSocketClient());
         stompClient.setMessageConverter(new JacksonJsonMessageConverter(jsonMapper));
         stompClient.setTaskScheduler(taskScheduler);
 
-        String url = "ws://localhost:" + port + "/ws/v1/?ticket=" + ticket;
+        String url = "ws://localhost:" + serverPort + "/ws/v1/?ticket=" + ticket;
         StompSession session = stompClient
                 .connectAsync(url, new StompSessionHandlerAdapter() {})
                 .get(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS);

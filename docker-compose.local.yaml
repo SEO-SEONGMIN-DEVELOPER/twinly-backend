@@ -20,5 +20,18 @@ services:
       retries: 5
       start_period: 20s
 
+  redis-twinly:
+    image: redis:7.4
+    container_name: redis-container-twinly
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
 volumes:
   mysqldata-twinly:

@@ -16,6 +16,7 @@ import org.springframework.boot.testcontainers.service.connection.ServiceConnect
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
+import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.mysql.MySQLContainer;
 
 import java.util.concurrent.atomic.AtomicInteger;
@@ -40,8 +41,12 @@ public abstract class AbstractIntegrationTest {
     static final MySQLContainer MYSQL = new MySQLContainer("mysql:8.4")
             .withCommand("--character-set-server=utf8mb4", "--collation-server=utf8mb4_0900_as_cs");
 
+    @ServiceConnection
+    static final GenericContainer<?> REDIS = new GenericContainer<>("redis:7.4").withExposedPorts(6379);
+
     static {
         MYSQL.start();
+        REDIS.start();
     }
 
     @Autowired
