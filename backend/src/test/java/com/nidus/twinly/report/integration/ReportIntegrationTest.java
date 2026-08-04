@@ -23,6 +23,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -139,8 +140,8 @@ class ReportIntegrationTest extends AbstractIntegrationTest {
         ReflectionTestUtils.setField(scene, "date", LocalDate.of(2026, 7, 26));
         ReflectionTestUtils.setField(scene, "version", "v1");
         ReflectionTestUtils.setField(scene, "place", "카페");
-        ReflectionTestUtils.setField(scene, "startsAt", LocalDateTime.of(2026, 7, 26, 10, 0));
-        ReflectionTestUtils.setField(scene, "endsAt", LocalDateTime.of(2026, 7, 26, 11, 0));
+        ReflectionTestUtils.setField(scene, "startsAt", LocalTime.of(10, 0));
+        ReflectionTestUtils.setField(scene, "endsAt", LocalTime.of(11, 0));
         ReflectionTestUtils.setField(scene, "type", SceneType.DIALOGUE);
         ReflectionTestUtils.setField(scene, "createdAt", Instant.now());
         return sceneRepository.save(scene);

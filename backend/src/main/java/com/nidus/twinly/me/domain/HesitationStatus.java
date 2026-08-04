@@ -1,7 +1,9 @@
 package com.nidus.twinly.me.domain;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 public enum HesitationStatus {
-    ANSWERED,
-    UNANSWERED,
-    ALL
+    @JsonProperty("answered")   ANSWERED,
+    @JsonProperty("unanswered") UNANSWERED,
+    @JsonProperty("all")        ALL
 }

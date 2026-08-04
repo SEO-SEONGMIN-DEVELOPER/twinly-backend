@@ -10,6 +10,8 @@ import com.nidus.twinly.user.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import com.nidus.twinly.common.security.SecurityConfig;
+import org.springframework.context.annotation.Import;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
@@ -31,6 +33,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(ConnectionController.class)
+@Import(SecurityConfig.class)
 class ConnectionControllerUnitTest {
 
     @Autowired
@@ -39,8 +42,7 @@ class ConnectionControllerUnitTest {
     @MockitoBean
     ConnectionService connectionService;
 
-    // ConnectionController는 @CurrentUser만 쓰지만, WebMvcConfig가 두 resolver를 모두 주입받고
-    // 각 resolver가 이 서비스에 의존하므로 슬라이스 기동에 필수.
+    // SecurityConfig가 JWT·익명 세션 필터를 함께 만들고 각 필터가 이 서비스에 의존하므로 슬라이스 기동에 둘 다 필수.
     @MockitoBean
     UserService userService;
 
@@ -66,12 +68,12 @@ class ConnectionControllerUnitTest {
         var result = mockMvc.perform(post("/api/v1/connection-tokens")
                 .header("Authorization", "Bearer access-token")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"connectionType\":\"WS\"}"));
+                .content("{\"connectionType\":\"ws\"}"));
 
         // then: 항상 새 티켓을 만드는 호출이므로 201 + 서비스 결과가 응답 JSON으로 매핑 + 인증 유저 id·커맨드로 서비스에 위임
         result.andExpect(status().isCreated())
                 .andExpect(jsonPath("$.ticket").value(ticket.toString()))
-                .andExpect(jsonPath("$.connectionType").value("WS"))
+                .andExpect(jsonPath("$.connectionType").value("ws"))
                 .andExpect(jsonPath("$.expiresAt").value(expiresAt.toString()));
         then(connectionService).should().token(1L, new ConnectionTokenCommand(ConnectionType.WS));
     }
@@ -98,7 +100,7 @@ class ConnectionControllerUnitTest {
         var result = mockMvc.perform(post("/api/v1/connection-tokens")
                 .header("Authorization", "Bearer access-token")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"connectionType\":\"HTTP\"}"));
+                .content("{\"connectionType\":\"http\"}"));
 
         // then: 본문 역직렬화 실패로 400 반환 + 서비스는 호출되지 않음
         result.andExpect(status().isBadRequest())
@@ -112,7 +114,7 @@ class ConnectionControllerUnitTest {
         // when: 인증 헤더 없이 연결 토큰 발급 API 호출
         var result = mockMvc.perform(post("/api/v1/connection-tokens")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"connectionType\":\"WS\"}"));
+                .content("{\"connectionType\":\"ws\"}"));
 
         // then: 401 반환 + 서비스는 호출되지 않음
         result.andExpect(status().isUnauthorized());

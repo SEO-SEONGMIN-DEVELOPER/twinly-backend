@@ -1,6 +1,8 @@
 package com.nidus.twinly.me.domain;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 public enum HesitationDuration {
-    TODAY,
-    ALL
+    @JsonProperty("today") TODAY,
+    @JsonProperty("all")   ALL
 }

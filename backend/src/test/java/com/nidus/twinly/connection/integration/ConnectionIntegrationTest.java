@@ -39,10 +39,10 @@ class ConnectionIntegrationTest extends AbstractIntegrationTest {
         String response = mockMvc.perform(post("/api/v1/connection-tokens")
                         .header("Authorization", bearer(me.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"connectionType\":\"WS\"}"))
+                        .content("{\"connectionType\":\"ws\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.ticket").isNotEmpty())
-                .andExpect(jsonPath("$.connectionType").value("WS"))
+                .andExpect(jsonPath("$.connectionType").value("ws"))
                 .andExpect(jsonPath("$.expiresAt").isNotEmpty())
                 .andReturn()
                 .getResponse()
@@ -68,9 +68,9 @@ class ConnectionIntegrationTest extends AbstractIntegrationTest {
         String response = mockMvc.perform(post("/api/v1/connection-tokens")
                         .header("Authorization", bearer(me.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"connectionType\":\"SSE\"}"))
+                        .content("{\"connectionType\":\"sse\"}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.connectionType").value("SSE"))
+                .andExpect(jsonPath("$.connectionType").value("sse"))
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
@@ -83,18 +83,18 @@ class ConnectionIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     @DisplayName("요청 바디의 enum은 쿼리 파라미터와 마찬가지로 대소문자를 구분하지 않는다")
-    void token_with_lowercase_connection_type_end_to_end() throws Exception {
+    void token_with_uppercase_connection_type_end_to_end() throws Exception {
         // given: 쿼리 파라미터·경로 변수의 enum은 CaseInsensitiveEnumConverterFactory로 대소문자를 무시하는데,
         //        요청 바디는 Jackson이 처리해 규칙이 갈려 있었다
         User me = saveUser();
 
-        // when: 소문자 connectionType으로 연결 토큰 발급 API 호출
+        // when: 계약과 다른 대문자 connectionType으로 연결 토큰 발급 API 호출
         String response = mockMvc.perform(post("/api/v1/connection-tokens")
                         .header("Authorization", bearer(me.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"connectionType\":\"ws\"}"))
+                        .content("{\"connectionType\":\"WS\"}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.connectionType").value("WS"))
+                .andExpect(jsonPath("$.connectionType").value("ws"))
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
@@ -118,7 +118,7 @@ class ConnectionIntegrationTest extends AbstractIntegrationTest {
         String response = mockMvc.perform(post("/api/v1/connection-tokens")
                         .header("Authorization", bearer(me.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"connectionType\":\"WS\"}"))
+                        .content("{\"connectionType\":\"ws\"}"))
                 .andExpect(status().isCreated())
                 .andReturn()
                 .getResponse()
@@ -149,7 +149,7 @@ class ConnectionIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(post("/api/v1/connection-tokens")
                         .header("Authorization", "Bearer invalid-access-token")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"connectionType\":\"WS\"}"))
+                        .content("{\"connectionType\":\"ws\"}"))
                 .andExpect(status().isUnauthorized());
 
         // then: 티켓 행이 늘어나지 않음
