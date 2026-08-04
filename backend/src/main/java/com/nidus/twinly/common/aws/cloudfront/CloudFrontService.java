@@ -19,8 +19,12 @@ public class CloudFrontService {
     private final PrivateKey cloudFrontPrivateKey;
     private final CloudFrontProperties cloudFrontProperties;
 
+    public String getPublicUrl(String key) {
+        return "https://%s/%s".formatted(cloudFrontProperties.domain(), key);
+    }
+
     public String getSignedUrl(String key) {
-        String resourceUrl = "https://%s/%s".formatted(cloudFrontProperties.domain(), key);
+        String resourceUrl = getPublicUrl(key);
 
         CannedSignerRequest cannedRequest = CannedSignerRequest.builder()
                 .resourceUrl(resourceUrl)

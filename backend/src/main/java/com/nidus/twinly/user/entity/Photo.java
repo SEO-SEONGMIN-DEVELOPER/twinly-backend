@@ -29,6 +29,9 @@ public class Photo {
     @Column(name = "`key`", columnDefinition = "TEXT")
     private String key;
 
+    @Column(columnDefinition = "TEXT")
+    private String thumbnailKey;
+
     private Integer xPos;
 
     private Integer yPos;
@@ -63,10 +66,15 @@ public class Photo {
 
     public void changePhoto(String key, Integer xPos, Integer yPos, Integer width, Integer height) {
         this.key = key;
+        this.thumbnailKey = null;
         this.xPos = xPos;
         this.yPos = yPos;
         this.width = width;
         this.height = height;
         this.uploadedAt = Instant.now();
+    }
+
+    public void changeThumbnailKey(String thumbnailKey) {
+        this.thumbnailKey = thumbnailKey;
     }
 }

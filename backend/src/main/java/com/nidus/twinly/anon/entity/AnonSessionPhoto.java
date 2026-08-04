@@ -1,6 +1,7 @@
 package com.nidus.twinly.anon.entity;
 
 import org.hibernate.annotations.DynamicUpdate;
+import com.nidus.twinly.common.photo.PhotoPosInfo;
 import com.nidus.twinly.common.photo.PhotoType;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -55,6 +56,10 @@ public class AnonSessionPhoto {
         photo.createdAt = now;
 
         return photo;
+    }
+
+    public PhotoPosInfo position() {
+        return new PhotoPosInfo(new PhotoPosInfo.StartPos(xPos, yPos), width, height);
     }
 
     public void changePhoto(String key, Integer xPos, Integer yPos, Integer width, Integer height) {
