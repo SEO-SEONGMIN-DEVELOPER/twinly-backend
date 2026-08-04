@@ -1,5 +1,6 @@
 package com.nidus.twinly.push.service;
 
+import com.nidus.twinly.device.domain.DevicePlatform;
 import com.nidus.twinly.device.entity.Device;
 import com.nidus.twinly.device.repository.DeviceRepository;
 import com.nidus.twinly.push.dto.command.PushTokenRegisterCommand;
@@ -40,10 +41,10 @@ class PushServiceUnitTest {
         given(deviceRepository.findAllByUserIdAndPushToken(1L, "fcm-token-abc")).willReturn(List.of());
 
         // when: 푸시 토큰 등록
-        pushService.register(1L, new PushTokenRegisterCommand(DEVICE_ID, "iPhone 15 Pro", "fcm-token-abc"));
+        pushService.register(1L, new PushTokenRegisterCommand(DEVICE_ID, DevicePlatform.IOS, "fcm-token-abc"));
 
         // then: 조회-후-저장(check-then-act)이 아니라 원자적 upsert로 위임된다
-        then(deviceRepository).should().upsert(1L, DEVICE_ID, "iPhone 15 Pro", "fcm-token-abc");
+        then(deviceRepository).should().upsert(1L, DEVICE_ID, "IOS", "fcm-token-abc");
         then(deviceRepository).should(never()).save(any());
     }
 
@@ -51,11 +52,11 @@ class PushServiceUnitTest {
     @DisplayName("등록: 내 다른 기기 행이 같은 토큰을 들고 있으면 그 행의 토큰을 비운다 (토큰 하나 = 행 하나)")
     void register_clears_same_token_on_my_other_rows() {
         // given: deviceId만 다른 내 옛 행이 같은 토큰을 들고 있음 (클라이언트가 deviceId를 새로 만든 경우)
-        Device myStaleRow = Device.create(1L, OTHER_DEVICE_ID, "iPhone 15 Pro", "shared-token");
+        Device myStaleRow = Device.create(1L, OTHER_DEVICE_ID, DevicePlatform.IOS, "shared-token");
         given(deviceRepository.findAllByUserIdAndPushToken(1L, "shared-token")).willReturn(List.of(myStaleRow));
 
         // when: 새 deviceId로 같은 토큰을 등록
-        pushService.register(1L, new PushTokenRegisterCommand(DEVICE_ID, "iPhone 15 Pro", "shared-token"));
+        pushService.register(1L, new PushTokenRegisterCommand(DEVICE_ID, DevicePlatform.IOS, "shared-token"));
 
         // then: 옛 행의 토큰이 비워져 같은 기기에 두 번 발송되지 않는다
         assertThat(myStaleRow.getPushToken()).isNull();
@@ -65,7 +66,7 @@ class PushServiceUnitTest {
     @DisplayName("해제: 본인 소유 기기가 있으면 pushToken을 null로 비운다")
     void revoke_existing_device_clears_token() {
         // given: 유저 1이 소유한 기기가 토큰을 가지고 있음
-        Device existing = Device.create(1L, DEVICE_ID, "iPhone 15 Pro", "fcm-token-abc");
+        Device existing = Device.create(1L, DEVICE_ID, DevicePlatform.IOS, "fcm-token-abc");
         given(deviceRepository.findByUserIdAndDeviceId(1L, DEVICE_ID)).willReturn(Optional.of(existing));
 
         // when: 푸시 토큰 해제

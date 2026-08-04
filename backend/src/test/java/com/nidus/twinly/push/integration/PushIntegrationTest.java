@@ -1,5 +1,6 @@
 package com.nidus.twinly.push.integration;
 
+import com.nidus.twinly.device.domain.DevicePlatform;
 import com.nidus.twinly.device.entity.Device;
 import com.nidus.twinly.device.repository.DeviceRepository;
 import com.nidus.twinly.support.AbstractIntegrationTest;
@@ -35,7 +36,7 @@ class PushIntegrationTest extends AbstractIntegrationTest {
         String body = """
                 {
                   "deviceId": "%s",
-                  "deviceModel": "iPhone 15 Pro",
+                  "platform": "ios",
                   "fcmToken": "fcm-token-abc"
                 }
                 """.formatted(deviceId);
@@ -52,27 +53,27 @@ class PushIntegrationTest extends AbstractIntegrationTest {
         entityManager.clear();
         Device saved = deviceRepository.findByDeviceId(deviceId).orElseThrow();
         assertThat(saved.getUserId()).isEqualTo(me.getId());
-        assertThat(saved.getDeviceModel()).isEqualTo("iPhone 15 Pro");
+        assertThat(saved.getPlatform()).isEqualTo(DevicePlatform.IOS);
         assertThat(saved.getPushToken()).isEqualTo("fcm-token-abc");
         assertThat(saved.getCreatedAt()).isNotNull();
     }
 
     @Test
-    @DisplayName("푸시 토큰 재등록: 같은 deviceId로 다시 등록하면 행이 늘지 않고 모델·토큰만 갱신된다")
+    @DisplayName("푸시 토큰 재등록: 같은 deviceId로 다시 등록하면 행이 늘지 않고 플랫폼·토큰만 갱신된다")
     void register_same_device_twice_updates_in_place() throws Exception {
         // given: 실제 유저와 이미 등록된 기기 1대
         User me = saveUser();
         UUID deviceId = UUID.randomUUID();
-        deviceRepository.save(Device.create(me.getId(), deviceId, "iPhone 14", "old-token"));
+        deviceRepository.save(Device.create(me.getId(), deviceId, DevicePlatform.ANDROID, "old-token"));
         entityManager.flush();
         entityManager.clear();
         Long originalRowId = deviceRepository.findByDeviceId(deviceId).orElseThrow().getId();
 
-        // when: 같은 deviceId로 모델·토큰을 바꿔 다시 등록
+        // when: 같은 deviceId로 플랫폼·토큰을 바꿔 다시 등록
         String body = """
                 {
                   "deviceId": "%s",
-                  "deviceModel": "iPhone 15 Pro",
+                  "platform": "ios",
                   "fcmToken": "new-token"
                 }
                 """.formatted(deviceId);
@@ -87,7 +88,7 @@ class PushIntegrationTest extends AbstractIntegrationTest {
         entityManager.clear();
         Device reloaded = deviceRepository.findByDeviceId(deviceId).orElseThrow();
         assertThat(reloaded.getId()).isEqualTo(originalRowId);
-        assertThat(reloaded.getDeviceModel()).isEqualTo("iPhone 15 Pro");
+        assertThat(reloaded.getPlatform()).isEqualTo(DevicePlatform.IOS);
         assertThat(reloaded.getPushToken()).isEqualTo("new-token");
     }
 
@@ -98,7 +99,7 @@ class PushIntegrationTest extends AbstractIntegrationTest {
         User previous = saveUser();
         User next = saveUser();
         UUID deviceId = UUID.randomUUID();
-        Long originalRowId = deviceRepository.save(Device.create(previous.getId(), deviceId, "iPhone 15 Pro", "shared-token")).getId();
+        Long originalRowId = deviceRepository.save(Device.create(previous.getId(), deviceId, DevicePlatform.IOS, "shared-token")).getId();
         entityManager.flush();
         entityManager.clear();
 
@@ -106,7 +107,7 @@ class PushIntegrationTest extends AbstractIntegrationTest {
         String body = """
                 {
                   "deviceId": "%s",
-                  "deviceModel": "iPhone 15 Pro",
+                  "platform": "ios",
                   "fcmToken": "shared-token"
                 }
                 """.formatted(deviceId);
@@ -133,7 +134,7 @@ class PushIntegrationTest extends AbstractIntegrationTest {
         User me = saveUser();
         UUID oldDeviceId = UUID.randomUUID();
         UUID newDeviceId = UUID.randomUUID();
-        deviceRepository.save(Device.create(me.getId(), oldDeviceId, "iPhone 15 Pro", "same-token"));
+        deviceRepository.save(Device.create(me.getId(), oldDeviceId, DevicePlatform.IOS, "same-token"));
         entityManager.flush();
         entityManager.clear();
 
@@ -141,7 +142,7 @@ class PushIntegrationTest extends AbstractIntegrationTest {
         String body = """
                 {
                   "deviceId": "%s",
-                  "deviceModel": "iPhone 15 Pro",
+                  "platform": "ios",
                   "fcmToken": "same-token"
                 }
                 """.formatted(newDeviceId);
@@ -166,7 +167,7 @@ class PushIntegrationTest extends AbstractIntegrationTest {
         // given: 실제 유저와 토큰이 등록된 기기 1대
         User me = saveUser();
         UUID deviceId = UUID.randomUUID();
-        deviceRepository.save(Device.create(me.getId(), deviceId, "iPhone 15 Pro", "fcm-token-abc"));
+        deviceRepository.save(Device.create(me.getId(), deviceId, DevicePlatform.IOS, "fcm-token-abc"));
         entityManager.flush();
         entityManager.clear();
 
@@ -181,6 +182,6 @@ class PushIntegrationTest extends AbstractIntegrationTest {
         Device reloaded = deviceRepository.findByDeviceId(deviceId).orElseThrow();
         assertThat(reloaded.getPushToken()).isNull();
         assertThat(reloaded.getUserId()).isEqualTo(me.getId());
-        assertThat(reloaded.getDeviceModel()).isEqualTo("iPhone 15 Pro");
+        assertThat(reloaded.getPlatform()).isEqualTo(DevicePlatform.IOS);
     }
 }

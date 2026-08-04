@@ -1,5 +1,6 @@
 package com.nidus.twinly.device.entity;
 
+import com.nidus.twinly.device.domain.DevicePlatform;
 import org.hibernate.annotations.DynamicUpdate;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -24,29 +25,29 @@ public class Device {
 
     private UUID deviceId;
 
-    @Column(columnDefinition = "TEXT")
-    private String deviceModel;
+    @Enumerated(EnumType.STRING)
+    private DevicePlatform platform;
 
     @Column(columnDefinition = "TEXT")
     private String pushToken;
 
     private Instant createdAt;
 
-    public static Device create(Long userId, UUID deviceId, String deviceModel, String pushToken) {
+    public static Device create(Long userId, UUID deviceId, DevicePlatform platform, String pushToken) {
         Device device = new Device();
 
         device.userId = userId;
         device.deviceId = deviceId;
-        device.deviceModel = deviceModel;
+        device.platform = platform;
         device.pushToken = pushToken;
         device.createdAt = Instant.now();
 
         return device;
     }
 
-    public void reregister(Long userId, String deviceModel, String pushToken) {
+    public void reregister(Long userId, DevicePlatform platform, String pushToken) {
         this.userId = userId;
-        this.deviceModel = deviceModel;
+        this.platform = platform;
         this.pushToken = pushToken;
     }
 

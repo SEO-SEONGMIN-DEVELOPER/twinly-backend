@@ -17,7 +17,7 @@ public class PushService {
 
     @Transactional
     public void register(Long userId, PushTokenRegisterCommand command) {
-        deviceRepository.upsert(userId, command.deviceId(), command.deviceModel(), command.fcmToken());
+        deviceRepository.upsert(userId, command.deviceId(), command.platform().name(), command.fcmToken());
 
         deviceRepository.findAllByUserIdAndPushToken(userId, command.fcmToken()).stream()
                 .filter(device -> !device.getDeviceId().equals(command.deviceId()))

@@ -1,6 +1,7 @@
 package com.nidus.twinly.push.controller;
 
 import com.nidus.twinly.anon.service.AnonService;
+import com.nidus.twinly.device.domain.DevicePlatform;
 import com.nidus.twinly.push.dto.command.PushTokenRegisterCommand;
 import com.nidus.twinly.push.service.PushService;
 import com.nidus.twinly.user.dto.header.UserInfo;
@@ -8,6 +9,8 @@ import com.nidus.twinly.user.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import com.nidus.twinly.common.security.SecurityConfig;
+import org.springframework.context.annotation.Import;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
@@ -28,6 +31,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(PushController.class)
+@Import(SecurityConfig.class)
 class PushControllerUnitTest {
 
     private static final UUID DEVICE_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
@@ -38,8 +42,7 @@ class PushControllerUnitTest {
     @MockitoBean
     PushService pushService;
 
-    // PushController가 직접 쓰진 않지만, WebMvcConfig가 두 resolver를 모두 주입받고
-    // 각 resolver가 이 서비스에 의존하므로 슬라이스 기동에 필수.
+    // SecurityConfig가 JWT·익명 세션 필터를 함께 만들고 각 필터가 이 서비스에 의존하므로 슬라이스 기동에 둘 다 필수.
     @MockitoBean
     UserService userService;
 
@@ -59,7 +62,7 @@ class PushControllerUnitTest {
         String body = """
                 {
                   "deviceId": "11111111-1111-1111-1111-111111111111",
-                  "deviceModel": "iPhone 15 Pro",
+                  "platform": "ios",
                   "fcmToken": "fcm-token-abc"
                 }
                 """;
@@ -74,7 +77,7 @@ class PushControllerUnitTest {
         result.andExpect(status().isOk());
         then(pushService).should().register(
                 1L,
-                new PushTokenRegisterCommand(DEVICE_ID, "iPhone 15 Pro", "fcm-token-abc"));
+                new PushTokenRegisterCommand(DEVICE_ID, DevicePlatform.IOS, "fcm-token-abc"));
     }
 
     @Test
@@ -83,7 +86,7 @@ class PushControllerUnitTest {
         // given: deviceId가 누락된 등록 요청 본문
         String body = """
                 {
-                  "deviceModel": "iPhone 15 Pro",
+                  "platform": "ios",
                   "fcmToken": "fcm-token-abc"
                 }
                 """;
@@ -107,7 +110,7 @@ class PushControllerUnitTest {
         String body = """
                 {
                   "deviceId": "not-a-uuid",
-                  "deviceModel": "iPhone 15 Pro",
+                  "platform": "ios",
                   "fcmToken": "fcm-token-abc"
                 }
                 """;
@@ -130,7 +133,7 @@ class PushControllerUnitTest {
         String body = """
                 {
                   "deviceId": "11111111-1111-1111-1111-111111111111",
-                  "deviceModel": "iPhone 15 Pro",
+                  "platform": "ios",
                   "fcmToken": "fcm-token-abc"
                 }
                 """;
@@ -184,13 +187,12 @@ class PushControllerUnitTest {
     }
 
     @Test
-    @DisplayName("푸시 토큰 등록 시 deviceModel·fcmToken이 공백뿐이면 400을 반환하고 서비스를 호출하지 않는다")
+    @DisplayName("푸시 토큰 등록 시 platform이 없고 fcmToken이 공백뿐이면 400을 반환하고 서비스를 호출하지 않는다")
     void register_with_blank_fields_returns_400() throws Exception {
-        // given: 필수 문자열이 공백뿐인 요청 본문
+        // given: platform이 누락되고 fcmToken이 빈 문자열인 요청 본문
         String body = """
                 {
                   "deviceId": "11111111-1111-1111-1111-111111111111",
-                  "deviceModel": "   ",
                   "fcmToken": ""
                 }
                 """;
@@ -202,6 +204,30 @@ class PushControllerUnitTest {
                 .content(body));
 
         // then: 400 INVALID_REQUEST 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        then(pushService).should(never()).register(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("푸시 토큰 등록 시 platform이 정의되지 않은 값이면 400 INVALID_REQUEST를 반환하고 서비스를 호출하지 않는다")
+    void register_with_unknown_platform_returns_400() throws Exception {
+        // given: DevicePlatform에 없는 값을 담은 요청 본문
+        String body = """
+                {
+                  "deviceId": "11111111-1111-1111-1111-111111111111",
+                  "platform": "windows",
+                  "fcmToken": "fcm-token-abc"
+                }
+                """;
+
+        // when: 인증 상태로 푸시 토큰 등록 API 호출
+        var result = mockMvc.perform(post("/api/v1/push/tokens")
+                .header("Authorization", "Bearer access-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body));
+
+        // then: 400 + INVALID_REQUEST 반환 + 서비스는 호출되지 않음 (본문 역직렬화 단계에서 차단)
         result.andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
         then(pushService).should(never()).register(anyLong(), any());

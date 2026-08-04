@@ -20,10 +20,10 @@ public interface DeviceRepository extends JpaRepository<Device, Long> {
 
     @Modifying
     @Query(value = """
-            INSERT INTO devices (user_id, device_id, device_model, push_token, created_at)
-            VALUES (:userId, :deviceId, :deviceModel, :pushToken, UTC_TIMESTAMP(6))
-            ON DUPLICATE KEY UPDATE user_id = :userId, device_model = :deviceModel, push_token = :pushToken
+            INSERT INTO devices (user_id, device_id, platform, push_token, created_at)
+            VALUES (:userId, :deviceId, :platform, :pushToken, UTC_TIMESTAMP(6))
+            ON DUPLICATE KEY UPDATE user_id = :userId, platform = :platform, push_token = :pushToken
             """, nativeQuery = true)
     void upsert(@Param("userId") Long userId, @Param("deviceId") UUID deviceId,
-                @Param("deviceModel") String deviceModel, @Param("pushToken") String pushToken);
+                @Param("platform") String platform, @Param("pushToken") String pushToken);
 }
