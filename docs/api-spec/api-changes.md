@@ -12,6 +12,63 @@
 
 ---
 
+## 2026-08-03
+
+### 1. **BREAKING** 씬의 유저 정보가 `userInfos` 한 곳으로 모입니다
+
+대상 API는 두 개입니다.
+
+- `GET /api/v1/activities/{date}`
+- `GET /api/v1/people/{userId}/events/{date}`
+
+지금까지는 같은 유저의 이름이 `scenes[].with[]`, `scenes[].lines[].speaker`, `profilePhotos[]` 세 군데에 흩어져 중복으로 내려갔습니다. 이제 **씬 안에는 유저 id만 남고, 이름과 프로필 사진은 최상위 `userInfos` 한 곳**에서만 내려갑니다.
+
+#### 1-1. `profilePhotos` → `userInfos` (이름 추가)
+
+`profilePhotos` 필드는 **사라집니다.** 같은 자리에 `userInfos`가 들어가고, 기존 `userId`/`profilePhoto`에 `userName`이 추가됩니다.
+
+```json
+{
+  "userInfos": [
+    {
+      "userId": "100",
+      "userName": "홍길동",
+      "profilePhoto": {
+        "key": "profile/100/key",
+        "photoUrl": "https://cdn.example.com/signed",
+        "position": { "startPos": { "x": 0, "y": 0 }, "width": 0, "height": 0 }
+      }
+    }
+  ]
+}
+```
+
+**조회자 본인이 항상 맨 앞에 오고**, 그 뒤로 응답 안 모든 `scenes[].with`에 등장한 유저가 **중복 없이** 한 건씩 이어집니다. 씬이 하나도 없는 날에도 본인 한 건은 내려갑니다. `userName`은 항상 값이 있고(탈퇴한 유저는 탈퇴 표기 이름), 사진이 없거나 탈퇴한 유저는 `profilePhoto`만 `null`입니다.
+
+#### 1-2. `scenes[].with`는 유저 id 배열이 됩니다
+
+```json
+"with": [{ "userId": "100", "userName": "홍길동" }]   // 이전
+"with": ["100"]                                       // 이후
+```
+
+`type`이 `action`인 씬은 혼자 있었던 순간일 수 있어 **동행자가 없으면 빈 배열이 아니라 `null`이 내려갑니다.** `dialogue` 씬은 상대가 있어야 성립하므로 항상 값이 있습니다.
+
+#### 1-3. `scenes[].lines[].speaker`는 유저 id 문자열이 됩니다
+
+`t`가 `bubble`인 대사에만 해당합니다.
+
+```json
+"speaker": { "userId": "100", "userName": "홍길동" }   // 이전
+"speaker": "100"                                       // 이후
+```
+
+**대응 방법:** `userInfos`를 `userId` 기준 맵으로 만들어 두고, `with`/`speaker`의 id로 이름과 프로필 사진을 찾아 쓰시면 됩니다. 본인도 `userInfos`에 들어 있으므로 내 말풍선(`speaker`가 내 id인 경우)도 같은 맵으로 처리하시면 됩니다.
+
+한 가지 더 알아두실 점이 있습니다. 이전에는 `with`의 이름은 최신 값이었지만 `speaker`의 이름은 씬이 저장되던 시점의 값이라, 상대가 이름을 바꾸거나 탈퇴하면 한 화면 안에서 이름이 어긋났습니다. 이제 이름의 출처가 `userInfos` 하나뿐이라 **항상 최신 값으로 일관**됩니다. 탈퇴한 유저는 `userInfos`에서 탈퇴 표기 이름과 `profilePhoto: null`로 내려갑니다.
+
+---
+
 ## 2026-08-02 (2)
 
 ### 1. 읽음 표시가 실시간으로 전파됩니다 (`chat.read.advanced` 추가)
