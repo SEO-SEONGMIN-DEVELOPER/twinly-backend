@@ -52,7 +52,7 @@ class ApiErrorContractIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("API 문서의 모든 오퍼레이션에 성공(2xx) 응답이 있다")
     void api_docs_expose_success_response_for_every_operation() throws Exception {
-        String json = mockMvc.perform(get("/v3/api-docs"))
+        String json = mockMvc.perform(get("/openapi/docs"))
                 .andReturn().getResponse().getContentAsString();
 
         Map<String, Map<String, Object>> paths = JsonPath.read(json, "$.paths");
@@ -83,7 +83,7 @@ class ApiErrorContractIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("API 문서의 모든 오류 응답 description은 ErrorCode 이름으로만 채워진다")
     void api_docs_expose_only_error_code_names() throws Exception {
-        String json = mockMvc.perform(get("/v3/api-docs"))
+        String json = mockMvc.perform(get("/openapi/docs"))
                 .andReturn().getResponse().getContentAsString();
 
         Set<String> definedCodes = Arrays.stream(ErrorCode.values()).map(Enum::name).collect(Collectors.toSet());
@@ -106,7 +106,7 @@ class ApiErrorContractIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("문서의 401은 인증 방식별 코드와 컨트롤러가 선언한 코드의 합집합이다")
     void api_docs_merge_auth_and_declared_401() throws Exception {
-        String json = mockMvc.perform(get("/v3/api-docs"))
+        String json = mockMvc.perform(get("/openapi/docs"))
                 .andReturn().getResponse().getContentAsString();
 
         // 익명 세션 인증: 리졸버·AnonService가 던지는 4가지가 모두 나온다
@@ -125,7 +125,7 @@ class ApiErrorContractIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("경로 미매칭·메서드 미지원은 전역 동작이므로 개별 오퍼레이션 문서에 섞이지 않는다")
     void api_docs_do_not_mix_global_routing_errors() throws Exception {
-        String json = mockMvc.perform(get("/v3/api-docs"))
+        String json = mockMvc.perform(get("/openapi/docs"))
                 .andReturn().getResponse().getContentAsString();
 
         // 문서에 있는 경로는 매핑이 존재하므로 NOT_FOUND(경로 없음)가 날 수 없다.
@@ -143,7 +143,7 @@ class ApiErrorContractIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("문서의 인증 방식은 principal 타입으로 판별되어 유저 API는 jwtAuth, 익명 세션 API는 anonSessionAuth로 표기된다")
     void api_docs_mark_security_scheme_by_principal_type() throws Exception {
-        String json = mockMvc.perform(get("/v3/api-docs"))
+        String json = mockMvc.perform(get("/openapi/docs"))
                 .andReturn().getResponse().getContentAsString();
 
         assertThat(JsonPath.<List<Map<String, Object>>>read(json, "$.paths['/api/v1/me/status'].get.security"))
