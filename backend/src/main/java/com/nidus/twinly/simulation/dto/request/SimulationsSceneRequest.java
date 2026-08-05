@@ -3,7 +3,7 @@ package com.nidus.twinly.simulation.dto.request;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 
-@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.EXISTING_PROPERTY, property = "type")
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.EXISTING_PROPERTY, property = "type", visible = true)
 @JsonSubTypes({
         @JsonSubTypes.Type(value = SimulationsActionSceneRequest.class, name = "action"),
         @JsonSubTypes.Type(value = SimulationsDialogueSceneRequest.class, name = "dialogue")
