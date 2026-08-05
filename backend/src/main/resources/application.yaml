@@ -106,6 +106,9 @@ anon:
 chat:
   room-intimacy-threshold: 70
 
+server:
+  port: 8080
+
 management:
   server:
     port: 8081
