@@ -540,6 +540,15 @@ CREATE TABLE seasons (
     CONSTRAINT pk_seasons PRIMARY KEY (id)
 ) ENGINE = INNODB;
 
+CREATE TABLE shedlock (
+    name        VARCHAR(64) NOT NULL,
+    lock_until  TIMESTAMP(3) NOT NULL,
+    locked_at   TIMESTAMP(3) NOT NULL,
+    locked_by   VARCHAR(255) NOT NULL,
+
+    CONSTRAINT pk_shedlock PRIMARY KEY (name)
+) ENGINE = INNODB;
+
 CREATE TABLE survey_answers (
     id               BIGINT NOT NULL AUTO_INCREMENT,
     anon_session_id  BIGINT NOT NULL,
