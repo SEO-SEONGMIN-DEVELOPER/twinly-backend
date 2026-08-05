@@ -4,10 +4,12 @@ import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.notification.domain.AppNotificationFeedType;
 import com.nidus.twinly.notification.entity.AppNotificationFeed;
+import com.nidus.twinly.notification.event.AppNotificationFeedCreatedEvent;
 import com.nidus.twinly.notification.repository.AppNotificationFeedRepository;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
@@ -21,12 +23,13 @@ public class AppNotificationFeedWriter {
 
     private final AppNotificationFeedRepository appNotificationFeedRepository;
     private final UserRepository userRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     public void writeMatch(Long roomId, Long userId, Long partnerUserId) {
-        appNotificationFeedRepository.saveAll(List.of(
+        publish(appNotificationFeedRepository.saveAll(List.of(
                 matchFeed(userId, partnerUserId, roomId),
                 matchFeed(partnerUserId, userId, roomId)
-        ));
+        )));
     }
 
     public void writeFriend(Long userId, Long partnerUserId, LocalDate simulationDate) {
@@ -35,14 +38,14 @@ public class AppNotificationFeedWriter {
 
         String partnerName = name(partnerUserId);
 
-        appNotificationFeedRepository.save(AppNotificationFeed.createProfileTarget(
+        publish(List.of(appNotificationFeedRepository.save(AppNotificationFeed.createProfileTarget(
                 userId,
                 AppNotificationFeedType.FRIEND,
                 partnerName + "님과 친구가 되었어요.",
                 "평행세계에서 " + partnerName + "님과 친구가 되었어요.",
                 partnerUserId,
                 simulationDate
-        ));
+        ))));
     }
 
     private AppNotificationFeed matchFeed(Long userId, Long partnerUserId, Long roomId) {
@@ -53,6 +56,10 @@ public class AppNotificationFeedWriter {
                 MATCH_BODY,
                 roomId
         );
+    }
+
+    private void publish(List<AppNotificationFeed> feeds) {
+        eventPublisher.publishEvent(new AppNotificationFeedCreatedEvent(feeds));
     }
 
     private String name(Long userId) {
