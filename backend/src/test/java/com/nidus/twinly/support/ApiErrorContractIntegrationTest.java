@@ -159,6 +159,35 @@ class ApiErrorContractIntegrationTest extends AbstractIntegrationTest {
                 .doesNotContain("jwtAuth", "anonSessionAuth");
     }
 
+    @Test
+    @DisplayName("오류 명세 문서는 모든 ErrorCode를 이름·상태코드·기본 메시지로 노출한다")
+    void error_specifications_expose_every_error_code() throws Exception {
+        String json = mockMvc.perform(get("/docs/openapi-error-specifications"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        List<Map<String, Object>> errors = JsonPath.read(json, "$.errors");
+
+        // 문서가 코드 이름만 담으면 프론트는 상태코드·문구를 다시 하드코딩해야 한다. 세 값이 함께 나가는 자리를 지킨다.
+        assertThat(errors).hasSize(ErrorCode.values().length);
+        assertThat(errors).allSatisfy(error -> {
+            ErrorCode errorCode = ErrorCode.valueOf(String.valueOf(error.get("code")));
+            assertThat(error.get("status")).isEqualTo(errorCode.getStatus().value());
+            assertThat(error.get("message")).isEqualTo(errorCode.getDefaultMessage());
+        });
+    }
+
+    @Test
+    @DisplayName("오류 명세 문서 자체는 API 문서에 오퍼레이션으로 실리지 않는다")
+    void error_specifications_are_hidden_from_api_docs() throws Exception {
+        String json = mockMvc.perform(get("/docs/openapi"))
+                .andReturn().getResponse().getContentAsString();
+
+        // 문서 엔드포인트가 문서에 실리면 위 계약 검증들이 문서 자신을 검사하게 된다.
+        assertThat(JsonPath.<Map<String, Object>>read(json, "$.paths"))
+                .doesNotContainKey("/docs/openapi-error-specifications");
+    }
+
     private String description(String json, String path, String status) {
         int from = json.indexOf("\"" + path + "\":");
         assertThat(from).as("문서에 %s 경로가 없다", path).isNotNegative();
