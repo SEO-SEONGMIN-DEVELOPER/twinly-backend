@@ -132,7 +132,7 @@ CREATE TABLE app_notification_feeds (
     user_id              BIGINT NOT NULL,
     title                TEXT NOT NULL,
     body                 TEXT NOT NULL,
-    type                 ENUM ('FRIEND','MATCH','CHAT_READY') NOT NULL,
+    type                 ENUM ('FRIEND','MATCH') NOT NULL,
     target_kind          ENUM ('PROFILE','CHAT') NOT NULL,
     target_user_id       BIGINT,
     target_chat_room_id  BIGINT,

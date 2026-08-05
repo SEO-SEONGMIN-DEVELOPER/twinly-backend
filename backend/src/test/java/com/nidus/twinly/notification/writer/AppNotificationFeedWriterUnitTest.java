@@ -16,6 +16,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
@@ -42,6 +43,9 @@ class AppNotificationFeedWriterUnitTest {
 
     @Mock
     UserRepository userRepository;
+
+    @Mock
+    ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     AppNotificationFeedWriter appNotificationFeedWriter;
@@ -74,35 +78,14 @@ class AppNotificationFeedWriterUnitTest {
     }
 
     @Test
-    @DisplayName("chat_ready 피드는 양쪽 유저에게 각각 상대 실명을 제목에 담아 채팅방을 가리키도록 저장된다")
-    void writeChatReady_saves_chat_target_feed_for_both_users() {
-        // given: 양쪽 유저 실명 조회 가능
-        given(userRepository.findById(ME)).willReturn(Optional.of(user(ME, "김", "나야")));
-        given(userRepository.findById(PARTNER)).willReturn(Optional.of(user(PARTNER, "박", "상대")));
-
-        // when: 양쪽 입장 동의 완료 알림 기록
-        appNotificationFeedWriter.writeChatReady(ROOM_ID, ME, PARTNER);
-
-        // then: 2건이 CHAT_READY 타입으로 저장됨
-        List<AppNotificationFeed> feeds = savedFeeds();
-        assertThat(feeds).hasSize(2);
-        assertThat(feeds).allSatisfy(feed -> {
-            assertThat(feed.getType()).isEqualTo(AppNotificationFeedType.CHAT_READY);
-            assertThat(feed.getTargetKind()).isEqualTo(AppNotificationFeedTargetType.CHAT);
-            assertThat(feed.getTargetChatRoomId()).isEqualTo(ROOM_ID);
-        });
-        assertThat(feedOf(feeds, ME).getTitle()).isEqualTo("박상대님과 채팅할 수 있어요.");
-        assertThat(feedOf(feeds, ME).getBody()).isEqualTo("두 사람 모두 입장하기를 눌렀어요. 이제 대화를 시작할 수 있어요.");
-        assertThat(feedOf(feeds, PARTNER).getTitle()).isEqualTo("김나야님과 채팅할 수 있어요.");
-    }
-
-    @Test
     @DisplayName("friend 피드는 같은 날짜로 만든 기존 피드를 지운 뒤 상대 프로필을 가리키도록 1건만 저장된다")
     void writeFriend_replaces_same_date_feed_and_saves_profile_target() {
         // given: 상대 실명 조회 가능
         given(userRepository.findById(PARTNER)).willReturn(Optional.of(user(PARTNER, "박", "상대")));
 
         // when: 친구 승격 알림 기록
+        given(appNotificationFeedRepository.save(any())).willAnswer(invocation -> invocation.getArgument(0));
+
         appNotificationFeedWriter.writeFriend(ME, PARTNER, DATE);
 
         // then: 같은 (유저, 타입, 상대, 날짜) 피드를 먼저 삭제
@@ -133,6 +116,8 @@ class AppNotificationFeedWriterUnitTest {
         given(userRepository.findById(PARTNER)).willReturn(Optional.of(withdrawn));
 
         // when: 친구 승격 알림 기록
+        given(appNotificationFeedRepository.save(any())).willAnswer(invocation -> invocation.getArgument(0));
+
         appNotificationFeedWriter.writeFriend(ME, PARTNER, DATE);
 
         // then: 제목·본문 어디에도 원래 실명이 노출되지 않음

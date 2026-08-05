@@ -619,13 +619,11 @@ class ChatServiceUnitTest {
         assertThat(result.partner().userId()).isEqualTo(PARTNER);
         assertThat(result.isCurrentSeason()).isTrue();
 
-        // then: 상대가 아직 동의하지 않았으므로 chat_ready 피드는 남기지 않음
-        then(appNotificationFeedWriter).should(never()).writeChatReady(anyLong(), anyLong(), anyLong());
     }
 
     @Test
-    @DisplayName("내 입장 동의로 양쪽 동의가 채워지면 chat_ready 피드를 남긴다")
-    void enterRoom_writes_chat_ready_feed_when_both_agreed() {
+    @DisplayName("내 입장 동의로 양쪽 동의가 채워지면 입장 상태가 모두 동의로 반영된다")
+    void enterRoom_both_agreed() {
         // given: 상대는 이미 동의했고 나는 아직 동의하지 않음
         ChatRoomParticipation mine = participation(ROOM_ID, ME);
         ChatRoomParticipation partner = participation(ROOM_ID, PARTNER);
@@ -643,35 +641,9 @@ class ChatServiceUnitTest {
         // when: 채팅방에 입장
         ChatRoomDetailResult result = chatService.enterRoom(ME, ROOM_ID);
 
-        // then: 양쪽 동의가 완성된 시점에 chat_ready 피드를 남김
-        then(appNotificationFeedWriter).should().writeChatReady(ROOM_ID, ME, PARTNER);
+        // then: 양쪽 동의가 상세 응답에 반영됨
         assertThat(result.entryStatus().myEntryAgreed()).isTrue();
         assertThat(result.entryStatus().partnerEntryAgreed()).isTrue();
-    }
-
-    @Test
-    @DisplayName("이미 동의한 뒤 다시 입장하면 chat_ready 피드를 중복으로 남기지 않는다")
-    void enterRoom_reentry_does_not_write_chat_ready_feed() {
-        // given: 양쪽 모두 이미 동의를 마친 방
-        ChatRoomParticipation mine = participation(ROOM_ID, ME);
-        mine.agree();
-        ChatRoomParticipation partner = participation(ROOM_ID, PARTNER);
-        partner.agree();
-        given(chatRoomRepository.findById(ROOM_ID)).willReturn(Optional.of(room(ROOM_ID, MATCH_ID)));
-        given(matchRepository.findById(MATCH_ID)).willReturn(Optional.of(match(MATCH_ID, ME, PARTNER, CURRENT_SEASON_ID)));
-        given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, ME)).willReturn(Optional.of(mine));
-        given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, PARTNER)).willReturn(Optional.of(partner));
-        given(userRepository.findById(PARTNER)).willReturn(Optional.of(user(PARTNER, "partnerNick")));
-        given(photoRepository.findByUserIdAndType(PARTNER, PhotoType.PROFILE)).willReturn(Optional.empty());
-        given(relationshipRepository.findLatestByUserIdAndPartnerUserId(ME, PARTNER)).willReturn(Optional.empty());
-        given(disclosureAgreementRepository.findAllByUserId(PARTNER)).willReturn(List.of());
-        given(currentSeasonReader.read()).willReturn(currentSeason());
-
-        // when: 같은 방에 다시 입장
-        chatService.enterRoom(ME, ROOM_ID);
-
-        // then: 이번 호출이 동의 상태를 바꾸지 않았으므로 피드를 남기지 않음
-        then(appNotificationFeedWriter).should(never()).writeChatReady(anyLong(), anyLong(), anyLong());
     }
 
     @Test

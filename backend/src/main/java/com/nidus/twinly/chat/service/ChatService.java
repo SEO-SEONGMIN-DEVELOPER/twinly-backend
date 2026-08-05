@@ -347,20 +347,9 @@ public class ChatService {
         Long partnerUserId = resolvePartnerId(match, userId);
 
         ChatRoomParticipation mine = getActiveParticipation(roomId, userId);
-        boolean firstAgreement = mine.getEntryAgreedAt() == null;
         mine.agree();
 
-        if (firstAgreement && hasAgreed(roomId, partnerUserId)) {
-            appNotificationFeedWriter.writeChatReady(roomId, userId, partnerUserId);
-        }
-
         return roomDetail(userId, roomId);
-    }
-
-    private boolean hasAgreed(Long roomId, Long userId) {
-        return chatRoomParticipationRepository.findByRoomIdAndUserId(roomId, userId)
-                .map(participation -> participation.getEntryAgreedAt() != null)
-                .orElse(false);
     }
 
     @Transactional

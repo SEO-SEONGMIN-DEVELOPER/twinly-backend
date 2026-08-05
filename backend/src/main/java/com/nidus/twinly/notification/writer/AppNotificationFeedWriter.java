@@ -18,7 +18,6 @@ import java.util.List;
 public class AppNotificationFeedWriter {
 
     private static final String MATCH_BODY = "채팅 탭에서 입장하기를 누르면, 상대가 동의한 뒤 대화가 시작돼요.";
-    private static final String CHAT_READY_BODY = "두 사람 모두 입장하기를 눌렀어요. 이제 대화를 시작할 수 있어요.";
 
     private final AppNotificationFeedRepository appNotificationFeedRepository;
     private final UserRepository userRepository;
@@ -27,13 +26,6 @@ public class AppNotificationFeedWriter {
         appNotificationFeedRepository.saveAll(List.of(
                 matchFeed(userId, partnerUserId, roomId),
                 matchFeed(partnerUserId, userId, roomId)
-        ));
-    }
-
-    public void writeChatReady(Long roomId, Long userId, Long partnerUserId) {
-        appNotificationFeedRepository.saveAll(List.of(
-                chatReadyFeed(userId, partnerUserId, roomId),
-                chatReadyFeed(partnerUserId, userId, roomId)
         ));
     }
 
@@ -59,16 +51,6 @@ public class AppNotificationFeedWriter {
                 AppNotificationFeedType.MATCH,
                 name(partnerUserId) + "님과 채팅방이 열렸어요.",
                 MATCH_BODY,
-                roomId
-        );
-    }
-
-    private AppNotificationFeed chatReadyFeed(Long userId, Long partnerUserId, Long roomId) {
-        return AppNotificationFeed.createChatTarget(
-                userId,
-                AppNotificationFeedType.CHAT_READY,
-                name(partnerUserId) + "님과 채팅할 수 있어요.",
-                CHAT_READY_BODY,
                 roomId
         );
     }

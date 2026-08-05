@@ -638,7 +638,7 @@ class MeServiceUnitTest {
         // given: 미읽음 프로필 알림 1건, 읽은 채팅 알림 1건
         AppNotificationFeed profileFeed = feed(10L, AppNotificationFeedType.FRIEND, "친구 요청", "본문1",
                 AppNotificationFeedTargetType.PROFILE, 5L, null, null);
-        AppNotificationFeed chatFeed = feed(11L, AppNotificationFeedType.CHAT_READY, "채팅 시작", "본문2",
+        AppNotificationFeed chatFeed = feed(11L, AppNotificationFeedType.MATCH, "채팅 시작", "본문2",
                 AppNotificationFeedTargetType.CHAT, null, 77L, Instant.now());
         given(appNotificationFeedRepository.findAllByUserIdAndFilter(ME, true, "FRIEND", 5))
                 .willReturn(List.of(profileFeed, chatFeed));
