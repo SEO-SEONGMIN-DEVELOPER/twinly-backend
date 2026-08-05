@@ -17,6 +17,8 @@ public interface NotificationSettingRepository extends JpaRepository<Notificatio
 
     Optional<NotificationSetting> findByUserIdAndChannelAndType(Long userId, NotificationChannel channel, NotificationType type);
 
+    List<NotificationSetting> findAllByUserIdInAndChannelAndType(List<Long> userIds, NotificationChannel channel, NotificationType type);
+
     @Modifying
     @Query(value = """
             INSERT INTO notification_settings (user_id, channel, type, enabled, created_at)

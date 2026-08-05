@@ -24,13 +24,15 @@ public class CloudFrontService {
     }
 
     public String getSignedUrl(String key) {
-        String resourceUrl = getPublicUrl(key);
+        return getSignedUrl(key, URL_EXPIRES_IN);
+    }
 
+    public String getSignedUrl(String key, Duration expiresIn) {
         CannedSignerRequest cannedRequest = CannedSignerRequest.builder()
-                .resourceUrl(resourceUrl)
+                .resourceUrl(getPublicUrl(key))
                 .privateKey(cloudFrontPrivateKey)
                 .keyPairId(cloudFrontProperties.keyPairId())
-                .expirationDate(Instant.now().plus(URL_EXPIRES_IN))
+                .expirationDate(Instant.now().plus(expiresIn))
                 .build();
 
         return cloudFrontUtilities.getSignedUrlWithCannedPolicy(cannedRequest).url();

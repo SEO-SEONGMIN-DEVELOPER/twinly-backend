@@ -18,6 +18,12 @@ public interface DeviceRepository extends JpaRepository<Device, Long> {
 
     List<Device> findAllByUserIdAndPushToken(Long userId, String pushToken);
 
+    List<Device> findAllByUserIdInAndPushTokenIsNotNull(List<Long> userIds);
+
+    @Modifying
+    @Query("UPDATE Device d SET d.pushToken = NULL WHERE d.pushToken IN :tokens")
+    void revokeTokens(@Param("tokens") List<String> tokens);
+
     @Modifying
     @Query(value = """
             INSERT INTO devices (user_id, device_id, platform, push_token, created_at)

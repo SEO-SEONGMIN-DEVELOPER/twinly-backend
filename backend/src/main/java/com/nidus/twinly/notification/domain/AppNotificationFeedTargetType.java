@@ -1,6 +1,8 @@
 package com.nidus.twinly.notification.domain;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 public enum AppNotificationFeedTargetType {
-    PROFILE,
-    CHAT
+    @JsonProperty("profile") PROFILE,
+    @JsonProperty("chat")    CHAT
 }

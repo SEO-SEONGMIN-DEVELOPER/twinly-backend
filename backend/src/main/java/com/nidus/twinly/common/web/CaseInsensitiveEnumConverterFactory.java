@@ -1,6 +1,6 @@
 package com.nidus.twinly.common.web;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
+import com.nidus.twinly.common.jackson.EnumJsonNames;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.core.convert.converter.ConverterFactory;
 
@@ -27,7 +27,7 @@ public class CaseInsensitiveEnumConverterFactory implements ConverterFactory<Str
             }
 
             for (T constant : enumType.getEnumConstants()) {
-                if (jsonName(constant).equalsIgnoreCase(value)) {
+                if (EnumJsonNames.of(constant).equalsIgnoreCase(value)) {
                     return constant;
                 }
             }
@@ -35,13 +35,5 @@ public class CaseInsensitiveEnumConverterFactory implements ConverterFactory<Str
             throw new IllegalArgumentException("허용되지 않는 값입니다: " + enumType.getSimpleName() + "=" + value);
         }
 
-        private String jsonName(T constant) {
-            try {
-                JsonProperty jsonProperty = enumType.getField(constant.name()).getAnnotation(JsonProperty.class);
-                return jsonProperty == null ? constant.name() : jsonProperty.value();
-            } catch (NoSuchFieldException e) {
-                return constant.name();
-            }
-        }
     }
 }
