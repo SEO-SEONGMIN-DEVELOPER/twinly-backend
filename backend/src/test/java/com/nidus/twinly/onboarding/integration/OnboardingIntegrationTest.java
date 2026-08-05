@@ -121,7 +121,7 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
     void schools_end_to_end() throws Exception {
         // given: 가입 가능한 학교 2곳을 이름 역순으로 저장 (시드로 들어온 실제 학교들과 섞인다)
         saveSchool("트윈리대학교", "twinly.ac.kr");
-        saveSchool("니두스대학교", "nidus.ac.kr", "grad.nidus.ac.kr");
+        saveSchool("소마대학교", "nidus.ac.kr", "grad.nidus.ac.kr");
         flushAndClear();
 
         // when: 인증 없이 학교 목록 조회
@@ -131,16 +131,16 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
 
         // then: 이름순으로 정렬되어 이름·도메인이 함께 내려온다
         assertThat(JsonPath.<List<String>>read(body, "$.schools[*].schoolName"))
-                .containsSubsequence("니두스대학교", "트윈리대학교");
-        assertThat(JsonPath.<List<List<String>>>read(body, "$.schools[?(@.schoolName == '니두스대학교')].domains"))
+                .containsSubsequence("소마대학교", "트윈리대학교");
+        assertThat(JsonPath.<List<List<String>>>read(body, "$.schools[?(@.schoolName == '소마대학교')].domains"))
                 .containsExactly(List.of("nidus.ac.kr", "grad.nidus.ac.kr"));
     }
 
     @Test
     @DisplayName("학과 목록: 요청 파라미터 없이 인증된 이메일의 학교 학과만 내려오고 다른 학교 학과는 섞이지 않는다")
     void affiliations_end_to_end() throws Exception {
-        // given: 학교 2곳과 각각의 학과, 그리고 니두스대학교 이메일로 인증을 마친 익명 세션
-        Long nidusId = saveSchool("니두스대학교", "nidus.ac.kr");
+        // given: 학교 2곳과 각각의 학과, 그리고 소마대학교 이메일로 인증을 마친 익명 세션
+        Long nidusId = saveSchool("소마대학교", "nidus.ac.kr");
         saveSchoolAffiliation(nidusId, "컴퓨터공학과");
         saveSchoolAffiliation(nidusId, "경영학과");
         Long twinlyId = saveSchool("트윈리대학교", "twinly.ac.kr");

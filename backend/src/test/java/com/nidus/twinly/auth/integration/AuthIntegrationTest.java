@@ -64,7 +64,7 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
         UUID anonToken = UUID.randomUUID();
         AnonSession anonSession = anonSessionRepository.save(
                 AnonSession.create(anonToken, Instant.now().plus(Duration.ofDays(1))));
-        saveSchool("니두스대학교", "nidus.ac.kr");
+        saveSchool("트윈리대학교", "nidus.ac.kr");
         willDoNothing().given(sesService).send(anyString(), anyString(), anyString());
 
         // when: 익명 세션 토큰을 Bearer로 붙여 온보딩 이메일 발송 API 호출
@@ -94,11 +94,11 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("온보딩 이메일 인증번호 발송: 가입 가능한 학교 도메인이 아니면 422를 반환하고 인증 세션도 메일도 생기지 않는다")
     void onboarding_email_send_with_unsupported_domain_returns_422() throws Exception {
-        // given: 학교 목록에는 니두스대학교만 등록되어 있음
+        // given: 학교 목록에는 트윈리대학교만 등록되어 있음
         UUID anonToken = UUID.randomUUID();
         AnonSession anonSession = anonSessionRepository.save(
                 AnonSession.create(anonToken, Instant.now().plus(Duration.ofDays(1))));
-        saveSchool("니두스대학교", "nidus.ac.kr");
+        saveSchool("트윈리대학교", "nidus.ac.kr");
 
         // when: 목록에 없는 도메인으로 발송 요청 (앱 UI를 우회한 직접 호출)
         mockMvc.perform(post("/api/v1/auth/onboarding/email/send")
@@ -341,7 +341,7 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
         UUID anonToken = UUID.randomUUID();
         AnonSession anonSession = anonSessionRepository.save(
                 AnonSession.create(anonToken, Instant.now().plus(Duration.ofDays(1))));
-        saveSchool("니두스대학교", "nidus.ac.kr");
+        saveSchool("트윈리대학교", "nidus.ac.kr");
         AnonSessionVerificationSession session = anonSessionVerificationSessionRepository.save(
                 AnonSessionVerificationSession.create(VerificationType.EMAIL, anonSession.getId(),
                         "verify@nidus.ac.kr", "123456", Instant.now().plus(Duration.ofMinutes(5))));
@@ -360,7 +360,7 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
                 .findByAnonSessionIdAndType(anonSession.getId(), VerificationType.EMAIL).orElseThrow();
         assertThat(verified.getVerifiedAt()).isNotNull();
         assertThat(anonSessionRepository.findById(anonSession.getId()).orElseThrow().getSchool())
-                .isEqualTo("니두스대학교");
+                .isEqualTo("트윈리대학교");
     }
 
     @Test

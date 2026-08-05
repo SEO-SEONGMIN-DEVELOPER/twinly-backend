@@ -302,15 +302,15 @@ class MeIntegrationTest extends AbstractIntegrationTest {
                         .header("Authorization", bearer(me.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"affiliation": "니두스대학교"}
+                                {"affiliation": "트윈리대학교"}
                                 """))
                 .andExpect(status().isOk());
 
         // then: DB에서 다시 읽어도 소속이 갱신되고, 해시도 새 값 기준으로 저장됨
         flushAndClear();
         User reloaded = userRepository.findById(me.getId()).orElseThrow();
-        assertThat(reloaded.getAffiliation()).isEqualTo("니두스대학교");
-        assertThat(reloaded.getAffiliationHash()).isEqualTo(blindIndexHasher.hash("니두스대학교"));
+        assertThat(reloaded.getAffiliation()).isEqualTo("트윈리대학교");
+        assertThat(reloaded.getAffiliationHash()).isEqualTo(blindIndexHasher.hash("트윈리대학교"));
     }
 
     @Test

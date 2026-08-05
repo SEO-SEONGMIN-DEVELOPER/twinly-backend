@@ -49,7 +49,7 @@ class AiChatServiceUnitTest {
             "홍",
             "길동",
             Gender.MALE,
-            "니두스대학교",
+            "트윈리대학교",
             "2024001",
             "2000-01-01",
             "01012345678",
@@ -86,7 +86,7 @@ class AiChatServiceUnitTest {
         // then: 프롬프트에 소속·페르소나가 포함되고, 첫 질문이 0번 턴 AI 메시지로 저장됨
         ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
         then(bedrockService).should().converse(promptCaptor.capture());
-        assertThat(promptCaptor.getValue()).contains("니두스대학교", "사람 만나는 것을 좋아함");
+        assertThat(promptCaptor.getValue()).contains("트윈리대학교", "사람 만나는 것을 좋아함");
 
         ArgumentCaptor<AiChat> chatCaptor = ArgumentCaptor.forClass(AiChat.class);
         then(aiChatRepository).should().save(chatCaptor.capture());

@@ -79,7 +79,7 @@ class OnboardingControllerUnitTest {
             "홍",
             "길동",
             Gender.MALE,
-            "니두스대학교",
+            "트윈리대학교",
             "2024001",
             "2000-01-01",
             "01012345678",
@@ -115,14 +115,14 @@ class OnboardingControllerUnitTest {
     void schools_success() throws Exception {
         // given: 가입 가능한 학교 1곳
         given(onboardingService.schools()).willReturn(new OnboardingSchoolsResult(
-                List.of(new OnboardingSchoolsItemResult("니두스대학교", List.of("nidus.ac.kr")))));
+                List.of(new OnboardingSchoolsItemResult("트윈리대학교", List.of("nidus.ac.kr")))));
 
         // when: 인증 헤더 없이 학교 목록 API 호출 (이메일 입력 전 단계라 세션 유무와 무관)
         var result = mockMvc.perform(get("/api/v1/onboarding/schools"));
 
         // then: 앱이 도메인을 고정 입력할 수 있도록 이름과 도메인이 함께 나감
         result.andExpect(status().isOk())
-                .andExpect(jsonPath("$.schools[0].schoolName").value("니두스대학교"))
+                .andExpect(jsonPath("$.schools[0].schoolName").value("트윈리대학교"))
                 .andExpect(jsonPath("$.schools[0].domains[0]").value("nidus.ac.kr"));
     }
 
@@ -218,7 +218,7 @@ class OnboardingControllerUnitTest {
                         {
                           "givenName": "길동",
                           "gender": "male",
-                          "affiliation": "니두스대학교",
+                          "affiliation": "트윈리대학교",
                           "affiliationNumber": "2024001",
                           "birthDate": "2000-01-01"
                         }
@@ -242,7 +242,7 @@ class OnboardingControllerUnitTest {
                           "familyName": "홍",
                           "givenName": "길동",
                           "gender": "male",
-                          "affiliation": "니두스대학교",
+                          "affiliation": "트윈리대학교",
                           "affiliationNumber": "2024001",
                           "birthDate": "2000-01-01"
                         }
@@ -675,7 +675,7 @@ class OnboardingControllerUnitTest {
                           "familyName": "홍",
                           "givenName": "길동",
                           "gender": "male",
-                          "affiliation": "니두스대학교",
+                          "affiliation": "트윈리대학교",
                           "affiliationNumber": "2024001",
                           "birthDate": "2999-01-01"
                         }

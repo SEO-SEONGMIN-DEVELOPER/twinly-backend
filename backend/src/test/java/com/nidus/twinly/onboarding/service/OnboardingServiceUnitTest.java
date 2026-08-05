@@ -101,7 +101,7 @@ class OnboardingServiceUnitTest {
             "홍",
             "길동",
             Gender.MALE,
-            "니두스대학교",
+            "트윈리대학교",
             "2024001",
             "2000-01-01",
             "01012345678",
@@ -215,7 +215,7 @@ class OnboardingServiceUnitTest {
     @DisplayName("학교 목록 조회는 저장된 학교의 이름과 이메일 도메인을 그대로 반환한다")
     void schools_returns_name_and_domains() {
         // given: 가입 가능한 학교 1곳이 도메인 2개로 등록되어 있음
-        given(schoolRepository.findAllByOrderByNameAsc()).willReturn(List.of(school(1L, "니두스대학교")));
+        given(schoolRepository.findAllByOrderByNameAsc()).willReturn(List.of(school(1L, "트윈리대학교")));
         given(schoolDomainRepository.findAll())
                 .willReturn(List.of(schoolDomain(1L, "nidus.ac.kr"), schoolDomain(1L, "grad.nidus.ac.kr")));
 
@@ -224,7 +224,7 @@ class OnboardingServiceUnitTest {
 
         // then: 앱이 도메인을 자동 입력할 수 있도록 이름과 도메인 전체가 함께 나감
         assertThat(result.schools()).containsExactly(
-                new OnboardingSchoolsItemResult("니두스대학교", List.of("nidus.ac.kr", "grad.nidus.ac.kr")));
+                new OnboardingSchoolsItemResult("트윈리대학교", List.of("nidus.ac.kr", "grad.nidus.ac.kr")));
     }
 
     @Test
@@ -233,7 +233,7 @@ class OnboardingServiceUnitTest {
         // given: 이메일 인증이 끝난 세션과, 그 도메인에 해당하는 학교의 학과 2개
         given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.EMAIL))
                 .willReturn(Optional.of(verifiedEmailSession("student@nidus.ac.kr")));
-        given(schoolCatalog.findByEmail("student@nidus.ac.kr")).willReturn(school(1L, "니두스대학교"));
+        given(schoolCatalog.findByEmail("student@nidus.ac.kr")).willReturn(school(1L, "트윈리대학교"));
         given(schoolAffiliationRepository.findAllBySchoolIdOrderByNameAsc(1L))
                 .willReturn(List.of(schoolAffiliation("경영학과"), schoolAffiliation("컴퓨터공학과")));
 
