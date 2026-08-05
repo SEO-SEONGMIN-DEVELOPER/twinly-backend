@@ -1,5 +1,6 @@
 package com.nidus.twinly.common.websocket.relay;
 
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
@@ -36,7 +37,7 @@ public class WebSocketRelayConfig {
     public RedisMessageListenerContainer webSocketRelayListenerContainer(
             RedisConnectionFactory connectionFactory,
             WebSocketRelayDispatcher webSocketRelayDispatcher,
-            ThreadPoolTaskExecutor webSocketRelayTaskExecutor
+            @Qualifier("webSocketRelayTaskExecutor") ThreadPoolTaskExecutor webSocketRelayTaskExecutor
     ) {
 
         RedisMessageListenerContainer container = new RedisMessageListenerContainer();
@@ -47,7 +48,7 @@ public class WebSocketRelayConfig {
         return container;
     }
 
-    @Bean
+    @Bean(defaultCandidate = false)
     public ThreadPoolTaskExecutor webSocketRelayTaskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(1);
