@@ -8,15 +8,17 @@ import org.hibernate.annotations.DynamicUpdate;
 
 @Entity
 @DynamicUpdate
-@Table(name = "schools")
+@Table(name = "school_domains")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class School {
+public class SchoolDomain {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(length = 100)
-    private String name;
+    private Long schoolId;
+
+    @Column(length = 255)
+    private String domain;
 }

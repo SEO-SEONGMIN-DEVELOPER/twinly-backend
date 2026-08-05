@@ -489,6 +489,34 @@ CREATE TABLE scenes (
 
 CREATE INDEX ix_scenes_user_id_date ON scenes (user_id, date);
 
+CREATE TABLE school_affiliations (
+    id         BIGINT NOT NULL AUTO_INCREMENT,
+    school_id  BIGINT NOT NULL,
+    name       VARCHAR(100) NOT NULL,
+
+    CONSTRAINT pk_school_affiliations PRIMARY KEY (id),
+    CONSTRAINT fk_school_affiliations_school_id FOREIGN KEY (school_id) REFERENCES schools(id),
+    CONSTRAINT uk_school_affiliations_school_id_name UNIQUE (school_id, name)
+) ENGINE = INNODB;
+
+CREATE TABLE school_domains (
+    id         BIGINT NOT NULL AUTO_INCREMENT,
+    school_id  BIGINT NOT NULL,
+    domain     VARCHAR(255) NOT NULL,
+
+    CONSTRAINT pk_school_domains PRIMARY KEY (id),
+    CONSTRAINT fk_school_domains_school_id FOREIGN KEY (school_id) REFERENCES schools(id),
+    CONSTRAINT uk_school_domains_domain UNIQUE (domain)
+) ENGINE = INNODB;
+
+CREATE TABLE schools (
+    id    BIGINT NOT NULL AUTO_INCREMENT,
+    name  VARCHAR(100) NOT NULL,
+
+    CONSTRAINT pk_schools PRIMARY KEY (id),
+    CONSTRAINT uk_schools_name UNIQUE (name)
+) ENGINE = INNODB;
+
 CREATE TABLE season_participations (
     id                  BIGINT NOT NULL AUTO_INCREMENT,
     user_id             BIGINT NOT NULL,

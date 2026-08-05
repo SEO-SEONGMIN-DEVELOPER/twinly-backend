@@ -115,7 +115,7 @@ class OnboardingControllerUnitTest {
     void schools_success() throws Exception {
         // given: 가입 가능한 학교 1곳
         given(onboardingService.schools()).willReturn(new OnboardingSchoolsResult(
-                List.of(new OnboardingSchoolsItemResult("니두스대학교", "nidus.ac.kr"))));
+                List.of(new OnboardingSchoolsItemResult("니두스대학교", List.of("nidus.ac.kr")))));
 
         // when: 인증 헤더 없이 학교 목록 API 호출 (이메일 입력 전 단계라 세션 유무와 무관)
         var result = mockMvc.perform(get("/api/v1/onboarding/schools"));
@@ -123,7 +123,7 @@ class OnboardingControllerUnitTest {
         // then: 앱이 도메인을 고정 입력할 수 있도록 이름과 도메인이 함께 나감
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.schools[0].schoolName").value("니두스대학교"))
-                .andExpect(jsonPath("$.schools[0].domain").value("nidus.ac.kr"));
+                .andExpect(jsonPath("$.schools[0].domains[0]").value("nidus.ac.kr"));
     }
 
     @Test

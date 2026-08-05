@@ -1,5 +1,6 @@
 package com.nidus.twinly.onboarding.integration;
 
+import com.jayway.jsonpath.JsonPath;
 import com.nidus.twinly.aichat.domain.AiChatSender;
 import com.nidus.twinly.aichat.entity.AiChat;
 import com.nidus.twinly.aichat.repository.AiChatRepository;
@@ -118,19 +119,21 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("학교 목록: 인증 헤더 없이도 DB에 등록된 학교가 이름순으로 내려온다")
     void schools_end_to_end() throws Exception {
-        // given: 가입 가능한 학교 2곳을 이름 역순으로 저장
+        // given: 가입 가능한 학교 2곳을 이름 역순으로 저장 (시드로 들어온 실제 학교들과 섞인다)
         saveSchool("트윈리대학교", "twinly.ac.kr");
-        saveSchool("니두스대학교", "nidus.ac.kr");
+        saveSchool("니두스대학교", "nidus.ac.kr", "grad.nidus.ac.kr");
         flushAndClear();
 
         // when: 인증 없이 학교 목록 조회
-        var result = mockMvc.perform(get("/api/v1/onboarding/schools"));
+        String body = mockMvc.perform(get("/api/v1/onboarding/schools"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
 
         // then: 이름순으로 정렬되어 이름·도메인이 함께 내려온다
-        result.andExpect(status().isOk())
-                .andExpect(jsonPath("$.schools[0].schoolName").value("니두스대학교"))
-                .andExpect(jsonPath("$.schools[0].domain").value("nidus.ac.kr"))
-                .andExpect(jsonPath("$.schools[1].schoolName").value("트윈리대학교"));
+        assertThat(JsonPath.<List<String>>read(body, "$.schools[*].schoolName"))
+                .containsSubsequence("니두스대학교", "트윈리대학교");
+        assertThat(JsonPath.<List<List<String>>>read(body, "$.schools[?(@.schoolName == '니두스대학교')].domains"))
+                .containsExactly(List.of("nidus.ac.kr", "grad.nidus.ac.kr"));
     }
 
     @Test
@@ -626,10 +629,16 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
         return "Bearer " + session.getToken();
     }
 
-    /** 학교를 직접 insert하고 schools.id를 반환한다. (운영에서도 마이그레이션 SQL로 주입되는 카탈로그 데이터) */
-    private Long saveSchool(String name, String domain) {
-        jdbcTemplate.update("INSERT INTO schools (name, domain) VALUES (?, ?)", name, domain);
-        return jdbcTemplate.queryForObject("SELECT id FROM schools WHERE domain = ?", Long.class, domain);
+    /** 학교와 이메일 도메인을 직접 insert하고 schools.id를 반환한다. (운영에서도 마이그레이션 SQL로 주입되는 카탈로그 데이터) */
+    private Long saveSchool(String name, String... domains) {
+        jdbcTemplate.update("INSERT INTO schools (name) VALUES (?)", name);
+        Long schoolId = jdbcTemplate.queryForObject("SELECT id FROM schools WHERE name = ?", Long.class, name);
+
+        for (String domain : domains) {
+            jdbcTemplate.update("INSERT INTO school_domains (school_id, domain) VALUES (?, ?)", schoolId, domain);
+        }
+
+        return schoolId;
     }
 
     /** 특정 학교의 학과를 직접 insert한다. */

@@ -618,9 +618,11 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
     }
 
     /** 지정한 전화번호·이메일로 실제 users 행을 만든다 (블라인드 인덱스 해시 포함). */
-    /** 가입 가능한 학교를 직접 insert한다. (운영에서도 마이그레이션 SQL로 주입되는 카탈로그 데이터) */
+    /** 가입 가능한 학교와 이메일 도메인을 직접 insert한다. (운영에서도 마이그레이션 SQL로 주입되는 카탈로그 데이터) */
     private void saveSchool(String name, String domain) {
-        jdbcTemplate.update("INSERT INTO schools (name, domain) VALUES (?, ?)", name, domain);
+        jdbcTemplate.update("INSERT INTO schools (name) VALUES (?)", name);
+        Long schoolId = jdbcTemplate.queryForObject("SELECT id FROM schools WHERE name = ?", Long.class, name);
+        jdbcTemplate.update("INSERT INTO school_domains (school_id, domain) VALUES (?, ?)", schoolId, domain);
     }
 
     private User saveUserWith(String phone, String email) {

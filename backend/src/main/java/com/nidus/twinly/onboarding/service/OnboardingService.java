@@ -37,7 +37,9 @@ import com.nidus.twinly.onboarding.entity.SurveyAnswer;
 import com.nidus.twinly.onboarding.repository.SurveyAnswerRepository;
 import com.nidus.twinly.school.entity.School;
 import com.nidus.twinly.school.entity.SchoolAffiliation;
+import com.nidus.twinly.school.entity.SchoolDomain;
 import com.nidus.twinly.school.repository.SchoolAffiliationRepository;
+import com.nidus.twinly.school.repository.SchoolDomainRepository;
 import com.nidus.twinly.school.repository.SchoolRepository;
 import com.nidus.twinly.school.service.SchoolCatalog;
 import com.nidus.twinly.user.repository.UserRepository;
@@ -71,6 +73,7 @@ public class OnboardingService {
     private final AnonSessionRepository anonSessionRepository;
     private final AnonSessionVerificationSessionRepository anonSessionVerificationSessionRepository;
     private final SchoolRepository schoolRepository;
+    private final SchoolDomainRepository schoolDomainRepository;
     private final SchoolAffiliationRepository schoolAffiliationRepository;
     private final AnonSessionPhotoRepository anonSessionPhotoRepository;
     private final AnonSessionPersonaElementRepository anonSessionPersonaElementRepository;
@@ -284,8 +287,17 @@ public class OnboardingService {
     }
 
     public OnboardingSchoolsResult schools() {
+        Map<Long, List<String>> domainsBySchoolId = schoolDomainRepository.findAll().stream()
+                .collect(Collectors.groupingBy(
+                        SchoolDomain::getSchoolId,
+                        Collectors.mapping(SchoolDomain::getDomain, Collectors.toList())
+                ));
+
         List<OnboardingSchoolsItemResult> schools = schoolRepository.findAllByOrderByNameAsc().stream()
-                .map(school -> new OnboardingSchoolsItemResult(school.getName(), school.getDomain()))
+                .map(school -> new OnboardingSchoolsItemResult(
+                        school.getName(),
+                        domainsBySchoolId.getOrDefault(school.getId(), List.of())
+                ))
                 .toList();
 
         return new OnboardingSchoolsResult(schools);
