@@ -1,0 +1,25 @@
+package com.nidus.twinly.connection.controller;
+
+import com.nidus.twinly.connection.dto.command.ConnectionDrainingCommand;
+import com.nidus.twinly.connection.dto.request.ConnectionDrainingRequest;
+import com.nidus.twinly.connection.service.ConnectionService;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequiredArgsConstructor
+public class ConnectionAdminController {
+
+    private final ConnectionService connectionService;
+
+    @ApiResponse(responseCode = "401", description = "UNAUTHORIZED")
+    @ApiResponse(responseCode = "403", description = "FORBIDDEN")
+    @PostMapping("/admin/connection/draining")
+    public void notifyDraining(@Valid @RequestBody ConnectionDrainingRequest request) {
+        connectionService.notifyDraining(ConnectionDrainingCommand.from(request));
+    }
+}

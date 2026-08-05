@@ -1,10 +1,12 @@
 package com.nidus.twinly.connection.service;
 
 import com.nidus.twinly.connection.domain.ConnectionType;
+import com.nidus.twinly.connection.dto.command.ConnectionDrainingCommand;
 import com.nidus.twinly.connection.dto.command.ConnectionTokenCommand;
 import com.nidus.twinly.connection.dto.result.ConnectionTicketResolveResult;
 import com.nidus.twinly.connection.dto.result.ConnectionTokenResult;
 import com.nidus.twinly.connection.entity.ConnectionTicket;
+import com.nidus.twinly.connection.notifier.ConnectionControlNotifier;
 import com.nidus.twinly.connection.repository.ConnectionTicketRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -21,6 +23,11 @@ public class ConnectionService {
     private static final Duration TICKET_TTL = Duration.ofSeconds(60);
 
     private final ConnectionTicketRepository connectionTicketRepository;
+    private final ConnectionControlNotifier connectionControlNotifier;
+
+    public void notifyDraining(ConnectionDrainingCommand command) {
+        connectionControlNotifier.notifyDraining(command.reason(), command.retryAfterMs());
+    }
 
     @Transactional
     public ConnectionTokenResult token(Long userId, ConnectionTokenCommand command) {
