@@ -1,5 +1,6 @@
 package com.nidus.twinly.support;
 
+import com.google.firebase.messaging.FirebaseMessaging;
 import com.nidus.twinly.common.aws.bedrock.BedrockService;
 import com.nidus.twinly.common.aws.s3.S3Service;
 import com.nidus.twinly.common.aws.ses.SesService;
@@ -63,6 +64,7 @@ public abstract class AbstractIntegrationTest {
     @MockitoBean protected SolapiService solapiService;
     @MockitoBean protected S3Service s3Service;
     @MockitoBean protected BedrockService bedrockService;
+    @MockitoBean protected FirebaseMessaging firebaseMessaging;
 
     private final AtomicInteger seq = new AtomicInteger();
 

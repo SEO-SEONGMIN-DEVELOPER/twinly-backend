@@ -74,6 +74,9 @@ dependencies {
     // Image
     implementation 'com.twelvemonkeys.imageio:imageio-webp:3.12.0'
 
+    // FCM
+    implementation 'com.google.firebase:firebase-admin:9.4.3'
+
     // JWT
     implementation 'io.jsonwebtoken:jjwt-api:0.13.0'
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.13.0'

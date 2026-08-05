@@ -1,3 +1,6 @@
+admin:
+  api-token: ${ADMIN_API_TOKEN:}
+
 spring:
   application:
     name: twinly
@@ -12,6 +15,9 @@ spring:
     redis:
       host: ${REDIS_HOST}
       port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      ssl:
+        enabled: ${REDIS_SSL_ENABLED:false}
       timeout: 1s
       connect-timeout: 1s
       repositories:
@@ -29,11 +35,16 @@ logging:
     level: "%5p [${INSTANCE_ID:${HOSTNAME:local}}]"
 
 springdoc:
+  api-docs:
+    path: /openapi/docs
   swagger-ui:
     enabled: false
+    path: /swagger-ui.html/docs
 
 springwolf:
   enabled: false
+  path:
+    base: /asyncapi
   docket:
     base-package: com.nidus.twinly
     info:
@@ -84,8 +95,8 @@ solapi:
 jwt:
   secret-key: ${JWT_SECRET_KEY}
 
-admin:
-  api-token: ${ADMIN_API_TOKEN:}
+fcm:
+  service-account-base64: ${FCM_SERVICE_ACCOUNT_BASE64}
 
 anon:
   session-ttl: 14d
