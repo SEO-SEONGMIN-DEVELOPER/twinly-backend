@@ -12,6 +12,8 @@ logging:
     name: logs/app.log
 
 springdoc:
+  api-docs:
+    enabled: true
   swagger-ui:
     enabled: true
 

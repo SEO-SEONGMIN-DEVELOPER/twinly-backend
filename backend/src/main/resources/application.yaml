@@ -36,15 +36,17 @@ logging:
 
 springdoc:
   api-docs:
-    path: /openapi/docs
+    enabled: false
+    path: /docs/openapi
   swagger-ui:
     enabled: false
-    path: /swagger-ui.html/docs
+    path: /docs/swagger-ui.html
 
 springwolf:
   enabled: false
   path:
-    base: /asyncapi
+    base: /docs
+    docs: /asyncapi
   docket:
     base-package: com.nidus.twinly
     info:
@@ -53,7 +55,7 @@ springwolf:
     servers:
       stomp:
         protocol: stomp
-        host: localhost:8080/ws/v1/
+        host: ${WS_HOST}/ws/v1/
   plugin:
     stomp:
       endpoint:

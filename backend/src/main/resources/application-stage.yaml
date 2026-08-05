@@ -10,8 +10,14 @@ logging:
     com.nidus.twinly: DEBUG
 
 springdoc:
+  api-docs:
+    enabled: true
   swagger-ui:
     enabled: true
 
 springwolf:
   enabled: true
+  docket:
+    servers:
+      stomp:
+        host: ${WS_HOST}/ws/v1/
