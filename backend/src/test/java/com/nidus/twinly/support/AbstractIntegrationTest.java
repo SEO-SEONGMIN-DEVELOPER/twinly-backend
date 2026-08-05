@@ -76,6 +76,7 @@ public abstract class AbstractIntegrationTest {
                 "family" + n, "familyHash" + n,
                 "given" + n, "givenHash" + n,
                 Gender.MALE,
+                "school" + n, "schoolHash" + n,
                 "aff" + n, "affHash" + n,
                 "affNo" + n, "affNoHash" + n,
                 "2000-01-01", "birthHash" + n,

@@ -696,7 +696,7 @@ class PeopleServiceUnitTest {
     private User user(Long id, String familyName, String givenName) {
         User user = User.create(
                 "nick" + id, familyName, "familyHash", givenName, "givenHash",
-                Gender.MALE, "aff", "affHash", "affNo", "affNoHash",
+                Gender.MALE, "school", "schoolHash", "aff", "affHash", "affNo", "affNoHash",
                 "2000-01-01", "birthHash", "phone", "phoneHash", "email", "emailHash");
         ReflectionTestUtils.setField(user, "id", id);
         return user;

@@ -42,6 +42,10 @@ public class AnonSession {
 
     @Convert(converter = EncryptedStringConverter.class)
     @Column(columnDefinition = "TEXT")
+    private String school;
+
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(columnDefinition = "TEXT")
     private String affiliation;
 
     @Convert(converter = EncryptedStringConverter.class)
@@ -80,6 +84,7 @@ public class AnonSession {
     public void changeFamilyName(String familyName) { this.familyName = familyName; }
     public void changeGivenName(String givenName) { this.givenName = givenName; }
     public void changeGender(Gender gender) { this.gender = gender; }
+    public void changeSchool(String school) { this.school = school; }
     public void changeAffiliation(String affiliation) { this.affiliation = affiliation; }
     public void changeAffiliationNumber(String affiliationNumber) { this.affiliationNumber = affiliationNumber; }
     public void changeBirthDate(String birthDate) { this.birthDate = birthDate; }

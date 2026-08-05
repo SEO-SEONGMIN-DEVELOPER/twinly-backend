@@ -27,6 +27,7 @@ import com.nidus.twinly.common.photo.ProfileThumbnailService;
 import com.nidus.twinly.common.solapi.SolapiService;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
+import com.nidus.twinly.school.entity.School;
 import com.nidus.twinly.school.service.SchoolCatalog;
 import com.nidus.twinly.user.entity.PersonaElement;
 import com.nidus.twinly.user.entity.Photo;
@@ -97,7 +98,15 @@ public class AuthService {
 
     @Transactional
     public void onboardingEmailVerify(AnonSessionSnapshot anonSessionSnapshot, AuthEmailVerifyCommand command) {
-        verifyAnonSession(anonSessionSnapshot.id(), command, VerificationType.EMAIL);
+        Long anonSessionId = anonSessionSnapshot.id();
+
+        AnonSessionVerificationSession session = verifyAnonSession(anonSessionId, command, VerificationType.EMAIL);
+        School school = schoolCatalog.findByEmail(session.getContact());
+
+        AnonSession anonSession = anonSessionRepository.findById(anonSessionId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_ANON_SESSION));
+
+        anonSession.changeSchool(school.getName());
     }
 
     @Transactional
@@ -197,7 +206,7 @@ public class AuthService {
         return session;
     }
 
-    private void verifyAnonSession(Long anonSessionId, VerifyCommand command, VerificationType type) {
+    private AnonSessionVerificationSession verifyAnonSession(Long anonSessionId, VerifyCommand command, VerificationType type) {
         AnonSessionVerificationSession session = anonSessionVerificationSessionRepository
                 .findByAnonSessionIdAndType(anonSessionId, type)
                 .orElseThrow(() -> new BusinessException(ErrorCode.VERIFICATION_NOT_FOUND));
@@ -213,6 +222,8 @@ public class AuthService {
         }
 
         session.verify();
+
+        return session;
     }
 
     @Transactional
@@ -241,6 +252,7 @@ public class AuthService {
 
         String familyNameHash = blindIndexHasher.hash(anonSession.getFamilyName());
         String givenNameHash = blindIndexHasher.hash(anonSession.getGivenName());
+        String schoolHash = blindIndexHasher.hash(anonSession.getSchool());
         String affiliationHash = blindIndexHasher.hash(anonSession.getAffiliation());
         String affiliationNumberHash = blindIndexHasher.hash(anonSession.getAffiliationNumber());
         String birthDateHash = blindIndexHasher.hash(anonSession.getBirthDate());
@@ -251,6 +263,7 @@ public class AuthService {
                         anonSession.getFamilyName(), familyNameHash,
                         anonSession.getGivenName(), givenNameHash,
                         anonSession.getGender(),
+                        anonSession.getSchool(), schoolHash,
                         anonSession.getAffiliation(), affiliationHash,
                         anonSession.getAffiliationNumber(), affiliationNumberHash,
                         anonSession.getBirthDate(), birthDateHash,
@@ -345,6 +358,7 @@ public class AuthService {
                 || anonSession.getFamilyName() == null
                 || anonSession.getGivenName() == null
                 || anonSession.getGender() == null
+                || anonSession.getSchool() == null
                 || anonSession.getAffiliation() == null
                 || anonSession.getAffiliationNumber() == null
                 || anonSession.getBirthDate() == null) {

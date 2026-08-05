@@ -246,6 +246,7 @@ class SimulationServiceUnitTest {
     private User user(Long id, String familyName, String givenName, String affiliation, String birthDate) {
         User user = User.create(
                 "nickname", familyName, "familyNameHash", givenName, "givenNameHash", Gender.MALE,
+                "school", "schoolHash",
                 affiliation, "affiliationHash", "20191234", "affiliationNumberHash",
                 birthDate, "birthDateHash", "01012345678", "phoneNumberHash", "a@b.ac.kr", "emailHash");
         ReflectionTestUtils.setField(user, "id", id);

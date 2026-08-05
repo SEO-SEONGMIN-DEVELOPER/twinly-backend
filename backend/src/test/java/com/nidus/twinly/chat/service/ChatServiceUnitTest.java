@@ -964,6 +964,7 @@ class ChatServiceUnitTest {
                 "family", "familyHash",
                 "given", "givenHash",
                 Gender.MALE,
+                "school", "schoolHash",
                 "aff", "affHash",
                 "affNo", "affNoHash",
                 "2000-01-01", "birthHash",

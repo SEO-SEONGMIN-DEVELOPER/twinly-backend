@@ -127,6 +127,7 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
         anonSession.changeFamilyName("홍");
         anonSession.changeGivenName("길동");
         anonSession.changeGender(Gender.MALE);
+        anonSession.changeSchool("트윈리대학교");
         anonSession.changeAffiliation("트윈리대학교");
         anonSession.changeAffiliationNumber("20250001");
         anonSession.changeBirthDate("2000-01-01");
@@ -192,6 +193,7 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
                 "영희", blindIndexHasher.hash("영희"),
                 Gender.FEMALE,
                 "트윈리대학교", blindIndexHasher.hash("트윈리대학교"),
+                "트윈리대학교", blindIndexHasher.hash("트윈리대학교"),
                 "20250002", blindIndexHasher.hash("20250002"),
                 "2000-02-02", blindIndexHasher.hash("2000-02-02"),
                 phone, blindIndexHasher.hash(phone),
@@ -228,6 +230,7 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
         anonSession.changeFamilyName("정");
         anonSession.changeGivenName("수민");
         anonSession.changeGender(Gender.FEMALE);
+        anonSession.changeSchool("트윈리대학교");
         anonSession.changeAffiliation("트윈리대학교");
         anonSession.changeAffiliationNumber("20250004");
         anonSession.changeBirthDate("2000-04-04");
@@ -262,6 +265,7 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
                 "박", blindIndexHasher.hash("박"),
                 "철수", blindIndexHasher.hash("철수"),
                 Gender.MALE,
+                "트윈리대학교", blindIndexHasher.hash("트윈리대학교"),
                 "트윈리대학교", blindIndexHasher.hash("트윈리대학교"),
                 "20250003", blindIndexHasher.hash("20250003"),
                 "2000-03-03", blindIndexHasher.hash("2000-03-03"),
@@ -331,15 +335,16 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("온보딩 이메일 인증 확인: 올바른 토큰·코드면 DB 인증 세션의 verifiedAt이 채워진다")
+    @DisplayName("온보딩 이메일 인증 확인: 올바른 토큰·코드면 verifiedAt이 채워지고 익명 세션에 학교가 기록된다")
     void onboarding_email_verify_end_to_end() throws Exception {
-        // given: 아직 인증되지 않은 EMAIL 인증 세션을 실제 DB에 저장
+        // given: 아직 인증되지 않은 EMAIL 인증 세션과, 그 도메인을 쓰는 학교를 실제 DB에 저장
         UUID anonToken = UUID.randomUUID();
         AnonSession anonSession = anonSessionRepository.save(
                 AnonSession.create(anonToken, Instant.now().plus(Duration.ofDays(1))));
+        saveSchool("니두스대학교", "nidus.ac.kr");
         AnonSessionVerificationSession session = anonSessionVerificationSessionRepository.save(
                 AnonSessionVerificationSession.create(VerificationType.EMAIL, anonSession.getId(),
-                        "verify@test.com", "123456", Instant.now().plus(Duration.ofMinutes(5))));
+                        "verify@nidus.ac.kr", "123456", Instant.now().plus(Duration.ofMinutes(5))));
 
         // when: 저장된 토큰·코드로 온보딩 이메일 인증 확인 API 호출
         mockMvc.perform(post("/api/v1/auth/onboarding/email/verify")
@@ -350,10 +355,12 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
                                 """.formatted(session.getVerificationToken())))
                 .andExpect(status().isOk());
 
-        // then: DB에 인증 완료 시각이 기록됨
+        // then: DB에 인증 완료 시각이 기록되고, 학교는 사용자 입력이 아니라 인증된 도메인으로 결정됨
         AnonSessionVerificationSession verified = anonSessionVerificationSessionRepository
                 .findByAnonSessionIdAndType(anonSession.getId(), VerificationType.EMAIL).orElseThrow();
         assertThat(verified.getVerifiedAt()).isNotNull();
+        assertThat(anonSessionRepository.findById(anonSession.getId()).orElseThrow().getSchool())
+                .isEqualTo("니두스대학교");
     }
 
     @Test
@@ -631,6 +638,7 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
                 "김", blindIndexHasher.hash("김"),
                 "철수", blindIndexHasher.hash("철수"),
                 Gender.MALE,
+                "트윈리대학교", blindIndexHasher.hash("트윈리대학교"),
                 "트윈리대학교", blindIndexHasher.hash("트윈리대학교"),
                 "20250003", blindIndexHasher.hash("20250003"),
                 "2000-03-03", blindIndexHasher.hash("2000-03-03"),

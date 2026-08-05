@@ -33,6 +33,7 @@ import com.nidus.twinly.common.solapi.SolapiService;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.legal.repository.AgreementRepository;
+import com.nidus.twinly.school.entity.School;
 import com.nidus.twinly.school.service.SchoolCatalog;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.PersonaElementRepository;
@@ -47,6 +48,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.BeanUtils;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
@@ -253,19 +255,24 @@ class AuthServiceUnitTest {
     }
 
     @Test
-    @DisplayName("온보딩 이메일 인증 확인: 토큰과 코드가 모두 맞으면 세션에 인증 완료 시각이 기록된다")
+    @DisplayName("온보딩 이메일 인증 확인: 토큰과 코드가 모두 맞으면 세션에 인증 완료 시각이 기록되고 익명 세션에 학교가 채워진다")
     void onboardingEmailVerify_success_marks_verified() {
-        // given: 유효 기간이 남은 EMAIL 인증 세션이 존재
+        // given: 유효 기간이 남은 EMAIL 인증 세션과, 그 이메일 도메인에 해당하는 학교
         AnonSessionVerificationSession session = AnonSessionVerificationSession.create(
                 VerificationType.EMAIL, ANON_SESSION_ID, EMAIL, "123456", Instant.now().plusSeconds(60));
         given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.EMAIL))
                 .willReturn(Optional.of(session));
 
+        AnonSession anonSession = AnonSession.create(SNAPSHOT.token(), Instant.now().plusSeconds(3600));
+        given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(anonSession));
+        given(schoolCatalog.findByEmail(EMAIL)).willReturn(school("트윈리대학교"));
+
         // when: 올바른 토큰·코드로 인증 확인
         authService.onboardingEmailVerify(SNAPSHOT, new AuthEmailVerifyCommand(session.getVerificationToken(), "123456"));
 
-        // then: 세션에 인증 완료 시각이 기록됨
+        // then: 세션에 인증 완료 시각이 기록되고, 학교는 사용자 입력이 아니라 인증된 도메인으로 결정됨
         assertThat(session.getVerifiedAt()).isNotNull();
+        assertThat(anonSession.getSchool()).isEqualTo("트윈리대학교");
     }
 
     @Test
@@ -764,10 +771,17 @@ class AuthServiceUnitTest {
         anonSession.changeFamilyName("홍");
         anonSession.changeGivenName("길동");
         anonSession.changeGender(Gender.MALE);
+        anonSession.changeSchool("트윈리대학교");
         anonSession.changeAffiliation("트윈리대학교");
         anonSession.changeAffiliationNumber("20250001");
         anonSession.changeBirthDate("2000-01-01");
         return anonSession;
+    }
+
+    private School school(String name) {
+        School school = BeanUtils.instantiateClass(School.class);
+        ReflectionTestUtils.setField(school, "name", name);
+        return school;
     }
 
     private User registeredUser() {
@@ -776,6 +790,7 @@ class AuthServiceUnitTest {
                 "홍", "hash:홍",
                 "길동", "hash:길동",
                 Gender.MALE,
+                "트윈리대학교", "hash:트윈리대학교",
                 "트윈리대학교", "hash:트윈리대학교",
                 "20250001", "hash:20250001",
                 "2000-01-01", "hash:2000-01-01",
