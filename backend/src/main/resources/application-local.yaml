@@ -6,6 +6,8 @@ spring:
     properties:
       hibernate:
         format_sql: true
+  flyway:
+    locations: classpath:db/migration, classpath:db/seed
 
 logging:
   file:
