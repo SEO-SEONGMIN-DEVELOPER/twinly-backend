@@ -5,11 +5,6 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 
-/*
- * [멘토링 피드백 반영완료]
- * KST 관련 필드와 메서드를 분리
- */
-
 public final class KstTimes {
 
     public static final ZoneId ZONE = ZoneId.of("Asia/Seoul");
