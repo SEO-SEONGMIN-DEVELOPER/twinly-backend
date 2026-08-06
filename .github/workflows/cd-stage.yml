@@ -1,0 +1,46 @@
+name: CD (stage)
+
+# CI가 main에서 성공했을 때만 이어서 실행된다.
+# 다른 워크플로의 job에는 needs를 걸 수 없어 workflow_run으로 대신한다.
+on:
+  workflow_run:
+    workflows: [ CI ]
+    types: [ completed ]
+    branches: [ main ]
+
+# 배포는 중간에 끊기면 어중간한 상태가 남는다. 취소 대신 큐에 쌓는다.
+concurrency:
+  group: cd-stage
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04-arm
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      # workflow_run의 github.sha는 기본 브랜치 tip이라 트리거한 커밋과 다를 수 있다.
+      # head_sha를 명시해 CI가 검증한 그 커밋을 그대로 빌드한다.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and Push Image
+        working-directory: backend
+        run: |
+          docker build -t "$ECR_REGISTRY/twinly:$IMAGE_TAG" .
+          docker push "$ECR_REGISTRY/twinly:$IMAGE_TAG"
+        env:
+          ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
+          IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
