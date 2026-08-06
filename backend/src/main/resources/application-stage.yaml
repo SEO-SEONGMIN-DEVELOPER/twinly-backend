@@ -1,6 +1,6 @@
 spring:
   flyway:
-    locations: classpath:db/migration, classpath:db/seed, classpath:db/stage
+    locations: classpath:db/migration, classpath:db/seed
     out-of-order: true
   jpa:
     show-sql: true
@@ -27,3 +27,9 @@ springwolf:
     servers:
       stomp:
         host: ${WS_HOST}/ws/v1/
+
+verification:
+  test:
+    code: "000000"
+    phone-prefix: "0100000"
+    email-prefix: "test"
