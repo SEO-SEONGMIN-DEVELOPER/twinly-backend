@@ -21,3 +21,6 @@ logs
 
 # commit
 COMMIT_MSG
+
+# pr
+PR_BODY
