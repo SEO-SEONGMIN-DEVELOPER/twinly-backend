@@ -19,12 +19,10 @@ import com.nidus.twinly.auth.entity.AnonSessionVerificationSession;
 import com.nidus.twinly.auth.entity.VerificationSession;
 import com.nidus.twinly.auth.repository.AnonSessionVerificationSessionRepository;
 import com.nidus.twinly.auth.repository.VerificationSessionRepository;
-import com.nidus.twinly.common.aws.ses.SesService;
 import com.nidus.twinly.common.crypto.BlindIndexHasher;
 import com.nidus.twinly.common.domain.VerificationType;
 import com.nidus.twinly.common.jwt.JwtService;
 import com.nidus.twinly.common.photo.ProfileThumbnailService;
-import com.nidus.twinly.common.solapi.SolapiService;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.school.entity.School;
@@ -42,9 +40,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.security.SecureRandom;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
@@ -52,11 +48,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AuthService {
 
-    private static final int CODE_EXPIRES_MINUTES = 5;
-    private static final SecureRandom RANDOM = new SecureRandom();
-
-    private final SesService sesService;
-    private final SolapiService solapiService;
+    private final VerificationCodeIssuer verificationCodeIssuer;
     private final JwtService jwtService;
     private final VerificationService verificationService;
     private final SchoolCatalog schoolCatalog;
@@ -81,17 +73,13 @@ public class AuthService {
     public AuthEmailSendResult onboardingEmailSend(AnonSessionSnapshot anonSessionSnapshot, AuthEmailSendCommand command) {
         schoolCatalog.requireSupportedDomain(command.email());
 
-        String code = generateCode();
-        Instant codeExpiresAt = Instant.now().plus(CODE_EXPIRES_MINUTES, ChronoUnit.MINUTES);
+        String code = verificationCodeIssuer.issue(command.email());
+        Instant codeExpiresAt = verificationCodeIssuer.codeExpiresAt();
 
         AnonSessionVerificationSession session = upsertVerificationSession(
                 anonSessionSnapshot.id(), VerificationType.EMAIL, command.email(), code, codeExpiresAt);
 
-        sesService.send(
-                command.email(),
-                "[트윈리] 인증번호 발송",
-                "인증번호는 [%s] 입니다. %d분 이내에 입력해주세요.".formatted(code, CODE_EXPIRES_MINUTES)
-        );
+        verificationCodeIssuer.send(VerificationType.EMAIL, command.email(), code);
 
         return new AuthEmailSendResult(session.getVerificationToken(), codeExpiresAt);
     }
@@ -111,16 +99,13 @@ public class AuthService {
 
     @Transactional
     public AuthSmsSendResult onboardingSmsSend(AnonSessionSnapshot anonSessionSnapshot, AuthSmsSendCommand command) {
-        String code = generateCode();
-        Instant codeExpiresAt = Instant.now().plus(CODE_EXPIRES_MINUTES, ChronoUnit.MINUTES);
+        String code = verificationCodeIssuer.issue(command.phone());
+        Instant codeExpiresAt = verificationCodeIssuer.codeExpiresAt();
 
         AnonSessionVerificationSession session = upsertVerificationSession(
                 anonSessionSnapshot.id(), VerificationType.SMS, command.phone(), code, codeExpiresAt);
 
-        solapiService.send(
-                command.phone(),
-                "[트윈리] 인증번호는 [%s] 입니다. %d분 이내에 입력해주세요.".formatted(code, CODE_EXPIRES_MINUTES)
-        );
+        verificationCodeIssuer.send(VerificationType.SMS, command.phone(), code);
 
         return new AuthSmsSendResult(session.getVerificationToken(), codeExpiresAt);
     }
@@ -136,17 +121,13 @@ public class AuthService {
             throw new BusinessException(ErrorCode.EMAIL_NOT_REGISTERED);
         }
 
-        String code = generateCode();
-        Instant codeExpiresAt = Instant.now().plus(CODE_EXPIRES_MINUTES, ChronoUnit.MINUTES);
+        String code = verificationCodeIssuer.issue(command.email());
+        Instant codeExpiresAt = verificationCodeIssuer.codeExpiresAt();
 
         VerificationSession session = VerificationSession.create(VerificationType.EMAIL, command.email(), code, codeExpiresAt);
         verificationSessionRepository.save(session);
 
-        sesService.send(
-                command.email(),
-                "[트윈리] 인증번호 발송",
-                "인증번호는 [%s] 입니다. %d분 이내에 입력해주세요.".formatted(code, CODE_EXPIRES_MINUTES)
-        );
+        verificationCodeIssuer.send(VerificationType.EMAIL, command.email(), code);
 
         return new AuthEmailSendResult(session.getVerificationToken(), codeExpiresAt);
     }
@@ -164,16 +145,13 @@ public class AuthService {
             throw new BusinessException(ErrorCode.PHONE_NOT_REGISTERED);
         }
 
-        String code = generateCode();
-        Instant codeExpiresAt = Instant.now().plus(CODE_EXPIRES_MINUTES, ChronoUnit.MINUTES);
+        String code = verificationCodeIssuer.issue(command.phone());
+        Instant codeExpiresAt = verificationCodeIssuer.codeExpiresAt();
 
         VerificationSession session = VerificationSession.create(VerificationType.SMS, command.phone(), code, codeExpiresAt);
         verificationSessionRepository.save(session);
 
-        solapiService.send(
-                command.phone(),
-                "[트윈리] 인증번호는 [%s] 입니다. %d분 이내에 입력해주세요.".formatted(code, CODE_EXPIRES_MINUTES)
-        );
+        verificationCodeIssuer.send(VerificationType.SMS, command.phone(), code);
 
         return new AuthSmsSendResult(session.getVerificationToken(), codeExpiresAt);
     }
@@ -183,11 +161,6 @@ public class AuthService {
         VerificationSession session = verificationService.verify(command, VerificationType.SMS);
 
         return new AuthSmsVerifyResult(session.getVerifiedToken(), session.getVerifiedTokenExpiresAt());
-    }
-
-    private String generateCode() {
-        int number = RANDOM.nextInt(1_000_000);
-        return String.format("%06d", number);
     }
 
     private AnonSessionVerificationSession upsertVerificationSession(

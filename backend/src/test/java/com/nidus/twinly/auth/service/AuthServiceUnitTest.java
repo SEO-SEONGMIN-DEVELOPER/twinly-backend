@@ -24,12 +24,10 @@ import com.nidus.twinly.auth.entity.VerificationSession;
 import com.nidus.twinly.auth.repository.AnonSessionVerificationSessionRepository;
 import com.nidus.twinly.auth.repository.RefreshTokenRepository;
 import com.nidus.twinly.auth.repository.VerificationSessionRepository;
-import com.nidus.twinly.common.aws.ses.SesService;
 import com.nidus.twinly.common.crypto.BlindIndexHasher;
 import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.domain.VerificationType;
 import com.nidus.twinly.common.jwt.JwtService;
-import com.nidus.twinly.common.solapi.SolapiService;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.legal.repository.AgreementRepository;
@@ -60,8 +58,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.contains;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willThrow;
@@ -75,6 +71,7 @@ class AuthServiceUnitTest {
     private static final Long USER_ID = 100L;
     private static final String PHONE = "01012345678";
     private static final String EMAIL = "user@test.com";
+    private static final String CODE = "123456";
 
     private static final AnonSessionSnapshot SNAPSHOT = new AnonSessionSnapshot(
             ANON_SESSION_ID,
@@ -91,10 +88,7 @@ class AuthServiceUnitTest {
     );
 
     @Mock
-    SesService sesService;
-
-    @Mock
-    SolapiService solapiService;
+    VerificationCodeIssuer verificationCodeIssuer;
 
     @Mock
     JwtService jwtService;
@@ -155,6 +149,8 @@ class AuthServiceUnitTest {
         // given: 해당 익명 세션의 EMAIL 인증 세션이 아직 없음
         given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.EMAIL))
                 .willReturn(Optional.empty());
+        given(verificationCodeIssuer.issue(EMAIL)).willReturn(CODE);
+        given(verificationCodeIssuer.codeExpiresAt()).willReturn(Instant.now().plusSeconds(300));
 
         // when: 온보딩 이메일 인증번호 발송
         AuthEmailSendResult result = authService.onboardingEmailSend(SNAPSHOT, new AuthEmailSendCommand(EMAIL));
@@ -168,11 +164,11 @@ class AuthServiceUnitTest {
         assertThat(saved.getType()).isEqualTo(VerificationType.EMAIL);
         assertThat(saved.getAnonSessionId()).isEqualTo(ANON_SESSION_ID);
         assertThat(saved.getContact()).isEqualTo(EMAIL);
-        assertThat(saved.getCode()).hasSize(6).containsOnlyDigits();
+        assertThat(saved.getCode()).isEqualTo(CODE);
         assertThat(result.emailVerificationToken()).isEqualTo(saved.getVerificationToken());
         assertThat(result.expiresAt()).isAfter(Instant.now());
 
-        then(sesService).should().send(eq(EMAIL), anyString(), contains(saved.getCode()));
+        then(verificationCodeIssuer).should().send(VerificationType.EMAIL, EMAIL, CODE);
     }
 
     @Test
@@ -185,6 +181,8 @@ class AuthServiceUnitTest {
         UUID oldToken = existing.getVerificationToken();
         given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.EMAIL))
                 .willReturn(Optional.of(existing));
+        given(verificationCodeIssuer.issue(EMAIL)).willReturn(CODE);
+        given(verificationCodeIssuer.codeExpiresAt()).willReturn(Instant.now().plusSeconds(300));
 
         // when: 새 이메일로 다시 인증번호 발송
         AuthEmailSendResult result = authService.onboardingEmailSend(SNAPSHOT, new AuthEmailSendCommand(EMAIL));
@@ -211,7 +209,7 @@ class AuthServiceUnitTest {
 
         // then: 도메인 검증이 코드 발급보다 앞서므로 저장·발송이 일어나지 않음
         then(anonSessionVerificationSessionRepository).should(never()).save(any());
-        then(sesService).should(never()).send(anyString(), anyString(), anyString());
+        then(verificationCodeIssuer).should(never()).send(any(), any(), any());
     }
 
     @Test
@@ -220,6 +218,8 @@ class AuthServiceUnitTest {
         // given: 해당 익명 세션의 SMS 인증 세션이 아직 없음
         given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.SMS))
                 .willReturn(Optional.empty());
+        given(verificationCodeIssuer.issue(PHONE)).willReturn(CODE);
+        given(verificationCodeIssuer.codeExpiresAt()).willReturn(Instant.now().plusSeconds(300));
 
         // when: 온보딩 SMS 인증번호 발송
         AuthSmsSendResult result = authService.onboardingSmsSend(SNAPSHOT, new AuthSmsSendCommand(PHONE));
@@ -234,7 +234,7 @@ class AuthServiceUnitTest {
         assertThat(saved.getContact()).isEqualTo(PHONE);
         assertThat(result.smsVerificationToken()).isEqualTo(saved.getVerificationToken());
 
-        then(solapiService).should().send(eq(PHONE), contains(saved.getCode()));
+        then(verificationCodeIssuer).should().send(VerificationType.SMS, PHONE, CODE);
     }
 
     // ---------- 온보딩 인증 확인 ----------
@@ -344,7 +344,7 @@ class AuthServiceUnitTest {
                 .isEqualTo(ErrorCode.EMAIL_NOT_REGISTERED);
 
         then(verificationSessionRepository).should(never()).save(any());
-        then(sesService).should(never()).send(any(), any(), any());
+        then(verificationCodeIssuer).should(never()).send(any(), any(), any());
     }
 
     @Test
@@ -353,6 +353,8 @@ class AuthServiceUnitTest {
         // given: 해당 이메일 해시로 가입된 유저가 존재
         given(blindIndexHasher.hash(EMAIL)).willReturn("hash:" + EMAIL);
         given(userRepository.existsByEmailHash("hash:" + EMAIL)).willReturn(true);
+        given(verificationCodeIssuer.issue(EMAIL)).willReturn(CODE);
+        given(verificationCodeIssuer.codeExpiresAt()).willReturn(Instant.now().plusSeconds(300));
 
         // when: 로그인용 이메일 인증번호 발송
         AuthEmailSendResult result = authService.emailSend(new AuthEmailSendCommand(EMAIL));
@@ -366,7 +368,7 @@ class AuthServiceUnitTest {
         assertThat(saved.getContact()).isEqualTo(EMAIL);
         assertThat(result.emailVerificationToken()).isEqualTo(saved.getVerificationToken());
 
-        then(sesService).should().send(eq(EMAIL), anyString(), contains(saved.getCode()));
+        then(verificationCodeIssuer).should().send(VerificationType.EMAIL, EMAIL, CODE);
     }
 
     @Test
@@ -383,7 +385,7 @@ class AuthServiceUnitTest {
                 .isEqualTo(ErrorCode.PHONE_NOT_REGISTERED);
 
         then(verificationSessionRepository).should(never()).save(any());
-        then(solapiService).should(never()).send(any(), any());
+        then(verificationCodeIssuer).should(never()).send(any(), any(), any());
     }
 
     @Test
@@ -392,6 +394,8 @@ class AuthServiceUnitTest {
         // given: 해당 전화번호 해시로 가입된 유저가 존재
         given(blindIndexHasher.hash(PHONE)).willReturn("hash:" + PHONE);
         given(userRepository.existsByPhoneNumberHash("hash:" + PHONE)).willReturn(true);
+        given(verificationCodeIssuer.issue(PHONE)).willReturn(CODE);
+        given(verificationCodeIssuer.codeExpiresAt()).willReturn(Instant.now().plusSeconds(300));
 
         // when: 로그인용 SMS 인증번호 발송
         AuthSmsSendResult result = authService.smsSend(new AuthSmsSendCommand(PHONE));
@@ -405,7 +409,7 @@ class AuthServiceUnitTest {
         assertThat(saved.getContact()).isEqualTo(PHONE);
         assertThat(result.smsVerificationToken()).isEqualTo(saved.getVerificationToken());
 
-        then(solapiService).should().send(eq(PHONE), contains(saved.getCode()));
+        then(verificationCodeIssuer).should().send(VerificationType.SMS, PHONE, CODE);
     }
 
     // ---------- 로그인용 인증 확인 ----------

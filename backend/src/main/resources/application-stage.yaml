@@ -27,3 +27,9 @@ springwolf:
     servers:
       stomp:
         host: ${WS_HOST}/ws/v1/
+
+verification:
+  test:
+    code: "000000"
+    phone-prefix: "0100000"
+    email-prefix: "test"
