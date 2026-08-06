@@ -618,4 +618,5 @@ VALUES
        ((SELECT id FROM schools WHERE name = '고려대학교'), '스포츠의학과'),
        ((SELECT id FROM schools WHERE name = '고려대학교'), '의학물리학과'),
        ((SELECT id FROM schools WHERE name = '고려대학교'), '인공지능융합의공학과'),
-       ((SELECT id FROM schools WHERE name = '고려대학교'), '기술창업학과');
+       ((SELECT id FROM schools WHERE name = '고려대학교'), '기술창업학과') AS new
+ON DUPLICATE KEY UPDATE name = new.name;

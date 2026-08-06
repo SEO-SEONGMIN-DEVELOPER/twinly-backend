@@ -10,4 +10,7 @@ VALUES ((SELECT id FROM policy_names WHERE identifier = 'serviceTerms'),
        ((SELECT id FROM policy_names WHERE identifier = 'marketingConsent'),
         '1.1', 'legal/marketing-consent/v1.1.html', FALSE, '2026-08-02 15:00:00'),
        ((SELECT id FROM policy_names WHERE identifier = 'thirdPartyRealIdentityDisclosure'),
-        '1.0', 'legal/third-party-real-identity-disclosure/v1.0.html', FALSE, '2026-08-02 15:00:00');
+        '1.0', 'legal/third-party-real-identity-disclosure/v1.0.html', FALSE, '2026-08-02 15:00:00') AS new
+ON DUPLICATE KEY UPDATE `key`        = new.`key`,
+                        is_required  = new.is_required,
+                        effective_at = new.effective_at;
