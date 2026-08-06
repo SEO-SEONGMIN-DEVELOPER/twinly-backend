@@ -20,11 +20,6 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class AnonService {
 
-    /*
-     * [멘토링 피드백 반영 완료]
-     * 상수는 환경변수에서 가져오도록 변환
-     */
-
     private final AnonProperties anonProperties;
 
     private final AnonSessionRepository anonSessionRepository;

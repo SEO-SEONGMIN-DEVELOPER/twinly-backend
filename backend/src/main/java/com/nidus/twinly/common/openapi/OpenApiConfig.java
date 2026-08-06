@@ -96,6 +96,10 @@ public class OpenApiConfig {
             mergeErrorCodes(responses, "400", List.of(ErrorCode.INVALID_REQUEST));
             mergeErrorCodes(responses, "500", List.of(ErrorCode.INTERNAL_ERROR));
 
+            if (operation.getRequestBody() != null) {
+                mergeErrorCodes(responses, "415", List.of(ErrorCode.UNSUPPORTED_MEDIA_TYPE));
+            }
+
             List<ErrorCode> auth401 = resolveAuth401(handlerMethod);
             if (!auth401.isEmpty()) {
                 mergeErrorCodes(responses, "401", auth401);

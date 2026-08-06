@@ -3,6 +3,7 @@ package com.nidus.twinly.common.web;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
@@ -102,6 +103,12 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.METHOD_NOT_ALLOWED)
     public ErrorResponse handleMethodNotSupported(HttpRequestMethodNotSupportedException e) {
         return ErrorResponse.of(ErrorCode.METHOD_NOT_ALLOWED);
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    @ResponseStatus(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+    public ErrorResponse handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException e) {
+        return ErrorResponse.of(ErrorCode.UNSUPPORTED_MEDIA_TYPE);
     }
 
     @ExceptionHandler(ResponseStatusException.class)
