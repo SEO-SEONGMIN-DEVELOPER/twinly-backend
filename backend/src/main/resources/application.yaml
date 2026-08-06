@@ -35,6 +35,7 @@ logging:
     level: "%5p [${INSTANCE_ID:${HOSTNAME:local}}]"
 
 springdoc:
+  override-with-generic-response: false
   api-docs:
     enabled: false
     path: /docs/openapi
