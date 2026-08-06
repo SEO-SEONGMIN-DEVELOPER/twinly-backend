@@ -1,6 +1,6 @@
 services:
   app:
-    image: ${ECR_REGISTRY}/twinly:${IMAGE_TAG}
+    image: ${ECR_REGISTRY:?ECR_REGISTRY is not set}/twinly:${IMAGE_TAG:?IMAGE_TAG is not set}
     ports:
       - "8080:8080"
       - "8081:8081"
