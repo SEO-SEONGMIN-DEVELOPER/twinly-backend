@@ -10,8 +10,6 @@ public enum ErrorCode {
     FORBIDDEN(HttpStatus.FORBIDDEN, "권한이 없습니다."),
     NOT_FOUND(HttpStatus.NOT_FOUND, "요청한 리소스를 찾을 수 없습니다."),
     METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "지원하지 않는 요청 방식입니다."),
-    NOT_ACCEPTABLE(HttpStatus.NOT_ACCEPTABLE, "지원하지 않는 응답 형식입니다."),
-    CONTENT_TOO_LARGE(HttpStatus.CONTENT_TOO_LARGE, "요청 용량 상한을 초과했습니다."),
     UNSUPPORTED_MEDIA_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "지원하지 않는 요청 형식입니다."),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "일시적인 서버 오류가 발생했습니다."),
 

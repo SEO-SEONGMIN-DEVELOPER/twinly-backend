@@ -3,11 +3,8 @@ package com.nidus.twinly.common.web;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
-import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
-import org.springframework.web.multipart.MaxUploadSizeExceededException;
-import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -90,12 +87,6 @@ public class GlobalExceptionHandler {
         return ErrorResponse.of(ErrorCode.INVALID_REQUEST);
     }
 
-    @ExceptionHandler(MissingServletRequestPartException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ErrorResponse handleMissingRequestPart(MissingServletRequestPartException e) {
-        return ErrorResponse.of(ErrorCode.INVALID_REQUEST);
-    }
-
     @ExceptionHandler(HandlerMethodValidationException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ErrorResponse handleHandlerMethodValidation(HandlerMethodValidationException e) {
@@ -112,18 +103,6 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.METHOD_NOT_ALLOWED)
     public ErrorResponse handleMethodNotSupported(HttpRequestMethodNotSupportedException e) {
         return ErrorResponse.of(ErrorCode.METHOD_NOT_ALLOWED);
-    }
-
-    @ExceptionHandler(HttpMediaTypeNotAcceptableException.class)
-    @ResponseStatus(HttpStatus.NOT_ACCEPTABLE)
-    public ErrorResponse handleMediaTypeNotAcceptable(HttpMediaTypeNotAcceptableException e) {
-        return ErrorResponse.of(ErrorCode.NOT_ACCEPTABLE);
-    }
-
-    @ExceptionHandler(MaxUploadSizeExceededException.class)
-    @ResponseStatus(HttpStatus.CONTENT_TOO_LARGE)
-    public ErrorResponse handleMaxUploadSizeExceeded(MaxUploadSizeExceededException e) {
-        return ErrorResponse.of(ErrorCode.CONTENT_TOO_LARGE);
     }
 
     @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
