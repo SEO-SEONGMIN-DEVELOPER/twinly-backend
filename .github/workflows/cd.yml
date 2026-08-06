@@ -45,11 +45,18 @@ jobs:
 
       - name: Deploy to Instances
         run: |
+          COMPOSE_B64=$(base64 -w0 docker-compose.stage.yaml)
+
           cat > /tmp/params.json <<EOF
           {
             "commands": [
               "set -e",
               "cd /home/ubuntu/twinly",
+              "echo '${COMPOSE_B64}' | base64 -d > docker-compose.stage.yaml",
+              "aws ssm get-parameter --region ${AWS_REGION} --name /twinly/stage/env --with-decryption --query Parameter.Value --output text > .env.new",
+              "grep -q '^JWT_SECRET_KEY=' .env.new",
+              "chmod 600 .env.new",
+              "mv .env.new .env",
               "sed -i 's/^IMAGE_TAG=.*/IMAGE_TAG=${IMAGE_TAG}/' .env",
               "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}",
               "docker compose -f docker-compose.stage.yaml pull",
