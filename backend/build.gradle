@@ -91,21 +91,24 @@ java {
 
 tasks.named('test') {
 	useJUnitPlatform {
-		excludeTags 'integration'   // 단위/슬라이스만 (빠름, Docker 불필요)
+		excludeTags 'integration'
 	}
+
+	systemProperty 'spring.profiles.active', 'test'
     testLogging {
         events "passed", "skipped", "failed"
     }
 }
 
 tasks.register('integrationTest', Test) {
-	description = '통합 테스트 (Testcontainers, Docker 필요)'
+	description = 'Integration Test (Testcontainers, Docker 필요)'
 	group = 'verification'
 	useJUnitPlatform {
 		includeTags 'integration'
 	}
 	testClassesDirs = sourceSets.test.output.classesDirs
 	classpath = sourceSets.test.runtimeClasspath
+	systemProperty 'spring.profiles.active', 'test'
 	shouldRunAfter tasks.named('test')
 	testLogging {
 		events "passed", "skipped", "failed"
