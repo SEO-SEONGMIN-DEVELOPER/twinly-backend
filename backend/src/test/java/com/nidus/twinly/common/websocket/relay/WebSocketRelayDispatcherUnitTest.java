@@ -45,7 +45,7 @@ class WebSocketRelayDispatcherUnitTest {
     void onMessage_toUser() {
         // given
         WebSocketEventBody<SeasonChangedPayload> body = WebSocketEventBody.of(
-                WebSocketBodyType.SEASON_CHANGED, new SeasonChangedPayload());
+                WebSocketBodyType.SEASON_CHANGED, new SeasonChangedPayload(7L));
         givenRelayMessage(WebSocketRelayMessage.toUser("42", "/queue/season", body));
 
         // when
@@ -61,7 +61,7 @@ class WebSocketRelayDispatcherUnitTest {
     void onMessage_toAllLocalUsers() {
         // given: 이 인스턴스에는 1번과 2번이 붙어 있다
         WebSocketEventBody<SeasonChangedPayload> body = WebSocketEventBody.of(
-                WebSocketBodyType.SEASON_CHANGED, new SeasonChangedPayload());
+                WebSocketBodyType.SEASON_CHANGED, new SeasonChangedPayload(7L));
         givenRelayMessage(WebSocketRelayMessage.toAll("/queue/season", body));
 
         // mock 스터빙을 given(...) 인자 안에서 하면 중첩되어 UnfinishedStubbingException 이 난다

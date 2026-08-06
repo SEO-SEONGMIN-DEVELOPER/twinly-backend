@@ -40,6 +40,6 @@ class SeasonNotifierUnitTest {
         then(relayPublisher).should().publishToAll(eq("/queue/season"), captor.capture());
 
         assertThat(captor.getValue().type()).isEqualTo(WebSocketBodyType.SEASON_CHANGED);
-        assertThat(captor.getValue().payload()).isInstanceOf(SeasonChangedPayload.class);
+        assertThat(captor.getValue().payload()).isEqualTo(new SeasonChangedPayload(7L));
     }
 }
