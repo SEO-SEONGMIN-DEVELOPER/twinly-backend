@@ -27,7 +27,7 @@ public class SeasonNotifier {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onSeasonChanged(SeasonChangedEvent event) {
         WebSocketEventBody<SeasonChangedPayload> body = WebSocketEventBody.of(
-                WebSocketBodyType.SEASON_CHANGED, new SeasonChangedPayload());
+                WebSocketBodyType.SEASON_CHANGED, new SeasonChangedPayload(event.seasonId()));
 
         publishSeasonChanged(body);
     }

@@ -24,6 +24,7 @@ jobs:
       ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
       AWS_REGION: ${{ vars.AWS_REGION }}
       INSTANCE_IDS: i-0373d39748d04d49b i-09ddde9020d7a94ca
+      MONITORING_INSTANCE_ID: i-0373d39748d04d49b
 
     steps:
       - uses: actions/checkout@v4
@@ -45,11 +46,18 @@ jobs:
 
       - name: Deploy to Instances
         run: |
+          COMPOSE_B64=$(base64 -w0 docker-compose.stage.yaml)
+
           cat > /tmp/params.json <<EOF
           {
             "commands": [
               "set -e",
               "cd /home/ubuntu/twinly",
+              "echo '${COMPOSE_B64}' | base64 -d > docker-compose.stage.yaml",
+              "aws ssm get-parameter --region ${AWS_REGION} --name /twinly/stage/env --with-decryption --query Parameter.Value --output text > .env.new",
+              "grep -q '^JWT_SECRET_KEY=' .env.new",
+              "chmod 600 .env.new",
+              "mv .env.new .env",
               "sed -i 's/^IMAGE_TAG=.*/IMAGE_TAG=${IMAGE_TAG}/' .env",
               "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}",
               "docker compose -f docker-compose.stage.yaml pull",
@@ -82,5 +90,46 @@ jobs:
 
             [ "$status" = "Success" ] || failed=1
           done
+
+          exit $failed
+
+      - name: Deploy Monitoring Stack
+        run: |
+          MONITORING_B64=$(tar czf - monitoring docker-compose.monitoring.yaml | base64 -w0)
+
+          cat > /tmp/monitoring-params.json <<EOF
+          {
+            "commands": [
+              "set -e",
+              "cd /home/ubuntu/twinly",
+              "echo '${MONITORING_B64}' | base64 -d | tar xzf -",
+              "docker compose -f docker-compose.monitoring.yaml up -d",
+              "timeout 120 bash -c 'until curl -fsS localhost:9090/-/ready >/dev/null; do sleep 5; done'",
+              "timeout 120 bash -c 'until curl -fsS localhost:3000/api/health >/dev/null; do sleep 5; done'"
+            ]
+          }
+          EOF
+
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids $MONITORING_INSTANCE_ID \
+            --document-name AWS-RunShellScript \
+            --comment "deploy monitoring ${IMAGE_TAG}" \
+            --parameters file:///tmp/monitoring-params.json \
+            --query Command.CommandId --output text)
+
+          for _ in $(seq 1 60); do
+            invocation=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$MONITORING_INSTANCE_ID" 2>/dev/null || echo '{}')
+            status=$(jq -r '.Status // "Pending"' <<< "$invocation")
+            case "$status" in Success|Failed|TimedOut|Cancelled) break ;; esac
+            sleep 5
+          done
+
+          echo "::group::${MONITORING_INSTANCE_ID} — ${status}"
+          jq -r '.StandardOutputContent // ""' <<< "$invocation"
+          jq -r '.StandardErrorContent // ""' <<< "$invocation"
+          echo "::endgroup::"
+
+          failed=0
+          [ "$status" = "Success" ] || failed=1
 
           exit $failed

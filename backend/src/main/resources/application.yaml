@@ -116,7 +116,15 @@ management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: health, prometheus
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      minimum-expected-value:
+        http.server.requests: 10ms
+      maximum-expected-value:
+        http.server.requests: 5s
   endpoint:
     health:
       show-details: never
