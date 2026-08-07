@@ -28,6 +28,7 @@ services:
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is not set}
       GF_USERS_ALLOW_SIGN_UP: "false"
+      SLACK_ALERT_WEBHOOK_URL: ${SLACK_ALERT_WEBHOOK_URL:?SLACK_ALERT_WEBHOOK_URL is not set}
     ports:
       - "127.0.0.1:3000:3000"
     volumes:

@@ -1,0 +1,115 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: twinly-api
+    folder: twinly
+    interval: 1m
+    rules:
+      - uid: db-pool-exhausted
+        title: DB 커넥션 풀 고갈
+        condition: B
+        for: 2m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: "[{{ $labels.env }}] {{ $labels.node }} 에서 DB 커넥션을 얻지 못한 스레드가 대기 중입니다"
+          description: "커넥션 풀이 마르면 요청 처리 스레드가 그 자리에서 멈추고, 이어서 톰캣 스레드까지 고갈되어 서버 전체가 응답하지 못하게 됩니다."
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: max by (node) (hikaricp_connections_pending)
+          - refId: B
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 0
+
+      - uid: heap-usage-high
+        title: 힙 사용률 초과
+        condition: B
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "[{{ $labels.env }}] {{ $labels.node }} 의 힙 사용률이 90%를 넘었습니다"
+          description: "이대로 두면 OutOfMemoryError 로 이어집니다. CloudWatch 의 oom 알람은 이미 터진 뒤에 울리므로, 손 쓸 수 있는 시점은 여기입니다."
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: sum by (env, node) (jvm_memory_used_bytes{area="heap"}) / max by (env, node) (jvm_memory_max_bytes{area="heap"} > 0)
+          - refId: B
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 0.9
+
+      - uid: error-rate-high
+        title: 5xx 에러율 초과
+        condition: B
+        for: 2m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: "[{{ $labels.env }}] {{ $labels.node }} 의 5xx 비율이 5%를 넘었습니다"
+          description: "4xx 는 클라이언트 잘못이라 제외한 수치입니다. 어떤 요청이 실패하는지는 CloudWatch Logs 에서 같은 시간대를 확인하십시오."
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: sum by (env, node) (rate(http_server_requests_seconds_count{outcome="SERVER_ERROR"}[5m])) / sum by (env, node) (rate(http_server_requests_seconds_count[5m]))
+          - refId: B
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 0.05
