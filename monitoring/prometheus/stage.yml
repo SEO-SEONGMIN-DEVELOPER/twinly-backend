@@ -10,8 +10,10 @@ scrape_configs:
       - targets:
           - 10.0.18.227:8081
         labels:
+          env: stage
           node: api-a
       - targets:
           - 10.0.23.25:8081
         labels:
+          env: stage
           node: api-c

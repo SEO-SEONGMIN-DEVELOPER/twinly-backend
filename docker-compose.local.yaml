@@ -59,6 +59,8 @@ services:
     restart: unless-stopped
     depends_on:
       - prometheus-twinly
+    environment:
+      SLACK_ALERT_WEBHOOK_URL: ${SLACK_ALERT_WEBHOOK_URL:-}
     ports:
       - "127.0.0.1:3000:3000"
     volumes:
