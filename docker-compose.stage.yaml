@@ -9,7 +9,10 @@ services:
     mem_limit: 2400m
     restart: unless-stopped
     logging:
-      driver: json-file
+      driver: awslogs
       options:
-        max-size: "20m"
-        max-file: "5"
+        awslogs-region: ${AWS_REGION:?AWS_REGION is not set}
+        awslogs-group: /twinly/stage/api
+        awslogs-stream: ${INSTANCE_ID:?INSTANCE_ID is not set}
+        mode: non-blocking
+        max-buffer-size: 4m
