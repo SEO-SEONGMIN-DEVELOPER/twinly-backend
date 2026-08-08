@@ -98,7 +98,8 @@ public enum ErrorCode {
 
     // 외부 연동
     EMAIL_SEND_FAILED(HttpStatus.BAD_GATEWAY, "이메일 발송에 실패했습니다."),
-    SMS_SEND_FAILED(HttpStatus.BAD_GATEWAY, "SMS 발송에 실패했습니다.");
+    SMS_SEND_FAILED(HttpStatus.BAD_GATEWAY, "SMS 발송에 실패했습니다."),
+    AI_RESPONSE_FAILED(HttpStatus.BAD_GATEWAY, "AI 응답 생성에 실패했습니다.");
 
     private final HttpStatus status;
     private final String defaultMessage;
