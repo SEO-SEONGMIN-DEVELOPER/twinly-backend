@@ -1,5 +1,6 @@
 package com.nidus.twinly.common.fcm;
 
+import com.google.firebase.ErrorCode;
 import com.google.firebase.messaging.BatchResponse;
 import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.messaging.FirebaseMessagingException;
@@ -23,23 +24,35 @@ public class FcmSender {
             MessagingErrorCode.UNREGISTERED,
             MessagingErrorCode.SENDER_ID_MISMATCH);
 
+    private static final Set<ErrorCode> AUTH_FAILURES = EnumSet.of(
+            ErrorCode.UNAUTHENTICATED,
+            ErrorCode.PERMISSION_DENIED);
+
     private final FirebaseMessaging firebaseMessaging;
     private final DeviceTokenRevoker deviceTokenRevoker;
 
-    public void send(List<PushMessage> pushMessages) {
+    public PushSendResult send(List<PushMessage> pushMessages) {
         if (pushMessages.isEmpty()) {
-            return;
+            return PushSendResult.empty();
         }
 
         BatchResponse response;
         try {
             response = firebaseMessaging.sendEach(pushMessages.stream().map(PushMessage::message).toList());
         } catch (FirebaseMessagingException e) {
-            log.warn("푸시 발송에 실패했습니다. count={}", pushMessages.size(), e);
-            return;
+            log.warn("푸시 발송이 중단되었습니다. count={}", pushMessages.size(), e);
+            return PushSendResult.cancelled();
         }
 
         deviceTokenRevoker.revoke(collectRevokableTokens(pushMessages, response));
+
+        return new PushSendResult(response.getSuccessCount(), response.getFailureCount(), hasAuthFailure(response));
+    }
+
+    private boolean hasAuthFailure(BatchResponse response) {
+        return response.getResponses().stream()
+                .filter(each -> !each.isSuccessful())
+                .anyMatch(each -> AUTH_FAILURES.contains(each.getException().getErrorCode()));
     }
 
     private List<String> collectRevokableTokens(List<PushMessage> pushMessages, BatchResponse response) {
