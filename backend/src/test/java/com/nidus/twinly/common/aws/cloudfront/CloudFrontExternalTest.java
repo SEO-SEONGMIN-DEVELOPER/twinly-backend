@@ -19,6 +19,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -70,6 +71,24 @@ class CloudFrontExternalTest {
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).isEqualTo(new String(content, StandardCharsets.UTF_8));
+    }
+
+    @Test
+    @DisplayName("만료된 서명으로 요청하면 CDN이 거부한다")
+    void expired_signature_is_rejected() throws IOException, InterruptedException {
+        // given: 만료 시각을 과거로 잡아 이미 만료된 서명 URL을 만든다
+        String expiredUrl = cloudFrontService.getSignedUrl(key, Duration.ofSeconds(-60));
+
+        // when: 만료된 URL로 요청한다
+        HttpResponse<Void> response = HTTP.send(
+                HttpRequest.newBuilder(URI.create(expiredUrl)).GET().build(),
+                HttpResponse.BodyHandlers.discarding());
+
+        // then: 서명 자체는 유효하지만 만료 시각이 지나 거부된다.
+        //       URL_EXPIRES_IN 이 실제로 강제되는지를 확인하는 지점이다.
+        System.out.println("===== 만료된 서명 =====\nstatus=" + response.statusCode() + "\n");
+
+        assertThat(response.statusCode()).isEqualTo(403);
     }
 
     @Test

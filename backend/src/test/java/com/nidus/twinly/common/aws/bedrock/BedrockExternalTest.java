@@ -1,6 +1,8 @@
 package com.nidus.twinly.common.aws.bedrock;
 
 import com.nidus.twinly.common.aws.AwsConfig;
+import com.nidus.twinly.common.web.BusinessException;
+import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontProperties;
 import com.nidus.twinly.common.aws.s3.S3Properties;
 import com.nidus.twinly.common.aws.ses.SesProperties;
@@ -10,8 +12,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.SpringBootTest;
+import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @Tag("external")
 @SpringBootTest(classes = {AwsConfig.class, BedrockService.class})
@@ -25,6 +29,26 @@ class BedrockExternalTest {
 
     @Autowired
     BedrockService bedrockService;
+
+    @Autowired
+    BedrockRuntimeClient bedrockRuntimeClient;
+
+    @Test
+    @DisplayName("존재하지 않는 모델이면 SdkException을 BusinessException으로 래핑한다")
+    void invalid_model_is_wrapped() {
+        // given: 존재할 수 없는 모델 ID로 어댑터를 직접 만든다.
+        //        AWS가 요청 단계에서 거부하므로 추론이 일어나지 않아 과금이 없다.
+        BedrockService broken = new BedrockService(
+                bedrockRuntimeClient,
+                new BedrockProperties(null, null, null, "external-test-invalid-model"));
+
+        // when & then: catch(SdkException)가 실제 예외 타입과 맞아야 502 도메인 오류가 된다.
+        //              안 맞으면 AWS SDK 예외가 그대로 새어나가 500이 나간다.
+        assertThatThrownBy(() -> broken.converse("ping"))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.AI_RESPONSE_FAILED);
+    }
 
     @Test
     @DisplayName("첫 질문: 온보딩 성향만으로 첫 번째 후속 질문이 생성된다")
