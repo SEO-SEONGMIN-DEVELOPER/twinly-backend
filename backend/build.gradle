@@ -94,7 +94,7 @@ java {
 
 tasks.named('test') {
 	useJUnitPlatform {
-		excludeTags 'integration'
+		excludeTags 'integration', 'external'
 	}
 
 	systemProperty 'spring.profiles.active', 'test'
@@ -108,6 +108,7 @@ tasks.register('integrationTest', Test) {
 	group = 'verification'
 	useJUnitPlatform {
 		includeTags 'integration'
+		excludeTags 'external'
 	}
 	testClassesDirs = sourceSets.test.output.classesDirs
 	classpath = sourceSets.test.runtimeClasspath
@@ -115,5 +116,20 @@ tasks.register('integrationTest', Test) {
 	shouldRunAfter tasks.named('test')
 	testLogging {
 		events "passed", "skipped", "failed"
+	}
+}
+
+tasks.register('externalTest', Test) {
+	description = '실제 외부 API 호출 검증 (과금·발송 주의, 수동 실행 전용)'
+	group = 'verification'
+	useJUnitPlatform {
+		includeTags 'external'
+	}
+	testClassesDirs = sourceSets.test.output.classesDirs
+	classpath = sourceSets.test.runtimeClasspath
+	systemProperty 'spring.profiles.active', 'external'
+	testLogging {
+		events "passed", "skipped", "failed"
+		showStandardStreams = true
 	}
 }
