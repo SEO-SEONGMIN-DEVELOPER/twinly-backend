@@ -1,0 +1,47 @@
+services:
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    container_name: prometheus-container-twinly
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prod.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata-twinly:/prometheus
+    mem_limit: 400m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  grafana:
+    image: grafana/grafana:11.5.2
+    container_name: grafana-container-twinly
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is not set}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      SLACK_ALERT_WEBHOOK_URL: ${SLACK_ALERT_WEBHOOK_URL:?SLACK_ALERT_WEBHOOK_URL is not set}
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafanadata-twinly:/var/lib/grafana
+    mem_limit: 300m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  promdata-twinly:
+  grafanadata-twinly:
