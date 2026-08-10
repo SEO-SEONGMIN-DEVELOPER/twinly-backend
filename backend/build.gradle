@@ -92,15 +92,26 @@ java {
     }
 }
 
-tasks.named('test') {
+tasks.register('unitTest', Test) {
+	description = 'Unit Test (Docker 불필요)'
+	group = 'verification'
 	useJUnitPlatform {
 		excludeTags 'integration', 'external'
 	}
-
+	testClassesDirs = sourceSets.test.output.classesDirs
+	classpath = sourceSets.test.runtimeClasspath
 	systemProperty 'spring.profiles.active', 'test'
-    testLogging {
-        events "passed", "skipped", "failed"
-    }
+	testLogging {
+		events "passed", "skipped", "failed"
+	}
+}
+
+tasks.named('test') {
+	enabled = false
+}
+
+tasks.named('check') {
+	dependsOn tasks.named('unitTest')
 }
 
 tasks.register('integrationTest', Test) {
@@ -113,7 +124,7 @@ tasks.register('integrationTest', Test) {
 	testClassesDirs = sourceSets.test.output.classesDirs
 	classpath = sourceSets.test.runtimeClasspath
 	systemProperty 'spring.profiles.active', 'test'
-	shouldRunAfter tasks.named('test')
+	shouldRunAfter tasks.named('unitTest')
 	testLogging {
 		events "passed", "skipped", "failed"
 	}
