@@ -235,16 +235,21 @@ jobs:
 
             echo "${id} ALB 타겟이 healthy 가 될 때까지 대기"
             for _ in $(seq 1 40); do
-              health=$(aws elbv2 describe-target-health \
+              if ! health=$(aws elbv2 describe-target-health \
                 --target-group-arn "$TARGET_GROUP_ARN" \
                 --targets Id="$id",Port=8080 \
-                --query 'TargetHealthDescriptions[0].TargetHealth.State' --output text 2>/dev/null || echo unknown)
+                --query 'TargetHealthDescriptions[0].TargetHealth.State' --output text); then
+                echo "::error::${id} 타겟 상태 조회에 실패했습니다. 권한(elasticloadbalancing:DescribeTargetHealth) 또는 타겟 등록 여부를 확인하십시오."
+                exit 1
+              fi
+
               [ "$health" = "healthy" ] && break
+              echo "  현재 ${health} — 재확인 대기"
               sleep 10
             done
 
             if [ "$health" != "healthy" ]; then
-              echo "::error::${id} 가 ALB 에서 healthy 가 되지 않았습니다 (현재: ${health}). 다음 인스턴스 배포를 중단합니다."
+              echo "::error::${id} 가 400초 안에 healthy 가 되지 않았습니다 (마지막 상태: ${health}). 다음 인스턴스 배포를 중단합니다."
               exit 1
             fi
 
