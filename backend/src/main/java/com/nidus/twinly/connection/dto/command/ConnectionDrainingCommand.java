@@ -1,14 +1,18 @@
 package com.nidus.twinly.connection.dto.command;
 
 import com.nidus.twinly.connection.domain.ConnectionDrainingReason;
+import com.nidus.twinly.connection.domain.ConnectionDrainingScope;
 import com.nidus.twinly.connection.dto.request.ConnectionDrainingRequest;
 
 public record ConnectionDrainingCommand(
         ConnectionDrainingReason reason,
-        Long retryAfterMs
+        Long retryAfterMs,
+        ConnectionDrainingScope scope
 ) {
 
     public static ConnectionDrainingCommand from(ConnectionDrainingRequest request) {
-        return new ConnectionDrainingCommand(request.reason(), request.retryAfterMs());
+        ConnectionDrainingScope scope = request.scope() == null ? ConnectionDrainingScope.ALL : request.scope();
+
+        return new ConnectionDrainingCommand(request.reason(), request.retryAfterMs(), scope);
     }
 }
