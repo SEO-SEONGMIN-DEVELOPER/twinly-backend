@@ -1,0 +1,24 @@
+{
+  "name": "twinly-prod-api-ec2-role",
+  "description": "twinly prod api server",
+  "trust": {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Principal": {
+          "Service": "ec2.amazonaws.com"
+        },
+        "Action": "sts:AssumeRole"
+      }
+    ]
+  },
+  "managedPolicies": [
+    "TwinlyProdReadEnv",
+    "TwinlyProdApiParameterBoundary",
+    "CloudWatchAgentServerPolicy",
+    "AmazonSSMManagedInstanceCore",
+    "AmazonEC2ContainerRegistryReadOnly"
+  ],
+  "inlinePolicies": []
+}

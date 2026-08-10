@@ -1,0 +1,13 @@
+{
+  "name": "twinly-prod-backend-bedrock",
+  "managedPolicies": [
+    "TwinlyBedrockInvokePolicy"
+  ],
+  "inlinePolicies": [],
+  "accessKeys": [
+    {
+      "id": "AKIA6C27DFBO3GONQ45Y",
+      "status": "Active"
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "name": "twinly-prod-chatbot-role",
+  "description": null,
+  "trust": {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Principal": {
+          "Service": "chatbot.amazonaws.com"
+        },
+        "Action": "sts:AssumeRole"
+      }
+    ]
+  },
+  "managedPolicies": [
+    "AWS-Chatbot-NotificationsOnly-Policy-7993c782-1c1b-479b-93ff-0a09365d06d4"
+  ],
+  "inlinePolicies": []
+}

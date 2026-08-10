@@ -1,0 +1,13 @@
+{
+  "name": "twinly-prod-backend-s3",
+  "managedPolicies": [
+    "TwinlyProdS3MediaAccess"
+  ],
+  "inlinePolicies": [],
+  "accessKeys": [
+    {
+      "id": "AKIA6C27DFBOXH6G7RXZ",
+      "status": "Active"
+    }
+  ]
+}
