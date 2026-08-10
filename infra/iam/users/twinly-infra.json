@@ -1,0 +1,18 @@
+{
+  "name": "twinly-infra",
+  "managedPolicies": [
+    "TwinlyInfraPassrole",
+    "AmazonSSMFullAccess",
+    "AmazonEC2FullAccess",
+    "AmazonRDSFullAccess",
+    "AWSCertificateManagerFullAccess",
+    "AmazonElastiCacheFullAccess"
+  ],
+  "inlinePolicies": [],
+  "accessKeys": [
+    {
+      "id": "AKIA6C27DFBOZSUZFQGW",
+      "status": "Active"
+    }
+  ]
+}

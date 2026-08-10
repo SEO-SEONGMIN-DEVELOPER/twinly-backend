@@ -1,0 +1,23 @@
+{
+  "name": "twinly-prod-monitoring-ec2-role",
+  "description": "twinly prod monitoring server",
+  "trust": {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Principal": {
+          "Service": "ec2.amazonaws.com"
+        },
+        "Action": "sts:AssumeRole"
+      }
+    ]
+  },
+  "managedPolicies": [
+    "TwinlyProdMonitoringParameterBoundary",
+    "TwinlyProdMonitoringReadEnv",
+    "CloudWatchAgentServerPolicy",
+    "AmazonSSMManagedInstanceCore"
+  ],
+  "inlinePolicies": []
+}

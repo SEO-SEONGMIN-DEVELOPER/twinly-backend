@@ -1,0 +1,15 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": "iam:PassRole",
+            "Resource": [
+                "arn:aws:iam::968177690717:role/rds-monitoring-role",
+                "arn:aws:iam::968177690717:role/twinly-stage-api-ec2-role",
+                "arn:aws:iam::968177690717:role/twinly-prod-api-ec2-role",
+                "arn:aws:iam::968177690717:role/twinly-prod-monitoring-ec2-role"
+            ]
+        }
+    ]
+}

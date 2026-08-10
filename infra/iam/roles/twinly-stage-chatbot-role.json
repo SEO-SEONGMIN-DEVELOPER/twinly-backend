@@ -1,0 +1,20 @@
+{
+  "name": "twinly-stage-chatbot-role",
+  "description": null,
+  "trust": {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Principal": {
+          "Service": "chatbot.amazonaws.com"
+        },
+        "Action": "sts:AssumeRole"
+      }
+    ]
+  },
+  "managedPolicies": [
+    "AWS-Chatbot-NotificationsOnly-Policy-8df0c28e-9674-4d47-9093-42b44ecb1354"
+  ],
+  "inlinePolicies": []
+}

@@ -1,0 +1,13 @@
+{
+  "name": "twinly-backend-ecr",
+  "managedPolicies": [
+    "AmazonEC2ContainerRegistryPowerUser"
+  ],
+  "inlinePolicies": [],
+  "accessKeys": [
+    {
+      "id": "AKIA6C27DFBOU7VNLX6V",
+      "status": "Active"
+    }
+  ]
+}

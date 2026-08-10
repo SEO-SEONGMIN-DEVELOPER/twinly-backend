@@ -1,0 +1,29 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": "ssm:SendCommand",
+            "Resource": [
+                "arn:aws:ssm:ap-northeast-2::document/AWS-RunShellScript",
+                "arn:aws:ec2:ap-northeast-2:968177690717:instance/i-08903483652243fec",
+                "arn:aws:ec2:ap-northeast-2:968177690717:instance/i-027f1e44635da471e",
+                "arn:aws:ec2:ap-northeast-2:968177690717:instance/i-0f9ae4a42137c72f9"
+            ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ssm:GetCommandInvocation",
+                "ssm:ListCommandInvocations"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "ElbDescribeDoesNotSupportResourceLevelPermissions",
+            "Effect": "Allow",
+            "Action": "elasticloadbalancing:DescribeTargetHealth",
+            "Resource": "*"
+        }
+    ]
+}

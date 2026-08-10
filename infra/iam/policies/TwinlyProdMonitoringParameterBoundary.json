@@ -1,0 +1,19 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "DenyParametersOutsideMonitoringEnv",
+            "Effect": "Deny",
+            "Action": [
+                "ssm:GetParameter",
+                "ssm:GetParameters",
+                "ssm:GetParametersByPath"
+            ],
+            "NotResource": [
+                "arn:aws:ssm:ap-northeast-2:968177690717:parameter/twinly/prod/monitoring-env",
+                "arn:aws:ssm:*:*:parameter/aws/*",
+                "arn:aws:ssm:*:*:parameter/AmazonCloudWatch-*"
+            ]
+        }
+    ]
+}

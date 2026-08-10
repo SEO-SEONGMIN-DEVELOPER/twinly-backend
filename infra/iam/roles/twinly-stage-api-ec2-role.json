@@ -1,0 +1,24 @@
+{
+  "name": "twinly-stage-api-ec2-role",
+  "description": "Allows EC2 instances to call AWS services on your behalf.",
+  "trust": {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Principal": {
+          "Service": "ec2.amazonaws.com"
+        },
+        "Action": "sts:AssumeRole"
+      }
+    ]
+  },
+  "managedPolicies": [
+    "TwinlyStageReadEnv",
+    "TwinlyStageApiParameterBoundary",
+    "CloudWatchAgentServerPolicy",
+    "AmazonSSMManagedInstanceCore",
+    "AmazonEC2ContainerRegistryReadOnly"
+  ],
+  "inlinePolicies": []
+}

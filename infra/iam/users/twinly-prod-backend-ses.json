@@ -1,0 +1,13 @@
+{
+  "name": "twinly-prod-backend-ses",
+  "managedPolicies": [
+    "AmazonSESFullAccess"
+  ],
+  "inlinePolicies": [],
+  "accessKeys": [
+    {
+      "id": "AKIA6C27DFBOUIWHMWQ6",
+      "status": "Active"
+    }
+  ]
+}
