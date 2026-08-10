@@ -3,7 +3,9 @@ package com.nidus.twinly.connection.notifier;
 import com.nidus.twinly.common.websocket.domain.WebSocketBodyType;
 import com.nidus.twinly.common.websocket.dto.WebSocketControlBody;
 import com.nidus.twinly.common.websocket.relay.WebSocketRelayPublisher;
+import com.nidus.twinly.common.websocket.sender.WebSocketLocalSender;
 import com.nidus.twinly.connection.domain.ConnectionDrainingReason;
+import com.nidus.twinly.connection.domain.ConnectionDrainingScope;
 import com.nidus.twinly.connection.dto.websocket.ConnectionDrainingPayload;
 import io.github.springwolf.bindings.stomp.annotations.StompAsyncOperationBinding;
 import io.github.springwolf.core.asyncapi.annotations.AsyncOperation;
@@ -21,11 +23,17 @@ public class ConnectionControlNotifier {
     private static final String CONTROL_OUTBOUND_CHANNEL = "/user/queue/connection/control";
 
     private final WebSocketRelayPublisher relayPublisher;
+    private final WebSocketLocalSender localSender;
 
-    public void notifyDraining(ConnectionDrainingReason reason, Long retryAfterMs) {
+    public void notifyDraining(ConnectionDrainingReason reason, Long retryAfterMs, ConnectionDrainingScope scope) {
         WebSocketControlBody<ConnectionDrainingPayload> body = WebSocketControlBody.of(
                 WebSocketBodyType.CONNECTION_DRAINING,
                 new ConnectionDrainingPayload(reason, retryAfterMs));
+
+        if (scope == ConnectionDrainingScope.LOCAL) {
+            localSender.sendToAll(CONTROL_DESTINATION, body);
+            return;
+        }
 
         publishDraining(body);
     }

@@ -10,7 +10,7 @@ CLAUDE.md
 
 # env
 .env
-.env.stage
+.env.*
 
 # build output
 .gradle

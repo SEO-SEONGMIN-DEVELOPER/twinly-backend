@@ -1,0 +1,18 @@
+services:
+  app:
+    image: ${ECR_REGISTRY:?ECR_REGISTRY is not set}/twinly:${IMAGE_TAG:?IMAGE_TAG is not set}
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    env_file:
+      - .env
+    mem_limit: 2400m
+    restart: unless-stopped
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: ${AWS_REGION:?AWS_REGION is not set}
+        awslogs-group: /twinly/prod/api
+        awslogs-stream: ${INSTANCE_ID:?INSTANCE_ID is not set}
+        mode: non-blocking
+        max-buffer-size: 4m

@@ -26,7 +26,7 @@ public class ConnectionService {
     private final ConnectionControlNotifier connectionControlNotifier;
 
     public void notifyDraining(ConnectionDrainingCommand command) {
-        connectionControlNotifier.notifyDraining(command.reason(), command.retryAfterMs());
+        connectionControlNotifier.notifyDraining(command.reason(), command.retryAfterMs(), command.scope());
     }
 
     @Transactional
