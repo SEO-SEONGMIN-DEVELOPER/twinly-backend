@@ -1,5 +1,95 @@
 [
     {
+        "name": "twinly-stage-api-a-disk-used",
+        "description": "루트 볼륨 사용률 80% 초과. 방치하면 앱과 SSM 에이전트가 함께 중단되어 복구가 어려워짐.\n\n조치:\n1. SSM으로 접속해 df -h 로 현황 확인\n2. docker system prune -f 로 미사용 이미지/컨테이너 정리\n3. 그래도 높으면 du -sh /var/lib/docker/containers/*/*.log 로 로그 크기 확인\n4. docker-compose.stage.yaml 의 logging max-size 설정이 실제 컨테이너에 적용됐는지 확인",
+        "namespace": "CWAgent",
+        "metric": "disk_used_percent",
+        "statistic": "Average",
+        "period": 300,
+        "evaluationPeriods": 2,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 80.0,
+        "treatMissingData": "missing",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-stage-alerts"
+        ]
+    },
+    {
+        "name": "twinly-stage-api-a-mem-used",
+        "description": "호스트 메모리 사용률 85% 초과. 방치하면 커널 OOM Killer 가 프로세스를 SIGKILL 로 죽이는데, 이 경우 앱 로그가 남지 않아 oom 메트릭 필터가 잡지 못한다.\n\nGrafana 의 힙 사용률 알림으로는 대체되지 않는다. JVM 힙은 실제 사용량의 일부일 뿐이고(실측 힙 121MB / 컨테이너 RSS 640MB), 호스트 메모리가 마르면 prometheus·grafana 도 함께 죽어 알릴 주체가 사라진다.\n\n조치:\n1. SSM으로 접속해 free -m 과 docker stats 로 어느 컨테이너가 쓰는지 확인\n2. Grafana 힙 사용률 패널로 JVM 힙인지 힙 바깥인지 구분\n3. 힙이면 mem_limit 또는 MaxRAMPercentage 조정, 힙 바깥이면 네이티브 메모리 누수 의심\n4. api-a 는 prometheus·grafana 도 함께 올라가 있으므로 각 컨테이너의 mem_limit 초과 여부 확인",
+        "namespace": "CWAgent",
+        "metric": "mem_used_percent",
+        "statistic": "Average",
+        "period": 60,
+        "evaluationPeriods": 5,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 85.0,
+        "treatMissingData": "missing",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-stage-alerts"
+        ]
+    },
+    {
+        "name": "twinly-stage-api-a-status-check-failed",
+        "description": "인스턴스 상태 검사 실패. EC2 또는 OS가 응답하지 않음.\n\n조치:\n1. EC2 콘솔 → 해당 인스턴스 → 상태 검사 탭에서 시스템/인스턴스 중 어느 쪽인지 확인\n2. 시스템 검사 실패면 AWS 인프라 문제. 인스턴스를 중지 후 시작 (재부팅이 아님)\n3. 인스턴스 검사 실패면 OS 문제. SSM 접속 시도 후 안 되면 재부팅\n4. ALB 대상 그룹에서 해당 인스턴스가 빠졌는지 확인",
+        "namespace": "AWS/EC2",
+        "metric": "StatusCheckFailed",
+        "statistic": "Maximum",
+        "period": 60,
+        "evaluationPeriods": 2,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 1.0,
+        "treatMissingData": "missing",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-stage-alerts"
+        ]
+    },
+    {
+        "name": "twinly-stage-api-c-disk-used",
+        "description": "루트 볼륨 사용률 80% 초과. 방치하면 앱과 SSM 에이전트가 함께 중단되어 복구가 어려워짐.\n\n조치:\n1. SSM으로 접속해 df -h 로 현황 확인\n2. docker system prune -f 로 미사용 이미지/컨테이너 정리\n3. 그래도 높으면 du -sh /var/lib/docker/containers/*/*.log 로 로그 크기 확인\n4. docker-compose.stage.yaml 의 logging max-size 설정이 실제 컨테이너에 적용됐는지 확인",
+        "namespace": "CWAgent",
+        "metric": "disk_used_percent",
+        "statistic": "Average",
+        "period": 300,
+        "evaluationPeriods": 2,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 80.0,
+        "treatMissingData": "missing",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-stage-alerts"
+        ]
+    },
+    {
+        "name": "twinly-stage-api-c-mem-used",
+        "description": "호스트 메모리 사용률 85% 초과. 방치하면 커널 OOM Killer 가 프로세스를 SIGKILL 로 죽이는데, 이 경우 앱 로그가 남지 않아 oom 메트릭 필터가 잡지 못한다.\n\nGrafana 의 힙 사용률 알림으로는 대체되지 않는다. JVM 힙은 실제 사용량의 일부일 뿐이고(실측 힙 121MB / 컨테이너 RSS 640MB), 호스트 메모리가 마르면 prometheus·grafana 도 함께 죽어 알릴 주체가 사라진다.\n\n조치:\n1. SSM으로 접속해 free -m 과 docker stats 로 어느 컨테이너가 쓰는지 확인\n2. Grafana 힙 사용률 패널로 JVM 힙인지 힙 바깥인지 구분\n3. 힙이면 mem_limit 또는 MaxRAMPercentage 조정, 힙 바깥이면 네이티브 메모리 누수 의심\n4. api-a 는 prometheus·grafana 도 함께 올라가 있으므로 각 컨테이너의 mem_limit 초과 여부 확인",
+        "namespace": "CWAgent",
+        "metric": "mem_used_percent",
+        "statistic": "Average",
+        "period": 60,
+        "evaluationPeriods": 5,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 85.0,
+        "treatMissingData": "missing",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-stage-alerts"
+        ]
+    },
+    {
+        "name": "twinly-stage-api-c-status-check-failed",
+        "description": "인스턴스 상태 검사 실패. EC2 또는 OS가 응답하지 않음.\n\n조치:\n1. EC2 콘솔 → 해당 인스턴스 → 상태 검사 탭에서 시스템/인스턴스 중 어느 쪽인지 확인\n2. 시스템 검사 실패면 AWS 인프라 문제. 인스턴스를 중지 후 시작 (재부팅이 아님)\n3. 인스턴스 검사 실패면 OS 문제. SSM 접속 시도 후 안 되면 재부팅\n4. ALB 대상 그룹에서 해당 인스턴스가 빠졌는지 확인",
+        "namespace": "AWS/EC2",
+        "metric": "StatusCheckFailed",
+        "statistic": "Maximum",
+        "period": 60,
+        "evaluationPeriods": 2,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 1.0,
+        "treatMissingData": "missing",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-stage-alerts"
+        ]
+    },
+    {
         "name": "twinly-stage-api-disk-full",
         "description": "디스크 공간 부족으로 앱이 쓰기에 실패. 디스크 80% 알람이 막지 못한 상태이며 이미 기능 장애 중.\n\n조치:\n1. 어느 인스턴스인지 확인\n   fields @timestamp, @logStream, log | filter log like /No space left/ | sort @timestamp desc\n2. SSM 접속 후 df -h 로 확인\n3. docker system prune -f 로 미사용 이미지/컨테이너 정리\n4. du -sh /var/lib/docker/containers/*/*.log 로 로그 크기 확인\n5. docker-compose.stage.yaml 의 logging max-size 가 실제 컨테이너에 적용됐는지 확인",
         "namespace": "twinly/stage/api",
@@ -55,6 +145,21 @@
         "comparisonOperator": "GreaterThanOrEqualToThreshold",
         "threshold": 1.0,
         "treatMissingData": "notBreaching",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-stage-alerts"
+        ]
+    },
+    {
+        "name": "twinly-stage-api-tg-healthy-hosts",
+        "description": "ALB 정상 대상 수가 2 미만으로 15분 이상 지속. 한 대가 트래픽을 못 받고 있음.\n\n조치:\n1. EC2 → 대상 그룹 twinly-stage-api-tg 에서 어느 인스턴스가 unhealthy 인지 확인\n2. 해당 인스턴스에 SSM 접속 → docker ps 로 컨테이너 상태 확인\n3. curl -s localhost:8081/actuator/health/readiness 로 앱 응답 확인\n4. 컨테이너가 내려가 있으면 docker compose -f docker-compose.stage.yaml up -d\n5. 배포 중이면 정상 상황 — CD 워크플로 진행 여부 먼저 확인",
+        "namespace": "AWS/ApplicationELB",
+        "metric": "HealthyHostCount",
+        "statistic": "Minimum",
+        "period": 300,
+        "evaluationPeriods": 3,
+        "comparisonOperator": "LessThanThreshold",
+        "threshold": 2.0,
+        "treatMissingData": "missing",
         "alarmActions": [
             "arn:aws:sns:ap-northeast-2:968177690717:twinly-stage-alerts"
         ]
