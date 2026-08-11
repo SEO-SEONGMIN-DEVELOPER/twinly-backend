@@ -1,0 +1,302 @@
+[
+    {
+        "name": "twinly-prod-api-a-disk-used",
+        "description": "루트 볼륨 사용률 80% 초과. 방치하면 앱과 SSM 에이전트가 함께 중단되어 복구가 어려워짐.\n\nprod API 인스턴스의 앱 로그는 awslogs 드라이버로 CloudWatch 에 바로 보내므로 로컬에 쌓이지 않는다. 따라서 이 알람은 대개 배포마다 누적된 ECR 이미지가 원인이다.\n\n조치:\n1. SSM으로 접속해 df -h 로 현황 확인\n2. docker system prune -f 로 미사용 이미지/컨테이너 정리\n3. 그래도 높으면 du -sh /var/lib/docker/containers/*/*.log 로 로컬 로그 크기 확인\n4. 로컬 로그가 크다면 docker-compose.prod.yaml 의 awslogs 설정이 실제 컨테이너에 적용됐는지 확인\n5. prune 후에도 반복되면 정리 주기 자동화를 검토",
+        "namespace": "CWAgent",
+        "metric": "disk_used_percent",
+        "statistic": "Average",
+        "period": 300,
+        "evaluationPeriods": 2,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 80.0,
+        "treatMissingData": "missing",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ]
+    },
+    {
+        "name": "twinly-prod-api-a-mem-used",
+        "description": "호스트 메모리 사용률 85% 초과. 방치하면 커널 OOM Killer 가 프로세스를 SIGKILL 로 죽이는데, 이 경우 앱 로그가 남지 않아 oom 메트릭 필터가 잡지 못한다.\n\nprod API 인스턴스에는 앱 컨테이너만 올라간다(prometheus·grafana 는 twinly-prod-monitoring 으로 분리). 따라서 이 알람은 사실상 앱 단독의 메모리 증가를 가리킨다.\n\n조치:\n1. SSM으로 접속해 free -m 과 docker stats 로 확인\n2. Grafana 힙 사용률 패널로 JVM 힙인지 힙 바깥인지 구분\n3. 힙이면 docker-compose.prod.yaml 의 mem_limit(2400m) 또는 MaxRAMPercentage 조정\n4. 힙 바깥이면 네이티브 메모리 누수 의심 — 스레드 수와 Metaspace 부터 확인\n5. 한 대만 오르면 그 인스턴스를 대상 그룹에서 빼고 재기동, 두 대 모두 오르면 직전 배포 버전을 의심",
+        "namespace": "CWAgent",
+        "metric": "mem_used_percent",
+        "statistic": "Average",
+        "period": 60,
+        "evaluationPeriods": 5,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 85.0,
+        "treatMissingData": "missing",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ]
+    },
+    {
+        "name": "twinly-prod-api-a-status-check-failed",
+        "description": "인스턴스 상태 검사 실패. EC2 또는 OS가 응답하지 않음.\n\n조치:\n1. EC2 콘솔 → 해당 인스턴스 → 상태 검사 탭에서 시스템/인스턴스 중 어느 쪽인지 확인\n2. 시스템 검사 실패면 AWS 인프라 문제. 인스턴스를 중지 후 시작 (재부팅이 아님)\n3. 인스턴스 검사 실패면 OS 문제. SSM 접속 시도 후 안 되면 재부팅\n4. 대상 그룹 twinly-prod-api-tg 에서 해당 인스턴스가 빠졌는지 확인 — 남은 한 대로 버티는 상태이므로 나머지 한 대의 부하를 함께 본다\n5. 복구 후 docker ps 로 컨테이너 자동 기동 확인",
+        "namespace": "AWS/EC2",
+        "metric": "StatusCheckFailed",
+        "statistic": "Maximum",
+        "period": 60,
+        "evaluationPeriods": 2,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 1.0,
+        "treatMissingData": "missing",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ]
+    },
+    {
+        "name": "twinly-prod-api-c-disk-used",
+        "description": "루트 볼륨 사용률 80% 초과. 방치하면 앱과 SSM 에이전트가 함께 중단되어 복구가 어려워짐.\n\nprod API 인스턴스의 앱 로그는 awslogs 드라이버로 CloudWatch 에 바로 보내므로 로컬에 쌓이지 않는다. 따라서 이 알람은 대개 배포마다 누적된 ECR 이미지가 원인이다.\n\n조치:\n1. SSM으로 접속해 df -h 로 현황 확인\n2. docker system prune -f 로 미사용 이미지/컨테이너 정리\n3. 그래도 높으면 du -sh /var/lib/docker/containers/*/*.log 로 로컬 로그 크기 확인\n4. 로컬 로그가 크다면 docker-compose.prod.yaml 의 awslogs 설정이 실제 컨테이너에 적용됐는지 확인\n5. prune 후에도 반복되면 정리 주기 자동화를 검토",
+        "namespace": "CWAgent",
+        "metric": "disk_used_percent",
+        "statistic": "Average",
+        "period": 300,
+        "evaluationPeriods": 2,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 80.0,
+        "treatMissingData": "missing",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ]
+    },
+    {
+        "name": "twinly-prod-api-c-mem-used",
+        "description": "호스트 메모리 사용률 85% 초과. 방치하면 커널 OOM Killer 가 프로세스를 SIGKILL 로 죽이는데, 이 경우 앱 로그가 남지 않아 oom 메트릭 필터가 잡지 못한다.\n\nprod API 인스턴스에는 앱 컨테이너만 올라간다(prometheus·grafana 는 twinly-prod-monitoring 으로 분리). 따라서 이 알람은 사실상 앱 단독의 메모리 증가를 가리킨다.\n\n조치:\n1. SSM으로 접속해 free -m 과 docker stats 로 확인\n2. Grafana 힙 사용률 패널로 JVM 힙인지 힙 바깥인지 구분\n3. 힙이면 docker-compose.prod.yaml 의 mem_limit(2400m) 또는 MaxRAMPercentage 조정\n4. 힙 바깥이면 네이티브 메모리 누수 의심 — 스레드 수와 Metaspace 부터 확인\n5. 한 대만 오르면 그 인스턴스를 대상 그룹에서 빼고 재기동, 두 대 모두 오르면 직전 배포 버전을 의심",
+        "namespace": "CWAgent",
+        "metric": "mem_used_percent",
+        "statistic": "Average",
+        "period": 60,
+        "evaluationPeriods": 5,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 85.0,
+        "treatMissingData": "missing",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ]
+    },
+    {
+        "name": "twinly-prod-api-c-status-check-failed",
+        "description": "인스턴스 상태 검사 실패. EC2 또는 OS가 응답하지 않음.\n\n조치:\n1. EC2 콘솔 → 해당 인스턴스 → 상태 검사 탭에서 시스템/인스턴스 중 어느 쪽인지 확인\n2. 시스템 검사 실패면 AWS 인프라 문제. 인스턴스를 중지 후 시작 (재부팅이 아님)\n3. 인스턴스 검사 실패면 OS 문제. SSM 접속 시도 후 안 되면 재부팅\n4. 대상 그룹 twinly-prod-api-tg 에서 해당 인스턴스가 빠졌는지 확인 — 남은 한 대로 버티는 상태이므로 나머지 한 대의 부하를 함께 본다\n5. 복구 후 docker ps 로 컨테이너 자동 기동 확인",
+        "namespace": "AWS/EC2",
+        "metric": "StatusCheckFailed",
+        "statistic": "Maximum",
+        "period": 60,
+        "evaluationPeriods": 2,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 1.0,
+        "treatMissingData": "missing",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ]
+    },
+    {
+        "name": "twinly-prod-api-disk-full",
+        "description": "디스크 공간 부족으로 앱이 쓰기에 실패. 디스크 80% 알람이 막지 못한 상태이며 이미 기능 장애 중.\n\n조치:\n1. 어느 인스턴스인지 확인\n   fields @timestamp, @logStream, log | filter log like /No space left/ | sort @timestamp desc\n2. SSM 접속 후 df -h 로 확인\n3. docker system prune -f 로 미사용 이미지/컨테이너 정리\n4. du -sh /var/lib/docker/containers/*/*.log 로 로그 크기 확인\n5. docker-compose.prod.yaml 의 logging max-size 가 실제 컨테이너에 적용됐는지 확인",
+        "namespace": "twinly/prod/api",
+        "metric": "DiskFullErrorCount",
+        "statistic": "Sum",
+        "period": 300,
+        "evaluationPeriods": 1,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 1.0,
+        "treatMissingData": "notBreaching",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ]
+    },
+    {
+        "name": "twinly-prod-api-oom",
+        "description": "JVM 힙 부족으로 OutOfMemoryError 발생. 해당 인스턴스의 JVM 전체가 위험한 상태.\n\n조치:\n1. 어느 인스턴스인지 확인\n   fields @timestamp, @logStream, log | filter log like /OutOfMemoryError/ | sort @timestamp desc\n2. 대상 그룹에서 해당 인스턴스가 unhealthy로 빠졌는지 확인\n3. 반복되면 힙 덤프를 확보해 메모리 누수 조사\n4. 급하면 컨테이너 재시작: docker compose -f docker-compose.prod.yaml up -d --force-recreate",
+        "namespace": "twinly/prod/api",
+        "metric": "OomErrorCount",
+        "statistic": "Sum",
+        "period": 300,
+        "evaluationPeriods": 1,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 1.0,
+        "treatMissingData": "notBreaching",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ]
+    },
+    {
+        "name": "twinly-prod-api-stack-overflow",
+        "description": "StackOverflowError 발생. 무한 재귀 가능성. JVM Error 계열이라 해당 요청 스레드는 복구 불가.\n\n조치:\n1. 어느 인스턴스인지, 어느 코드 경로인지 확인\n   fields @timestamp, @logStream, log | filter log like /StackOverflowError/ | sort @timestamp desc\n2. 스택트레이스에서 반복되는 메서드 호출 구간을 찾아 재귀 종료 조건 점검\n3. 최근 배포와 연관 있는지 확인",
+        "namespace": "twinly/prod/api",
+        "metric": "StackOverflowCount",
+        "statistic": "Sum",
+        "period": 300,
+        "evaluationPeriods": 1,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 1.0,
+        "treatMissingData": "notBreaching",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ]
+    },
+    {
+        "name": "twinly-prod-api-startup-failure",
+        "description": "앱 부팅 실패. 컨테이너가 떴지만 Spring 컨텍스트 초기화에 실패함.\n\n조치:\n1. 실패 원인 확인\n   fields @timestamp, @logStream, log | filter log like /FAILED TO START/ | sort @timestamp desc\n2. 배포 직후라면 CD 워크플로 결과부터 확인\n3. 흔한 원인: DB 접속 실패, 환경변수 누락, 포트 충돌\n4. 재시작 루프인지 확인: docker ps -a 로 재시작 횟수 점검",
+        "namespace": "twinly/prod/api",
+        "metric": "StartupFailureCount",
+        "statistic": "Sum",
+        "period": 300,
+        "evaluationPeriods": 1,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 1.0,
+        "treatMissingData": "notBreaching",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ]
+    },
+    {
+        "name": "twinly-prod-api-tg-healthy-hosts",
+        "description": "ALB 정상 대상 수가 2 미만으로 15분 이상 지속. 한 대가 트래픽을 못 받고 있음.\n\n조치:\n1. EC2 → 대상 그룹 twinly-prod-api-tg 에서 어느 인스턴스가 unhealthy 인지 확인\n2. 해당 인스턴스에 SSM 접속 → docker ps 로 컨테이너 상태 확인\n3. curl -s localhost:8081/actuator/health/readiness 로 앱 응답 확인\n4. 컨테이너가 내려가 있으면 docker compose -f docker-compose.prod.yaml up -d\n5. 배포 중이면 정상 상황 — prod CD 는 순차 배포라 한 대씩 빠진다. CD 워크플로 진행 여부를 먼저 확인",
+        "namespace": "AWS/ApplicationELB",
+        "metric": "HealthyHostCount",
+        "statistic": "Minimum",
+        "period": 300,
+        "evaluationPeriods": 3,
+        "comparisonOperator": "LessThanThreshold",
+        "threshold": 2.0,
+        "treatMissingData": "missing",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ]
+    },
+    {
+        "name": "twinly-prod-api-ws-internal-error",
+        "description": "웹소켓 메시지 처리 중 예상하지 못한 예외 발생. 예상된 도메인 실패는 컨트롤러가 자체 처리하므로, 여기 잡혔다면 코드 버그다.\n\n조치:\n1. 스택트레이스 확인\n   fields @timestamp, actor, httpPath, error.type, error.stack_trace | filter errorCode = \"INTERNAL\" | sort @timestamp desc\n2. actor(user:<id>)로 영향받은 유저 특정. 해당 유저는 채팅 명령이 실패한 상태\n3. 클라이언트에는 CommandError.code=INTERNAL 로 나갔으므로 재시도로 회복되지 않는다",
+        "namespace": "twinly/prod/api",
+        "metric": "WsInternalErrorCount",
+        "statistic": "Sum",
+        "period": 300,
+        "evaluationPeriods": 1,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 1.0,
+        "treatMissingData": "notBreaching",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ]
+    },
+    {
+        "name": "twinly-prod-api-ws-relay-failure",
+        "description": "Redis pub/sub 인스턴스 간 웹소켓 메시지 전파 실패. 다른 인스턴스에 접속한 유저에게 메시지가 도달하지 않는다.\n\n조치:\n1. 발행 실패인지 수신 실패인지 확인\n   fields @timestamp, errorCode, bodyKind, bodyType, error.type | filter errorCode like /RELAY_/ | sort @timestamp desc\n2. RELAY_PUBLISH_FAILED — 이 인스턴스의 Redis 연결 확인 (ElastiCache 상태, 보안그룹)\n3. RELAY_RECEIVE_FAILED — 역직렬화 실패 가능성. 배포 중 메시지 스키마 불일치를 의심한다\n4. 단일 인스턴스로 축소하면 증상은 사라지지만 원인은 남는다",
+        "namespace": "twinly/prod/api",
+        "metric": "WsRelayFailureCount",
+        "statistic": "Sum",
+        "period": 300,
+        "evaluationPeriods": 1,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 1.0,
+        "treatMissingData": "notBreaching",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ]
+    },
+    {
+        "name": "twinly-prod-monitoring-status-check-failed",
+        "description": "모니터링 인스턴스의 상태 검사 실패. EC2 또는 OS가 응답하지 않음.\n\n이 인스턴스에는 prometheus·grafana 가 올라간다. 죽어도 서비스 트래픽에는 영향이 없지만 Grafana 기반 알림이 전부 멎는다. CloudWatch 알람은 계속 동작하므로, 복구 전까지는 CloudWatch 쪽만 신뢰할 수 있다.\n\n조치:\n1. EC2 콘솔 → 상태 검사 탭에서 시스템/인스턴스 중 어느 쪽인지 확인\n2. 시스템 검사 실패면 AWS 인프라 문제. 인스턴스를 중지 후 시작 (재부팅이 아님)\n3. 인스턴스 검사 실패면 OS 문제. SSM 접속 시도 후 안 되면 재부팅\n4. 복구되면 docker ps 로 prometheus·grafana 기동 확인, Grafana 에서 수집 재개 확인\n5. 다운된 구간의 prometheus 메트릭은 유실된다. 사후 분석 시 공백 구간임을 감안",
+        "namespace": "AWS/EC2",
+        "metric": "StatusCheckFailed",
+        "statistic": "Maximum",
+        "period": 60,
+        "evaluationPeriods": 2,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 1.0,
+        "treatMissingData": "missing",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ]
+    },
+    {
+        "name": "twinly-prod-nat-a-port-allocation-error",
+        "description": "NAT 게이트웨이가 소스 포트를 할당하지 못함. 같은 목적지로의 동시 연결이 한계(약 55,000)에 도달했다는 뜻.\n\n프라이빗 서브넷의 인스턴스는 외부 호출을 전부 이 NAT 를 거친다. 이 상태에서는 ECR 이미지 풀, SES 발송, Bedrock 호출, S3 업로드가 산발적으로 실패한다. 앱 로그에는 연결 타임아웃으로만 보여 원인을 찾기 어려우므로, 이 알람이 원인 지목의 출발점이 된다.\n\n조치:\n1. CloudWatch → NAT 게이트웨이 ActiveConnectionCount 추이 확인\n2. 특정 목적지로 연결이 몰리는지 확인 — 커넥션을 재사용하지 않고 매번 새로 여는 클라이언트가 흔한 원인\n3. 외부 API 클라이언트의 keep-alive 및 커넥션 풀 설정 점검\n4. 순간 폭증이면 배치나 부하테스트가 원인인지 확인\n5. 구조적으로 부족하면 S3·ECR 은 VPC 엔드포인트로 우회시켜 NAT 를 타지 않게 한다",
+        "namespace": "AWS/NATGateway",
+        "metric": "ErrorPortAllocation",
+        "statistic": "Sum",
+        "period": 300,
+        "evaluationPeriods": 1,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 1.0,
+        "treatMissingData": "notBreaching",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ]
+    },
+    {
+        "name": "twinly-prod-nat-c-port-allocation-error",
+        "description": "NAT 게이트웨이가 소스 포트를 할당하지 못함. 같은 목적지로의 동시 연결이 한계(약 55,000)에 도달했다는 뜻.\n\n프라이빗 서브넷의 인스턴스는 외부 호출을 전부 이 NAT 를 거친다. 이 상태에서는 ECR 이미지 풀, SES 발송, Bedrock 호출, S3 업로드가 산발적으로 실패한다. 앱 로그에는 연결 타임아웃으로만 보여 원인을 찾기 어려우므로, 이 알람이 원인 지목의 출발점이 된다.\n\n조치:\n1. CloudWatch → NAT 게이트웨이 ActiveConnectionCount 추이 확인\n2. 특정 목적지로 연결이 몰리는지 확인 — 커넥션을 재사용하지 않고 매번 새로 여는 클라이언트가 흔한 원인\n3. 외부 API 클라이언트의 keep-alive 및 커넥션 풀 설정 점검\n4. 순간 폭증이면 배치나 부하테스트가 원인인지 확인\n5. 구조적으로 부족하면 S3·ECR 은 VPC 엔드포인트로 우회시켜 NAT 를 타지 않게 한다",
+        "namespace": "AWS/NATGateway",
+        "metric": "ErrorPortAllocation",
+        "statistic": "Sum",
+        "period": 300,
+        "evaluationPeriods": 1,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 1.0,
+        "treatMissingData": "notBreaching",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ]
+    },
+    {
+        "name": "twinly-prod-redis-001-engine-cpu",
+        "description": "Redis 엔진 CPU 사용률 80% 초과. Redis 는 명령 실행이 단일 스레드라, 엔진 CPU 가 차면 노드 전체 응답이 함께 느려진다.\n\n이 Redis 는 웹소켓 릴레이 pub/sub 에 쓰인다(WebSocketRelayPublisher). 클라이언트 타임아웃이 1초로 짧아서, 엔진이 밀리면 곧바로 RELAY_PUBLISH_FAILED / RELAY_RECEIVE_FAILED 로 이어진다. 즉 이 알람은 ws-relay-failure 알람의 선행 신호다.\n\n조치:\n1. 001 은 복제 그룹 twinly-prod-redis 의 노드다. 콘솔에서 현재 프라이머리/리플리카 역할을 먼저 확인\n2. CurrConnections, NewConnections 급증 여부 확인 — 연결을 재사용하지 않는 코드가 원인일 수 있다\n3. SlowLog 로 오래 걸리는 명령 확인 (KEYS, SMEMBERS 등 O(N) 명령 주의)\n4. cache.t4g.micro 는 버스터블이므로 지속 부하 시 CPU 크레딧 소진을 의심\n5. 트래픽 증가가 원인이면 노드 타입 상향 검토",
+        "namespace": "AWS/ElastiCache",
+        "metric": "EngineCPUUtilization",
+        "statistic": "Average",
+        "period": 300,
+        "evaluationPeriods": 2,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 80.0,
+        "treatMissingData": "missing",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ]
+    },
+    {
+        "name": "twinly-prod-redis-001-memory-usage",
+        "description": "Redis 데이터베이스 메모리 사용률 80% 초과. 더 차면 maxmemory-policy 에 따라 키가 축출되거나 쓰기가 거부된다.\n\n이 Redis 는 웹소켓 릴레이 pub/sub 전용이라 정상 상태에서는 메모리가 거의 늘지 않는다. 사용률이 오른다는 것은 만료되지 않고 남는 키가 있다는 신호이므로, 증설보다 원인 확인이 먼저다.\n\n조치:\n1. 001 은 복제 그룹 twinly-prod-redis 의 노드다. BytesUsedForCache 추이부터 확인\n2. Evictions 가 0 이 아니면 이미 축출이 시작된 상태\n3. INFO keyspace 와 redis-cli --bigkeys 로 어떤 키가 쌓이는지 확인\n4. TTL 없이 저장되는 경로가 코드에 있는지 점검\n5. 정상 사용량 자체가 늘어난 것이면 cache.t4g.micro 는 가용 메모리가 작으므로 노드 타입 상향 검토",
+        "namespace": "AWS/ElastiCache",
+        "metric": "DatabaseMemoryUsagePercentage",
+        "statistic": "Average",
+        "period": 300,
+        "evaluationPeriods": 2,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 80.0,
+        "treatMissingData": "missing",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ]
+    },
+    {
+        "name": "twinly-prod-redis-002-engine-cpu",
+        "description": "Redis 엔진 CPU 사용률 80% 초과. Redis 는 명령 실행이 단일 스레드라, 엔진 CPU 가 차면 노드 전체 응답이 함께 느려진다.\n\n이 Redis 는 웹소켓 릴레이 pub/sub 에 쓰인다(WebSocketRelayPublisher). 클라이언트 타임아웃이 1초로 짧아서, 엔진이 밀리면 곧바로 RELAY_PUBLISH_FAILED / RELAY_RECEIVE_FAILED 로 이어진다. 즉 이 알람은 ws-relay-failure 알람의 선행 신호다.\n\n조치:\n1. 002 는 복제 그룹 twinly-prod-redis 의 노드다. 콘솔에서 현재 프라이머리/리플리카 역할을 먼저 확인\n2. CurrConnections, NewConnections 급증 여부 확인 — 연결을 재사용하지 않는 코드가 원인일 수 있다\n3. SlowLog 로 오래 걸리는 명령 확인 (KEYS, SMEMBERS 등 O(N) 명령 주의)\n4. cache.t4g.micro 는 버스터블이므로 지속 부하 시 CPU 크레딧 소진을 의심\n5. 트래픽 증가가 원인이면 노드 타입 상향 검토",
+        "namespace": "AWS/ElastiCache",
+        "metric": "EngineCPUUtilization",
+        "statistic": "Average",
+        "period": 300,
+        "evaluationPeriods": 2,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 80.0,
+        "treatMissingData": "missing",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ]
+    },
+    {
+        "name": "twinly-prod-redis-002-memory-usage",
+        "description": "Redis 데이터베이스 메모리 사용률 80% 초과. 더 차면 maxmemory-policy 에 따라 키가 축출되거나 쓰기가 거부된다.\n\n이 Redis 는 웹소켓 릴레이 pub/sub 전용이라 정상 상태에서는 메모리가 거의 늘지 않는다. 사용률이 오른다는 것은 만료되지 않고 남는 키가 있다는 신호이므로, 증설보다 원인 확인이 먼저다.\n\n조치:\n1. 002 는 복제 그룹 twinly-prod-redis 의 노드다. BytesUsedForCache 추이부터 확인\n2. Evictions 가 0 이 아니면 이미 축출이 시작된 상태\n3. INFO keyspace 와 redis-cli --bigkeys 로 어떤 키가 쌓이는지 확인\n4. TTL 없이 저장되는 경로가 코드에 있는지 점검\n5. 정상 사용량 자체가 늘어난 것이면 cache.t4g.micro 는 가용 메모리가 작으므로 노드 타입 상향 검토",
+        "namespace": "AWS/ElastiCache",
+        "metric": "DatabaseMemoryUsagePercentage",
+        "statistic": "Average",
+        "period": 300,
+        "evaluationPeriods": 2,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 80.0,
+        "treatMissingData": "missing",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ]
+    }
+]
