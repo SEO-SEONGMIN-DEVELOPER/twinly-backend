@@ -1,5 +1,7 @@
 package com.nidus.twinly.common.websocket.relay;
 
+import com.nidus.twinly.common.logging.ErrorLog;
+import com.nidus.twinly.common.websocket.domain.WebSocketErrorCode;
 import com.nidus.twinly.common.websocket.sender.WebSocketLocalSender;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,7 +33,8 @@ public class WebSocketRelayDispatcher implements MessageListener {
 
             webSocketLocalSender.sendToAll(relayMessage.destination(), relayMessage.body());
         } catch (RuntimeException e) {
-            log.warn("웹소켓 이벤트 수신 처리에 실패했습니다.", e);
+            ErrorLog.warn(log, WebSocketErrorCode.RELAY_RECEIVE_FAILED.name(), null, e)
+                    .log("웹소켓 이벤트 수신 처리에 실패했습니다");
         }
     }
 }
