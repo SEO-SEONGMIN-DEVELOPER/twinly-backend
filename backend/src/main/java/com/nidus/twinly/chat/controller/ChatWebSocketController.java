@@ -6,6 +6,7 @@ import com.nidus.twinly.chat.dto.result.ChatReadMessagesResult;
 import com.nidus.twinly.chat.dto.result.ChatSendMessageResult;
 import com.nidus.twinly.chat.service.ChatService;
 import com.nidus.twinly.common.web.BusinessException;
+import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.common.websocket.domain.WebSocketBodyKind;
 import com.nidus.twinly.common.websocket.domain.WebSocketBodyType;
 import com.nidus.twinly.chat.dto.websocket.ChatMessageCommittedPayload;
@@ -75,7 +76,7 @@ public class ChatWebSocketController {
         if (body.v() == null || body.v() != 1
                 || !WebSocketBodyKind.COMMAND.equals(body.kind())
                 || body.type() != expectedType) {
-            throw new IllegalArgumentException("허용되지 않은 COMMAND Body입니다.");
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
         }
     }
 }

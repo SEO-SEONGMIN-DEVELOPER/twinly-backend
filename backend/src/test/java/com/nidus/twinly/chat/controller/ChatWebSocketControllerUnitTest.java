@@ -135,7 +135,7 @@ class ChatWebSocketControllerUnitTest {
     }
 
     @Test
-    @DisplayName("봉투의 type이 매핑과 다르면 IllegalArgumentException을 던지고 서비스·응답을 하지 않는다")
+    @DisplayName("봉투의 type이 매핑과 다르면 INVALID_REQUEST BusinessException을 던지고 서비스·응답을 하지 않는다")
     void sendMessage_invalidEnvelope_throwsAndDoesNotDelegate() {
         // given: /chat/messages 매핑인데 type을 CHAT_READ_ADVANCE로 잘못 넣은 봉투
         Principal principal = new WebSocketUserPrincipal(1L);
@@ -145,7 +145,9 @@ class ChatWebSocketControllerUnitTest {
 
         // when & then: 봉투 검증 실패로 예외 발생 + 서비스·응답 모두 호출되지 않음
         assertThatThrownBy(() -> controller.sendMessage(principal, "session-A", body))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_REQUEST);
 
         then(chatService).shouldHaveNoInteractions();
         then(commandResponder).shouldHaveNoInteractions();

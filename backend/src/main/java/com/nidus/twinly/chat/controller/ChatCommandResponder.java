@@ -1,6 +1,6 @@
 package com.nidus.twinly.chat.controller;
 
-import com.nidus.twinly.chat.domain.CommandErrorCode;
+import com.nidus.twinly.common.websocket.domain.WebSocketErrorCode;
 import com.nidus.twinly.chat.dto.websocket.ChatMessageCommittedPayload;
 import com.nidus.twinly.chat.dto.websocket.ChatMessageRejectedPayload;
 import com.nidus.twinly.chat.dto.websocket.ChatReadCommittedPayload;
@@ -109,20 +109,6 @@ public class ChatCommandResponder {
     }
 
     private CommandError toCommandError(BusinessException e) {
-        CommandErrorCode code = switch (e.getErrorCode()) {
-            case INVALID_REQUEST -> CommandErrorCode.INVALID_REQUEST;
-            case ROOM_NOT_FOUND -> CommandErrorCode.ROOM_NOT_FOUND;
-            case MATCH_NOT_FOUND -> CommandErrorCode.MATCH_NOT_FOUND;
-            case CHAT_PARTICIPATION_NOT_FOUND -> CommandErrorCode.PARTICIPATION_NOT_FOUND;
-            case NOT_MATCH_PARTICIPANT -> CommandErrorCode.NOT_A_PARTICIPANT;
-            case NOT_ACTIVE_ROOM_PARTICIPANT -> CommandErrorCode.NOT_ACTIVE_PARTICIPANT;
-            case ROOM_CLOSED -> CommandErrorCode.ROOM_CLOSED;
-            case CLIENT_MSG_ID_CONFLICT -> CommandErrorCode.CLIENT_MSG_ID_CONFLICT;
-            case MESSAGE_LENGTH_EXCEEDED -> CommandErrorCode.TEXT_SIZE_LIMIT_EXCEEDED;
-            case MESSAGE_NOT_IN_ROOM -> CommandErrorCode.INVALID_MESSAGE_CURSOR;
-            default -> CommandErrorCode.INTERNAL;
-        };
-
-        return new CommandError(code, e.getMessage(), false);
+        return new CommandError(WebSocketErrorCode.from(e.getErrorCode()), e.getMessage(), false);
     }
 }

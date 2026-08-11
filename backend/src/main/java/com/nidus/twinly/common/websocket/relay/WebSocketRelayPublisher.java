@@ -1,5 +1,7 @@
 package com.nidus.twinly.common.websocket.relay;
 
+import com.nidus.twinly.common.logging.ErrorLog;
+import com.nidus.twinly.common.websocket.domain.WebSocketErrorCode;
 import com.nidus.twinly.common.websocket.dto.WebSocketResponseBody;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,6 +14,9 @@ import org.springframework.stereotype.Component;
 public class WebSocketRelayPublisher {
 
     public static final String CHANNEL = "ws:relay";
+
+    private static final String BODY_KIND = "bodyKind";
+    private static final String BODY_TYPE = "bodyType";
 
     private final RedisTemplate<String, WebSocketRelayMessage> webSocketRelayRedisTemplate;
 
@@ -27,8 +32,10 @@ public class WebSocketRelayPublisher {
         try {
             webSocketRelayRedisTemplate.convertAndSend(CHANNEL, message);
         } catch (RuntimeException e) {
-            log.error("웹소켓 메시지 전파에 실패했습니다. kind={}, type={}",
-                    message.body().kind(), message.body().type(), e);
+            ErrorLog.error(log, WebSocketErrorCode.RELAY_PUBLISH_FAILED.name(), null, e)
+                    .addKeyValue(BODY_KIND, message.body().kind())
+                    .addKeyValue(BODY_TYPE, message.body().type())
+                    .log("웹소켓 메시지 전파에 실패했습니다");
         }
     }
 }
