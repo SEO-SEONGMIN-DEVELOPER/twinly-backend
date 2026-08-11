@@ -9,8 +9,7 @@ logging:
       console: ecs
   level:
     root: INFO
-    com.nidus.twinly: DEBUG
-    org.hibernate.SQL: DEBUG
+    com.nidus.twinly: INFO
 
 springdoc:
   api-docs:
