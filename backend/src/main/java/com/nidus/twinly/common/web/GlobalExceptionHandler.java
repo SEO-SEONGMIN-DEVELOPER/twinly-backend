@@ -1,9 +1,10 @@
 package com.nidus.twinly.common.web;
 
 import com.nidus.twinly.anon.dto.snapshot.AnonSessionSnapshot;
+import com.nidus.twinly.common.logging.Actor;
+import com.nidus.twinly.common.logging.ErrorLog;
 import com.nidus.twinly.user.dto.header.UserInfo;
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.spi.LoggingEventBuilder;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -31,7 +32,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleBusinessException(BusinessException e) {
         ErrorCode errorCode = e.getErrorCode();
         if (errorCode.getStatus().is5xxServerError()) {
-            errorLog(errorCode, e).log("[5xx Error]");
+            errorLog("[5xx Error]", errorCode, e);
         }
         return ResponseEntity
                 .status(errorCode.getStatus())
@@ -90,7 +91,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleResponseStatusException(ResponseStatusException e) {
         ErrorCode errorCode = resolveErrorCode(e.getStatusCode());
         if (e.getStatusCode().is5xxServerError()) {
-            errorLog(errorCode, e).log("[5xx Error]");
+            errorLog("[5xx Error]", errorCode, e);
         }
         return ResponseEntity
                 .status(e.getStatusCode())
@@ -111,17 +112,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ErrorResponse handleUnexpected(Exception e) {
-        errorLog(ErrorCode.INTERNAL_ERROR, e).log("[500 Error]");
+        errorLog("[500 Error]", ErrorCode.INTERNAL_ERROR, e);
         return ErrorResponse.of(ErrorCode.INTERNAL_ERROR);
     }
 
-    private LoggingEventBuilder errorLog(ErrorCode errorCode, Throwable e) {
-        LoggingEventBuilder builder = log.atError()
-                .addKeyValue("errorCode", errorCode.name())
-                .setCause(e);
-
-        String actor = currentActor();
-        return actor == null ? builder : builder.addKeyValue("actor", actor);
+    private void errorLog(String message, ErrorCode errorCode, Throwable e) {
+        ErrorLog.error(log, errorCode.name(), currentActor(), e).log(message);
     }
 
     private String currentActor() {
@@ -131,8 +127,8 @@ public class GlobalExceptionHandler {
         }
 
         return switch (authentication.getPrincipal()) {
-            case UserInfo userInfo -> "user:" + userInfo.id();
-            case AnonSessionSnapshot snapshot -> "anon:" + snapshot.id();
+            case UserInfo userInfo -> Actor.user(userInfo.id());
+            case AnonSessionSnapshot snapshot -> Actor.anonSession(snapshot.id());
             case String principal -> principal;
             default -> null;
         };
