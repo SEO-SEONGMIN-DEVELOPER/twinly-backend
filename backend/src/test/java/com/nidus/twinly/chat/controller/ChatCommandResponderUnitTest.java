@@ -1,6 +1,6 @@
 package com.nidus.twinly.chat.controller;
 
-import com.nidus.twinly.chat.domain.CommandErrorCode;
+import com.nidus.twinly.common.websocket.domain.WebSocketErrorCode;
 import com.nidus.twinly.chat.dto.websocket.ChatMessageCommittedPayload;
 import com.nidus.twinly.chat.dto.websocket.ChatMessageRejectedPayload;
 import com.nidus.twinly.chat.dto.websocket.ChatReadCommittedPayload;
@@ -95,7 +95,7 @@ class ChatCommandResponderUnitTest {
         ChatMessageRejectedPayload payload = (ChatMessageRejectedPayload) sent.payload();
         assertThat(payload.roomId()).isEqualTo(10L);
         assertThat(payload.clientMsgId()).isEqualTo("cmid-1");
-        assertThat(payload.error().code()).isEqualTo(CommandErrorCode.ROOM_NOT_FOUND);
+        assertThat(payload.error().code()).isEqualTo(WebSocketErrorCode.ROOM_NOT_FOUND);
         assertThat(payload.error().message()).isEqualTo(ErrorCode.ROOM_NOT_FOUND.getDefaultMessage());
         assertThat(payload.error().retryable()).isFalse();
     }
@@ -116,7 +116,7 @@ class ChatCommandResponderUnitTest {
         ChatReadRejectedPayload payload = (ChatReadRejectedPayload) sent.payload();
         assertThat(payload.roomId()).isEqualTo(10L);
         assertThat(payload.lastMsgId()).isEqualTo(55L);
-        assertThat(payload.error().code()).isEqualTo(CommandErrorCode.NOT_A_PARTICIPANT);
+        assertThat(payload.error().code()).isEqualTo(WebSocketErrorCode.NOT_A_PARTICIPANT);
     }
 
     @ParameterizedTest(name = "{0} → {1}")
@@ -132,12 +132,12 @@ class ChatCommandResponderUnitTest {
             "MESSAGE_NOT_IN_ROOM,          INVALID_MESSAGE_CURSOR",
             "INTERNAL_ERROR,               INTERNAL"                   // 매핑되지 않은 코드
     })
-    @DisplayName("메시지 거절은 status가 아니라 ErrorCode 자체로 CommandErrorCode를 정한다")
-    void messageRejected_mapsErrorCodeToCommandErrorCode(ErrorCode errorCode, CommandErrorCode expected) {
+    @DisplayName("메시지 거절은 status가 아니라 ErrorCode 자체로 WebSocketErrorCode를 정한다")
+    void messageRejected_mapsErrorCodeToWebSocketErrorCode(ErrorCode errorCode, WebSocketErrorCode expected) {
         // when: 각 도메인 예외로 거절 응답 전송
         responder.messageRejected(1L, "session-A", "command-1", 10L, "cmid-1", new BusinessException(errorCode));
 
-        // then: 같은 status를 공유하는 코드들도 서로 다른 CommandErrorCode로 갈린다
+        // then: 같은 status를 공유하는 코드들도 서로 다른 WebSocketErrorCode로 갈린다
         ChatMessageRejectedPayload payload = (ChatMessageRejectedPayload) captureSentTo("1").payload();
         assertThat(payload.error().code()).isEqualTo(expected);
     }
@@ -153,7 +153,7 @@ class ChatCommandResponderUnitTest {
 
         // then
         ChatReadRejectedPayload payload = (ChatReadRejectedPayload) captureSentTo("1").payload();
-        assertThat(payload.error().code()).isEqualTo(CommandErrorCode.INVALID_MESSAGE_CURSOR);
+        assertThat(payload.error().code()).isEqualTo(WebSocketErrorCode.INVALID_MESSAGE_CURSOR);
     }
 
     @Test
