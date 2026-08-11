@@ -105,6 +105,9 @@ chat:
 
 server:
   port: 8080
+  tomcat:
+    mbeanregistry:
+      enabled: true
 
 management:
   server:
