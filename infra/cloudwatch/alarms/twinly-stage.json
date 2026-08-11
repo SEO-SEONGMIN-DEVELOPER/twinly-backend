@@ -193,5 +193,110 @@
         "alarmActions": [
             "arn:aws:sns:ap-northeast-2:968177690717:twinly-stage-alerts"
         ]
+    },
+    {
+        "name": "twinly-stage-nat-a-port-allocation-error",
+        "description": "NAT 게이트웨이가 소스 포트를 할당하지 못함. 같은 목적지로의 동시 연결이 한계(약 55,000)에 도달했다는 뜻.\n\nstage 는 NAT 게이트웨이가 ap-northeast-2a 에 하나뿐이고, 2a·2c 양쪽 프라이빗 서브넷의 외부 호출이 전부 이 하나를 거친다. NAT 가 AZ 별로 나뉜 prod 보다 포트 고갈에 이르기 쉽다.\n\n이 상태에서는 ECR 이미지 풀, SES 발송, Bedrock 호출, S3 업로드가 산발적으로 실패한다. 앱 로그에는 연결 타임아웃으로만 보여 원인을 찾기 어려우므로, 이 알람이 원인 지목의 출발점이 된다.\n\n조치:\n1. CloudWatch → NAT 게이트웨이 ActiveConnectionCount 추이 확인\n2. 부하테스트 중이라면 부하 생성기나 대상 서버가 외부로 나가는 트래픽을 만들고 있는지 확인\n3. 커넥션을 재사용하지 않고 매번 새로 여는 클라이언트가 흔한 원인\n4. 외부 API 클라이언트의 keep-alive 및 커넥션 풀 설정 점검\n5. 구조적으로 부족하면 S3·ECR 은 VPC 엔드포인트로 우회시켜 NAT 를 타지 않게 한다",
+        "namespace": "AWS/NATGateway",
+        "metric": "ErrorPortAllocation",
+        "statistic": "Sum",
+        "period": 300,
+        "evaluationPeriods": 1,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 1.0,
+        "treatMissingData": "notBreaching",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-stage-alerts"
+        ]
+    },
+    {
+        "name": "twinly-stage-rds-connections",
+        "description": "DB 커넥션 수 400 이상. max_connections 는 {DBInstanceClassMemory/12582880} 로 db.m7g.large 기준 약 682 이므로 60% 수준이다.\n\n평시 커넥션은 20 안팎이다(앱 2대 × HikariCP 풀). 400 까지 올랐다면 정상적인 트래픽 증가가 아니라 커넥션 누수나 풀 설정 오류를 의심해야 한다. max_connections 에 도달하면 새 연결이 거부되어 앱 전체가 멈춘다.\n\n조치:\n1. SHOW PROCESSLIST 로 어떤 상태의 커넥션이 쌓였는지 확인 (Sleep 이 많으면 누수 의심)\n2. 앱의 HikariCP maximum-pool-size 와 인스턴스 수를 곱해 이론상 최대치와 비교\n3. 트랜잭션이 길게 열려 있는지 확인\n4. 부하테스트 중이라면 풀 크기를 의도적으로 올렸는지 확인",
+        "namespace": "AWS/RDS",
+        "metric": "DatabaseConnections",
+        "statistic": "Maximum",
+        "period": 300,
+        "evaluationPeriods": 2,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 400.0,
+        "treatMissingData": "missing",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-stage-alerts"
+        ]
+    },
+    {
+        "name": "twinly-stage-rds-cpu",
+        "description": "DB 인스턴스 CPU 사용률 80% 초과. db.m7g.large 는 버스터블이 아니라 고정 성능이므로, 크레딧 소진이 아니라 실제로 처리량 한계에 접근했다는 뜻이다.\n\n앱은 readiness 에 DB 상태를 포함하지 않으므로, DB 가 느려져도 ALB 는 계속 트래픽을 보낸다. 즉 이 알람이 울릴 때 healthy-hosts 알람은 조용하다.\n\n조치:\n1. Performance Insights 에서 상위 대기 이벤트와 상위 SQL 확인 (보존 7일)\n2. 특정 쿼리가 튀는지, 전반적으로 오른 것인지 구분\n3. 특정 쿼리면 실행계획과 인덱스 점검\n4. 전반적이면 커넥션 수·트래픽 증가 여부 확인\n5. 부하테스트 중이라면 예상된 상황인지 먼저 확인",
+        "namespace": "AWS/RDS",
+        "metric": "CPUUtilization",
+        "statistic": "Average",
+        "period": 300,
+        "evaluationPeriods": 2,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 80.0,
+        "treatMissingData": "missing",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-stage-alerts"
+        ]
+    },
+    {
+        "name": "twinly-stage-rds-free-storage",
+        "description": "사용 가능 스토리지 4GiB 미만. 할당량은 20GiB 이며 최대 100GiB 까지 자동 확장된다.\n\n자동 확장이 있으므로 즉시 장애로 이어지지는 않는다. 다만 확장은 무료가 아니고, 확장이 반복된다면 데이터가 예상보다 빠르게 늘고 있다는 신호다. 스토리지가 실제로 차면 DB 는 읽기 전용으로 전환되어 모든 쓰기가 실패한다.\n\n조치:\n1. 어느 테이블이 커졌는지 확인 (information_schema.tables)\n2. 부하테스트나 배치가 만든 데이터라면 정리\n3. binlog·슬로우로그 보존 기간 확인\n4. 정상 증가라면 MaxAllocatedStorage 상향 검토",
+        "namespace": "AWS/RDS",
+        "metric": "FreeStorageSpace",
+        "statistic": "Average",
+        "period": 300,
+        "evaluationPeriods": 2,
+        "comparisonOperator": "LessThanThreshold",
+        "threshold": 4294967296.0,
+        "treatMissingData": "missing",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-stage-alerts"
+        ]
+    },
+    {
+        "name": "twinly-stage-rds-freeable-memory",
+        "description": "사용 가능 메모리 800MiB 미만. db.m7g.large 는 8GiB 이므로 10% 아래로 떨어진 상태다.\n\n더 줄면 InnoDB 버퍼 풀이 밀려나 디스크 읽기가 늘고, 그때부터 지연이 급격히 커진다. 메모리 부족은 CPU 처럼 완만하게 나빠지지 않고 임계를 넘는 순간 성능이 무너진다.\n\n조치:\n1. Enhanced Monitoring 에서 실제 메모리 분포 확인\n2. DatabaseConnections 급증이 동반됐는지 확인 — 커넥션마다 버퍼를 쓴다\n3. Performance Insights 로 대량 정렬·임시 테이블을 쓰는 쿼리 확인\n4. 지속되면 인스턴스 클래스 상향 검토",
+        "namespace": "AWS/RDS",
+        "metric": "FreeableMemory",
+        "statistic": "Average",
+        "period": 300,
+        "evaluationPeriods": 2,
+        "comparisonOperator": "LessThanThreshold",
+        "threshold": 838860800.0,
+        "treatMissingData": "missing",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-stage-alerts"
+        ]
+    },
+    {
+        "name": "twinly-stage-redis-a-engine-cpu",
+        "description": "Redis 엔진 CPU 사용률 80% 초과. Redis 는 명령 실행이 단일 스레드라, 엔진 CPU 가 차면 노드 전체 응답이 함께 느려진다.\n\n이 Redis 는 웹소켓 릴레이 pub/sub 에 쓰인다(WebSocketRelayPublisher). 클라이언트 타임아웃이 1초로 짧아서, 엔진이 밀리면 곧바로 RELAY_PUBLISH_FAILED / RELAY_RECEIVE_FAILED 로 이어진다. 즉 이 알람은 ws-relay-failure 알람의 선행 신호다.\n\nstage 는 단일 노드이고 자동 failover 가 없다. prod 와 달리 대체할 노드가 없으므로 영향이 더 직접적이다.\n\n조치:\n1. CurrConnections, NewConnections 급증 여부 확인 — 연결을 재사용하지 않는 코드가 원인일 수 있다\n2. SlowLog 로 오래 걸리는 명령 확인 (KEYS, SMEMBERS 등 O(N) 명령 주의)\n3. cache.t4g.micro 는 버스터블이므로 지속 부하 시 CPU 크레딧 소진을 의심\n4. 부하테스트 중이라면 웹소켓 시나리오가 원인인지 먼저 확인\n5. 트래픽 증가가 원인이면 노드 타입 상향 검토",
+        "namespace": "AWS/ElastiCache",
+        "metric": "EngineCPUUtilization",
+        "statistic": "Average",
+        "period": 300,
+        "evaluationPeriods": 2,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 80.0,
+        "treatMissingData": "missing",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-stage-alerts"
+        ]
+    },
+    {
+        "name": "twinly-stage-redis-a-memory-usage",
+        "description": "Redis 데이터베이스 메모리 사용률 80% 초과. 더 차면 maxmemory-policy 에 따라 키가 축출되거나 쓰기가 거부된다.\n\n이 Redis 는 웹소켓 릴레이 pub/sub 전용이라 정상 상태에서는 메모리가 거의 늘지 않는다. 사용률이 오른다는 것은 만료되지 않고 남는 키가 있다는 신호이므로, 증설보다 원인 확인이 먼저다.\n\nstage 는 단일 노드다. 축출이 시작되면 대체 노드 없이 곧바로 기능 영향으로 이어진다.\n\n조치:\n1. BytesUsedForCache 추이부터 확인\n2. Evictions 가 0 이 아니면 이미 축출이 시작된 상태\n3. INFO keyspace 와 redis-cli --bigkeys 로 어떤 키가 쌓이는지 확인\n4. TTL 없이 저장되는 경로가 코드에 있는지 점검\n5. 정상 사용량 자체가 늘어난 것이면 cache.t4g.micro 는 가용 메모리가 작으므로 노드 타입 상향 검토",
+        "namespace": "AWS/ElastiCache",
+        "metric": "DatabaseMemoryUsagePercentage",
+        "statistic": "Average",
+        "period": 300,
+        "evaluationPeriods": 2,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 80.0,
+        "treatMissingData": "missing",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-stage-alerts"
+        ]
     }
 ]
