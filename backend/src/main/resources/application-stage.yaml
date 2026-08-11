@@ -8,6 +8,7 @@ logging:
     format:
       console: ecs
   level:
+    root: INFO
     com.nidus.twinly: DEBUG
     org.hibernate.SQL: DEBUG
 
