@@ -1,0 +1,74 @@
+[
+    {
+        "name": "twinly-stage-api-disk-full",
+        "pattern": "\"No space left on device\"",
+        "metric": "DiskFullErrorCount",
+        "namespace": "twinly/stage/api",
+        "value": "1",
+        "defaultValue": 0.0
+    },
+    {
+        "name": "twinly-stage-api-oom",
+        "pattern": "OutOfMemoryError",
+        "metric": "OomErrorCount",
+        "namespace": "twinly/stage/api",
+        "value": "1",
+        "defaultValue": 0.0
+    },
+    {
+        "name": "twinly-stage-api-stack-overflow",
+        "pattern": "StackOverflowError",
+        "metric": "StackOverflowCount",
+        "namespace": "twinly/stage/api",
+        "value": "1",
+        "defaultValue": 0.0
+    },
+    {
+        "name": "twinly-stage-api-startup-failure",
+        "pattern": "\"APPLICATION FAILED TO START\"",
+        "metric": "StartupFailureCount",
+        "namespace": "twinly/stage/api",
+        "value": "1",
+        "defaultValue": 0.0
+    },
+    {
+        "name": "twinly-stage-api-ws-frame-rejected",
+        "pattern": "{ $.errorCode = \"FRAME_REJECTED\" }",
+        "metric": "WsFrameRejectedCount",
+        "namespace": "twinly/stage/api",
+        "value": "1",
+        "defaultValue": 0.0
+    },
+    {
+        "name": "twinly-stage-api-ws-handshake-rejected",
+        "pattern": "{ $.connectionType = \"*\" }",
+        "metric": "WsHandshakeRejectedCount",
+        "namespace": "twinly/stage/api",
+        "value": "1",
+        "defaultValue": 0.0
+    },
+    {
+        "name": "twinly-stage-api-ws-internal-error",
+        "pattern": "{ $.errorCode = \"INTERNAL\" }",
+        "metric": "WsInternalErrorCount",
+        "namespace": "twinly/stage/api",
+        "value": "1",
+        "defaultValue": 0.0
+    },
+    {
+        "name": "twinly-stage-api-ws-relay-failure",
+        "pattern": "{ $.errorCode = \"RELAY_PUBLISH_FAILED\" || $.errorCode = \"RELAY_RECEIVE_FAILED\" }",
+        "metric": "WsRelayFailureCount",
+        "namespace": "twinly/stage/api",
+        "value": "1",
+        "defaultValue": 0.0
+    },
+    {
+        "name": "twinly-stage-api-ws-send-failed",
+        "pattern": "{ $.errorCode = \"SEND_FAILED\" }",
+        "metric": "WsSendFailedCount",
+        "namespace": "twinly/stage/api",
+        "value": "1",
+        "defaultValue": 0.0
+    }
+]
