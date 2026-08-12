@@ -13,19 +13,27 @@ LOADGEN=twinly-stage-loadgen
 TARGET=twinly-stage-api-c
 TARGET_IP=10.0.23.25
 
-STAMP=$(date +%Y%m%d-%H%M%S)
-OUT="results/${SCENARIO%.js}-${MODE}-${STAMP}"
+# 같은 시나리오·모드 안에서 몇 번째 실행인지로 폴더를 나눈다.
+# 실행 시각은 start-utc.txt 에 남으므로 폴더명에 중복해 넣지 않는다.
+PREFIX="${SCENARIO%.js}-${MODE}"
+# 첫 실행이면 매칭되는 폴더가 없어 ls 가 실패한다. pipefail 때문에 스크립트가
+# 통째로 죽으므로 실패를 흡수한다.
+LAST=$( { ls -d "results/$PREFIX-"[0-9]* 2>/dev/null || true; } | sed -E "s|.*/$PREFIX-([0-9]+)$|\1|" | sort -n | tail -1)
+RUN=$(( ${LAST:-0} + 1 ))
+OUT="results/$PREFIX-$RUN"
 mkdir -p "$OUT"
 
-echo "결과 폴더: $OUT"
+echo "결과 폴더: $OUT (${PREFIX} ${RUN}회차)"
 
 cleanup() {
   echo "수집기 정리 중..."
   [[ -n "${SCRAPE_PID:-}" ]] && kill "$SCRAPE_PID" 2>/dev/null || true
   [[ -n "${MPSTAT_PID:-}" ]] && kill "$MPSTAT_PID" 2>/dev/null || true
   [[ -n "${GENCPU_PID:-}" ]] && kill "$GENCPU_PID" 2>/dev/null || true
+  [[ -n "${MEM_PID:-}" ]] && kill "$MEM_PID" 2>/dev/null || true
+  [[ -n "${DISK_PID:-}" ]] && kill "$DISK_PID" 2>/dev/null || true
   ssh "$LOADGEN" 'pkill -f scrape.py' 2>/dev/null || true
-  ssh "$TARGET" 'pkill -f "mpstat -P ALL"' 2>/dev/null || true
+  ssh "$TARGET" 'pkill -f "mpstat -P ALL"; pkill -f "loadtest/mem.sh"; pkill -f "loadtest/disk.sh"; pkill -f "iostat -x"' 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -44,9 +52,17 @@ MPSTAT_PID=$!
 ssh "$LOADGEN" 'mpstat -P ALL 1' > "$OUT/loadgen-cpu.txt" 2>&1 &
 GENCPU_PID=$!
 
+# 4) 대상 컨테이너·호스트 메모리 — 힙 지표만으로는 mem_limit 초과를 못 본다
+ssh "$TARGET" 'bash ~/loadtest/mem.sh 5' > "$OUT/target-mem.csv" 2>&1 &
+MEM_PID=$!
+
+# 5) 대상 디스크 I/O — %iowait 은 CPU 관점이라 장치 포화를 놓칠 수 있다
+ssh "$TARGET" 'bash ~/loadtest/disk.sh 1' > "$OUT/target-disk.csv" 2>&1 &
+DISK_PID=$!
+
 sleep 3   # 수집기가 첫 샘플을 남길 시간
 
-# 4) 쿼리 다이제스트 초기화 — 부하 구간만 정확히 잘라내기 위해
+# 6) 쿼리 다이제스트 초기화 — 부하 구간만 정확히 잘라내기 위해
 #    Performance Insights 가 SCP 로 막혀 있어 performance_schema 로 대신한다.
 ssh "$TARGET" 'bash ~/loadtest/pfs.sh reset' | sed 's/^/  /'
 
@@ -77,7 +93,25 @@ cleanup
 trap - EXIT
 
 scp -q "$LOADGEN:/tmp/summary.json" "$OUT/summary.json" 2>/dev/null || true
-scp -q "$LOADGEN:/tmp/k6-raw.json"  "$OUT/k6-raw.json"  2>/dev/null || true
+
+# 시계열 집계는 원시 파일이 있는 생성기에서 돌린다.
+# 무릎이 어느 RPS 인지는 summary.json 으로는 알 수 없고 이 표에서만 나온다.
+TAG="${SCENARIO%%-*}"
+ssh "$LOADGEN" "python3 ~/loadtest/agg.py $TAG" > "$OUT/timeline.txt" 2>&1 || true
+
+# 원시 파일은 200MB 대라 그대로 끌면 SSM 터널에서 끊긴다. 압축하면 30분의 1 이 된다.
+ssh "$LOADGEN" 'gzip -6 -c /tmp/k6-raw.json > /tmp/k6-raw.json.gz' 2>/dev/null || true
+scp -q "$LOADGEN:/tmp/k6-raw.json.gz" "$OUT/k6-raw.json.gz" 2>/dev/null || true
+
+# 전송이 온전한지 확인한다. 잘린 파일을 온전한 것으로 착각하면 분석이 조용히 틀어진다.
+if [[ -f "$OUT/k6-raw.json.gz" ]]; then
+  if gzip -t "$OUT/k6-raw.json.gz" 2>/dev/null; then
+    echo "  원시 시계열 회수 완료 ($(du -h "$OUT/k6-raw.json.gz" | cut -f1), 무결성 확인)"
+  else
+    echo "  경고: 원시 시계열이 전송 중 손상됨. 생성기 /tmp/k6-raw.json 이 원본"
+    rm -f "$OUT/k6-raw.json.gz"
+  fi
+fi
 
 echo
 echo "=== 수집 결과 ==="
