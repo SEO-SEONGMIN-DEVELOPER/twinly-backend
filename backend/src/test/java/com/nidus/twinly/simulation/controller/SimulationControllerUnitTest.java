@@ -60,7 +60,7 @@ class SimulationControllerUnitTest {
         personaElements.put(PersonaDimension.CONFLICT_STYLE, List.of("직접 말하기보다 시간을 둔다"));
         personaElements.put(PersonaDimension.INTERESTS, List.of("등산", "재즈"));
         given(simulationService.persona(USER_ID)).willReturn(new SimulationPersonaResult(
-                USER_ID, "서성민", Gender.MALE, "컴퓨터공학과", LocalDate.of(1999, 3, 21), personaElements));
+                USER_ID, "서", "성민", Gender.MALE, "성균관대학교", "컴퓨터공학과", LocalDate.of(1999, 3, 21), personaElements));
 
         // when: 경로 변수 userId로 페르소나 조회 API 호출
         var result = mockMvc.perform(get("/internal/v1/users/{userId}/persona", "12"));
@@ -68,8 +68,10 @@ class SimulationControllerUnitTest {
         // then: 200 반환 + 숫자 id는 문자열로, 성향은 차원별 키로 직렬화
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.userId", is("12")))
-                .andExpect(jsonPath("$.userName", is("서성민")))
+                .andExpect(jsonPath("$.familyName", is("서")))
+                .andExpect(jsonPath("$.givenName", is("성민")))
                 .andExpect(jsonPath("$.gender", is("male")))
+                .andExpect(jsonPath("$.school", is("성균관대학교")))
                 .andExpect(jsonPath("$.affiliation", is("컴퓨터공학과")))
                 .andExpect(jsonPath("$.birthDate", is("1999-03-21")))
                 .andExpect(jsonPath("$.personaElements.openness", hasSize(1)))
@@ -84,7 +86,7 @@ class SimulationControllerUnitTest {
     void persona_without_elements_returns_empty_object() throws Exception {
         // given: 성향이 하나도 없는 유저의 페르소나 조회 결과
         given(simulationService.persona(USER_ID)).willReturn(new SimulationPersonaResult(
-                USER_ID, "서성민", Gender.MALE, "컴퓨터공학과", LocalDate.of(1999, 3, 21), Map.of()));
+                USER_ID, "서", "성민", Gender.MALE, "성균관대학교", "컴퓨터공학과", LocalDate.of(1999, 3, 21), Map.of()));
 
         // when: 페르소나 조회 API 호출
         var result = mockMvc.perform(get("/internal/v1/users/{userId}/persona", "12"));
