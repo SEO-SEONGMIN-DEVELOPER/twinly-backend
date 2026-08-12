@@ -9,8 +9,10 @@ import java.util.Map;
 
 public record SimulationPersonaResult(
         Long userId,
-        String userName,
+        String familyName,
+        String givenName,
         Gender gender,
+        String school,
         String affiliation,
         LocalDate birthDate,
         Map<PersonaDimension, List<String>> personaElements
