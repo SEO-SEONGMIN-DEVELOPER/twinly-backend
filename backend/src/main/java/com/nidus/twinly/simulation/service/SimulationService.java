@@ -261,8 +261,10 @@ public class SimulationService {
 
         return new SimulationPersonaResult(
                 user.getId(),
-                user.displayName(),
+                user.getFamilyName(),
+                user.getGivenName(),
                 user.getGender(),
+                user.getSchool(),
                 user.getAffiliation(),
                 birthDate(user),
                 personaElements

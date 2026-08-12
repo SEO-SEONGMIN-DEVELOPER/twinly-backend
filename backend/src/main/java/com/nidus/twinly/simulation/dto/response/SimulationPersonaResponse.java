@@ -12,14 +12,16 @@ import java.util.Map;
 public record SimulationPersonaResponse(
         @JsonFormat(shape = JsonFormat.Shape.STRING)
         Long userId,
-        String userName,
+        String familyName,
+        String givenName,
         Gender gender,
+        String school,
         String affiliation,
         LocalDate birthDate,
         Map<PersonaDimension, List<String>> personaElements
 ) {
 
     public static SimulationPersonaResponse from(SimulationPersonaResult result) {
-        return new SimulationPersonaResponse(result.userId(), result.userName(), result.gender(), result.affiliation(), result.birthDate(), result.personaElements());
+        return new SimulationPersonaResponse(result.userId(), result.familyName(), result.givenName(), result.gender(), result.school(), result.affiliation(), result.birthDate(), result.personaElements());
     }
 }
