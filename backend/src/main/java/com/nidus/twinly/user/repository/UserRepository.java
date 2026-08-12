@@ -3,6 +3,8 @@ package com.nidus.twinly.user.repository;
 import com.nidus.twinly.user.entity.User;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
 import java.util.List;
@@ -19,4 +21,15 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByPhoneNumberHash(String phoneNumberHash);
 
     List<User> findAllByDeletedAtIsNullAndWithdrawalScheduledAtLessThanEqual(Instant now, Pageable pageable);
+
+    @Query(value = """
+            SELECT u.id
+            FROM users u
+            WHERE u.deleted_at IS NULL
+              AND (:cursor IS NULL OR u.id > :cursor)
+            ORDER BY u.id ASC
+            LIMIT :limit
+            """, nativeQuery = true)
+    List<Long> findIdsAfterCursor(@Param("cursor") Long cursor,
+                                  @Param("limit") int limit);
 }
