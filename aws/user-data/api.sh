@@ -3,7 +3,7 @@ set -eux
 export DEBIAN_FRONTEND=noninteractive
 
 apt-get update
-apt-get install -y ca-certificates curl unzip
+apt-get install -y ca-certificates curl unzip sysstat mysql-client
 
 install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc

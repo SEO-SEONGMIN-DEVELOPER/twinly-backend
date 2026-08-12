@@ -22,10 +22,10 @@ cd "$HERE"
 # 단일 출처로 두고, 원격은 언제 지워도 되는 상태로 만든다.
 sync_scripts() {
   ssh "$LOADGEN" 'mkdir -p ~/loadtest'
-  scp -q scenarios/*.js collectors/scrape.py collectors/agg.py "$LOADGEN:loadtest/"
+  scp -q scenarios/*.js collectors/scrape.py collectors/agg.py setup/*.py "$LOADGEN:loadtest/"
   ssh "$TARGET" 'mkdir -p ~/loadtest'
   scp -q collectors/mem.sh collectors/disk.sh collectors/pfs.sh "$TARGET:loadtest/"
-  echo "  스크립트 동기화 완료 (시나리오 $(ls scenarios/*.js | wc -l | tr -d ' ')개, 수집기 5개)"
+  echo "  스크립트 동기화 완료 (시나리오 $(ls scenarios/*.js | wc -l | tr -d ' ')개, 수집기 5개, 준비 도구 $(ls setup/*.py | wc -l | tr -d ' ')개)"
 }
 
 # 같은 시나리오·모드 안에서 몇 번째 실행인지로 폴더를 나눈다.
@@ -53,6 +53,18 @@ cleanup() {
 trap cleanup EXIT
 
 sync_scripts
+
+# 측정 조건은 시나리오만으로 정해지지 않는다. k6 버전이나 대상 스펙이 바뀌면
+# 같은 시나리오라도 다른 숫자가 나오므로, 나중에 결과를 비교할 때 원인을
+# 짚을 수 있도록 환경을 함께 남긴다.
+{
+  echo "k6:        $(ssh "$LOADGEN" 'k6 version' 2>/dev/null | head -1)"
+  echo "target:    $TARGET ($(ssh "$TARGET" 'cloud-init query ds.meta_data.instance_type 2>/dev/null || echo unknown')), vCPU $(ssh "$TARGET" 'nproc')"
+  echo "pool_max:  $(ssh "$TARGET" "curl -s http://localhost:8081/actuator/prometheus | grep '^hikaricp_connections_max' | awk '{print \$2}'")"
+  echo "image:     $(ssh "$TARGET" 'docker inspect --format "{{.Config.Image}}" twinly-app-1 2>/dev/null | sed "s/.*twinly://"')"
+  echo "scenario:  $SCENARIO (mode=$MODE)"
+} > "$OUT/environment.txt"
+cat "$OUT/environment.txt" | sed 's/^/  /'
 
 date -u +%Y-%m-%dT%H:%M:%SZ > "$OUT/start-utc.txt"
 
