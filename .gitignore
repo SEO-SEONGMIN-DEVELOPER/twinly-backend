@@ -24,3 +24,5 @@ COMMIT_MSG
 
 # pr
 PR_BODY
+# loadtest
+loadtest/results
