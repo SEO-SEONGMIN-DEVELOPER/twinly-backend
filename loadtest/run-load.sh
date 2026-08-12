@@ -13,6 +13,21 @@ LOADGEN=twinly-stage-loadgen
 TARGET=twinly-stage-api-c
 TARGET_IP=10.0.23.25
 
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$HERE"
+
+# 저장소 사본을 매 실행마다 원격에 밀어넣는다.
+# 손으로 올리던 시절에는 수정하고 scp 를 빠뜨려도 k6 가 옛 파일을 성실히 실행해
+# 조용히 잘못된 조건으로 측정됐다. 계단과 임계값이 곧 측정 조건이므로 저장소를
+# 단일 출처로 두고, 원격은 언제 지워도 되는 상태로 만든다.
+sync_scripts() {
+  ssh "$LOADGEN" 'mkdir -p ~/loadtest'
+  scp -q scenarios/*.js collectors/scrape.py collectors/agg.py "$LOADGEN:loadtest/"
+  ssh "$TARGET" 'mkdir -p ~/loadtest'
+  scp -q collectors/mem.sh collectors/disk.sh collectors/pfs.sh "$TARGET:loadtest/"
+  echo "  스크립트 동기화 완료 (시나리오 $(ls scenarios/*.js | wc -l | tr -d ' ')개, 수집기 5개)"
+}
+
 # 같은 시나리오·모드 안에서 몇 번째 실행인지로 폴더를 나눈다.
 # 실행 시각은 start-utc.txt 에 남으므로 폴더명에 중복해 넣지 않는다.
 PREFIX="${SCENARIO%.js}-${MODE}"
@@ -36,6 +51,8 @@ cleanup() {
   ssh "$TARGET" 'pkill -f "mpstat -P ALL"; pkill -f "loadtest/mem.sh"; pkill -f "loadtest/disk.sh"; pkill -f "iostat -x"' 2>/dev/null || true
 }
 trap cleanup EXIT
+
+sync_scripts
 
 date -u +%Y-%m-%dT%H:%M:%SZ > "$OUT/start-utc.txt"
 
