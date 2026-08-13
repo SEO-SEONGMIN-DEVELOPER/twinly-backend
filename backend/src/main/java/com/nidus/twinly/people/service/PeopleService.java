@@ -9,9 +9,10 @@ import com.nidus.twinly.block.repository.BlockRepository;
 import com.nidus.twinly.chat.entity.ChatRoom;
 import com.nidus.twinly.chat.repository.ChatRoomRepository;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
-import com.nidus.twinly.common.scene.SceneBubbleLine;
 import com.nidus.twinly.common.scene.SceneLine;
-import com.nidus.twinly.common.scene.SceneNarrationLine;
+import com.nidus.twinly.common.scene.StoredSceneBubbleLine;
+import com.nidus.twinly.common.scene.StoredSceneLine;
+import com.nidus.twinly.common.scene.StoredSceneNarrationLine;
 import com.nidus.twinly.common.photo.PhotoType;
 import com.nidus.twinly.common.photo.ProfilePhotoInfo;
 import com.nidus.twinly.common.time.KstTimes;
@@ -351,24 +352,30 @@ public class PeopleService {
             return scene.getNarration();
         }
 
-        List<SceneLine> lines = parseLines(scene);
+        List<StoredSceneLine> lines = parseLines(scene);
         if (lines.isEmpty()) {
             return null;
         }
 
         return switch (lines.get(0)) {
-            case SceneNarrationLine narration -> narration.text();
-            case SceneBubbleLine bubble -> bubble.text();
+            case StoredSceneNarrationLine narration -> narration.text();
+            case StoredSceneBubbleLine bubble -> bubble.text();
         };
     }
 
-    private List<SceneLine> parseLines(Scene scene) {
+    private List<SceneLine> toSceneLines(Scene scene) {
+        return parseLines(scene).stream()
+                .map(line -> SceneLine.from(line, scene.getDate()))
+                .toList();
+    }
+
+    private List<StoredSceneLine> parseLines(Scene scene) {
         if (scene.getLines() == null) {
             return List.of();
         }
 
         try {
-            return objectMapper.readValue(scene.getLines(), new TypeReference<List<SceneLine>>() {
+            return objectMapper.readValue(scene.getLines(), new TypeReference<List<StoredSceneLine>>() {
             });
         } catch (JacksonException e) {
             log.warn("씬 대사 파싱에 실패해 빈 목록으로 대체합니다. sceneId={}", scene.getId(), e);
@@ -441,7 +448,7 @@ public class PeopleService {
                     endsAt,
                     scene.getPlace(),
                     with,
-                    parseLines(scene)
+                    toSceneLines(scene)
             );
         };
     }

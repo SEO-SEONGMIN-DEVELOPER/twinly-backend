@@ -103,9 +103,9 @@ POST /internal/v1/users/{userId}/simulations
       "place": "학식당",
       "with": ["2"],
       "lines": [
-        { "t": "narr", "text": "점심 줄에서 다시 만났다." },
-        { "t": "bubble", "userId": "1", "action": "웃으며", "text": "여기서 또 보네요?" },
-        { "t": "bubble", "userId": "2", "action": "고개를 끄덕이며", "text": "그러게요, 같이 먹을래요?" }
+        { "t": "narr", "text": "점심 줄에서 다시 만났다.", "occursAt": "12:00" },
+        { "t": "bubble", "userId": "1", "action": "웃으며", "text": "여기서 또 보네요?", "occursAt": "12:05" },
+        { "t": "bubble", "userId": "2", "action": "고개를 끄덕이며", "text": "그러게요, 같이 먹을래요?", "occursAt": "12:06" }
       ]
     }
   ],
@@ -131,7 +131,10 @@ POST /internal/v1/users/{userId}/simulations
 
 - `type`: `action` | `dialogue`
 - `lines[].t`: `narr` | `bubble`
+- `lines[].occursAt`: `HH:mm` 로컬 시각, **필수**. 빠뜨리면 요청 전체가 400
 - `qtype`: `promise` | `persona`
+
+`lines[].occursAt` 은 대사 한 줄이 나온 시각입니다. 조회 API 에서는 `date` 와 합쳐져 절대시각(`2026-08-09T12:05:00+09:00`)으로 내려오므로, 주입할 때는 `start` ~ `end` 사이 값으로 넣어야 화면에서 자연스럽습니다. 서버는 범위나 순서를 검증하지 않습니다.
 
 ### 5-3. 이 주입으로 채워지는 화면
 

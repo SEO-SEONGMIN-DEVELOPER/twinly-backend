@@ -100,10 +100,12 @@ class ActivityControllerUnitTest {
                 .andExpect(jsonPath("$.scenes[1].lines", hasSize(2)))
                 .andExpect(jsonPath("$.scenes[1].lines[0].t").value("narr"))
                 .andExpect(jsonPath("$.scenes[1].lines[0].text").value("교실이 조용해졌다"))
+                .andExpect(jsonPath("$.scenes[1].lines[0].occursAt", startsWith("2026-07-26T12:00")))
                 .andExpect(jsonPath("$.scenes[1].lines[1].t").value("bubble"))
                 .andExpect(jsonPath("$.scenes[1].lines[1].userId", is("100")))
                 .andExpect(jsonPath("$.scenes[1].lines[1].action").value("웃으며"))
                 .andExpect(jsonPath("$.scenes[1].lines[1].text").value("안녕"))
+                .andExpect(jsonPath("$.scenes[1].lines[1].occursAt", startsWith("2026-07-26T12:05")))
                 .andExpect(jsonPath("$.questions", hasSize(1)))
                 .andExpect(jsonPath("$.questions[0].id").value("50"))
                 .andExpect(jsonPath("$.questions[0].type").value("PROMISE"))
@@ -168,8 +170,10 @@ class ActivityControllerUnitTest {
                 "교실",
                 List.of(userId),
                 List.of(
-                        new SceneNarrationLine("narr", "교실이 조용해졌다"),
-                        new SceneBubbleLine("bubble", userId, "웃으며", "안녕")
+                        new SceneNarrationLine("narr", "교실이 조용해졌다",
+                                OffsetDateTime.of(2026, 7, 26, 12, 0, 0, 0, KST)),
+                        new SceneBubbleLine("bubble", userId, "웃으며", "안녕",
+                                OffsetDateTime.of(2026, 7, 26, 12, 5, 0, 0, KST))
                 )
         );
 

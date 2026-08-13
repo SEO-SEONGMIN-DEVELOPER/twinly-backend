@@ -135,8 +135,8 @@ class ActivityServiceUnitTest {
         // given: narr 1줄 + bubble 1줄이 담긴 lines JSON을 가진 dialogue 씬
         String linesJson = """
                 [
-                  {"t":"narr","text":"교실이 조용해졌다"},
-                  {"t":"bubble","userId":100,"action":"웃으며","text":"안녕"}
+                  {"t":"narr","text":"교실이 조용해졌다","occursAt":"12:00:00"},
+                  {"t":"bubble","userId":100,"action":"웃으며","text":"안녕","occursAt":"12:05:00"}
                 ]
                 """;
         Scene scene = dialogueScene(11L, "v1", "교실",
@@ -155,11 +155,13 @@ class ActivityServiceUnitTest {
 
         SceneNarrationLine narration = (SceneNarrationLine) dialogue.lines().get(0);
         assertThat(narration.text()).isEqualTo("교실이 조용해졌다");
+        assertThat(narration.occursAt()).isEqualTo(OffsetDateTime.of(2026, 7, 26, 12, 0, 0, 0, KST));
 
         SceneBubbleLine bubble = (SceneBubbleLine) dialogue.lines().get(1);
         assertThat(bubble.userId()).isEqualTo(100L);
         assertThat(bubble.action()).isEqualTo("웃으며");
         assertThat(bubble.text()).isEqualTo("안녕");
+        assertThat(bubble.occursAt()).isEqualTo(OffsetDateTime.of(2026, 7, 26, 12, 5, 0, 0, KST));
     }
 
     /*

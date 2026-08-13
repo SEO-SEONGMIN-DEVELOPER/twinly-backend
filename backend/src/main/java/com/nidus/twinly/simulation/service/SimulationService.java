@@ -9,9 +9,9 @@ import com.nidus.twinly.activity.repository.QuestionRepository;
 import com.nidus.twinly.activity.repository.ScenePartnerRepository;
 import com.nidus.twinly.activity.repository.SceneRepository;
 import com.nidus.twinly.chat.opener.ChatRoomOpener;
-import com.nidus.twinly.common.scene.SceneBubbleLine;
-import com.nidus.twinly.common.scene.SceneLine;
-import com.nidus.twinly.common.scene.SceneNarrationLine;
+import com.nidus.twinly.common.scene.StoredSceneBubbleLine;
+import com.nidus.twinly.common.scene.StoredSceneLine;
+import com.nidus.twinly.common.scene.StoredSceneNarrationLine;
 import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
@@ -158,14 +158,19 @@ public class SimulationService {
                 .toList());
     }
 
-    private SceneLine toSceneLine(SimulationsLineCommand command) {
+    private StoredSceneLine toSceneLine(SimulationsLineCommand command) {
         return switch (command) {
-            case SimulationsNarrationLineCommand narration -> new SceneNarrationLine(narration.t(), narration.text());
-            case SimulationsBubbleLineCommand bubble -> new SceneBubbleLine(
+            case SimulationsNarrationLineCommand narration -> new StoredSceneNarrationLine(
+                    narration.t(),
+                    narration.text(),
+                    narration.occursAt()
+            );
+            case SimulationsBubbleLineCommand bubble -> new StoredSceneBubbleLine(
                     bubble.t(),
                     bubble.userId(),
                     bubble.action(),
-                    bubble.text()
+                    bubble.text(),
+                    bubble.occursAt()
             );
         };
     }
