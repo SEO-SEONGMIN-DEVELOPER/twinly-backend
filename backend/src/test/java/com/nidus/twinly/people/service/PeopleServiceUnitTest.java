@@ -17,7 +17,7 @@ import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.match.entity.Match;
 import com.nidus.twinly.match.repository.MatchRepository;
-import com.nidus.twinly.common.scene.SceneNarrationLine;
+import com.nidus.twinly.common.scene.StoredSceneNarrationLine;
 import com.nidus.twinly.people.domain.IntimacyResolution;
 import com.nidus.twinly.people.dto.result.PeopleEventActionSceneResult;
 import com.nidus.twinly.people.dto.result.PeopleEventResult;
@@ -60,6 +60,7 @@ import java.lang.reflect.Constructor;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -546,7 +547,7 @@ class PeopleServiceUnitTest {
                 .willReturn(List.of(
                         relationship(ME, 20L, day1, 10, "{}"),
                         relationship(ME, 20L, day2, 35, "{}")));
-        willReturn(List.of(new SceneNarrationLine("narr", "안녕이라고 했다")))
+        willReturn(List.of(new StoredSceneNarrationLine("narr", "안녕이라고 했다", LocalTime.of(12, 0))))
                 .given(objectMapper).readValue(eq(linesJson), any(TypeReference.class));
 
         // when: 이벤트 목록 조회

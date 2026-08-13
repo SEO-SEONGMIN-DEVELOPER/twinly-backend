@@ -109,8 +109,8 @@ class ActivityIntegrationTest extends AbstractIntegrationTest {
 
         String linesJson = """
                 [
-                  {"t":"narr","text":"교실이 조용해졌다"},
-                  {"t":"bubble","userId":%d,"action":"웃으며","text":"안녕"}
+                  {"t":"narr","text":"교실이 조용해졌다","occursAt":"12:00:00"},
+                  {"t":"bubble","userId":%d,"action":"웃으며","text":"안녕","occursAt":"12:05:00"}
                 ]
                 """.formatted(partner.getId());
 
@@ -129,9 +129,11 @@ class ActivityIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.scenes[0].type").value("dialogue"))
                 .andExpect(jsonPath("$.scenes[0].lines", hasSize(2)))
                 .andExpect(jsonPath("$.scenes[0].lines[0].text").value("교실이 조용해졌다"))
+                .andExpect(jsonPath("$.scenes[0].lines[0].occursAt", startsWith("2026-07-26T12:00")))
                 .andExpect(jsonPath("$.scenes[0].lines[1].userId").value(partner.getId().toString()))
                 .andExpect(jsonPath("$.scenes[0].lines[1].action").value("웃으며"))
-                .andExpect(jsonPath("$.scenes[0].lines[1].text").value("안녕"));
+                .andExpect(jsonPath("$.scenes[0].lines[1].text").value("안녕"))
+                .andExpect(jsonPath("$.scenes[0].lines[1].occursAt", startsWith("2026-07-26T12:05")));
     }
 
     @Test

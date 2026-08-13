@@ -9,6 +9,7 @@ import com.nidus.twinly.activity.repository.ScenePartnerRepository;
 import com.nidus.twinly.activity.repository.SceneRepository;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
 import com.nidus.twinly.common.scene.SceneLine;
+import com.nidus.twinly.common.scene.StoredSceneLine;
 import com.nidus.twinly.common.photo.PhotoType;
 import com.nidus.twinly.common.photo.ProfilePhotoInfo;
 import com.nidus.twinly.common.time.KstTimes;
@@ -106,7 +107,7 @@ public class ActivityService {
                     endsAt,
                     scene.getPlace(),
                     with,
-                    parseLines(scene)
+                    toSceneLines(scene)
             );
         };
     }
@@ -127,13 +128,19 @@ public class ActivityService {
                 .toList();
     }
 
-    private List<SceneLine> parseLines(Scene scene) {
+    private List<SceneLine> toSceneLines(Scene scene) {
+        return parseLines(scene).stream()
+                .map(line -> SceneLine.from(line, scene.getDate()))
+                .toList();
+    }
+
+    private List<StoredSceneLine> parseLines(Scene scene) {
         if (scene.getLines() == null) {
             return List.of();
         }
 
         try {
-            return objectMapper.readValue(scene.getLines(), new TypeReference<List<SceneLine>>() {
+            return objectMapper.readValue(scene.getLines(), new TypeReference<List<StoredSceneLine>>() {
             });
         } catch (JacksonException e) {
             log.warn("씬 대사 파싱에 실패해 빈 목록으로 대체합니다. sceneId={}", scene.getId(), e);
