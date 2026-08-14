@@ -18,6 +18,7 @@ public record PeopleEventActionSceneResponse(
         @Schema(nullable = true)
         List<Long> with,
         String narration,
+        @Schema(nullable = true)
         String mind
 ) implements PeopleEventSceneResponse {
 

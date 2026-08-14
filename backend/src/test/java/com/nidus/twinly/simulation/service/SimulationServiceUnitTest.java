@@ -32,7 +32,6 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -160,7 +159,7 @@ class SimulationServiceUnitTest {
 
     private SimulationsCommand simulationsCommand(Integer rapport) {
         return new SimulationsCommand(USER_ID, DATE, List.of(), List.of(), List.of(
-                new SimulationsRelationshipCommand(PARTNER_ID, LocalTime.of(21, 0), rapport, "{}")
+                new SimulationsRelationshipCommand(PARTNER_ID, DATE.atTime(21, 0), rapport, "{}")
         ));
     }
 

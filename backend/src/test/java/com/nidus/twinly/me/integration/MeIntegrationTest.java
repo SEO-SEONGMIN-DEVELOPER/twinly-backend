@@ -41,7 +41,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
@@ -679,7 +678,7 @@ class MeIntegrationTest extends AbstractIntegrationTest {
         ReflectionTestUtils.setField(question, "userId", userId);
         ReflectionTestUtils.setField(question, "date", date);
         ReflectionTestUtils.setField(question, "version", "v1");
-        ReflectionTestUtils.setField(question, "time", LocalTime.of(21, 0));
+        ReflectionTestUtils.setField(question, "time", date.atTime(21, 0));
         ReflectionTestUtils.setField(question, "type", QuestionType.PERSONA);
         ReflectionTestUtils.setField(question, "text", text);
         ReflectionTestUtils.setField(question, "options", options);

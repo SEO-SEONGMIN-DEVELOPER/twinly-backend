@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalTime;
+import java.time.LocalDateTime;
 
 @Entity
 @DynamicUpdate
@@ -35,11 +35,11 @@ public class Relationship {
     @Column(columnDefinition = "TEXT")
     private String partnerModel;
 
-    private LocalTime updateTime;
+    private LocalDateTime updateTime;
 
     private Instant createdAt;
 
-    public static Relationship create(Long userId, LocalDate date, String version, Long partnerUserId, Integer intimacy, String partnerModel, LocalTime updateTime) {
+    public static Relationship create(Long userId, LocalDate date, String version, Long partnerUserId, Integer intimacy, String partnerModel, LocalDateTime updateTime) {
         Relationship relationship = new Relationship();
 
         relationship.userId = userId;

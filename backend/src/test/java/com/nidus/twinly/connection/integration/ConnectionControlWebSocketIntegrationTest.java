@@ -63,7 +63,7 @@ class ConnectionControlWebSocketIntegrationTest extends AbstractWebSocketIntegra
 
         // when: 관리자가 배포 사유로 3초 후 재연결을 예고 (실제 HTTP → Redis 릴레이 → 소켓)
         requestDraining("""
-                {"reason":"deploy","retryAfterMs":3000}
+                {"reason":"deploy","retryAfterMs":3000,"scope":"all"}
                 """);
 
         // then: 개인 control 큐로 control 봉투 수신
@@ -98,7 +98,7 @@ class ConnectionControlWebSocketIntegrationTest extends AbstractWebSocketIntegra
 
         // when: 관리자가 점검 사유로 대기 시간 없이 예고
         requestDraining("""
-                {"reason":"maintenance"}
+                {"reason":"maintenance","scope":"all"}
                 """);
 
         // then: 두 세션 모두 각자 1건씩 수신하고, retryAfterMs=null 이 그대로 전달된다
