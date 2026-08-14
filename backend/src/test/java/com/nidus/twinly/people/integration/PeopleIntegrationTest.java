@@ -7,6 +7,7 @@ import com.nidus.twinly.activity.repository.ScenePartnerRepository;
 import com.nidus.twinly.activity.repository.SceneRepository;
 import com.nidus.twinly.block.entity.Block;
 import com.nidus.twinly.block.repository.BlockRepository;
+import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.people.entity.Encounter;
 import com.nidus.twinly.people.entity.EncounterPreference;
 import com.nidus.twinly.people.repository.EncounterPreferenceRepository;
@@ -24,7 +25,6 @@ import java.lang.reflect.Constructor;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -178,30 +178,27 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("친밀도 시계열 조회: from/to 구간의 실제 관계 기록이 날짜 오름차순 포인트로 내려온다")
+    @DisplayName("친밀도 시계열 조회: 실제 관계 기록의 첫 날부터 오늘까지가 균등 간격 포인트로 내려온다")
     void intimacySeries_success_end_to_end() throws Exception {
-        // given: 7/19(10), 7/20(60) 두 건의 관계 기록을 실제 DB에 저장
+        // given: 5일 전(10), 1일 전(60) 두 건의 관계 기록을 실제 DB에 저장
+        LocalDate today = KstTimes.today();
         User me = saveUser();
         User partner = saveUser();
-        saveRelationship(me.getId(), partner.getId(), DAY_1, 10, "{}");
-        saveRelationship(me.getId(), partner.getId(), DAY_2, 60, "{}");
+        saveRelationship(me.getId(), partner.getId(), today.minusDays(5), 10, "{}");
+        saveRelationship(me.getId(), partner.getId(), today.minusDays(1), 60, "{}");
 
-        // when: 기간·해상도·최대 포인트 수와 함께 친밀도 시계열 조회 API 호출
+        // when: 쿼리 파라미터 없이 친밀도 시계열 조회 API 호출
         var result = mockMvc.perform(get("/api/v1/people/{userId}/intimacy-series", partner.getId().toString())
-                .param("from", "2026-07-01")
-                .param("to", "2026-07-31")
-                .param("resolution", "DAY")
-                .param("maxPoints", "10")
                 .header("Authorization", bearer(me.getId())));
 
-        // then: 200 + 최신 친밀도와 날짜 오름차순 시계열 2건
+        // then: 200 + 첫 기록일부터 오늘까지 하루 간격 6개 포인트와 최신 친밀도
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.currentIntimacy").value(60))
-                .andExpect(jsonPath("$.intimacySeries.length()").value(2))
-                .andExpect(jsonPath("$.intimacySeries[0].date").value("2026-07-19"))
+                .andExpect(jsonPath("$.intimacySeries.length()").value(6))
+                .andExpect(jsonPath("$.intimacySeries[0].date").value(today.minusDays(5).toString()))
                 .andExpect(jsonPath("$.intimacySeries[0].intimacy").value(10))
-                .andExpect(jsonPath("$.intimacySeries[1].date").value("2026-07-20"))
-                .andExpect(jsonPath("$.intimacySeries[1].intimacy").value(60));
+                .andExpect(jsonPath("$.intimacySeries[5].date").value(today.toString()))
+                .andExpect(jsonPath("$.intimacySeries[5].intimacy").value(60));
     }
 
     @Test
@@ -296,7 +293,7 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
         ReflectionTestUtils.setField(relationship, "version", "v1");
         ReflectionTestUtils.setField(relationship, "intimacy", intimacy);
         ReflectionTestUtils.setField(relationship, "partnerModel", partnerModel);
-        ReflectionTestUtils.setField(relationship, "updateTime", LocalTime.of(23, 0));
+        ReflectionTestUtils.setField(relationship, "updateTime", date.atTime(23, 0));
         ReflectionTestUtils.setField(relationship, "createdAt", Instant.now());
         return relationshipRepository.saveAndFlush(relationship);
     }
@@ -307,8 +304,8 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
         ReflectionTestUtils.setField(scene, "date", date);
         ReflectionTestUtils.setField(scene, "version", version);
         ReflectionTestUtils.setField(scene, "place", place);
-        ReflectionTestUtils.setField(scene, "startsAt", LocalTime.of(9, 0));
-        ReflectionTestUtils.setField(scene, "endsAt", LocalTime.of(10, 0));
+        ReflectionTestUtils.setField(scene, "startsAt", date.atTime(9, 0));
+        ReflectionTestUtils.setField(scene, "endsAt", date.atTime(10, 0));
         ReflectionTestUtils.setField(scene, "type", SceneType.ACTION);
         ReflectionTestUtils.setField(scene, "narration", narration);
         ReflectionTestUtils.setField(scene, "mind", mind);

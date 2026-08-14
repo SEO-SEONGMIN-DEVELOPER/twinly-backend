@@ -21,7 +21,6 @@ import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.match.entity.Match;
 import com.nidus.twinly.match.repository.MatchRepository;
 import com.nidus.twinly.people.dto.result.*;
-import com.nidus.twinly.people.domain.IntimacyResolution;
 import com.nidus.twinly.people.entity.Encounter;
 import com.nidus.twinly.people.entity.EncounterPreference;
 import com.nidus.twinly.people.repository.EncounterPreferenceRepository;
@@ -65,6 +64,7 @@ import java.util.stream.Stream;
 public class PeopleService {
 
     private static final int DEFAULT_LIMIT = 20;
+    private static final int INTIMACY_SERIES_MAX_POINTS = 30;
 
         private final UserRepository userRepository;
     private final PhotoRepository photoRepository;
@@ -221,55 +221,34 @@ public class PeopleService {
                 });
     }
 
-    public PeopleIntimacySeriesResult intimacySeries(Long userId, Long partnerUserId, LocalDate from, LocalDate to, IntimacyResolution resolution, Integer maxPoints) {
-        if (from.isAfter(to)) {
-            throw new BusinessException(ErrorCode.INVALID_DATE_RANGE, "조회 시작일이 종료일보다 늦습니다: from=%s, to=%s".formatted(from, to));
-        }
-
-        int currentIntimacy = relationshipRepository.findLatestByUserIdAndPartnerUserId(userId, partnerUserId)
-                .map(Relationship::getIntimacy)
-                .orElseThrow(() -> new BusinessException(ErrorCode.RELATIONSHIP_NOT_FOUND));
-
+    public PeopleIntimacySeriesResult intimacySeries(Long userId, Long partnerUserId) {
         List<Relationship> relationships = relationshipRepository
-                .findAllByUserIdAndPartnerUserIdAndDateBetweenOrderByDateAsc(userId, partnerUserId, from, to);
+                .findAllByUserIdAndPartnerUserIdOrderByDateAsc(userId, partnerUserId);
 
-        List<PeopleIntimacySeriesItemResult> series = downsample(bucketByResolution(relationships, resolution, from), maxPoints);
+        if (relationships.isEmpty()) {
+            throw new BusinessException(ErrorCode.RELATIONSHIP_NOT_FOUND);
+        }
 
-        return new PeopleIntimacySeriesResult(currentIntimacy, series);
+        List<PeopleIntimacySeriesItemResult> series = distribute(relationships, KstTimes.today());
+
+        return new PeopleIntimacySeriesResult(relationships.getLast().getIntimacy(), series);
     }
 
-    private List<PeopleIntimacySeriesItemResult> bucketByResolution(List<Relationship> relationships, IntimacyResolution resolution, LocalDate from) {
-        if (resolution == IntimacyResolution.WEEK) {
-            Map<LocalDate, List<Relationship>> byWeek = relationships.stream()
-                    .collect(Collectors.groupingBy(
-                            relationship -> from.plusDays(ChronoUnit.DAYS.between(from, relationship.getDate()) / 7 * 7),
-                            LinkedHashMap::new,
-                            Collectors.toList()));
+    private List<PeopleIntimacySeriesItemResult> distribute(List<Relationship> relationships, LocalDate to) {
+        LocalDate from = relationships.getFirst().getDate();
+        long span = Math.max(ChronoUnit.DAYS.between(from, to), 0);
+        int points = (int) Math.min(span + 1, INTIMACY_SERIES_MAX_POINTS);
 
-            return byWeek.entrySet().stream()
-                    .map(entry -> new PeopleIntimacySeriesItemResult(
-                            entry.getKey(),
-                            entry.getValue().getLast().getIntimacy()))
-                    .toList();
+        List<PeopleIntimacySeriesItemResult> series = new ArrayList<>(points);
+        int index = 0;
+        for (int i = 0; i < points; i++) {
+            LocalDate date = from.plusDays(points == 1 ? 0 : Math.round((double) span * i / (points - 1)));
+            while (index + 1 < relationships.size() && !relationships.get(index + 1).getDate().isAfter(date)) {
+                index++;
+            }
+            series.add(new PeopleIntimacySeriesItemResult(date, relationships.get(index).getIntimacy()));
         }
-
-        return relationships.stream()
-                .map(relationship -> new PeopleIntimacySeriesItemResult(relationship.getDate(), relationship.getIntimacy()))
-                .toList();
-    }
-
-    private List<PeopleIntimacySeriesItemResult> downsample(List<PeopleIntimacySeriesItemResult> series, Integer maxPoints) {
-        if (series.size() <= maxPoints) {
-            return series;
-        }
-
-        List<PeopleIntimacySeriesItemResult> sampled = new ArrayList<>(maxPoints);
-        double step = (double) series.size() / maxPoints;
-        for (int i = 0; i < maxPoints; i++) {
-            int index = Math.min((int) Math.floor((i + 1) * step) - 1, series.size() - 1);
-            sampled.add(series.get(index));
-        }
-        return sampled;
+        return series;
     }
 
     public PeopleEventsResult events(Long userId, Long partnerUserId, LocalDate cursor, Integer limit) {
@@ -365,7 +344,7 @@ public class PeopleService {
 
     private List<SceneLine> toSceneLines(Scene scene) {
         return parseLines(scene).stream()
-                .map(line -> SceneLine.from(line, scene.getDate()))
+                .map(SceneLine::from)
                 .toList();
     }
 
@@ -427,8 +406,8 @@ public class PeopleService {
     }
 
     private PeopleEventSceneResult toSceneResult(Scene scene, List<Long> with) {
-        OffsetDateTime startsAt = KstTimes.toKstOffsetDateTime(scene.getDate().atTime(scene.getStartsAt()));
-        OffsetDateTime endsAt = KstTimes.toKstOffsetDateTime(scene.getDate().atTime(scene.getEndsAt()));
+        OffsetDateTime startsAt = KstTimes.toKstOffsetDateTime(scene.getStartsAt());
+        OffsetDateTime endsAt = KstTimes.toKstOffsetDateTime(scene.getEndsAt());
 
         return switch (scene.getType()) {
             case ACTION -> new PeopleEventActionSceneResult(

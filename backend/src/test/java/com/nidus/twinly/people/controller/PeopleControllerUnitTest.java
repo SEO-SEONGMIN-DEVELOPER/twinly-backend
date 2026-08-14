@@ -3,7 +3,6 @@ package com.nidus.twinly.people.controller;
 import com.nidus.twinly.anon.service.AnonService;
 import com.nidus.twinly.common.photo.PhotoPosInfo;
 import com.nidus.twinly.common.photo.ProfilePhotoInfo;
-import com.nidus.twinly.people.domain.IntimacyResolution;
 import com.nidus.twinly.people.dto.result.PeopleEventActionSceneResult;
 import com.nidus.twinly.people.dto.result.PeopleEventResult;
 import com.nidus.twinly.people.dto.result.PeopleEventUserInfoResult;
@@ -249,95 +248,24 @@ class PeopleControllerUnitTest {
     // ------------------------------------------ GET /api/v1/people/{userId}/intimacy-series
 
     @Test
-    @DisplayName("친밀도 시계열 조회 시 from/to는 날짜(ISO)로 바인딩되어 서비스로 전달되고 200과 함께 시계열 JSON을 반환한다")
+    @DisplayName("친밀도 시계열 조회 시 쿼리 파라미터 없이 인증 유저 id와 경로 userId만으로 위임하고 200과 함께 시계열 JSON을 반환한다")
     void intimacySeries_success() throws Exception {
         // given: 서비스가 현재 친밀도와 시계열 1건을 반환
-        given(peopleService.intimacySeries(1L, 42L, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31), IntimacyResolution.DAY, 10))
+        given(peopleService.intimacySeries(1L, 42L))
                 .willReturn(new PeopleIntimacySeriesResult(
                         55,
                         List.of(new PeopleIntimacySeriesItemResult(LocalDate.of(2026, 7, 1), 40))));
 
-        // when: 기간·해상도·최대 포인트 수와 함께 친밀도 시계열 조회 API 호출
+        // when: 인증 상태로 친밀도 시계열 조회 API 호출
         var result = mockMvc.perform(get("/api/v1/people/{userId}/intimacy-series", "42")
-                .param("from", "2026-07-01")
-                .param("to", "2026-07-31")
-                .param("resolution", "DAY")
-                .param("maxPoints", "10")
                 .header("Authorization", "Bearer access-token"));
 
-        // then: 200 반환 + 시계열 JSON 응답 + 요청·응답·서비스 인자가 모두 날짜 단위로 일치
+        // then: 200 반환 + 시계열 JSON 응답 + 인증 유저 id·경로 userId로 서비스에 위임
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.currentIntimacy").value(55))
                 .andExpect(jsonPath("$.intimacySeries[0].date").value("2026-07-01"))
                 .andExpect(jsonPath("$.intimacySeries[0].intimacy").value(40));
-        then(peopleService).should().intimacySeries(1L, 42L, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31), IntimacyResolution.DAY, 10);
-    }
-
-    @Test
-    @DisplayName("친밀도 시계열 조회 시 from/to에 시각을 보내면 400을 반환하고 서비스를 호출하지 않는다")
-    void intimacySeries_with_date_time_param_returns_400() throws Exception {
-        // when: 날짜가 아니라 오프셋이 붙은 시각으로 친밀도 시계열 조회 API 호출
-        var result = mockMvc.perform(get("/api/v1/people/{userId}/intimacy-series", "42")
-                .param("from", "2026-07-01T00:00:00Z")
-                .param("to", "2026-07-31T00:00:00Z")
-                .param("resolution", "DAY")
-                .param("maxPoints", "10")
-                .header("Authorization", "Bearer access-token"));
-
-        // then: 이 API의 시간축 단위는 날짜이므로 400 INVALID_REQUEST + 서비스는 호출되지 않음
-        result.andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
-        then(peopleService).should(never()).intimacySeries(any(), any(), any(), any(), any(), any());
-    }
-
-    @Test
-    @DisplayName("친밀도 시계열 조회 시 resolution이 허용되지 않는 값이면 400을 반환하고 서비스를 호출하지 않는다")
-    void intimacySeries_with_invalid_resolution_returns_400() throws Exception {
-        // when: resolution에 정의되지 않은 값을 넣어 친밀도 시계열 조회 API 호출
-        var result = mockMvc.perform(get("/api/v1/people/{userId}/intimacy-series", "42")
-                .param("from", "2026-07-01")
-                .param("to", "2026-07-31")
-                .param("resolution", "MONTH")
-                .param("maxPoints", "10")
-                .header("Authorization", "Bearer access-token"));
-
-        // then: 400 INVALID_REQUEST 반환 + 서비스는 호출되지 않음
-        result.andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
-        then(peopleService).should(never()).intimacySeries(any(), any(), any(), any(), any(), any());
-    }
-
-    @Test
-    @DisplayName("친밀도 시계열 조회 시 필수 쿼리 파라미터가 빠지면 400을 반환하고 서비스를 호출하지 않는다")
-    void intimacySeries_with_missing_required_param_returns_400() throws Exception {
-        // when: 필수 파라미터 maxPoints 없이 친밀도 시계열 조회 API 호출
-        var result = mockMvc.perform(get("/api/v1/people/{userId}/intimacy-series", "42")
-                .param("from", "2026-07-01")
-                .param("to", "2026-07-31")
-                .param("resolution", "DAY")
-                .header("Authorization", "Bearer access-token"));
-
-        // then: 클라이언트 입력 오류이므로 400 INVALID_REQUEST 반환 + 서비스는 호출되지 않음
-        result.andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
-        then(peopleService).should(never()).intimacySeries(any(), any(), any(), any(), any(), any());
-    }
-
-    @Test
-    @DisplayName("친밀도 시계열 조회 시 maxPoints가 1 미만이면 400을 반환하고 서비스를 호출하지 않는다")
-    void intimacySeries_with_non_positive_maxPoints_returns_400() throws Exception {
-        // when & then: 음수는 다운샘플링에서 터지고, 0은 조용히 빈 시계열이 되므로 둘 다 입력 단계에서 막는다
-        for (String maxPoints : List.of("-1", "0")) {
-            mockMvc.perform(get("/api/v1/people/{userId}/intimacy-series", "42")
-                            .param("from", "2026-07-01")
-                            .param("to", "2026-07-31")
-                            .param("resolution", "DAY")
-                            .param("maxPoints", maxPoints)
-                            .header("Authorization", "Bearer access-token"))
-                    .andExpect(status().isBadRequest())
-                    .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
-        }
-        then(peopleService).should(never()).intimacySeries(any(), any(), any(), any(), any(), any());
+        then(peopleService).should().intimacySeries(1L, 42L);
     }
 
     // ------------------------------------------------- GET /api/v1/people/{userId}/events

@@ -13,12 +13,12 @@ import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.photo.PhotoPosInfo;
 import com.nidus.twinly.common.photo.PhotoType;
 import com.nidus.twinly.common.photo.ProfilePhotoInfo;
+import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.match.entity.Match;
 import com.nidus.twinly.match.repository.MatchRepository;
 import com.nidus.twinly.common.scene.StoredSceneNarrationLine;
-import com.nidus.twinly.people.domain.IntimacyResolution;
 import com.nidus.twinly.people.dto.result.PeopleEventActionSceneResult;
 import com.nidus.twinly.people.dto.result.PeopleEventResult;
 import com.nidus.twinly.people.dto.result.PeopleEventUserInfoResult;
@@ -60,9 +60,10 @@ import java.lang.reflect.Constructor;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -369,96 +370,69 @@ class PeopleServiceUnitTest {
     // --------------------------------------------------------- intimacySeries()
 
     @Test
-    @DisplayName("DAY 해상도는 기간 내 관계 기록을 날짜별 포인트로 그대로 반환한다")
-    void intimacySeries_day_resolution() {
-        // given: 7/1, 7/3, 7/5 세 건의 관계 기록과 최신 친밀도 30
-        LocalDate from = LocalDate.of(2026, 7, 1);
-        LocalDate to = LocalDate.of(2026, 7, 31);
-        given(relationshipRepository.findAllByUserIdAndPartnerUserIdAndDateBetweenOrderByDateAsc(ME, 20L, from, to))
+    @DisplayName("기간이 30일을 넘으면 첫 기록일부터 오늘까지를 30개 포인트로 균등 분배한다")
+    void intimacySeries_distributes_long_range_into_max_points() {
+        // given: 59일 전 첫 기록(10)과 10일 전 기록(50)
+        LocalDate today = KstTimes.today();
+        given(relationshipRepository.findAllByUserIdAndPartnerUserIdOrderByDateAsc(ME, 20L))
                 .willReturn(List.of(
-                        relationship(ME, 20L, LocalDate.of(2026, 7, 1), 10, "{}"),
-                        relationship(ME, 20L, LocalDate.of(2026, 7, 3), 20, "{}"),
-                        relationship(ME, 20L, LocalDate.of(2026, 7, 5), 30, "{}")));
-        given(relationshipRepository.findLatestByUserIdAndPartnerUserId(ME, 20L))
-                .willReturn(Optional.of(relationship(ME, 20L, LocalDate.of(2026, 7, 5), 30, "{}")));
+                        relationship(ME, 20L, today.minusDays(59), 10, "{}"),
+                        relationship(ME, 20L, today.minusDays(10), 50, "{}")));
 
-        // when: DAY 해상도로 시계열 조회
-        PeopleIntimacySeriesResult result = peopleService.intimacySeries(ME, 20L, from, to, IntimacyResolution.DAY, 10);
+        // when: 친밀도 시계열 조회
+        PeopleIntimacySeriesResult result = peopleService.intimacySeries(ME, 20L);
 
-        // then: 기록 수만큼 포인트가 생기고 현재 친밀도는 최신 기록 값
-        assertThat(result.currentIntimacy()).isEqualTo(30);
-        assertThat(result.intimacySeries()).extracting(PeopleIntimacySeriesItemResult::date)
-                .containsExactly(LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 3), LocalDate.of(2026, 7, 5));
-        assertThat(result.intimacySeries()).extracting(PeopleIntimacySeriesItemResult::intimacy)
-                .containsExactly(10, 20, 30);
+        // then: 첫 기록일에서 시작해 오늘로 끝나는 30개 포인트가 생긴다
+        assertThat(result.intimacySeries()).hasSize(30);
+        assertThat(result.intimacySeries().getFirst().date()).isEqualTo(today.minusDays(59));
+        assertThat(result.intimacySeries().getLast().date()).isEqualTo(today);
+
+        // then: 포인트 간격이 최대 1일만 차이 나 균등하게 배분된다
+        List<Long> gaps = IntStream.range(1, result.intimacySeries().size())
+                .mapToObj(i -> ChronoUnit.DAYS.between(
+                        result.intimacySeries().get(i - 1).date(), result.intimacySeries().get(i).date()))
+                .distinct()
+                .toList();
+        assertThat(gaps).allMatch(gap -> gap == 2L || gap == 3L);
+
+        // then: 친밀도는 누적 상태값이므로 각 포인트 시점까지의 최신 기록 값을 쓴다
+        assertThat(result.currentIntimacy()).isEqualTo(50);
+        assertThat(result.intimacySeries().getFirst().intimacy()).isEqualTo(10);
+        assertThat(result.intimacySeries().getLast().intimacy()).isEqualTo(50);
     }
 
     @Test
-    @DisplayName("WEEK 해상도는 from 기준 7일 버킷으로 묶고 각 버킷의 마지막 기록 값을 사용한다")
-    void intimacySeries_week_resolution() {
-        // given: 같은 주에 7/1(10)·7/3(20), 다음 주에 7/8(30) 기록
-        LocalDate from = LocalDate.of(2026, 7, 1);
-        LocalDate to = LocalDate.of(2026, 7, 31);
-        given(relationshipRepository.findAllByUserIdAndPartnerUserIdAndDateBetweenOrderByDateAsc(ME, 20L, from, to))
+    @DisplayName("기간이 30일보다 짧으면 하루 단위 포인트만 만들어 날짜가 중복되지 않는다")
+    void intimacySeries_short_range_falls_back_to_daily_points() {
+        // given: 2일 전 첫 기록(10)과 오늘 기록(30)
+        LocalDate today = KstTimes.today();
+        given(relationshipRepository.findAllByUserIdAndPartnerUserIdOrderByDateAsc(ME, 20L))
                 .willReturn(List.of(
-                        relationship(ME, 20L, LocalDate.of(2026, 7, 1), 10, "{}"),
-                        relationship(ME, 20L, LocalDate.of(2026, 7, 3), 20, "{}"),
-                        relationship(ME, 20L, LocalDate.of(2026, 7, 8), 30, "{}")));
-        given(relationshipRepository.findLatestByUserIdAndPartnerUserId(ME, 20L))
-                .willReturn(Optional.of(relationship(ME, 20L, LocalDate.of(2026, 7, 8), 30, "{}")));
+                        relationship(ME, 20L, today.minusDays(2), 10, "{}"),
+                        relationship(ME, 20L, today, 30, "{}")));
 
-        // when: WEEK 해상도로 시계열 조회
-        PeopleIntimacySeriesResult result = peopleService.intimacySeries(ME, 20L, from, to, IntimacyResolution.WEEK, 10);
+        // when: 친밀도 시계열 조회
+        PeopleIntimacySeriesResult result = peopleService.intimacySeries(ME, 20L);
 
-        // then: 버킷 시작일(7/1, 7/8) 2개 포인트로 축약되고, 친밀도는 누적 상태값이므로 구간 끝 값을 쓴다
+        // then: 30개를 억지로 채우지 않고 하루 간격 3개 포인트만 내려간다
         assertThat(result.intimacySeries()).extracting(PeopleIntimacySeriesItemResult::date)
-                .containsExactly(LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 8));
+                .containsExactly(today.minusDays(2), today.minusDays(1), today);
         assertThat(result.intimacySeries()).extracting(PeopleIntimacySeriesItemResult::intimacy)
-                .containsExactly(20, 30);
-
-        // then: 마지막 포인트가 currentIntimacy와 일치해 그래프 끝과 현재 값이 어긋나지 않는다
-        assertThat(result.intimacySeries().getLast().intimacy()).isEqualTo(result.currentIntimacy());
+                .containsExactly(10, 10, 30);
     }
 
     @Test
-    @DisplayName("포인트 수가 maxPoints를 넘으면 균등 간격으로 다운샘플링해 maxPoints개만 남긴다")
-    void intimacySeries_downsamples_to_maxPoints() {
-        // given: 5건의 일별 기록, maxPoints는 2
-        LocalDate from = LocalDate.of(2026, 7, 1);
-        LocalDate to = LocalDate.of(2026, 7, 31);
-        given(relationshipRepository.findAllByUserIdAndPartnerUserIdAndDateBetweenOrderByDateAsc(ME, 20L, from, to))
-                .willReturn(List.of(
-                        relationship(ME, 20L, LocalDate.of(2026, 7, 1), 1, "{}"),
-                        relationship(ME, 20L, LocalDate.of(2026, 7, 2), 2, "{}"),
-                        relationship(ME, 20L, LocalDate.of(2026, 7, 3), 3, "{}"),
-                        relationship(ME, 20L, LocalDate.of(2026, 7, 4), 4, "{}"),
-                        relationship(ME, 20L, LocalDate.of(2026, 7, 5), 5, "{}")));
-        given(relationshipRepository.findLatestByUserIdAndPartnerUserId(ME, 20L))
-                .willReturn(Optional.of(relationship(ME, 20L, LocalDate.of(2026, 7, 5), 5, "{}")));
-
-        // when: maxPoints=2로 시계열 조회
-        PeopleIntimacySeriesResult result = peopleService.intimacySeries(ME, 20L, from, to, IntimacyResolution.DAY, 2);
-
-        // then: 각 구간의 마지막 포인트만 남아 2개가 된다
-        assertThat(result.intimacySeries()).extracting(PeopleIntimacySeriesItemResult::date)
-                .containsExactly(LocalDate.of(2026, 7, 2), LocalDate.of(2026, 7, 5));
-        assertThat(result.intimacySeries()).extracting(PeopleIntimacySeriesItemResult::intimacy)
-                .containsExactly(2, 5);
-    }
-
-    @Test
-    @DisplayName("관계 기록이 전혀 없으면 구간 조회·집계 전에 RELATIONSHIP_NOT_FOUND 예외가 발생한다")
+    @DisplayName("관계 기록이 전혀 없으면 RELATIONSHIP_NOT_FOUND 예외가 발생한다")
     void intimacySeries_without_relationship_throws() {
-        // when & then: 최신 관계 기록이 없으면 RELATIONSHIP_NOT_FOUND 예외 발생
-        assertThatThrownBy(() -> peopleService.intimacySeries(
-                ME, 20L, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31), IntimacyResolution.DAY, 10))
+        // given: 두 유저 사이의 관계 기록이 없음
+        given(relationshipRepository.findAllByUserIdAndPartnerUserIdOrderByDateAsc(ME, 20L))
+                .willReturn(List.of());
+
+        // when & then: 만난 첫 날을 정할 수 없으므로 RELATIONSHIP_NOT_FOUND 예외 발생
+        assertThatThrownBy(() -> peopleService.intimacySeries(ME, 20L))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.RELATIONSHIP_NOT_FOUND);
-
-        // then: 버려질 구간 조회와 버킷팅을 수행하지 않고 조기 실패한다
-        then(relationshipRepository).should(never())
-                .findAllByUserIdAndPartnerUserIdAndDateBetweenOrderByDateAsc(any(), any(), any(), any());
     }
 
     // ------------------------------------------------------------------ events()
@@ -547,7 +521,7 @@ class PeopleServiceUnitTest {
                 .willReturn(List.of(
                         relationship(ME, 20L, day1, 10, "{}"),
                         relationship(ME, 20L, day2, 35, "{}")));
-        willReturn(List.of(new StoredSceneNarrationLine("narr", "안녕이라고 했다", LocalTime.of(12, 0))))
+        willReturn(List.of(new StoredSceneNarrationLine("narr", "안녕이라고 했다", day1.atTime(12, 0))))
                 .given(objectMapper).readValue(eq(linesJson), any(TypeReference.class));
 
         // when: 이벤트 목록 조회
@@ -727,8 +701,8 @@ class PeopleServiceUnitTest {
         ReflectionTestUtils.setField(scene, "date", date);
         ReflectionTestUtils.setField(scene, "version", version);
         ReflectionTestUtils.setField(scene, "place", place);
-        ReflectionTestUtils.setField(scene, "startsAt", java.time.LocalTime.of(9, 0));
-        ReflectionTestUtils.setField(scene, "endsAt", java.time.LocalTime.of(10, 0));
+        ReflectionTestUtils.setField(scene, "startsAt", date.atTime(9, 0));
+        ReflectionTestUtils.setField(scene, "endsAt", date.atTime(10, 0));
         ReflectionTestUtils.setField(scene, "type", type);
         ReflectionTestUtils.setField(scene, "narration", narration);
         ReflectionTestUtils.setField(scene, "mind", mind);
@@ -786,16 +760,5 @@ class PeopleServiceUnitTest {
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("테스트 엔티티 생성 실패: " + type.getName(), e);
         }
-    }
-
-    @Test
-    @DisplayName("친밀도 시계열 조회 시 from이 to보다 늦으면 INVALID_DATE_RANGE 예외가 발생한다")
-    void intimacySeries_when_from_after_to_throws() {
-        // when & then: 뒤집힌 기간은 빈 결과 대신 명시적 오류로 거절된다
-        assertThatThrownBy(() -> peopleService.intimacySeries(
-                1L, 42L, LocalDate.of(2026, 7, 31), LocalDate.of(2026, 7, 1), IntimacyResolution.DAY, 10))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(ErrorCode.INVALID_DATE_RANGE);
     }
 }
