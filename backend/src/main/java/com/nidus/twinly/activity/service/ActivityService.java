@@ -86,8 +86,8 @@ public class ActivityService {
     }
 
     private ActivitySceneResult toSceneResult(Scene scene, List<Long> with) {
-        OffsetDateTime startsAt = KstTimes.toKstOffsetDateTime(scene.getDate().atTime(scene.getStartsAt()));
-        OffsetDateTime endsAt = KstTimes.toKstOffsetDateTime(scene.getDate().atTime(scene.getEndsAt()));
+        OffsetDateTime startsAt = KstTimes.toKstOffsetDateTime(scene.getStartsAt());
+        OffsetDateTime endsAt = KstTimes.toKstOffsetDateTime(scene.getEndsAt());
 
         return switch (scene.getType()) {
             case ACTION -> new ActivityActionSceneResult(
@@ -130,7 +130,7 @@ public class ActivityService {
 
     private List<SceneLine> toSceneLines(Scene scene) {
         return parseLines(scene).stream()
-                .map(line -> SceneLine.from(line, scene.getDate()))
+                .map(SceneLine::from)
                 .toList();
     }
 
@@ -149,7 +149,7 @@ public class ActivityService {
     }
 
     private ActivityQuestionResult toQuestionResult(Question question) {
-        OffsetDateTime time = KstTimes.toKstOffsetDateTime(question.getDate().atTime(question.getTime()));
+        OffsetDateTime time = KstTimes.toKstOffsetDateTime(question.getTime());
 
         return new ActivityQuestionResult(
                 question.getId(),

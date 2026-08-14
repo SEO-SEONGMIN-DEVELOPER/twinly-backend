@@ -89,8 +89,8 @@ POST /internal/v1/users/{userId}/simulations
   "scenes": [
     {
       "type": "action",
-      "start": "09:00",
-      "end": "09:30",
+      "start": "2026-08-09T09:00:00",
+      "end": "2026-08-09T09:30:00",
       "place": "강의동 앞",
       "with": ["2"],
       "narration": "아침 강의를 들으러 가는 길에 마주쳤다.",
@@ -98,20 +98,20 @@ POST /internal/v1/users/{userId}/simulations
     },
     {
       "type": "dialogue",
-      "start": "12:00",
-      "end": "12:40",
+      "start": "2026-08-09T12:00:00",
+      "end": "2026-08-09T12:40:00",
       "place": "학식당",
       "with": ["2"],
       "lines": [
-        { "t": "narr", "text": "점심 줄에서 다시 만났다.", "occursAt": "12:00" },
-        { "t": "bubble", "userId": "1", "action": "웃으며", "text": "여기서 또 보네요?", "occursAt": "12:05" },
-        { "t": "bubble", "userId": "2", "action": "고개를 끄덕이며", "text": "그러게요, 같이 먹을래요?", "occursAt": "12:06" }
+        { "t": "narr", "text": "점심 줄에서 다시 만났다.", "occursAt": "2026-08-09T12:00:00" },
+        { "t": "bubble", "userId": "1", "action": "웃으며", "text": "여기서 또 보네요?", "occursAt": "2026-08-09T12:05:00" },
+        { "t": "bubble", "userId": "2", "action": "고개를 끄덕이며", "text": "그러게요, 같이 먹을래요?", "occursAt": "2026-08-09T12:06:00" }
       ]
     }
   ],
   "questions": [
     {
-      "time": "13:00",
+      "time": "2026-08-09T13:00:00",
       "qtype": "promise",
       "partnerId": ["2"],
       "text": "내일 같이 점심 먹을래?",
@@ -121,7 +121,7 @@ POST /internal/v1/users/{userId}/simulations
   "relationships": [
     {
       "partnerId": "2",
-      "updateTime": "13:10",
+      "updateTime": "2026-08-09T13:10:00",
       "rapport": 72,
       "partnerModel": "조용하지만 대화가 시작되면 잘 받아주는 사람"
     }
@@ -131,10 +131,20 @@ POST /internal/v1/users/{userId}/simulations
 
 - `type`: `action` | `dialogue`
 - `lines[].t`: `narr` | `bubble`
-- `lines[].occursAt`: `HH:mm` 로컬 시각, **필수**. 빠뜨리면 요청 전체가 400
+- `lines[].action`: `bubble` 전용, **선택**. 생략하거나 `null` 로 보낼 수 있고 조회 시에도 `null` 로 내려옴
+- `lines[].occursAt`: `YYYY-MM-DDTHH:mm:ss` 로컬 시각, **필수**. 빠뜨리면 요청 전체가 400
 - `qtype`: `promise` | `persona`
 
-`lines[].occursAt` 은 대사 한 줄이 나온 시각입니다. 조회 API 에서는 `date` 와 합쳐져 절대시각(`2026-08-09T12:05:00+09:00`)으로 내려오므로, 주입할 때는 `start` ~ `end` 사이 값으로 넣어야 화면에서 자연스럽습니다. 서버는 범위나 순서를 검증하지 않습니다.
+`date` 를 제외한 모든 시각은 **날짜까지 포함한 로컬 시각**입니다. 타임존 오프셋(`+09:00`)을 붙이면 400 이니 붙이지 마세요.
+
+`lines[].occursAt` 은 대사 한 줄이 나온 시각입니다. 조회 API 에서 절대시각(`2026-08-09T12:05:00+09:00`)으로 내려오므로, 주입할 때는 `start` ~ `end` 사이 값으로 넣어야 화면에서 자연스럽습니다. 서버는 범위나 순서를 검증하지 않습니다.
+
+#### `date` 는 달력 날짜가 아니라 **하루 회차**입니다
+
+`date` 는 "이 데이터가 어느 하루 묶음에 속하는가"를 나타내는 키일 뿐이고, 각 시각의 날짜와 달라도 됩니다. AI 서버는 하루를 **06:00 ~ 다음 날 04:00** 으로 만들기 때문에, `date: "2026-08-09"` 인 회차에 `start: "2026-08-10T01:30:00"` 같은 새벽 씬이 섞여 들어옵니다.
+
+- `GET /api/v1/activities/2026-08-09` 는 그 새벽 씬까지 **함께** 내려줍니다. (8/10 조회에는 안 들어갑니다)
+- 따라서 화면에 날짜를 표기할 때는 `date` 가 아니라 **각 씬의 `startsAt`** 을 쓰세요.
 
 ### 5-3. 이 주입으로 채워지는 화면
 

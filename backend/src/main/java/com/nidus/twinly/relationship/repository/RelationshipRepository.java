@@ -63,7 +63,7 @@ public interface RelationshipRepository extends JpaRepository<Relationship, Long
                                           @Param("cursor") Long cursor,
                                           @Param("limit") Integer limit);
 
-    List<Relationship> findAllByUserIdAndPartnerUserIdAndDateBetweenOrderByDateAsc(Long userId, Long partnerUserId, LocalDate from, LocalDate to);
+    List<Relationship> findAllByUserIdAndPartnerUserIdOrderByDateAsc(Long userId, Long partnerUserId);
 
     void deleteAllByUserIdAndDate(Long userId, LocalDate date);
 

@@ -2,11 +2,11 @@ package com.nidus.twinly.simulation.dto.command;
 
 import com.nidus.twinly.simulation.dto.request.SimulationsRelationshipRequest;
 
-import java.time.LocalTime;
+import java.time.LocalDateTime;
 
 public record SimulationsRelationshipCommand(
         Long partnerId,
-        LocalTime updateTime,
+        LocalDateTime updateTime,
         Integer rapport,
         String partnerModel
 ) {

@@ -1,7 +1,6 @@
 package com.nidus.twinly.people.controller;
 
 import com.nidus.twinly.common.web.RequestId;
-import com.nidus.twinly.people.domain.IntimacyResolution;
 import com.nidus.twinly.people.dto.response.PeopleEventResponse;
 import com.nidus.twinly.people.dto.response.PeopleEventsResponse;
 import com.nidus.twinly.people.dto.response.PeopleIntimacySeriesResponse;
@@ -11,7 +10,6 @@ import com.nidus.twinly.people.dto.response.PeopleResponse;
 import com.nidus.twinly.people.service.PeopleService;
 import com.nidus.twinly.user.dto.header.UserInfo;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Max;
 import lombok.RequiredArgsConstructor;
@@ -59,18 +57,11 @@ public class PeopleController {
         peopleService.deleteFavorite(userInfo.id(), RequestId.toLong(partnerUserId, "userId"));
     }
 
-    @ApiResponses({
-            @ApiResponse(responseCode = "400", description = "INVALID_DATE_RANGE"),
-            @ApiResponse(responseCode = "404", description = "RELATIONSHIP_NOT_FOUND")
-    })
+    @ApiResponse(responseCode = "404", description = "RELATIONSHIP_NOT_FOUND")
     @GetMapping("/api/v1/people/{userId}/intimacy-series")
     public PeopleIntimacySeriesResponse intimacySeries(@AuthenticationPrincipal UserInfo userInfo,
-                                                       @PathVariable("userId") String partnerUserId,
-                                                       @RequestParam LocalDate from,
-                                                       @RequestParam LocalDate to,
-                                                       @RequestParam IntimacyResolution resolution,
-                                                       @RequestParam @Min(1) Integer maxPoints) {
-        return PeopleIntimacySeriesResponse.from(peopleService.intimacySeries(userInfo.id(), RequestId.toLong(partnerUserId, "userId"), from, to, resolution, maxPoints));
+                                                       @PathVariable("userId") String partnerUserId) {
+        return PeopleIntimacySeriesResponse.from(peopleService.intimacySeries(userInfo.id(), RequestId.toLong(partnerUserId, "userId")));
     }
 
     @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND")

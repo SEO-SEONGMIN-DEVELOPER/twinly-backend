@@ -11,8 +11,6 @@ public record ConnectionDrainingCommand(
 ) {
 
     public static ConnectionDrainingCommand from(ConnectionDrainingRequest request) {
-        ConnectionDrainingScope scope = request.scope() == null ? ConnectionDrainingScope.ALL : request.scope();
-
-        return new ConnectionDrainingCommand(request.reason(), request.retryAfterMs(), scope);
+        return new ConnectionDrainingCommand(request.reason(), request.retryAfterMs(), request.scope());
     }
 }

@@ -73,7 +73,6 @@ public enum ErrorCode {
     // 관계/사람
     ENCOUNTER_NOT_FOUND(HttpStatus.NOT_FOUND, "만난 적 없는 상대입니다."),
     RELATIONSHIP_NOT_FOUND(HttpStatus.NOT_FOUND, "관계 없는 상대입니다."),
-    INVALID_DATE_RANGE(HttpStatus.BAD_REQUEST, "조회 기간이 올바르지 않습니다."),
 
     // AI 채팅
     AI_QUESTION_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 턴의 AI 질문이 존재하지 않습니다."),

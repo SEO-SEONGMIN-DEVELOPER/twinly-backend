@@ -6,11 +6,11 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 
-import java.time.LocalTime;
+import java.time.LocalDateTime;
 import java.util.List;
 
 public record SimulationsQuestionRequest(
-        @NotNull LocalTime time,
+        @NotNull LocalDateTime time,
         @NotNull QuestionType qtype,
         @JsonFormat(shape = JsonFormat.Shape.STRING)
         @NotEmpty List<Long> partnerId,

@@ -2,14 +2,14 @@ package com.nidus.twinly.simulation.dto.command;
 
 import com.nidus.twinly.simulation.dto.request.SimulationsBubbleLineRequest;
 
-import java.time.LocalTime;
+import java.time.LocalDateTime;
 
 public record SimulationsBubbleLineCommand(
         String t,
         Long userId,
         String action,
         String text,
-        LocalTime occursAt
+        LocalDateTime occursAt
 ) implements SimulationsLineCommand {
 
     public static SimulationsBubbleLineCommand from(SimulationsBubbleLineRequest request) {

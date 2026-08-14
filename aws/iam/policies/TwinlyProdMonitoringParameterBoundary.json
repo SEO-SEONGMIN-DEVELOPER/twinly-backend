@@ -10,7 +10,7 @@
                 "ssm:GetParametersByPath"
             ],
             "NotResource": [
-                "arn:aws:ssm:ap-northeast-2:968177690717:parameter/twinly/prod/monitoring-env",
+                "arn:aws:ssm:ap-northeast-2:968177690717:parameter/twinly/prod/monitoring/env",
                 "arn:aws:ssm:*:*:parameter/aws/*",
                 "arn:aws:ssm:*:*:parameter/AmazonCloudWatch-*"
             ]

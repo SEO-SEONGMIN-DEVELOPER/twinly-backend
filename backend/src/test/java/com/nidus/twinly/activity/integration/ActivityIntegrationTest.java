@@ -20,7 +20,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalTime;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.hamcrest.Matchers.hasSize;
@@ -57,10 +57,10 @@ class ActivityIntegrationTest extends AbstractIntegrationTest {
         User partner = saveUser();
 
         Scene scene = sceneRepository.save(actionScene(me.getId(), "v1", "학교 복도",
-                LocalTime.of(9, 0), LocalTime.of(10, 0),
+                DATE.atTime(9, 0), DATE.atTime(10, 0),
                 "복도를 천천히 걸었다", "조금 설레었다"));
         scenePartnerRepository.save(scenePartner(scene.getId(), partner.getId()));
-        Question question = questionRepository.save(question(me.getId(), LocalTime.of(21, 30),
+        Question question = questionRepository.save(question(me.getId(), DATE.atTime(21, 30),
                 QuestionType.PROMISE, "오늘 어땠어?", List.of("좋았어", "별로야")));
         flushAndClear();
 
@@ -109,13 +109,13 @@ class ActivityIntegrationTest extends AbstractIntegrationTest {
 
         String linesJson = """
                 [
-                  {"t":"narr","text":"교실이 조용해졌다","occursAt":"12:00:00"},
-                  {"t":"bubble","userId":%d,"action":"웃으며","text":"안녕","occursAt":"12:05:00"}
+                  {"t":"narr","text":"교실이 조용해졌다","occursAt":"2026-07-26T12:00:00"},
+                  {"t":"bubble","userId":%d,"action":"웃으며","text":"안녕","occursAt":"2026-07-26T12:05:00"}
                 ]
                 """.formatted(partner.getId());
 
         Scene scene = sceneRepository.save(dialogueScene(me.getId(), "v1", "교실",
-                LocalTime.of(12, 0), LocalTime.of(12, 30), linesJson));
+                DATE.atTime(12, 0), DATE.atTime(12, 30), linesJson));
         scenePartnerRepository.save(scenePartner(scene.getId(), partner.getId()));
         flushAndClear();
 
@@ -175,7 +175,7 @@ class ActivityIntegrationTest extends AbstractIntegrationTest {
     }
 
     private Scene actionScene(Long userId, String version, String place,
-                              LocalTime startsAt, LocalTime endsAt,
+                              LocalDateTime startsAt, LocalDateTime endsAt,
                               String narration, String mind) {
         Scene scene = newScene(userId, version, place, startsAt, endsAt, SceneType.ACTION);
         ReflectionTestUtils.setField(scene, "narration", narration);
@@ -184,7 +184,7 @@ class ActivityIntegrationTest extends AbstractIntegrationTest {
     }
 
     private Scene dialogueScene(Long userId, String version, String place,
-                                LocalTime startsAt, LocalTime endsAt, String lines) {
+                                LocalDateTime startsAt, LocalDateTime endsAt, String lines) {
         Scene scene = newScene(userId, version, place, startsAt, endsAt, SceneType.DIALOGUE);
         ReflectionTestUtils.setField(scene, "lines", lines, String.class);
         return scene;
@@ -193,7 +193,7 @@ class ActivityIntegrationTest extends AbstractIntegrationTest {
     // Scene/Question/ScenePartner는 protected 기본 생성자만 있고 생성 팩토리가 없으므로 리플렉션으로 픽스처를 만든다.
     // created_at 등 NOT NULL 컬럼은 반드시 채워야 INSERT가 통과한다.
     private Scene newScene(Long userId, String version, String place,
-                           LocalTime startsAt, LocalTime endsAt, SceneType type) {
+                           LocalDateTime startsAt, LocalDateTime endsAt, SceneType type) {
         Scene scene = BeanUtils.instantiateClass(Scene.class);
         ReflectionTestUtils.setField(scene, "userId", userId);
         ReflectionTestUtils.setField(scene, "date", DATE);
@@ -214,7 +214,7 @@ class ActivityIntegrationTest extends AbstractIntegrationTest {
         return scenePartner;
     }
 
-    private Question question(Long userId, LocalTime time, QuestionType type, String text, List<String> options) {
+    private Question question(Long userId, LocalDateTime time, QuestionType type, String text, List<String> options) {
         Question question = BeanUtils.instantiateClass(Question.class);
         ReflectionTestUtils.setField(question, "userId", userId);
         ReflectionTestUtils.setField(question, "date", DATE);

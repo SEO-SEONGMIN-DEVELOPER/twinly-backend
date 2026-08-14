@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalTime;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Entity
@@ -31,7 +31,7 @@ public class Question {
     private String version;
 
     @Column(nullable = false)
-    private LocalTime time;
+    private LocalDateTime time;
 
     @Enumerated(EnumType.STRING)
     private QuestionType type;
@@ -50,7 +50,7 @@ public class Question {
 
     private Instant createdAt;
 
-    public static Question create(Long userId, LocalDate date, String version, LocalTime time, QuestionType type,
+    public static Question create(Long userId, LocalDate date, String version, LocalDateTime time, QuestionType type,
                                   String text, List<String> options) {
         Question question = new Question();
 

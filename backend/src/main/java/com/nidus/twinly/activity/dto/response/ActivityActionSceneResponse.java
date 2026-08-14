@@ -18,6 +18,7 @@ public record ActivityActionSceneResponse(
         @Schema(nullable = true)
         List<Long> with,
         String narration,
+        @Schema(nullable = true)
         String mind
 ) implements ActivitySceneResponse {
 

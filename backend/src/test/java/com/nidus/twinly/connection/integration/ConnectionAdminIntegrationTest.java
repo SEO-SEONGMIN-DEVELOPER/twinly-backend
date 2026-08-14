@@ -35,7 +35,7 @@ class ConnectionAdminIntegrationTest extends AbstractIntegrationTest {
                         .header("X-Admin-Token", ADMIN_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"reason":"deploy","retryAfterMs":3000}
+                                {"reason":"deploy","retryAfterMs":3000,"scope":"all"}
                                 """))
                 .andExpect(status().isOk());
     }
@@ -50,7 +50,7 @@ class ConnectionAdminIntegrationTest extends AbstractIntegrationTest {
                         .header("X-Admin-Token", ADMIN_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"reason":"maintenance"}
+                                {"reason":"maintenance","scope":"all"}
                                 """))
                 .andExpect(status().isOk());
     }
@@ -64,7 +64,7 @@ class ConnectionAdminIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(post(ADMIN_DRAINING_PATH)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"reason":"deploy","retryAfterMs":3000}
+                                {"reason":"deploy","retryAfterMs":3000,"scope":"all"}
                                 """))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value(ErrorCode.UNAUTHORIZED.name()));
@@ -80,7 +80,23 @@ class ConnectionAdminIntegrationTest extends AbstractIntegrationTest {
                         .header("X-Admin-Token", ADMIN_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"retryAfterMs":3000}
+                                {"retryAfterMs":3000,"scope":"all"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(ErrorCode.INVALID_REQUEST.name()));
+    }
+
+    @Test
+    @DisplayName("draining 예고 실패: 전파 범위가 없으면 400과 INVALID_REQUEST를 반환한다")
+    void notifyDraining_withoutScope_returns400() throws Exception {
+        // given: scope 가 빠진 요청 (한 대만 비울지 전체에 뿌릴지는 운영자가 매번 정해야 한다)
+
+        // when & then
+        mockMvc.perform(post(ADMIN_DRAINING_PATH)
+                        .header("X-Admin-Token", ADMIN_TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reason":"deploy","retryAfterMs":3000}
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value(ErrorCode.INVALID_REQUEST.name()));
@@ -96,7 +112,7 @@ class ConnectionAdminIntegrationTest extends AbstractIntegrationTest {
                         .header("X-Admin-Token", ADMIN_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"reason":"deploy","retryAfterMs":0}
+                                {"reason":"deploy","retryAfterMs":0,"scope":"all"}
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value(ErrorCode.INVALID_REQUEST.name()));
@@ -112,7 +128,7 @@ class ConnectionAdminIntegrationTest extends AbstractIntegrationTest {
                         .header("X-Admin-Token", ADMIN_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"reason":"unknown","retryAfterMs":3000}
+                                {"reason":"unknown","retryAfterMs":3000,"scope":"all"}
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value(ErrorCode.INVALID_REQUEST.name()));

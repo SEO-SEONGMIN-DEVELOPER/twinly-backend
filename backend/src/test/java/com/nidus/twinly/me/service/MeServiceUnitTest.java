@@ -81,7 +81,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
@@ -1007,7 +1006,7 @@ class MeServiceUnitTest {
         ReflectionTestUtils.setField(question, "id", id);
         ReflectionTestUtils.setField(question, "userId", userId);
         ReflectionTestUtils.setField(question, "date", date);
-        ReflectionTestUtils.setField(question, "time", LocalTime.of(9, 0));
+        ReflectionTestUtils.setField(question, "time", date.atTime(9, 0));
         ReflectionTestUtils.setField(question, "type", QuestionType.PERSONA);
         ReflectionTestUtils.setField(question, "text", "망설임 질문");
         ReflectionTestUtils.setField(question, "options", options);

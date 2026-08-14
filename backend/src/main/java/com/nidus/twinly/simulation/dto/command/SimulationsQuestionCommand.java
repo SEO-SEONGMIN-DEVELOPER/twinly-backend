@@ -3,11 +3,11 @@ package com.nidus.twinly.simulation.dto.command;
 import com.nidus.twinly.activity.domain.QuestionType;
 import com.nidus.twinly.simulation.dto.request.SimulationsQuestionRequest;
 
-import java.time.LocalTime;
+import java.time.LocalDateTime;
 import java.util.List;
 
 public record SimulationsQuestionCommand(
-        LocalTime time,
+        LocalDateTime time,
         QuestionType qtype,
         List<Long> partnerId,
         String text,

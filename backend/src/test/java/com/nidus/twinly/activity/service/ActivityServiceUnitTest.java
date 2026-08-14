@@ -38,7 +38,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalTime;
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -97,7 +97,7 @@ class ActivityServiceUnitTest {
     void activity_maps_action_scene() {
         // given: 파트너 1명이 있는 action 씬 1개와 그 파트너 유저가 존재
         Scene scene = actionScene(10L, "v1", "학교 복도",
-                LocalTime.of(9, 0), LocalTime.of(10, 0),
+                DATE.atTime(9, 0), DATE.atTime(10, 0),
                 "복도를 천천히 걸었다", "조금 설레었다");
         given(sceneRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of(scene));
         given(scenePartnerRepository.findAllBySceneIdIn(List.of(10L))).willReturn(List.of(scenePartner(10L, 100L)));
@@ -130,17 +130,37 @@ class ActivityServiceUnitTest {
     }
 
     @Test
+    @DisplayName("date 다음 날 새벽에 일어난 씬도 해당 회차에 포함되고 실제 날짜의 KST 시각으로 내려간다")
+    void activity_maps_scene_after_midnight() {
+        // given: 7/26 회차에 속하지만 실제로는 7/27 새벽에 일어난 씬
+        Scene scene = actionScene(10L, "v1", "편의점",
+                DATE.plusDays(1).atTime(1, 30), DATE.plusDays(1).atTime(2, 0),
+                "야식을 샀다", "출출했다");
+        given(sceneRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of(scene));
+        given(userRepository.findAllById(List.of(USER_ID))).willReturn(List.of(user(USER_ID, "나", "자신")));
+        given(questionRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of());
+
+        // when: 7/26 회차 조회
+        ActivityResult result = activityService.activity(USER_ID, DATE);
+
+        // then: date가 아니라 씬에 저장된 실제 시각이 그대로 변환된다
+        ActivityActionSceneResult action = (ActivityActionSceneResult) result.scenes().get(0);
+        assertThat(action.startsAt()).isEqualTo(OffsetDateTime.of(2026, 7, 27, 1, 30, 0, 0, KST));
+        assertThat(action.endsAt()).isEqualTo(OffsetDateTime.of(2026, 7, 27, 2, 0, 0, 0, KST));
+    }
+
+    @Test
     @DisplayName("dialogue 씬의 lines JSON은 narr/bubble 타입으로 구분되어 파싱된다")
     void activity_parses_dialogue_lines() {
         // given: narr 1줄 + bubble 1줄이 담긴 lines JSON을 가진 dialogue 씬
         String linesJson = """
                 [
-                  {"t":"narr","text":"교실이 조용해졌다","occursAt":"12:00:00"},
-                  {"t":"bubble","userId":100,"action":"웃으며","text":"안녕","occursAt":"12:05:00"}
+                  {"t":"narr","text":"교실이 조용해졌다","occursAt":"2026-07-26T12:00:00"},
+                  {"t":"bubble","userId":100,"action":"웃으며","text":"안녕","occursAt":"2026-07-26T12:05:00"}
                 ]
                 """;
         Scene scene = dialogueScene(11L, "v1", "교실",
-                LocalTime.of(12, 0), LocalTime.of(12, 30), linesJson);
+                DATE.atTime(12, 0), DATE.atTime(12, 30), linesJson);
         given(sceneRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of(scene));
         given(userRepository.findAllById(List.of(USER_ID))).willReturn(List.of(user(USER_ID, "나", "자신")));
         given(questionRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of());
@@ -175,7 +195,7 @@ class ActivityServiceUnitTest {
     void activity_broken_lines_json_does_not_fail_whole_day() {
         // given: lines에 배열이 아닌 JSON이 저장된 dialogue 씬
         Scene broken = dialogueScene(11L, "v1", "교실",
-                LocalTime.of(12, 0), LocalTime.of(12, 30), "{\"not\":\"an array\"}");
+                DATE.atTime(12, 0), DATE.atTime(12, 30), "{\"not\":\"an array\"}");
         given(sceneRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of(broken));
         given(userRepository.findAllById(List.of(USER_ID))).willReturn(List.of(user(USER_ID, "나", "자신")));
         given(questionRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of());
@@ -194,7 +214,7 @@ class ActivityServiceUnitTest {
     void activity_dialogue_with_null_lines_returns_empty_lines() {
         // given: lines가 저장되지 않은 dialogue 씬
         Scene scene = dialogueScene(11L, "v1", "교실",
-                LocalTime.of(12, 0), LocalTime.of(12, 30), null);
+                DATE.atTime(12, 0), DATE.atTime(12, 30), null);
         given(sceneRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of(scene));
         given(userRepository.findAllById(List.of(USER_ID))).willReturn(List.of(user(USER_ID, "나", "자신")));
         given(questionRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of());
@@ -208,13 +228,13 @@ class ActivityServiceUnitTest {
     }
 
     @Test
-    @DisplayName("질문은 date와 time을 합쳐 KST 시각으로 변환하고 타입을 문자열로 내보낸다")
+    @DisplayName("질문은 저장된 시각을 KST 시각으로 변환하고 타입을 문자열로 내보낸다")
     void activity_maps_questions() {
         // given: 씬은 없고 PROMISE 질문 1개만 존재
         given(sceneRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of());
         given(userRepository.findAllById(List.of(USER_ID))).willReturn(List.of(user(USER_ID, "나", "자신")));
         given(questionRepository.findAllByUserIdAndDate(USER_ID, DATE))
-                .willReturn(List.of(question(50L, LocalTime.of(21, 30), QuestionType.PROMISE,
+                .willReturn(List.of(question(50L, DATE.atTime(21, 30), QuestionType.PROMISE,
                         "오늘 어땠어?", List.of("좋았어", "별로야"))));
 
         // when: 활동 조회
@@ -254,9 +274,9 @@ class ActivityServiceUnitTest {
     void activity_maps_user_infos_per_partner() {
         // given: 두 씬에 걸쳐 파트너 100(사진 있음), 200(사진 없음)이 등장하고 100은 두 씬 모두에 등장
         Scene first = actionScene(10L, "v1", "학교 복도",
-                LocalTime.of(9, 0), LocalTime.of(10, 0), "걸었다", "설레었다");
+                DATE.atTime(9, 0), DATE.atTime(10, 0), "걸었다", "설레었다");
         Scene second = actionScene(11L, "v1", "교실",
-                LocalTime.of(11, 0), LocalTime.of(12, 0), "앉았다", "무덤덤했다");
+                DATE.atTime(11, 0), DATE.atTime(12, 0), "앉았다", "무덤덤했다");
         given(sceneRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of(first, second));
         given(scenePartnerRepository.findAllBySceneIdIn(List.of(10L, 11L)))
                 .willReturn(List.of(scenePartner(10L, 100L), scenePartner(11L, 100L), scenePartner(11L, 200L)));
@@ -283,7 +303,7 @@ class ActivityServiceUnitTest {
     void activity_without_partners_returns_null_with() {
         // given: 동행자가 없는 씬 1개
         Scene scene = actionScene(10L, "v1", "집",
-                LocalTime.of(9, 0), LocalTime.of(10, 0), "쉬었다", "편안했다");
+                DATE.atTime(9, 0), DATE.atTime(10, 0), "쉬었다", "편안했다");
         given(sceneRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of(scene));
         given(userRepository.findAllById(List.of(USER_ID))).willReturn(List.of(user(USER_ID, "나", "자신")));
         given(questionRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of());
@@ -298,7 +318,7 @@ class ActivityServiceUnitTest {
     }
 
     private Scene actionScene(Long id, String version, String place,
-                              LocalTime startsAt, LocalTime endsAt,
+                              LocalDateTime startsAt, LocalDateTime endsAt,
                               String narration, String mind) {
         Scene scene = newScene(id, version, place, startsAt, endsAt, SceneType.ACTION);
         ReflectionTestUtils.setField(scene, "narration", narration);
@@ -307,7 +327,7 @@ class ActivityServiceUnitTest {
     }
 
     private Scene dialogueScene(Long id, String version, String place,
-                                LocalTime startsAt, LocalTime endsAt, String lines) {
+                                LocalDateTime startsAt, LocalDateTime endsAt, String lines) {
         Scene scene = newScene(id, version, place, startsAt, endsAt, SceneType.DIALOGUE);
         ReflectionTestUtils.setField(scene, "lines", lines, String.class);
         return scene;
@@ -315,7 +335,7 @@ class ActivityServiceUnitTest {
 
     // Scene은 protected 기본 생성자만 있으므로 리플렉션으로 인스턴스를 만들고 필드를 채운다.
     private Scene newScene(Long id, String version, String place,
-                           LocalTime startsAt, LocalTime endsAt, SceneType type) {
+                           LocalDateTime startsAt, LocalDateTime endsAt, SceneType type) {
         Scene scene = BeanUtils.instantiateClass(Scene.class);
         ReflectionTestUtils.setField(scene, "id", id);
         ReflectionTestUtils.setField(scene, "userId", USER_ID);
@@ -337,7 +357,7 @@ class ActivityServiceUnitTest {
         return scenePartner;
     }
 
-    private Question question(Long id, LocalTime time, QuestionType type, String text, List<String> options) {
+    private Question question(Long id, LocalDateTime time, QuestionType type, String text, List<String> options) {
         Question question = BeanUtils.instantiateClass(Question.class);
         ReflectionTestUtils.setField(question, "id", id);
         ReflectionTestUtils.setField(question, "userId", USER_ID);
