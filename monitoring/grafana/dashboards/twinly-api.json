@@ -42,7 +42,20 @@
           "min": 0,
           "custom": { "fillOpacity": 10 }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": { "id": "byRegexp", "options": "^api-a$" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byRegexp", "options": "^api-c$" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": { "displayMode": "list", "placement": "bottom" },
@@ -69,7 +82,20 @@
           "min": 0,
           "custom": { "fillOpacity": 0 }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": { "id": "byRegexp", "options": "^api-a$" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byRegexp", "options": "^api-c$" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": { "displayMode": "list", "placement": "bottom" },
@@ -108,7 +134,20 @@
             ]
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": { "id": "byRegexp", "options": "^api-a$" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byRegexp", "options": "^api-c$" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": { "displayMode": "list", "placement": "bottom" },
@@ -197,10 +236,36 @@
         },
         "overrides": [
           {
-            "matcher": { "id": "byRegexp", "options": ".*대기.*" },
+            "matcher": { "id": "byRegexp", "options": "^api-a 사용 중$" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byRegexp", "options": "^api-c 사용 중$" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byRegexp", "options": ".*대기$" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "purple" } },
+              { "id": "custom.lineWidth", "value": 2 }
+            ]
+          },
+          {
+            "matcher": { "id": "byRegexp", "options": "^api-c 대기$" },
+            "properties": [
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } }
+            ]
+          },
+          {
+            "matcher": { "id": "byRegexp", "options": ".*최대$" },
             "properties": [
               { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } },
-              { "id": "custom.lineWidth", "value": 2 }
+              { "id": "custom.lineWidth", "value": 1 },
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [4, 4] } }
             ]
           }
         ]
@@ -255,7 +320,20 @@
             ]
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": { "id": "byRegexp", "options": "^api-a$" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byRegexp", "options": "^api-c$" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": { "displayMode": "list", "placement": "bottom" },
