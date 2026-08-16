@@ -33,7 +33,7 @@
     {
       "id": 1,
       "type": "timeseries",
-      "title": "초당 요청 수 (uri별)",
+      "title": "초당 요청 수",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
@@ -42,7 +42,20 @@
           "min": 0,
           "custom": { "fillOpacity": 10 }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": { "id": "byRegexp", "options": "^api-a$" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byRegexp", "options": "^api-c$" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": { "displayMode": "list", "placement": "bottom" },
@@ -52,8 +65,8 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum by (node, uri) (rate(http_server_requests_seconds_count{node=~\"$node\"}[1m]))",
-          "legendFormat": "{{node}} · {{uri}}"
+          "expr": "sum by (node) (rate(http_server_requests_seconds_count{node=~\"$node\"}[1m]))",
+          "legendFormat": "{{node}}"
         }
       ]
     },
@@ -69,7 +82,20 @@
           "min": 0,
           "custom": { "fillOpacity": 0 }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": { "id": "byRegexp", "options": "^api-a$" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byRegexp", "options": "^api-c$" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": { "displayMode": "list", "placement": "bottom" },
@@ -108,7 +134,20 @@
             ]
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": { "id": "byRegexp", "options": "^api-a$" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byRegexp", "options": "^api-c$" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": { "displayMode": "list", "placement": "bottom" },
@@ -124,11 +163,70 @@
       ]
     },
     {
+      "id": 7,
+      "type": "table",
+      "title": "API별 트래픽",
+      "description": "최근 5분간 요청이 있었던 API. 트래픽이 없는 API 는 표시하지 않는다.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "초당 요청 수" },
+            "properties": [
+              { "id": "unit", "value": "reqps" },
+              { "id": "decimals", "value": 3 },
+              { "id": "custom.width", "value": 130 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "메서드" },
+            "properties": [{ "id": "custom.width", "value": 80 }]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [{ "displayName": "초당 요청 수", "desc": true }],
+        "footer": {
+          "show": false,
+          "reducer": ["sum"],
+          "fields": "",
+          "countRows": false,
+          "enablePagination": true
+        }
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true },
+            "renameByName": {
+              "method": "메서드",
+              "uri": "API",
+              "Value": "초당 요청 수"
+            },
+            "indexByName": { "method": 0, "uri": 1, "Value": 2 }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (method, uri) (rate(http_server_requests_seconds_count{node=~\"$node\"}[5m])) > 0",
+          "format": "table",
+          "instant": true
+        }
+      ]
+    },
+    {
       "id": 4,
       "type": "timeseries",
       "title": "DB 커넥션",
       "description": "대기가 0보다 크면 커넥션 풀이 고갈된 상태다.",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
@@ -138,10 +236,36 @@
         },
         "overrides": [
           {
-            "matcher": { "id": "byRegexp", "options": ".*대기.*" },
+            "matcher": { "id": "byRegexp", "options": "^api-a 사용 중$" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byRegexp", "options": "^api-c 사용 중$" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byRegexp", "options": ".*대기$" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "purple" } },
+              { "id": "custom.lineWidth", "value": 2 }
+            ]
+          },
+          {
+            "matcher": { "id": "byRegexp", "options": "^api-c 대기$" },
+            "properties": [
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } }
+            ]
+          },
+          {
+            "matcher": { "id": "byRegexp", "options": ".*최대$" },
             "properties": [
               { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } },
-              { "id": "custom.lineWidth", "value": 2 }
+              { "id": "custom.lineWidth", "value": 1 },
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [4, 4] } }
             ]
           }
         ]
@@ -176,7 +300,7 @@
       "type": "timeseries",
       "title": "힙 사용률",
       "description": "jvm_memory_max_bytes 는 일부 영역이 -1 이라 max(... > 0) 으로 실제 상한만 고른다.",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
@@ -196,7 +320,20 @@
             ]
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": { "id": "byRegexp", "options": "^api-a$" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byRegexp", "options": "^api-c$" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": { "displayMode": "list", "placement": "bottom" },
@@ -216,7 +353,7 @@
       "type": "stat",
       "title": "서버 생존",
       "description": "Prometheus 가 스크래핑에 성공하면 1, 실패하면 0.",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
