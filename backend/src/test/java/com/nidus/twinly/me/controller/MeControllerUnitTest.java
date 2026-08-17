@@ -25,6 +25,7 @@ import com.nidus.twinly.me.dto.result.MeConsentsItemResult;
 import com.nidus.twinly.me.dto.result.MeConsentsResult;
 import com.nidus.twinly.me.dto.result.MeHesitationsResult;
 import com.nidus.twinly.me.dto.result.MeProfileEditViewResult;
+import com.nidus.twinly.me.dto.result.MeProfileResult;
 import com.nidus.twinly.me.dto.result.MeProfilePhotoCommitResult;
 import com.nidus.twinly.me.dto.result.MeProfilePhotoPresignResult;
 import com.nidus.twinly.me.dto.result.MeProfileVisibilitySettingsResult;
@@ -752,5 +753,63 @@ class MeControllerUnitTest {
                     .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
         }
         then(meService).should(never()).appNotificationsFeeds(anyLong(), any(), any(), any());
+    }
+
+    // ---------------------------------------------------------------- 내 프로필 조회
+
+    @Test
+    @DisplayName("내 프로필 조회 성공 시 200과 함께 userId를 문자열로 직렬화한 JSON을 반환한다")
+    void myProfile_success() throws Exception {
+        // given: 서비스가 내 프로필 정보를 반환
+        given(meService.profile(ME))
+                .willReturn(new MeProfileResult(1L, "홍길동",
+                        new ProfilePhotoInfo("profile/1/key", "https://cdn/p.jpg", new PhotoPosInfo(new PhotoPosInfo.StartPos(10, 20), 100, 200)),
+                        "새로운 걸 좋아한다, 약속은 꼭 지킨다, 먼저 말을 건다...",
+                        List.of("등산", "영화"), 2, 1));
+
+        // when: 내 프로필 조회 API 호출
+        var result = mockMvc.perform(get("/api/v1/me/profile")
+                .header("Authorization", BEARER));
+
+        // then: 200 반환 + userId는 문자열로 직렬화 + 인증 유저 id로 서비스에 위임
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.userId").value("1"))
+                .andExpect(jsonPath("$.userName").value("홍길동"))
+                .andExpect(jsonPath("$.profilePhoto.key").value("profile/1/key"))
+                .andExpect(jsonPath("$.profilePhoto.photoUrl").value("https://cdn/p.jpg"))
+                .andExpect(jsonPath("$.persona").value("새로운 걸 좋아한다, 약속은 꼭 지킨다, 먼저 말을 건다..."))
+                .andExpect(jsonPath("$.interests[0]").value("등산"))
+                .andExpect(jsonPath("$.interests[1]").value("영화"))
+                .andExpect(jsonPath("$.encounteredPeopleCount").value(2))
+                .andExpect(jsonPath("$.encounteredFriendCount").value(1));
+        then(meService).should().profile(ME);
+    }
+
+    @Test
+    @DisplayName("내 프로필 조회 시 프로필 사진이 없으면 profilePhoto를 null로 직렬화한다")
+    void myProfile_without_photo_serializes_null() throws Exception {
+        // given: 서비스가 사진 없는 프로필을 반환
+        given(meService.profile(ME))
+                .willReturn(new MeProfileResult(1L, "홍길동", null, "...", List.of(), 0, 0));
+
+        // when: 내 프로필 조회 API 호출
+        var result = mockMvc.perform(get("/api/v1/me/profile")
+                .header("Authorization", BEARER));
+
+        // then: 200 반환 + profilePhoto는 null, 관심사는 빈 배열
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.profilePhoto").doesNotExist())
+                .andExpect(jsonPath("$.interests").isEmpty());
+    }
+
+    @Test
+    @DisplayName("내 프로필 조회 시 인증 헤더가 없으면 401을 반환하고 서비스를 호출하지 않는다")
+    void myProfile_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 내 프로필 조회 API 호출
+        var result = mockMvc.perform(get("/api/v1/me/profile"));
+
+        // then: 401 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isUnauthorized());
+        then(meService).should(never()).profile(anyLong());
     }
 }
