@@ -5,6 +5,7 @@ import com.nidus.twinly.activity.entity.Question;
 import com.nidus.twinly.activity.repository.QuestionRepository;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
 import com.nidus.twinly.common.crypto.BlindIndexHasher;
+import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.photo.PhotoPosInfo;
 import com.nidus.twinly.common.photo.PhotoType;
@@ -43,6 +44,7 @@ import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsResult;
 import com.nidus.twinly.me.dto.result.MeConsentsResult;
 import com.nidus.twinly.me.dto.result.MeHesitationsResult;
 import com.nidus.twinly.me.dto.result.MeProfileEditViewResult;
+import com.nidus.twinly.me.dto.result.MeProfileResult;
 import com.nidus.twinly.me.dto.result.MeProfilePhotoCommitResult;
 import com.nidus.twinly.me.dto.result.MeProfilePhotoPresignResult;
 import com.nidus.twinly.me.dto.result.MeProfileVisibilitySettingsResult;
@@ -60,12 +62,17 @@ import com.nidus.twinly.notification.repository.NotificationSettingRepository;
 import com.nidus.twinly.report.domain.ReportReason;
 import com.nidus.twinly.report.domain.ReportStatus;
 import com.nidus.twinly.report.entity.Report;
+import com.nidus.twinly.people.repository.EncounterRepository;
+import com.nidus.twinly.relationship.entity.Relationship;
+import com.nidus.twinly.relationship.repository.RelationshipRepository;
 import com.nidus.twinly.report.repository.ReportRepository;
 import com.nidus.twinly.user.domain.DisclosureField;
 import com.nidus.twinly.user.entity.DisclosureAgreement;
+import com.nidus.twinly.user.entity.PersonaElement;
 import com.nidus.twinly.user.entity.Photo;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.DisclosureAgreementRepository;
+import com.nidus.twinly.user.repository.PersonaElementRepository;
 import com.nidus.twinly.user.repository.PhotoRepository;
 import com.nidus.twinly.user.repository.UserRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -145,6 +152,15 @@ class MeServiceUnitTest {
 
     @Mock
     PolicyCatalog policyCatalog;
+
+    @Mock
+    PersonaElementRepository personaElementRepository;
+
+    @Mock
+    EncounterRepository encounterRepository;
+
+    @Mock
+    RelationshipRepository relationshipRepository;
 
     @InjectMocks
     MeService meService;
@@ -962,7 +978,124 @@ class MeServiceUnitTest {
         assertThat(question.getIsSkipped()).isFalse();
     }
 
+    // ---------------------------------------------------------------- 내 프로필 조회
+
+    @Test
+    @DisplayName("내 프로필은 성+이름과 서명된 사진, 페르소나 요약, 관심사, 만난 사람·친구 수를 함께 반환한다")
+    void myProfile_success() {
+        // given: 유저·사진·페르소나 요소·만난 사람 2명(친밀도 75/10)이 모두 존재
+        User user = user();
+        ReflectionTestUtils.setField(user, "id", ME);
+        given(userRepository.findById(ME)).willReturn(Optional.of(user));
+
+        Photo photo = Photo.create(ME, PhotoType.PROFILE, "profile/1/key", 10, 20, 100, 200, Instant.now());
+        given(photoRepository.findByUserIdAndType(ME, PhotoType.PROFILE)).willReturn(Optional.of(photo));
+        given(cloudFrontService.getSignedUrl("profile/1/key")).willReturn("https://cdn/signed.jpg");
+
+        given(personaElementRepository.findAllByUserIdOrderByIdAsc(ME)).willReturn(List.of(
+                personaElement(PersonaDimension.OPENNESS, "새로운 걸 좋아한다"),
+                personaElement(PersonaDimension.OPENNESS, "낯선 곳도 잘 간다"),
+                personaElement(PersonaDimension.CONSCIENTIOUSNESS, "약속은 꼭 지킨다"),
+                personaElement(PersonaDimension.EXTRAVERSION, "먼저 말을 건다"),
+                personaElement(PersonaDimension.AGREEABLENESS, "잘 맞춰준다"),
+                personaElement(PersonaDimension.INTERESTS, "등산"),
+                personaElement(PersonaDimension.INTERESTS, "영화")));
+
+        given(encounterRepository.findAllPartnerUserIdsByUserId(ME)).willReturn(List.of(10L, 20L));
+        given(relationshipRepository.findLatestByUserIdAndPartnerUserIdIn(ME, List.of(10L, 20L)))
+                .willReturn(List.of(relationship(10L, 75), relationship(20L, 10)));
+
+        // when: 내 프로필 조회
+        MeProfileResult result = meService.profile(ME);
+
+        // then: 본인 화면이므로 성+이름, 페르소나는 차원별 첫 문장 3개까지만 요약, 지인은 친구 수에서 빠진다
+        assertThat(result.userId()).isEqualTo(ME);
+        assertThat(result.userName()).isEqualTo("홍길동");
+        assertThat(result.profilePhoto().photoUrl()).isEqualTo("https://cdn/signed.jpg");
+        assertThat(result.profilePhoto().position())
+                .isEqualTo(new PhotoPosInfo(new PhotoPosInfo.StartPos(10, 20), 100, 200));
+        assertThat(result.persona()).isEqualTo("새로운 걸 좋아한다, 약속은 꼭 지킨다, 먼저 말을 건다...");
+        assertThat(result.interests()).containsExactly("등산", "영화");
+        assertThat(result.encounteredPeopleCount()).isEqualTo(2);
+        assertThat(result.encounteredFriendCount()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("내 프로필 조회 시 프로필 사진이 없으면 profilePhoto는 null이다")
+    void myProfile_without_photo() {
+        // given: 유저는 있으나 프로필 사진이 없음
+        User user = user();
+        ReflectionTestUtils.setField(user, "id", ME);
+        given(userRepository.findById(ME)).willReturn(Optional.of(user));
+        given(photoRepository.findByUserIdAndType(ME, PhotoType.PROFILE)).willReturn(Optional.empty());
+
+        // when: 내 프로필 조회
+        MeProfileResult result = meService.profile(ME);
+
+        // then: profilePhoto는 null이고 CloudFront는 호출되지 않음
+        assertThat(result.profilePhoto()).isNull();
+        then(cloudFrontService).should(never()).getSignedUrl(any());
+    }
+
+    @Test
+    @DisplayName("페르소나 요소가 하나도 없으면 요약은 말줄임표만 남고 관심사는 빈 목록이다")
+    void myProfile_without_persona_elements() {
+        // given: 페르소나 요소가 전혀 없는 유저
+        User user = user();
+        ReflectionTestUtils.setField(user, "id", ME);
+        given(userRepository.findById(ME)).willReturn(Optional.of(user));
+        given(personaElementRepository.findAllByUserIdOrderByIdAsc(ME)).willReturn(List.of());
+
+        // when: 내 프로필 조회
+        MeProfileResult result = meService.profile(ME);
+
+        // then: 이어붙일 문장이 없어 접미사만 남고 관심사는 빈 목록
+        assertThat(result.persona()).isEqualTo("...");
+        assertThat(result.interests()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("만난 사람이 없으면 두 카운트 모두 0이고 관계 기록은 조회하지 않는다")
+    void myProfile_without_encounters() {
+        // given: 만난 적이 없는 유저
+        User user = user();
+        ReflectionTestUtils.setField(user, "id", ME);
+        given(userRepository.findById(ME)).willReturn(Optional.of(user));
+        given(encounterRepository.findAllPartnerUserIdsByUserId(ME)).willReturn(List.of());
+
+        // when: 내 프로필 조회
+        MeProfileResult result = meService.profile(ME);
+
+        // then: 카운트는 0이고 불필요한 관계 조회는 일어나지 않음
+        assertThat(result.encounteredPeopleCount()).isZero();
+        assertThat(result.encounteredFriendCount()).isZero();
+        then(relationshipRepository).should(never()).findLatestByUserIdAndPartnerUserIdIn(anyLong(), anyList());
+    }
+
+    @Test
+    @DisplayName("내 프로필 조회 시 유저가 없으면 USER_NOT_FOUND 예외가 발생한다")
+    void myProfile_user_not_found_throws() {
+        // given: 유저가 존재하지 않음
+        given(userRepository.findById(ME)).willReturn(Optional.empty());
+
+        // when & then: USER_NOT_FOUND 예외 발생 + 사진 조회로 넘어가지 않음
+        assertThatThrownBy(() -> meService.profile(ME))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.USER_NOT_FOUND);
+
+        then(photoRepository).should(never()).findByUserIdAndType(anyLong(), any());
+    }
+
     // ---------------------------------------------------------------- 픽스처
+
+    private PersonaElement personaElement(PersonaDimension dimension, String explanation) {
+        return PersonaElement.create(ME, dimension, explanation, Instant.now());
+    }
+
+    private Relationship relationship(Long partnerUserId, int intimacy) {
+        return Relationship.create(ME, LocalDate.of(2026, 7, 26), "v1", partnerUserId, intimacy, "model", null);
+    }
 
     private User user() {
         return User.create(

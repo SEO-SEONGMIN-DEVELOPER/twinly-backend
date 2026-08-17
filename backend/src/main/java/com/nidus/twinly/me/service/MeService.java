@@ -5,6 +5,7 @@ import com.nidus.twinly.activity.entity.Question;
 import com.nidus.twinly.activity.repository.QuestionRepository;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
 import com.nidus.twinly.common.crypto.BlindIndexHasher;
+import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.common.photo.PhotoPosInfo;
 import com.nidus.twinly.common.photo.PhotoType;
 import com.nidus.twinly.common.photo.ProfilePhotoInfo;
@@ -46,6 +47,7 @@ import com.nidus.twinly.me.dto.result.MeHesitationsResult;
 import com.nidus.twinly.me.dto.result.MePushNotificationsResult;
 import com.nidus.twinly.me.dto.result.MePushNotificationsSettingsResult;
 import com.nidus.twinly.me.dto.result.MeProfileEditViewResult;
+import com.nidus.twinly.me.dto.result.MeProfileResult;
 import com.nidus.twinly.me.dto.result.MeProfilePhotoCommitResult;
 import com.nidus.twinly.me.dto.result.MeProfilePhotoPresignResult;
 import com.nidus.twinly.me.dto.result.MeProfileVisibilitySettingsResult;
@@ -60,14 +62,19 @@ import com.nidus.twinly.notification.entity.AppNotificationFeed;
 import com.nidus.twinly.notification.entity.NotificationSetting;
 import com.nidus.twinly.notification.repository.AppNotificationFeedRepository;
 import com.nidus.twinly.notification.repository.NotificationSettingRepository;
+import com.nidus.twinly.people.repository.EncounterRepository;
+import com.nidus.twinly.relationship.domain.RelationshipType;
+import com.nidus.twinly.relationship.repository.RelationshipRepository;
 import com.nidus.twinly.report.domain.ReportStatus;
 import com.nidus.twinly.report.entity.Report;
 import com.nidus.twinly.report.repository.ReportRepository;
 import com.nidus.twinly.user.domain.DisclosureField;
 import com.nidus.twinly.user.entity.DisclosureAgreement;
+import com.nidus.twinly.user.entity.PersonaElement;
 import com.nidus.twinly.user.entity.Photo;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.DisclosureAgreementRepository;
+import com.nidus.twinly.user.repository.PersonaElementRepository;
 import com.nidus.twinly.user.repository.PhotoRepository;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -77,6 +84,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.Map;
@@ -92,6 +100,18 @@ public class MeService {
 
     private static final Duration WITHDRAWAL_RECOVERABLE_PERIOD = Duration.ofDays(15);
     private static final int DEFAULT_APP_NOTIFICATIONS_LIMIT = 20;
+    private static final int PERSONA_SUMMARY_SIZE = 3;
+    private static final String PERSONA_SUMMARY_DELIMITER = ", ";
+    private static final String PERSONA_SUMMARY_SUFFIX = "...";
+    private static final List<PersonaDimension> PERSONA_SUMMARY_DIMENSIONS = List.of(
+            PersonaDimension.OPENNESS,
+            PersonaDimension.CONSCIENTIOUSNESS,
+            PersonaDimension.EXTRAVERSION,
+            PersonaDimension.AGREEABLENESS,
+            PersonaDimension.NEUROTICISM,
+            PersonaDimension.LIFE_STYLE,
+            PersonaDimension.CONFLICT_STYLE,
+            PersonaDimension.COMMUNICATION_STYLE);
 
     private final PresignService presignService;
     private final PhotoCommitService photoCommitService;
@@ -109,6 +129,9 @@ public class MeService {
     private final AppNotificationFeedRepository appNotificationFeedRepository;
     private final ReportRepository reportRepository;
     private final QuestionRepository questionRepository;
+    private final PersonaElementRepository personaElementRepository;
+    private final EncounterRepository encounterRepository;
+    private final RelationshipRepository relationshipRepository;
 
     private final PolicyCatalog policyCatalog;
 
@@ -443,6 +466,55 @@ public class MeService {
         }
 
         question.answer(command.answer());
+    }
+
+    public MeProfileResult profile(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        ProfilePhotoInfo profilePhoto = photoRepository.findByUserIdAndType(userId, PhotoType.PROFILE)
+                .map(photo -> new ProfilePhotoInfo(photo.getKey(), cloudFrontService.getSignedUrl(photo.getKey()), photo.position()))
+                .orElse(null);
+
+        Map<PersonaDimension, List<String>> explanationsByDimension = personaElementRepository.findAllByUserIdOrderByIdAsc(userId).stream()
+                .collect(Collectors.groupingBy(
+                        PersonaElement::getDimension,
+                        LinkedHashMap::new,
+                        Collectors.mapping(PersonaElement::getExplanation, Collectors.toList())
+                ));
+
+        List<Long> partnerUserIds = encounterRepository.findAllPartnerUserIdsByUserId(userId);
+
+        return new MeProfileResult(
+                user.getId(),
+                user.displayFullName(),
+                profilePhoto,
+                persona(explanationsByDimension),
+                explanationsByDimension.getOrDefault(PersonaDimension.INTERESTS, List.of()),
+                partnerUserIds.size(),
+                encounteredFriendCount(userId, partnerUserIds)
+        );
+    }
+
+    private String persona(Map<PersonaDimension, List<String>> explanationsByDimension) {
+        List<String> explanations = PERSONA_SUMMARY_DIMENSIONS.stream()
+                .map(dimension -> explanationsByDimension.getOrDefault(dimension, List.of()))
+                .filter(dimensionExplanations -> !dimensionExplanations.isEmpty())
+                .map(List::getFirst)
+                .limit(PERSONA_SUMMARY_SIZE)
+                .toList();
+
+        return String.join(PERSONA_SUMMARY_DELIMITER, explanations) + PERSONA_SUMMARY_SUFFIX;
+    }
+
+    private int encounteredFriendCount(Long userId, List<Long> partnerUserIds) {
+        if (partnerUserIds.isEmpty()) {
+            return 0;
+        }
+
+        return (int) relationshipRepository.findLatestByUserIdAndPartnerUserIdIn(userId, partnerUserIds).stream()
+                .filter(relationship -> RelationshipType.fromIntimacy(relationship.getIntimacy()) != RelationshipType.ACQUAINTANCE)
+                .count();
     }
 
     private boolean isSameHandling(Question question, MeHesitationsAnswerCommand command) {
