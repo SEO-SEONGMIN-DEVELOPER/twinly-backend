@@ -26,8 +26,10 @@ jobs:
       IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
       ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
       AWS_REGION: ${{ vars.AWS_REGION }}
-      INSTANCE_IDS: i-0373d39748d04d49b i-09ddde9020d7a94ca
+      API_INSTANCE_IDS: i-0373d39748d04d49b i-09ddde9020d7a94ca
       MONITORING_INSTANCE_ID: i-0373d39748d04d49b
+      TARGET_GROUP_ARN: arn:aws:elasticloadbalancing:ap-northeast-2:968177690717:targetgroup/twinly-stage-api-tg/9a145ab64b8995bf
+      DRAINING_RETRY_AFTER_MS: 60000
 
     steps:
       - uses: actions/checkout@v4
@@ -47,7 +49,7 @@ jobs:
           docker build -t "$ECR_REGISTRY/twinly:$IMAGE_TAG" .
           docker push "$ECR_REGISTRY/twinly:$IMAGE_TAG"
 
-      - name: Deploy to Instances
+      - name: Deploy API Instances Sequentially
         run: |
           BUNDLE_B64=$(tar czf - docker-compose.stage.yaml monitoring/cloudwatch-agent | base64 -w0)
 
@@ -57,6 +59,7 @@ jobs:
               "set -e",
               "cd /home/ubuntu/twinly",
               "echo '${BUNDLE_B64}' | base64 -d | tar xzf -",
+              "if [ -f .env ]; then ADMIN_TOKEN=\$(grep '^ADMIN_API_TOKEN=' .env | cut -d= -f2-); curl -fsS -m 5 -X POST localhost:8080/admin/connection/draining -H \"X-Admin-Token: \$ADMIN_TOKEN\" -H 'Content-Type: application/json' -d '{\"reason\":\"deploy\",\"retryAfterMs\":${DRAINING_RETRY_AFTER_MS},\"scope\":\"local\"}' >/dev/null 2>&1 && echo 'draining 통보 완료' || echo 'draining 통보 생략 (앱 미기동 또는 호출 실패)'; sleep 3; fi",
               "aws ssm get-parameter --region ${AWS_REGION} --name /twinly/stage/api/env --with-decryption --query Parameter.Value --output text > .env.new",
               "grep -q '^JWT_SECRET_KEY=' .env.new",
               "chmod 600 .env.new",
@@ -68,21 +71,22 @@ jobs:
               "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}",
               "docker compose -f docker-compose.stage.yaml pull",
               "docker compose -f docker-compose.stage.yaml up -d",
-              "timeout 180 bash -c 'until curl -fsS localhost:8081/actuator/health >/dev/null; do sleep 5; done'",
+              "timeout 180 bash -c 'until curl -fsS localhost:8081/actuator/health/readiness >/dev/null; do sleep 5; done'",
               "/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:/home/ubuntu/twinly/monitoring/cloudwatch-agent/config.json"
             ]
           }
           EOF
 
-          COMMAND_ID=$(aws ssm send-command \
-            --instance-ids $INSTANCE_IDS \
-            --document-name AWS-RunShellScript \
-            --comment "deploy ${IMAGE_TAG}" \
-            --parameters file:///tmp/params.json \
-            --query Command.CommandId --output text)
+          for id in $API_INSTANCE_IDS; do
+            echo "::group::${id} 배포"
 
-          failed=0
-          for id in $INSTANCE_IDS; do
+            COMMAND_ID=$(aws ssm send-command \
+              --instance-ids "$id" \
+              --document-name AWS-RunShellScript \
+              --comment "deploy stage ${IMAGE_TAG}" \
+              --parameters file:///tmp/params.json \
+              --query Command.CommandId --output text)
+
             for _ in $(seq 1 60); do
               invocation=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$id" 2>/dev/null || echo '{}')
               status=$(jq -r '.Status // "Pending"' <<< "$invocation")
@@ -90,15 +94,37 @@ jobs:
               sleep 5
             done
 
-            echo "::group::${id} — ${status}"
             jq -r '.StandardOutputContent // ""' <<< "$invocation"
             jq -r '.StandardErrorContent // ""' <<< "$invocation"
             echo "::endgroup::"
 
-            [ "$status" = "Success" ] || failed=1
-          done
+            if [ "$status" != "Success" ]; then
+              echo "::error::${id} 배포 실패 (${status}). 나머지 인스턴스는 이전 버전으로 유지됩니다."
+              exit 1
+            fi
 
-          exit $failed
+            echo "${id} ALB 타겟이 healthy 가 될 때까지 대기"
+            for _ in $(seq 1 40); do
+              if ! health=$(aws elbv2 describe-target-health \
+                --target-group-arn "$TARGET_GROUP_ARN" \
+                --targets Id="$id",Port=8080 \
+                --query 'TargetHealthDescriptions[0].TargetHealth.State' --output text); then
+                echo "::error::${id} 타겟 상태 조회에 실패했습니다. 권한(elasticloadbalancing:DescribeTargetHealth) 또는 타겟 등록 여부를 확인하십시오."
+                exit 1
+              fi
+
+              [ "$health" = "healthy" ] && break
+              echo "  현재 ${health} — 재확인 대기"
+              sleep 10
+            done
+
+            if [ "$health" != "healthy" ]; then
+              echo "::error::${id} 가 400초 안에 healthy 가 되지 않았습니다 (마지막 상태: ${health}). 다음 인스턴스 배포를 중단합니다."
+              exit 1
+            fi
+
+            echo "${id} healthy 확인 — 다음 인스턴스로 진행"
+          done
 
       - name: Deploy Monitoring Stack
         run: |
