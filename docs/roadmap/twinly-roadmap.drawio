@@ -1,0 +1,115 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="twinly-roadmap" name="twinly 프로덕트 로드맵">
+    <mxGraphModel dx="1400" dy="1400" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1320" pageHeight="1300" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="mkLane" value="" style="rounded=1;arcSize=6;whiteSpace=wrap;html=1;fillColor=#EDF7F5;strokeColor=#6FAFA6;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="1040" y="608" width="220" height="460" as="geometry" />
+        </mxCell>
+
+        <mxCell id="spine" style="html=1;endArrow=block;endFill=1;endSize=5;strokeColor=#C5CDD4;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="262" y="100" as="sourcePoint" />
+            <mxPoint x="262" y="1088" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="r1m" value="4월" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#78909C;strokeColor=none;fontColor=#FFFFFF;fontSize=20;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="100" width="190" height="64" as="geometry" />
+        </mxCell>
+        <mxCell id="r1c" value="완료" style="rounded=1;arcSize=40;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#90A4AE;fontColor=#546E7A;fontSize=17;" vertex="1" parent="1">
+          <mxGeometry x="50" y="176" width="100" height="38" as="geometry" />
+        </mxCell>
+        <mxCell id="r1b" value="&lt;b style=&quot;font-size:24px&quot;&gt;문제 정의 · 수요 검증&lt;/b&gt;&lt;br&gt;&lt;br&gt;• 타깃 페인포인트 정의 및 아이디어 탐색&lt;br&gt;• 고객 인터뷰로 수요의 실재성 확인" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#CFD8DC;align=left;verticalAlign=top;spacingLeft=20;spacingRight=20;spacingTop=14;fontSize=21;fontColor=#37474F;" vertex="1" parent="1">
+          <mxGeometry x="284" y="100" width="736" height="140" as="geometry" />
+        </mxCell>
+
+        <mxCell id="r2m" value="5월 – 6월" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#607D8B;strokeColor=none;fontColor=#FFFFFF;fontSize=20;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="260" width="190" height="64" as="geometry" />
+        </mxCell>
+        <mxCell id="r2c" value="완료" style="rounded=1;arcSize=40;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#90A4AE;fontColor=#546E7A;fontSize=17;" vertex="1" parent="1">
+          <mxGeometry x="50" y="336" width="100" height="38" as="geometry" />
+        </mxCell>
+        <mxCell id="r2b" value="&lt;b style=&quot;font-size:24px&quot;&gt;초기 컨셉 MVP 구축&lt;/b&gt;&lt;br&gt;&lt;br&gt;• 핵심 가설 검증에 필요한 최소 기능만으로 MVP 완성&lt;br&gt;• MVP 기반 POC 수행으로 초기 컨셉의 실효성 측정" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#CFD8DC;align=left;verticalAlign=top;spacingLeft=20;spacingRight=20;spacingTop=14;fontSize=21;fontColor=#37474F;" vertex="1" parent="1">
+          <mxGeometry x="284" y="260" width="736" height="140" as="geometry" />
+        </mxCell>
+
+        <mxCell id="r3m" value="7월 – 8월" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#D98324;strokeColor=none;fontColor=#FFFFFF;fontSize=20;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="420" width="190" height="64" as="geometry" />
+        </mxCell>
+        <mxCell id="r3c" value="진행 중" style="rounded=1;arcSize=40;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E8A33D;fontColor=#C77914;fontSize=17;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="496" width="100" height="38" as="geometry" />
+        </mxCell>
+        <mxCell id="r3n" value="◀ 현시점 (8월)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=16;fontColor=#C77914;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="542" width="190" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="r3b" value="&lt;b style=&quot;font-size:24px&quot;&gt;컨셉 재정의 · 프로젝트 리뉴얼&lt;/b&gt;&lt;br&gt;&lt;br&gt;• POC 결과를 반영해 제품 컨셉 재정의&lt;br&gt;• 바이브 코딩 의존도를 걷어내고 코드베이스 전면 재구축&lt;br&gt;• 확장 국면을 감당할 기술 기반 확보" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFF8EF;strokeColor=#F0C892;align=left;verticalAlign=top;spacingLeft=20;spacingRight=20;spacingTop=14;fontSize=21;fontColor=#5C3D14;" vertex="1" parent="1">
+          <mxGeometry x="284" y="420" width="736" height="168" as="geometry" />
+        </mxCell>
+
+        <mxCell id="r4m" value="9월" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#2F6DB0;strokeColor=none;fontColor=#FFFFFF;fontSize=20;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="608" width="190" height="64" as="geometry" />
+        </mxCell>
+        <mxCell id="r4c" value="예정" style="rounded=1;arcSize=40;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#4A7FB5;fontColor=#2F6DB0;fontSize=17;" vertex="1" parent="1">
+          <mxGeometry x="50" y="684" width="100" height="38" as="geometry" />
+        </mxCell>
+        <mxCell id="r4b" value="&lt;b style=&quot;font-size:24px&quot;&gt;성북구 파일럿 오픈&lt;/b&gt;&lt;br&gt;&lt;br&gt;• 대학 밀집 지역 우선 오픈 &lt;font color=&quot;#5A7CA0&quot; style=&quot;font-size:18px&quot;&gt;(성균관대 · 고려대 · 성신여대 등)&lt;/font&gt;&lt;br&gt;• 실사용 데이터로 1차 검증" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#F2F7FC;strokeColor=#B9D3EC;align=left;verticalAlign=top;spacingLeft=20;spacingRight=20;spacingTop=14;fontSize=21;fontColor=#1F3F63;" vertex="1" parent="1">
+          <mxGeometry x="284" y="608" width="736" height="140" as="geometry" />
+        </mxCell>
+
+        <mxCell id="r5m" value="10월 – 11월" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#2559A0;strokeColor=none;fontColor=#FFFFFF;fontSize=20;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="768" width="190" height="64" as="geometry" />
+        </mxCell>
+        <mxCell id="r5c" value="예정" style="rounded=1;arcSize=40;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#4A7FB5;fontColor=#2F6DB0;fontSize=17;" vertex="1" parent="1">
+          <mxGeometry x="50" y="844" width="100" height="38" as="geometry" />
+        </mxCell>
+        <mxCell id="r5b" value="&lt;b style=&quot;font-size:24px&quot;&gt;서울 주요 지역구 확산&lt;/b&gt;&lt;br&gt;&lt;br&gt;• 파일럿에서 검증된 오픈 방식을 서울 주요 지역구에 순차 적용&lt;br&gt;• 지역구 단위 확장으로 운영의 반복 가능성 확인" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#F2F7FC;strokeColor=#B9D3EC;align=left;verticalAlign=top;spacingLeft=20;spacingRight=20;spacingTop=14;fontSize=21;fontColor=#1F3F63;" vertex="1" parent="1">
+          <mxGeometry x="284" y="768" width="736" height="140" as="geometry" />
+        </mxCell>
+
+        <mxCell id="r6m" value="12월" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#1B4380;strokeColor=none;fontColor=#FFFFFF;fontSize=20;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="928" width="190" height="64" as="geometry" />
+        </mxCell>
+        <mxCell id="r6c" value="예정" style="rounded=1;arcSize=40;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#4A7FB5;fontColor=#2F6DB0;fontSize=17;" vertex="1" parent="1">
+          <mxGeometry x="50" y="1004" width="100" height="38" as="geometry" />
+        </mxCell>
+        <mxCell id="r6b" value="&lt;b style=&quot;font-size:24px&quot;&gt;서울 통합 · 전국 확장&lt;/b&gt;&lt;br&gt;&lt;br&gt;• 지역구별 서비스를 서울 단일 권역으로 통합&lt;br&gt;• 전국 대학교 대상 확장 착수" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#F2F7FC;strokeColor=#B9D3EC;align=left;verticalAlign=top;spacingLeft=20;spacingRight=20;spacingTop=14;fontSize=21;fontColor=#1F3F63;" vertex="1" parent="1">
+          <mxGeometry x="284" y="928" width="736" height="140" as="geometry" />
+        </mxCell>
+
+        <mxCell id="mkLabel" value="마케팅 실행" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=21;fontStyle=1;fontColor=#276158;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="644" width="180" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="mkSub" value="오픈 시점부터&lt;br&gt;상시 가동" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=17;fontColor=#5C8F87;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="678" width="180" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="mk1" value="에브리타임" style="rounded=1;arcSize=40;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6FAFA6;fontColor=#276158;fontSize=19;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="800" width="180" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="mk2" value="메타 광고" style="rounded=1;arcSize=40;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6FAFA6;fontColor=#276158;fontSize=19;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="876" width="180" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="mk3" value="인플루언서 협업" style="rounded=1;arcSize=40;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6FAFA6;fontColor=#276158;fontSize=19;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="952" width="180" height="56" as="geometry" />
+        </mxCell>
+
+        <mxCell id="pivot" value="&lt;b style=&quot;font-size:24px&quot;&gt;시장 확장 계획 &lt;font color=&quot;#A88B33&quot;&gt;(상시 검토)&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;br&gt;대학생을 1차 타깃으로 확장하되, 파일럿 · 확산 단계에서 확보한 지표에 따라&lt;br&gt;&lt;b&gt;직장인 시장으로의 타깃 확대&lt;/b&gt;를 후속 확장 방향으로 병행 검토한다." style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;dashed=1;dashPattern=6 4;fillColor=#FFFDF5;strokeColor=#C7A44A;strokeWidth=2;align=left;verticalAlign=middle;spacingLeft=28;spacingRight=28;fontSize=21;fontColor=#5C4A14;" vertex="1" parent="1">
+          <mxGeometry x="50" y="1118" width="1210" height="140" as="geometry" />
+        </mxCell>
+
+        <mxCell id="lgDone" value="완료" style="rounded=1;arcSize=40;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#90A4AE;fontColor=#546E7A;fontSize=17;" vertex="1" parent="1">
+          <mxGeometry x="936" y="30" width="100" height="38" as="geometry" />
+        </mxCell>
+        <mxCell id="lgDoing" value="진행 중" style="rounded=1;arcSize=40;whiteSpace=wrap;html=1;fillColor=#FFF8EF;strokeColor=#E8A33D;fontColor=#C77914;fontSize=17;" vertex="1" parent="1">
+          <mxGeometry x="1048" y="30" width="100" height="38" as="geometry" />
+        </mxCell>
+        <mxCell id="lgTodo" value="예정" style="rounded=1;arcSize=40;whiteSpace=wrap;html=1;fillColor=#F2F7FC;strokeColor=#4A7FB5;fontColor=#2F6DB0;fontSize=17;" vertex="1" parent="1">
+          <mxGeometry x="1160" y="30" width="100" height="38" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
