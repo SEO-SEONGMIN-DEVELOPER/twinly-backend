@@ -8,4 +8,6 @@ import java.util.List;
 public interface PersonaElementRepository extends JpaRepository<PersonaElement, Long> {
 
     List<PersonaElement> findAllByUserIdOrderByIdAsc(Long userId);
+
+    boolean existsByUserId(Long userId);
 }

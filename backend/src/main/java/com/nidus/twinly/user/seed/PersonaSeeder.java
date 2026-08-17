@@ -85,27 +85,36 @@ public class PersonaSeeder implements ApplicationRunner {
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
-        if (userRepository.existsByEmailHash(blindIndexHasher.hash(email(SEED_USERS.getFirst(), 0)))) {
-            return;
-        }
-
         requireEnoughElements();
 
         Instant now = Instant.now();
-        List<PersonaElement> elements = new ArrayList<>();
-        List<Long> userIds = new ArrayList<>();
 
+        List<User> users = new ArrayList<>();
         for (int index = 0; index < SEED_USERS.size(); index++) {
-            User user = userRepository.save(toUser(SEED_USERS.get(index), index));
+            users.add(findOrCreateUser(SEED_USERS.get(index), index));
+        }
 
-            userIds.add(user.getId());
-            elements.addAll(toPersonaElements(user.getId(), index, now));
+        List<PersonaElement> elements = new ArrayList<>();
+        for (int index = 0; index < users.size(); index++) {
+            Long userId = users.get(index).getId();
+
+            if (!personaElementRepository.existsByUserId(userId)) {
+                elements.addAll(toPersonaElements(userId, index, now));
+            }
+        }
+
+        if (elements.isEmpty()) {
+            return;
         }
 
         personaElementRepository.saveAll(elements);
 
-        log.info("페르소나 시드 유저를 생성했습니다. userCount={}, elementCount={}, userIdFrom={}, userIdTo={}",
-                userIds.size(), elements.size(), userIds.getFirst(), userIds.getLast());
+        log.info("페르소나 시드 요소를 채웠습니다. userCount={}, elementCount={}", users.size(), elements.size());
+    }
+
+    private User findOrCreateUser(SeedUser seed, int index) {
+        return userRepository.findByEmailHash(blindIndexHasher.hash(email(seed, index)))
+                .orElseGet(() -> userRepository.save(toUser(seed, index)));
     }
 
     private void requireEnoughElements() {
