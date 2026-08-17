@@ -29,4 +29,11 @@ public interface EncounterRepository extends JpaRepository<Encounter, Long> {
             """, nativeQuery = true)
     List<Encounter> findAllByUserIdAndPartnerUserIdIn(@Param("userId") Long userId,
                                                       @Param("partnerUserIds") List<Long> partnerUserIds);
+
+    @Query(value = """
+            SELECT IF(e.user_a_id = :userId, e.user_b_id, e.user_a_id)
+            FROM encounters e
+            WHERE e.user_a_id = :userId OR e.user_b_id = :userId
+            """, nativeQuery = true)
+    List<Long> findAllPartnerUserIdsByUserId(@Param("userId") Long userId);
 }

@@ -189,7 +189,7 @@ public class PeopleService {
 
         return new PeopleProfileResult(
                 partnerUserId,
-                partner.displayName(),
+                partner.displayGivenName(),
                 profilePhoto,
                 intimacy,
                 RelationshipType.fromIntimacy(intimacy),
@@ -266,7 +266,7 @@ public class PeopleService {
 
         PeopleEventsPartnerResult partnerResult = new PeopleEventsPartnerResult(
                 partnerUserId,
-                partner.displayName(),
+                partner.displayGivenName(),
                 profilePhoto,
                 intimacy,
                 RelationshipSpecificType.fromIntimacy(intimacy)
@@ -400,7 +400,7 @@ public class PeopleService {
         return userIds.stream()
                 .map(userId -> new PeopleEventUserInfoResult(
                         userId,
-                        userById.get(userId).displayName(),
+                        userById.get(userId).displayGivenName(),
                         profilePhotoByUserId.get(userId)))
                 .toList();
     }

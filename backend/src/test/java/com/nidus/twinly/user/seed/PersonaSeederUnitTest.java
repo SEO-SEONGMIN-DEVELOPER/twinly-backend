@@ -21,6 +21,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -50,9 +52,11 @@ class PersonaSeederUnitTest {
     @InjectMocks
     PersonaSeeder personaSeeder;
 
+    AtomicLong sequence;
+
     @BeforeEach
     void setUp() {
-        AtomicLong sequence = new AtomicLong();
+        sequence = new AtomicLong();
 
         given(userRepository.save(any(User.class))).willAnswer(invocation -> {
             User user = invocation.getArgument(0);
@@ -66,7 +70,7 @@ class PersonaSeederUnitTest {
     @DisplayName("시드된 적이 없으면 유저 20명과 차원당 5개씩의 페르소나를 저장한다")
     void run_seeds_users_and_elements() {
         // given: 아직 시드 유저가 없는 상태
-        given(userRepository.existsByEmailHash(any())).willReturn(false);
+        given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
 
         // when: 시더 실행
         personaSeeder.run(null);
@@ -92,7 +96,7 @@ class PersonaSeederUnitTest {
     @DisplayName("유저끼리 같은 페르소나 문장을 공유하지 않는다")
     void run_gives_every_user_distinct_elements() {
         // given: 아직 시드 유저가 없는 상태
-        given(userRepository.existsByEmailHash(any())).willReturn(false);
+        given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
 
         // when: 시더 실행
         personaSeeder.run(null);
@@ -109,7 +113,7 @@ class PersonaSeederUnitTest {
     @DisplayName("전화번호는 01000009001부터, 이메일은 test-seed01부터 순서대로 배정한다")
     void run_assigns_phone_and_email_in_order() {
         // given: 아직 시드 유저가 없는 상태
-        given(userRepository.existsByEmailHash(any())).willReturn(false);
+        given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
 
         // when: 시더 실행
         personaSeeder.run(null);
@@ -131,7 +135,7 @@ class PersonaSeederUnitTest {
     @DisplayName("성별은 남녀 10명씩이고 학교는 세 곳이 섞여 있다")
     void run_keeps_gender_and_school_mix() {
         // given: 아직 시드 유저가 없는 상태
-        given(userRepository.existsByEmailHash(any())).willReturn(false);
+        given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
 
         // when: 시더 실행
         personaSeeder.run(null);
@@ -150,10 +154,11 @@ class PersonaSeederUnitTest {
     }
 
     @Test
-    @DisplayName("이미 시드된 상태면 유저도 페르소나도 저장하지 않는다")
+    @DisplayName("유저와 페르소나가 모두 있으면 아무것도 저장하지 않는다")
     void run_is_idempotent() {
-        // given: 첫 시드 유저의 이메일이 이미 존재하는 상태
-        given(userRepository.existsByEmailHash(any())).willReturn(true);
+        // given: 시드 유저도 페르소나도 이미 존재하는 상태
+        given(userRepository.findByEmailHash(any())).willAnswer(invocation -> Optional.of(existingUser()));
+        given(personaElementRepository.existsByUserId(any())).willReturn(true);
 
         // when: 시더 실행
         personaSeeder.run(null);
@@ -161,6 +166,39 @@ class PersonaSeederUnitTest {
         // then: 아무것도 저장하지 않음
         then(userRepository).should(never()).save(any(User.class));
         then(personaElementRepository).should(never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("유저는 남아 있는데 페르소나만 비어 있으면 페르소나만 채운다")
+    void run_backfills_elements_only() {
+        // given: 시드 유저는 존재하지만 페르소나가 전부 사라진 상태
+        given(userRepository.findByEmailHash(any())).willAnswer(invocation -> Optional.of(existingUser()));
+        given(personaElementRepository.existsByUserId(any())).willReturn(false);
+
+        // when: 시더 실행
+        personaSeeder.run(null);
+
+        // then: 유저는 새로 만들지 않고 페르소나만 채움
+        then(userRepository).should(never()).save(any(User.class));
+
+        List<PersonaElement> elements = savedElements();
+        assertThat(elements).hasSize(SEED_USER_COUNT * PersonaDimension.values().length * ELEMENTS_PER_DIMENSION);
+
+        Set<Long> userIds = elements.stream()
+                .map(PersonaElement::getUserId)
+                .collect(Collectors.toSet());
+        assertThat(userIds).hasSize(SEED_USER_COUNT);
+    }
+
+    private User existingUser() {
+        User user = User.create(
+                "기존유저", "김", "hash", "도윤", "hash", Gender.MALE,
+                "성균관대학교", "hash", "미디어커뮤니케이션학과", "hash",
+                "20210001", "hash", "2000-01-01", "hash",
+                "01000009001", "hash", "test-seed01@skku.edu", "hash");
+        ReflectionTestUtils.setField(user, "id", sequence.incrementAndGet());
+
+        return user;
     }
 
     private List<User> savedUsers() {

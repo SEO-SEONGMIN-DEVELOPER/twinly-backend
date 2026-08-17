@@ -125,8 +125,8 @@ class ActivityServiceUnitTest {
         assertThat(action.mind()).isEqualTo("조금 설레었다");
         assertThat(action.with()).containsExactly(100L);
         assertThat(result.userInfos()).containsExactly(
-                new ActivityUserInfoResult(USER_ID, "나자신", null),
-                new ActivityUserInfoResult(100L, "홍길동", null));
+                new ActivityUserInfoResult(USER_ID, "자신", null),
+                new ActivityUserInfoResult(100L, "길동", null));
     }
 
     @Test
@@ -292,10 +292,10 @@ class ActivityServiceUnitTest {
 
         // then: 조회자 본인이 맨 앞에 오고, 여러 씬에 중복 등장한 유저도 한 건이며, 이름과 key/서명 URL이 함께 담긴다
         assertThat(result.userInfos()).containsExactly(
-                new ActivityUserInfoResult(USER_ID, "나자신", null),
-                new ActivityUserInfoResult(100L, "홍길동", new ProfilePhotoInfo("profile/100/key", "https://cdn.example.com/signed100",
+                new ActivityUserInfoResult(USER_ID, "자신", null),
+                new ActivityUserInfoResult(100L, "길동", new ProfilePhotoInfo("profile/100/key", "https://cdn.example.com/signed100",
                         new PhotoPosInfo(new PhotoPosInfo.StartPos(10, 20), 100, 200))),
-                new ActivityUserInfoResult(200L, "김철수", null));
+                new ActivityUserInfoResult(200L, "철수", null));
     }
 
     @Test
@@ -314,7 +314,7 @@ class ActivityServiceUnitTest {
         // then: 빈 배열이 아니라 null로 내려가고, 본인 정보는 그대로 담긴다
         ActivityActionSceneResult action = (ActivityActionSceneResult) result.scenes().get(0);
         assertThat(action.with()).isNull();
-        assertThat(result.userInfos()).containsExactly(new ActivityUserInfoResult(USER_ID, "나자신", null));
+        assertThat(result.userInfos()).containsExactly(new ActivityUserInfoResult(USER_ID, "자신", null));
     }
 
     private Scene actionScene(Long id, String version, String place,

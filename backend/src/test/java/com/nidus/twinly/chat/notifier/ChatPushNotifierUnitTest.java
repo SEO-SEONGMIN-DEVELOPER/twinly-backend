@@ -110,7 +110,7 @@ class ChatPushNotifierUnitTest {
         assertThat(content.messageId()).isEqualTo(8821L);
         assertThat(content.roomId()).isEqualTo(ROOM_ID);
         assertThat(content.senderId()).isEqualTo(SENDER);
-        assertThat(content.senderName()).isEqualTo("김나야");
+        assertThat(content.senderName()).isEqualTo("나야");
         assertThat(content.text()).isEqualTo("내일 시간 괜찮아?");
         assertThat(content.senderThumbnailKey()).isEqualTo("profile/1/abc-thumb");
         then(fcmSender).should().send(built);

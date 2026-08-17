@@ -153,6 +153,58 @@ class AiChatServiceUnitTest {
     }
 
     @Test
+    @DisplayName("AI 채팅 시작 프롬프트는 관심사 중 하나를 골라 질문하도록 지시한다")
+    void aiChatStart_prompt_asks_about_interest() {
+        // given: 세션의 관심사가 2건 있음
+        given(anonSessionPersonaElementRepository.findAllByAnonSessionId(ANON_SESSION_ID))
+                .willReturn(List.of(
+                        AnonSessionPersonaElement.create(ANON_SESSION_ID, PersonaDimension.INTERESTS, "등산"),
+                        AnonSessionPersonaElement.create(ANON_SESSION_ID, PersonaDimension.INTERESTS, "재즈")));
+        given(bedrockService.converse(anyString())).willReturn("등산은 어디로 자주 가?");
+
+        // when: AI 채팅 시작
+        aiChatService.aiChatStart(ANON_SESSION);
+
+        // then: 프롬프트에 관심사 목록과 관심사 질문 지시가 포함됨
+        ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
+        then(bedrockService).should().converse(promptCaptor.capture());
+        assertThat(promptCaptor.getValue()).contains("[관심사]", "등산", "재즈", "위 관심사 중 하나를 골라");
+    }
+
+    @Test
+    @DisplayName("5번째 턴(인덱스 4) 질문은 직전 답변을 잇지 않고 관심사로 새 대화를 시작한다")
+    void aiChatMessage_restart_turn_asks_new_interest_question() {
+        // given: 3번 턴 AI 질문이 존재하고 0~3번 턴 AI 질문이 이미 쌓여 있음
+        given(aiChatRepository.findByAnonSessionIdAndTurnIndexAndSender(ANON_SESSION_ID, 3, AiChatSender.AI))
+                .willReturn(Optional.of(AiChat.create(ANON_SESSION_ID, AiChatSender.AI, "그 산 정상에서 뭐 했어?", 3)));
+        given(aiChatRepository.findByAnonSessionIdOrderByTurnIndexAscSenderDesc(ANON_SESSION_ID))
+                .willReturn(List.of(
+                        AiChat.create(ANON_SESSION_ID, AiChatSender.AI, "등산은 어디로 자주 가?", 0),
+                        AiChat.create(ANON_SESSION_ID, AiChatSender.USER, "북한산", 0),
+                        AiChat.create(ANON_SESSION_ID, AiChatSender.AI, "그 산 정상에서 뭐 했어?", 3)));
+        given(anonSessionPersonaElementRepository.findAllByAnonSessionId(ANON_SESSION_ID))
+                .willReturn(List.of(
+                        AnonSessionPersonaElement.create(ANON_SESSION_ID, PersonaDimension.INTERESTS, "등산"),
+                        AnonSessionPersonaElement.create(ANON_SESSION_ID, PersonaDimension.INTERESTS, "재즈")));
+        given(bedrockService.converse(anyString())).willReturn("재즈는 어떤 아티스트 좋아해?");
+
+        // when: 3번 턴에 답변 전송
+        OnboardingAiChatMessageResult result = aiChatService.aiChatMessage(ANON_SESSION,
+                new OnboardingAiChatMessageCommand("사진 찍었어", 3));
+
+        // then: 후속 질문 프롬프트가 아니라 관심사 시작 질문 프롬프트로 4번 턴 질문을 생성함
+        ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
+        then(bedrockService).should().converse(promptCaptor.capture());
+        assertThat(promptCaptor.getValue())
+                .contains("위 관심사 중 하나를 골라", "[이미 물어본 질문]", "등산은 어디로 자주 가?", "완전히 새로운 주제")
+                .doesNotContain("[방금 나눈 대화]", "사진 찍었어");
+
+        assertThat(result.message()).isEqualTo("재즈는 어떤 아티스트 좋아해?");
+        assertThat(result.turnIndex()).isEqualTo(4);
+        assertThat(result.isEnd()).isFalse();
+    }
+
+    @Test
     @DisplayName("마지막 턴(7)에 답하면 모델 호출 없이 종료 메시지와 isEnd=true를 반환한다")
     void aiChatMessage_last_turn_ends_conversation() {
         // given: 7번 턴 AI 질문이 존재

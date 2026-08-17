@@ -5,6 +5,7 @@ import com.nidus.twinly.activity.entity.Question;
 import com.nidus.twinly.activity.repository.QuestionRepository;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
 import com.nidus.twinly.common.crypto.BlindIndexHasher;
+import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.common.photo.PhotoType;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.legal.entity.Agreement;
@@ -21,10 +22,16 @@ import com.nidus.twinly.notification.entity.AppNotificationFeed;
 import com.nidus.twinly.notification.entity.NotificationSetting;
 import com.nidus.twinly.notification.repository.AppNotificationFeedRepository;
 import com.nidus.twinly.notification.repository.NotificationSettingRepository;
+import com.nidus.twinly.people.entity.Encounter;
+import com.nidus.twinly.people.repository.EncounterRepository;
+import com.nidus.twinly.relationship.entity.Relationship;
+import com.nidus.twinly.relationship.repository.RelationshipRepository;
 import com.nidus.twinly.support.AbstractIntegrationTest;
 import com.nidus.twinly.user.domain.DisclosureField;
+import com.nidus.twinly.user.entity.PersonaElement;
 import com.nidus.twinly.user.entity.Photo;
 import com.nidus.twinly.user.entity.User;
+import com.nidus.twinly.user.repository.PersonaElementRepository;
 import com.nidus.twinly.user.repository.PhotoRepository;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
@@ -70,6 +77,15 @@ class MeIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     PhotoRepository photoRepository;
+
+    @Autowired
+    PersonaElementRepository personaElementRepository;
+
+    @Autowired
+    EncounterRepository encounterRepository;
+
+    @Autowired
+    RelationshipRepository relationshipRepository;
 
     @Autowired
     BlindIndexHasher blindIndexHasher;
@@ -741,5 +757,69 @@ class MeIntegrationTest extends AbstractIntegrationTest {
                                 """))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("POLICY_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("내 프로필 조회: 실제 유저·사진·페르소나·만난 사람까지 관통해 성+이름과 요약·카운트가 내려온다")
+    void myProfile_success_end_to_end() throws Exception {
+        // given: 실제 유저 본인과 만난 상대 2명(FK 때문에 상대도 실제 저장)
+        User me = saveUser();
+        User friend = saveUser();
+        User acquaintance = saveUser();
+
+        // given: 프로필 사진 + CloudFront 서명 URL 목
+        String key = "profile/%d/photo-1".formatted(me.getId());
+        photoRepository.save(Photo.create(me.getId(), PhotoType.PROFILE, key, 10, 20, 100, 200, Instant.now()));
+        given(cloudFrontService.getSignedUrl(key)).willReturn("https://cdn.example.com/" + key);
+
+        // given: 요약에 쓰이는 차원 4개(앞 3개만 요약됨) + 관심사 2개
+        personaElementRepository.saveAll(List.of(
+                PersonaElement.create(me.getId(), PersonaDimension.OPENNESS, "새로운 걸 좋아한다", Instant.now()),
+                PersonaElement.create(me.getId(), PersonaDimension.CONSCIENTIOUSNESS, "약속은 꼭 지킨다", Instant.now()),
+                PersonaElement.create(me.getId(), PersonaDimension.EXTRAVERSION, "먼저 말을 건다", Instant.now()),
+                PersonaElement.create(me.getId(), PersonaDimension.AGREEABLENESS, "잘 맞춰준다", Instant.now()),
+                PersonaElement.create(me.getId(), PersonaDimension.INTERESTS, "등산", Instant.now()),
+                PersonaElement.create(me.getId(), PersonaDimension.INTERESTS, "영화", Instant.now())));
+
+        // given: 만난 기록 2건 — 하나는 내가 userA, 하나는 내가 userB로 정렬되도록 양방향 저장
+        encounterRepository.save(Encounter.create(me.getId(), friend.getId()));
+        encounterRepository.save(Encounter.create(acquaintance.getId(), me.getId()));
+
+        // given: friend는 어제 지인이었다가 오늘 친구로 올라섰고, acquaintance는 지인에 머문다
+        LocalDate today = LocalDate.now(KST);
+        relationshipRepository.saveAll(List.of(
+                relationship(me.getId(), friend.getId(), today.minusDays(1), 10),
+                relationship(me.getId(), friend.getId(), today, 75),
+                relationship(me.getId(), acquaintance.getId(), today, 10)));
+
+        // when: 본인의 실제 액세스 토큰으로 내 프로필 조회 API 호출
+        var result = mockMvc.perform(get("/api/v1/me/profile")
+                .header("Authorization", bearer(me.getId())));
+
+        // then: 200 + 본인 화면이므로 성+이름, 페르소나는 앞 3개 요약, 최신 친밀도 기준으로 지인은 친구 수에서 빠진다
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.userId").value(me.getId().toString()))
+                .andExpect(jsonPath("$.userName").value(me.getFamilyName() + me.getGivenName()))
+                .andExpect(jsonPath("$.profilePhoto.key").value(key))
+                .andExpect(jsonPath("$.profilePhoto.photoUrl").value("https://cdn.example.com/" + key))
+                .andExpect(jsonPath("$.profilePhoto.position.startPos.x").value(10))
+                .andExpect(jsonPath("$.profilePhoto.position.width").value(100))
+                .andExpect(jsonPath("$.persona").value("새로운 걸 좋아한다, 약속은 꼭 지킨다, 먼저 말을 건다..."))
+                .andExpect(jsonPath("$.interests[0]").value("등산"))
+                .andExpect(jsonPath("$.interests[1]").value("영화"))
+                .andExpect(jsonPath("$.encounteredPeopleCount").value(2))
+                .andExpect(jsonPath("$.encounteredFriendCount").value(1));
+    }
+
+    @Test
+    @DisplayName("내 프로필 조회: 인증 헤더가 없으면 401을 반환한다")
+    void myProfile_without_auth_returns_401() throws Exception {
+        // when & then: 인증 헤더 없이 호출하면 필터 단계에서 막힌다
+        mockMvc.perform(get("/api/v1/me/profile"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    private Relationship relationship(Long userId, Long partnerUserId, LocalDate date, int intimacy) {
+        return Relationship.create(userId, date, "v1", partnerUserId, intimacy, "model", date.atTime(9, 0));
     }
 }

@@ -64,7 +64,7 @@ public class AppNotificationFeedWriter {
 
     private String name(Long userId) {
         return userRepository.findById(userId)
-                .map(User::displayName)
+                .map(User::displayGivenName)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
     }
 }
