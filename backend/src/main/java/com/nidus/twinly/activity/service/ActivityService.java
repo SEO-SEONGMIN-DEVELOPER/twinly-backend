@@ -123,7 +123,7 @@ public class ActivityService {
         return userIds.stream()
                 .map(userId -> new ActivityUserInfoResult(
                         userId,
-                        userById.get(userId).displayName(),
+                        userById.get(userId).displayGivenName(),
                         profilePhotoByUserId.get(userId)))
                 .toList();
     }

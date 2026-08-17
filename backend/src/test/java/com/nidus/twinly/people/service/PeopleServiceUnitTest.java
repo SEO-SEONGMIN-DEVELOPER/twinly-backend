@@ -250,7 +250,7 @@ class PeopleServiceUnitTest {
     }
 
     @Test
-    @DisplayName("프로필은 성+이름을 합치고 공개 동의된 필드만 노출하며 차단/즐겨찾기 상태를 반영한다")
+    @DisplayName("프로필은 상대 이름만 담고 공개 동의된 필드만 노출하며 차단/즐겨찾기 상태를 반영한다")
     void profile_discloses_only_agreed_fields() {
         // given: 소속만 공개 동의하고, 즐겨찾기·차단된 상대
         User partner = user(20L, "김", "철수");
@@ -269,8 +269,8 @@ class PeopleServiceUnitTest {
         // when: 프로필 조회
         PeopleProfileResult result = peopleService.profile(ME, 20L);
 
-        // then: 이름 결합 + 동의 필드만 노출 + 즐겨찾기/차단 반영
-        assertThat(result.userName()).isEqualTo("김철수");
+        // then: 상대는 이름만 + 동의 필드만 노출 + 즐겨찾기/차단 반영
+        assertThat(result.userName()).isEqualTo("철수");
         assertThat(result.intimacy()).isEqualTo(75);
         assertThat(result.relationshipType()).isEqualTo(RelationshipType.BEST_FRIEND);
         assertThat(result.disclosedFields().affiliation()).isEqualTo("트윈리대학교");
@@ -528,7 +528,7 @@ class PeopleServiceUnitTest {
         PeopleEventsResult result = peopleService.events(ME, 20L, null, null);
 
         // then: 상대 정보와 날짜별 이벤트(변화량/관계 변화/미리보기)가 채워진다
-        assertThat(result.partner().userName()).isEqualTo("김철수");
+        assertThat(result.partner().userName()).isEqualTo("철수");
         assertThat(result.partner().intimacy()).isEqualTo(45);
         assertThat(result.partner().relationshipSpecificType()).isEqualTo(RelationshipSpecificType.RELATIONSHIP_SPECIFIC_TYPE_2);
 
@@ -592,8 +592,8 @@ class PeopleServiceUnitTest {
         assertThat(actionScene.mind()).isEqualTo("설렜다");
         assertThat(actionScene.with()).containsExactly(20L);
         assertThat(result.userInfos()).containsExactly(
-                new PeopleEventUserInfoResult(ME, "나자신", null),
-                new PeopleEventUserInfoResult(20L, "김철수", null));
+                new PeopleEventUserInfoResult(ME, "자신", null),
+                new PeopleEventUserInfoResult(20L, "철수", null));
     }
 
     @Test
@@ -618,10 +618,10 @@ class PeopleServiceUnitTest {
 
         // then: 조회자 본인이 맨 앞에 오고, 쿼리에서 빠진 씬의 40은 애초에 조회되지 않으며, 사진이 없는 30은 profilePhoto가 null
         assertThat(result.userInfos()).containsExactly(
-                new PeopleEventUserInfoResult(ME, "나자신", null),
-                new PeopleEventUserInfoResult(20L, "김철수", new ProfilePhotoInfo("profile/20/key", "https://cdn.example.com/signed20",
+                new PeopleEventUserInfoResult(ME, "자신", null),
+                new PeopleEventUserInfoResult(20L, "철수", new ProfilePhotoInfo("profile/20/key", "https://cdn.example.com/signed20",
                         new PhotoPosInfo(new PhotoPosInfo.StartPos(10, 20), 100, 200))),
-                new PeopleEventUserInfoResult(30L, "박영희", null));
+                new PeopleEventUserInfoResult(30L, "영희", null));
     }
 
     @Test
@@ -637,7 +637,7 @@ class PeopleServiceUnitTest {
         assertThat(result.scenes()).isEmpty();
         assertThat(result.version()).isNull();
         assertThat(result.userId()).isEqualTo(20L);
-        assertThat(result.userInfos()).containsExactly(new PeopleEventUserInfoResult(ME, "나자신", null));
+        assertThat(result.userInfos()).containsExactly(new PeopleEventUserInfoResult(ME, "자신", null));
     }
 
     // ------------------------------------------------------------ learnedFacts()

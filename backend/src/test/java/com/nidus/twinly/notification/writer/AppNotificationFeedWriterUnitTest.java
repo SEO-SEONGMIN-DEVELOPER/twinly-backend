@@ -69,12 +69,12 @@ class AppNotificationFeedWriterUnitTest {
         assertThat(mine.getTargetKind()).isEqualTo(AppNotificationFeedTargetType.CHAT);
         assertThat(mine.getTargetChatRoomId()).isEqualTo(ROOM_ID);
         assertThat(mine.getTargetUserId()).isNull();
-        assertThat(mine.getTitle()).isEqualTo("박상대님과 채팅방이 열렸어요.");
+        assertThat(mine.getTitle()).isEqualTo("상대님과 채팅방이 열렸어요.");
         assertThat(mine.getBody()).isEqualTo("채팅 탭에서 입장하기를 누르면, 상대가 동의한 뒤 대화가 시작돼요.");
         assertThat(mine.getReadAt()).isNull();
         assertThat(mine.getCreatedAt()).isNotNull();
 
-        assertThat(feedOf(feeds, PARTNER).getTitle()).isEqualTo("김나야님과 채팅방이 열렸어요.");
+        assertThat(feedOf(feeds, PARTNER).getTitle()).isEqualTo("나야님과 채팅방이 열렸어요.");
     }
 
     @Test
@@ -103,8 +103,8 @@ class AppNotificationFeedWriterUnitTest {
         assertThat(feed.getTargetUserId()).isEqualTo(PARTNER);
         assertThat(feed.getTargetChatRoomId()).isNull();
         assertThat(feed.getSimulationDate()).isEqualTo(DATE);
-        assertThat(feed.getTitle()).isEqualTo("박상대님과 친구가 되었어요.");
-        assertThat(feed.getBody()).isEqualTo("평행세계에서 박상대님과 친구가 되었어요.");
+        assertThat(feed.getTitle()).isEqualTo("상대님과 친구가 되었어요.");
+        assertThat(feed.getBody()).isEqualTo("평행세계에서 상대님과 친구가 되었어요.");
     }
 
     @Test

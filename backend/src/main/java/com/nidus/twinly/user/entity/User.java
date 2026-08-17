@@ -135,7 +135,7 @@ public class User {
         return deletedAt != null;
     }
 
-    public String displayName() {
+    public String displayFullName() {
         return isWithdrawn() ? WITHDRAWN_NAME : familyName + givenName;
     }
 

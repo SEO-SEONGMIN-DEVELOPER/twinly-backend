@@ -120,10 +120,10 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
         var result = mockMvc.perform(get("/api/v1/people/{userId}/profile", partner.getId().toString())
                 .header("Authorization", bearer(me.getId())));
 
-        // then: 200 + 성+이름 결합, 공개 미동의 필드는 null, 차단/즐겨찾기는 false
+        // then: 200 + 타인이므로 이름만, 공개 미동의 필드는 null, 차단/즐겨찾기는 false
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.userId").value(partner.getId().toString()))
-                .andExpect(jsonPath("$.userName").value(partner.getFamilyName() + partner.getGivenName()))
+                .andExpect(jsonPath("$.userName").value(partner.getGivenName()))
                 .andExpect(jsonPath("$.intimacy").value(75))
                 .andExpect(jsonPath("$.relationshipType").value("bestFriend"))
                 .andExpect(jsonPath("$.isFavorited").value(false))
@@ -219,7 +219,7 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
         // then: 200 + 상대 정보와 7/20 이벤트(장소·미리보기·변화량 30·관계 변화)가 내려온다
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.partner.userId").value(partner.getId().toString()))
-                .andExpect(jsonPath("$.partner.userName").value(partner.getFamilyName() + partner.getGivenName()))
+                .andExpect(jsonPath("$.partner.userName").value(partner.getGivenName()))
                 .andExpect(jsonPath("$.partner.intimacy").value(40))
                 .andExpect(jsonPath("$.events.length()").value(1))
                 .andExpect(jsonPath("$.events[0].date").value("2026-07-20"))
@@ -262,7 +262,8 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.userInfos.length()").value(2))
                 .andExpect(jsonPath("$.userInfos[0].userId").value(me.getId().toString()))
                 .andExpect(jsonPath("$.userInfos[1].userId").value(partner.getId().toString()))
-                .andExpect(jsonPath("$.userInfos[1].userName").value(partner.getFamilyName() + partner.getGivenName()));
+                .andExpect(jsonPath("$.userInfos[0].userName").value(me.getGivenName()))
+                .andExpect(jsonPath("$.userInfos[1].userName").value(partner.getGivenName()));
     }
 
     @Test

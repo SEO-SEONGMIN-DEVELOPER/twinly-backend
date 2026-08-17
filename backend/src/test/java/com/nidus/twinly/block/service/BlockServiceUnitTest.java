@@ -94,7 +94,7 @@ class BlockServiceUnitTest {
     }
 
     @Test
-    @DisplayName("차단 목록은 성+이름을 합쳐 반환하고, 탈퇴한 유저는 '탈퇴한 사용자'로 표기한다")
+    @DisplayName("차단 목록은 이름만 반환하고, 탈퇴한 유저는 '탈퇴한 사용자'로 표기한다")
     void blockList_maps_names_and_withdrawn_user() {
         // given: 차단 대상 2명 (정상 유저 10, 탈퇴 유저 20)
         given(blockRepository.findAllByUserId(1L))
@@ -109,10 +109,10 @@ class BlockServiceUnitTest {
         // when: 차단 목록 조회
         BlockListResult result = blockService.blockList(1L);
 
-        // then: 정상 유저는 성+이름, 탈퇴 유저는 '탈퇴한 사용자'
+        // then: 정상 유저는 이름만, 탈퇴 유저는 '탈퇴한 사용자'
         assertThat(result.blocks())
                 .extracting(item -> item.blockedUserId() + ":" + item.blockedUserName())
-                .containsExactly("10:홍길동", "20:탈퇴한 사용자");
+                .containsExactly("10:길동", "20:탈퇴한 사용자");
     }
 
     private User user(String familyName, String givenName, Instant deletedAt) {

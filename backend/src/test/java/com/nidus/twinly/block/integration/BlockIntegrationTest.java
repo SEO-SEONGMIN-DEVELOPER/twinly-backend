@@ -112,7 +112,7 @@ class BlockIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.blocks.length()").value(1))
                 .andExpect(jsonPath("$.blocks[0].blockedUserId").value(target.getId().toString()))
                 .andExpect(jsonPath("$.blocks[0].blockedUserName")
-                        .value(target.getFamilyName() + target.getGivenName()));
+                        .value(target.getGivenName()));
     }
 
     @Test
