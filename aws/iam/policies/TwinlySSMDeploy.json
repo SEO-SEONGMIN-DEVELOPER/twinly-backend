@@ -17,6 +17,12 @@
                 "ssm:ListCommandInvocations"
             ],
             "Resource": "*"
+        },
+        {
+            "Sid": "ElbDescribeDoesNotSupportResourceLevelPermissions",
+            "Effect": "Allow",
+            "Action": "elasticloadbalancing:DescribeTargetHealth",
+            "Resource": "*"
         }
     ]
 }
