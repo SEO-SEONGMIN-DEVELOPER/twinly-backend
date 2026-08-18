@@ -2,7 +2,11 @@ package com.nidus.twinly.user.seed;
 
 import com.nidus.twinly.common.crypto.BlindIndexHasher;
 import com.nidus.twinly.common.domain.Gender;
+import com.nidus.twinly.common.interest.InterestLoader;
 import com.nidus.twinly.common.persona.PersonaDimension;
+import com.nidus.twinly.common.survey.SurveyLoader;
+import com.nidus.twinly.common.survey.SurveyOptionName;
+import com.nidus.twinly.common.survey.SurveyQuestion;
 import com.nidus.twinly.user.entity.PersonaElement;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.PersonaElementRepository;
@@ -17,8 +21,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Random;
 
 @Slf4j
 @Component
@@ -26,14 +31,27 @@ import java.util.List;
 @RequiredArgsConstructor
 public class PersonaSeeder implements ApplicationRunner {
 
-    private static final int ELEMENTS_PER_DIMENSION = 5;
+    private static final int DETAIL_ELEMENTS_PER_USER = 5;
+    private static final int INTERESTS_PER_USER = 5;
+    private static final long ANSWER_SEED = 20260817L;
     private static final String PHONE_PREFIX = "0100000";
     private static final int PHONE_START = 9001;
     private static final String EMAIL_LOCAL_PREFIX = "test-seed";
 
+    private static final List<String> INTEREST_POOL = List.of(
+            "영화", "애니메이션", "드라마", "음악", "K-POP", "힙합", "인디음악", "콘서트",
+            "운동", "헬스", "러닝", "등산", "클라이밍", "수영", "테니스", "볼링",
+            "맛집", "카페", "커피", "디저트", "요리", "와인", "맥주",
+            "여행", "캠핑", "호캉스", "독서", "웹툰", "게임", "보드게임", "방탈출",
+            "사진", "전시", "뮤지컬", "반려동물", "강아지", "고양이",
+            "패션", "인테리어", "식물키우기", "재테크", "주식", "MBTI", "타로"
+    );
+
     private final UserRepository userRepository;
     private final PersonaElementRepository personaElementRepository;
     private final BlindIndexHasher blindIndexHasher;
+    private final SurveyLoader surveyLoader;
+    private final InterestLoader interestLoader;
 
     private enum SeedSchool {
         SKKU("성균관대학교", "skku.edu"),
@@ -118,15 +136,24 @@ public class PersonaSeeder implements ApplicationRunner {
     }
 
     private void requireEnoughElements() {
-        int required = SEED_USERS.size() * ELEMENTS_PER_DIMENSION;
+        int required = SEED_USERS.size() * DETAIL_ELEMENTS_PER_USER;
 
-        for (PersonaDimension dimension : PersonaDimension.values()) {
-            List<String> pool = PersonaSeedElements.BY_DIMENSION.get(dimension);
+        if (PersonaSeedElements.DETAIL.size() < required) {
+            throw new IllegalStateException("페르소나 시드 문장이 부족합니다. dimension=%s, required=%d, actual=%d"
+                    .formatted(PersonaDimension.DETAIL, required, PersonaSeedElements.DETAIL.size()));
+        }
 
-            if (pool == null || pool.size() < required) {
-                throw new IllegalStateException("페르소나 시드 문장이 부족합니다. dimension=%s, required=%d, actual=%d"
-                        .formatted(dimension, required, pool == null ? 0 : pool.size()));
-            }
+        if (INTEREST_POOL.size() < INTERESTS_PER_USER) {
+            throw new IllegalStateException("시드 관심사가 부족합니다. required=%d, actual=%d"
+                    .formatted(INTERESTS_PER_USER, INTEREST_POOL.size()));
+        }
+
+        List<String> unknown = INTEREST_POOL.stream()
+                .filter(interest -> !interestLoader.getAllInterests().contains(interest))
+                .toList();
+
+        if (!unknown.isEmpty()) {
+            throw new IllegalStateException("관심사 목록에 없는 시드 관심사가 있습니다: " + unknown);
         }
     }
 
@@ -153,17 +180,37 @@ public class PersonaSeeder implements ApplicationRunner {
     }
 
     private List<PersonaElement> toPersonaElements(Long userId, int index, Instant createdAt) {
-        return Arrays.stream(PersonaDimension.values())
-                .flatMap(dimension -> explanations(dimension, index).stream()
-                        .map(explanation -> PersonaElement.create(userId, dimension, explanation, createdAt)))
-                .toList();
+        Random random = new Random(ANSWER_SEED + index);
+        List<PersonaElement> elements = new ArrayList<>();
+
+        for (SurveyQuestion question : surveyLoader.getAllQuestions()) {
+            SurveyOptionName answer = random.nextBoolean() ? SurveyOptionName.A : SurveyOptionName.B;
+
+            elements.add(PersonaElement.create(userId, question.dimension(), question.traitFor(answer), createdAt));
+        }
+
+        for (String interest : interests(random)) {
+            elements.add(PersonaElement.create(userId, PersonaDimension.INTEREST, interest, createdAt));
+        }
+
+        for (String detail : details(index)) {
+            elements.add(PersonaElement.create(userId, PersonaDimension.DETAIL, detail, createdAt));
+        }
+
+        return List.copyOf(elements);
     }
 
-    private List<String> explanations(PersonaDimension dimension, int index) {
-        List<String> pool = PersonaSeedElements.BY_DIMENSION.get(dimension);
-        int from = index * ELEMENTS_PER_DIMENSION;
+    private List<String> interests(Random random) {
+        List<String> shuffled = new ArrayList<>(INTEREST_POOL);
+        Collections.shuffle(shuffled, random);
 
-        return List.copyOf(pool.subList(from, from + ELEMENTS_PER_DIMENSION));
+        return List.copyOf(shuffled.subList(0, INTERESTS_PER_USER));
+    }
+
+    private List<String> details(int index) {
+        int from = index * DETAIL_ELEMENTS_PER_USER;
+
+        return List.copyOf(PersonaSeedElements.DETAIL.subList(from, from + DETAIL_ELEMENTS_PER_USER));
     }
 
     private String email(SeedUser seed, int index) {
