@@ -20,7 +20,7 @@ class ParallelRelationResolverUnitTest {
     @BeforeEach
     void setUp() throws IOException {
         // given: 실제 문구 파일과 운영 기본값과 같은 경계값으로 조립한다
-        loader = new ParallelRelationLoader(new ObjectMapper());
+        loader = new ParallelRelationLoader(new ObjectMapper(), new ParallelStoryRenderer());
         loader.load();
 
         resolver = new ParallelRelationResolver(new ParallelRelationProperties(thresholds()), loader, new ParallelStoryRenderer());

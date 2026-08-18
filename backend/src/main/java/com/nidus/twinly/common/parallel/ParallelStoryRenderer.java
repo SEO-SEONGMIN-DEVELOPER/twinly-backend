@@ -2,7 +2,9 @@ package com.nidus.twinly.common.parallel;
 
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Map;
+import java.util.regex.MatchResult;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -10,6 +12,7 @@ import java.util.regex.Pattern;
 public class ParallelStoryRenderer {
 
     private static final Pattern PLACEHOLDER = Pattern.compile("\\{([AB])(와|는|가)?}");
+    private static final Pattern ANY_PLACEHOLDER = Pattern.compile("\\{[^}]*}");
     private static final Map<String, String> PARTICLE_AFTER_FINAL_CONSONANT = Map.of(
             "와", "과",
             "는", "은",
@@ -32,6 +35,13 @@ public class ParallelStoryRenderer {
         matcher.appendTail(rendered);
 
         return rendered.toString();
+    }
+
+    public List<String> unsupportedPlaceholders(String story) {
+        return ANY_PLACEHOLDER.matcher(story).results()
+                .map(MatchResult::group)
+                .filter(token -> !PLACEHOLDER.matcher(token).matches())
+                .toList();
     }
 
     private String particle(String name, String particle) {

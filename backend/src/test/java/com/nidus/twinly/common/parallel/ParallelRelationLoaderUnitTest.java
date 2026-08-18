@@ -16,7 +16,7 @@ class ParallelRelationLoaderUnitTest {
     @BeforeEach
     void setUp() throws IOException {
         // given: 실제 문구 파일을 그대로 로드한다
-        loader = new ParallelRelationLoader(new ObjectMapper());
+        loader = new ParallelRelationLoader(new ObjectMapper(), new ParallelStoryRenderer());
         loader.load();
     }
 
