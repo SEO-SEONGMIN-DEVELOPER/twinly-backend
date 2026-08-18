@@ -177,8 +177,8 @@ class SimulationServiceUnitTest {
         given(personaElementRepository.findAllByUserIdOrderByIdAsc(USER_ID)).willReturn(List.of(
                 personaElement(PersonaDimension.OPENNESS, "새로운 시도를 즐긴다"),
                 personaElement(PersonaDimension.CONFLICT_STYLE, "직접 말하기보다 시간을 둔다"),
-                personaElement(PersonaDimension.INTERESTS, "등산"),
-                personaElement(PersonaDimension.INTERESTS, "재즈")
+                personaElement(PersonaDimension.INTEREST, "등산"),
+                personaElement(PersonaDimension.INTEREST, "재즈")
         ));
 
         // when: 페르소나 조회
@@ -195,7 +195,7 @@ class SimulationServiceUnitTest {
         assertThat(result.personaElements())
                 .containsEntry(PersonaDimension.OPENNESS, List.of("새로운 시도를 즐긴다"))
                 .containsEntry(PersonaDimension.CONFLICT_STYLE, List.of("직접 말하기보다 시간을 둔다"))
-                .containsEntry(PersonaDimension.INTERESTS, List.of("등산", "재즈"));
+                .containsEntry(PersonaDimension.INTEREST, List.of("등산", "재즈"));
     }
 
     @Test

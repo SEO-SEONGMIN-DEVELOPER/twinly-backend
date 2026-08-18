@@ -969,7 +969,7 @@ final class PersonaSeedElements {
             PersonaDimension.LIFE_STYLE, LIFE_STYLE,
             PersonaDimension.CONFLICT_STYLE, CONFLICT_STYLE,
             PersonaDimension.COMMUNICATION_STYLE, COMMUNICATION_STYLE,
-            PersonaDimension.INTERESTS, INTERESTS,
+            PersonaDimension.INTEREST, INTERESTS,
             PersonaDimension.DETAIL, DETAIL
     );
 }

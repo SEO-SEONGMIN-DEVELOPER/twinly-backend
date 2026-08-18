@@ -337,7 +337,7 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("관심사 등록: 전달한 관심사 수만큼 INTERESTS 페르소나 요소 행이 생성된다")
+    @DisplayName("관심사 등록: 전달한 관심사 수만큼 INTEREST 페르소나 요소 행이 생성된다")
     void interests_end_to_end() throws Exception {
         // given: 실제 익명 세션 저장
         AnonSession session = saveAnonSession();
@@ -351,7 +351,7 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
                                 """))
                 .andExpect(status().isOk());
 
-        // then: DB에 INTERESTS 차원의 페르소나 요소가 2건 생성됨
+        // then: DB에 INTEREST 차원의 페르소나 요소가 2건 생성됨
         flushAndClear();
         assertThat(anonSessionPersonaElementRepository.findAllByAnonSessionId(session.getId()))
                 .extracting(AnonSessionPersonaElement::getExplanation)
@@ -681,7 +681,7 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("관심사 등록 멱등: 같은 목록을 다시 제출해도 INTERESTS 요소가 늘지 않는다")
+    @DisplayName("관심사 등록 멱등: 같은 목록을 다시 제출해도 INTEREST 요소가 늘지 않는다")
     void interests_same_list_is_idempotent() throws Exception {
         // given: 실제 익명 세션 저장
         AnonSession session = saveAnonSession();

@@ -490,7 +490,7 @@ public class MeService {
                 user.displayFullName(),
                 profilePhoto,
                 persona(explanationsByDimension),
-                explanationsByDimension.getOrDefault(PersonaDimension.INTERESTS, List.of()),
+                explanationsByDimension.getOrDefault(PersonaDimension.INTEREST, List.of()),
                 partnerUserIds.size(),
                 encounteredFriendCount(userId, partnerUserIds)
         );

@@ -415,18 +415,18 @@ class OnboardingServiceUnitTest {
     // ---------- interests ----------
 
     @Test
-    @DisplayName("관심사는 각각 INTERESTS 차원의 페르소나 요소로 저장된다")
+    @DisplayName("관심사는 각각 INTEREST 차원의 페르소나 요소로 저장된다")
     void interests_saves_each_interest_as_persona_element() {
         // when: 관심사 2건 저장
         onboardingService.interests(ANON_SESSION, new OnboardingInterestsCommand(List.of("등산", "독서")));
 
-        // then: 관심사마다 INTERESTS 차원의 페르소나 요소가 저장됨
+        // then: 관심사마다 INTEREST 차원의 페르소나 요소가 저장됨
         ArgumentCaptor<AnonSessionPersonaElement> captor = ArgumentCaptor.forClass(AnonSessionPersonaElement.class);
         then(anonSessionPersonaElementRepository).should(times(2)).save(captor.capture());
         assertThat(captor.getAllValues())
                 .allSatisfy(element -> {
                     assertThat(element.getAnonSessionId()).isEqualTo(ANON_SESSION_ID);
-                    assertThat(element.getDimension()).isEqualTo(PersonaDimension.INTERESTS);
+                    assertThat(element.getDimension()).isEqualTo(PersonaDimension.INTEREST);
                 })
                 .extracting(AnonSessionPersonaElement::getExplanation)
                 .containsExactly("등산", "독서");

@@ -310,7 +310,7 @@ JS/JSON 파서의 정수 정밀도 문제를 피하기 위한 규칙입니다. �
   "personaElements": {
     "openness": ["새로운 시도를 즐긴다"],
     "conflictStyle": ["직접 말하기보다 시간을 둔다"],
-    "interests": ["등산", "재즈"],
+    "interest": ["등산", "재즈"],
     "detail": ["요즘 가장 자주 하는 생각이 뭐예요?: 졸업하고 뭐 할지 고민이에요"]
   }
 }
@@ -324,10 +324,10 @@ JS/JSON 파서의 정수 정밀도 문제를 피하기 위한 규칙입니다. �
 
 ```python
 # 이렇게 접근하면 KeyError
-elements["interests"]
+elements["interest"]
 
 # 이렇게 접근하세요
-elements.get("interests", [])
+elements.get("interest", [])
 ```
 
 가능한 키 (총 10종):
@@ -342,7 +342,7 @@ elements.get("interests", [])
 | `lifeStyle` | 생활 양식 |
 | `conflictStyle` | 갈등 대처 방식 |
 | `communicationStyle` | 의사소통 방식 |
-| `interests` | 관심사 |
+| `interest` | 관심사 |
 | `detail` | **온보딩 AI 대화 원문** |
 
 #### `detail` 은 성격이 다릅니다

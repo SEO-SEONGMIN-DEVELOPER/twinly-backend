@@ -105,7 +105,7 @@ public class AiChatService {
 
     private String buildInterestPrompt(AnonSessionSnapshot session, List<AnonSessionPersonaElement> personaElements, List<String> askedQuestions) {
         List<String> interests = personaElements.stream()
-                .filter(element -> element.getDimension() == PersonaDimension.INTERESTS)
+                .filter(element -> element.getDimension() == PersonaDimension.INTEREST)
                 .map(AnonSessionPersonaElement::getExplanation)
                 .toList();
 
@@ -157,12 +157,12 @@ public class AiChatService {
 
         sb.append("\n[관심사]\n");
         personaElements.stream()
-                .filter(element -> element.getDimension() == PersonaDimension.INTERESTS)
+                .filter(element -> element.getDimension() == PersonaDimension.INTEREST)
                 .forEach(element -> sb.append("- ").append(element.getExplanation()).append("\n"));
 
         sb.append("\n[성격 특성]\n");
         personaElements.stream()
-                .filter(element -> element.getDimension() != PersonaDimension.INTERESTS)
+                .filter(element -> element.getDimension() != PersonaDimension.INTEREST)
                 .forEach(element -> sb.append("- ").append(element.getDimension()).append(": ").append(element.getExplanation()).append("\n"));
     }
 
