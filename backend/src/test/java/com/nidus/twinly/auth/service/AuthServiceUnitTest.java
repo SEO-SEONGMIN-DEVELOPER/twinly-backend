@@ -1,5 +1,7 @@
 package com.nidus.twinly.auth.service;
 
+import com.nidus.twinly.aichat.repository.AiChatRepository;
+import com.nidus.twinly.aichat.repository.AnonSessionAiChatRepository;
 import com.nidus.twinly.anon.dto.snapshot.AnonSessionSnapshot;
 import com.nidus.twinly.anon.entity.AnonSession;
 import com.nidus.twinly.anon.repository.AnonSessionAgreementRepository;
@@ -32,6 +34,7 @@ import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.legal.repository.AgreementRepository;
 import com.nidus.twinly.organization.entity.Organization;
+import com.nidus.twinly.onboarding.repository.SurveyAnswerRepository;
 import com.nidus.twinly.organization.service.OrganizationCatalog;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.PersonaElementRepository;
@@ -116,6 +119,15 @@ class AuthServiceUnitTest {
 
     @Mock
     AnonSessionPersonaElementRepository anonSessionPersonaElementRepository;
+
+    @Mock
+    AnonSessionAiChatRepository anonSessionAiChatRepository;
+
+    @Mock
+    AiChatRepository aiChatRepository;
+
+    @Mock
+    SurveyAnswerRepository surveyAnswerRepository;
 
     @Mock
     RefreshTokenRepository refreshTokenRepository;

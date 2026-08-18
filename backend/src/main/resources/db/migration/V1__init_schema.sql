@@ -16,16 +16,16 @@ CREATE TABLE agreements (
 ) ENGINE = INNODB;
 
 CREATE TABLE ai_chats (
-    id               BIGINT NOT NULL AUTO_INCREMENT,
-    anon_session_id  BIGINT NOT NULL,
-    sender           ENUM ('AI','USER') NOT NULL,
-    message          TEXT NOT NULL,
-    turn_index       INTEGER DEFAULT 0 NOT NULL,
-    created_at       DATETIME(6) DEFAULT (UTC_TIMESTAMP(6)) NOT NULL,
+    id          BIGINT NOT NULL AUTO_INCREMENT,
+    user_id     BIGINT NOT NULL,
+    sender      ENUM ('AI','USER') NOT NULL,
+    message     TEXT NOT NULL,
+    turn_index  INTEGER DEFAULT 0 NOT NULL,
+    created_at  DATETIME(6) DEFAULT (UTC_TIMESTAMP(6)) NOT NULL,
 
     CONSTRAINT pk_ai_chats PRIMARY KEY (id),
-    CONSTRAINT fk_ai_chats_anon_session_id FOREIGN KEY (anon_session_id) REFERENCES anon_sessions(id),
-    CONSTRAINT uk_ai_chats_anon_session_id_sender_turn_index UNIQUE (anon_session_id, sender, turn_index)
+    CONSTRAINT fk_ai_chats_user_id FOREIGN KEY (user_id) REFERENCES users(id),
+    CONSTRAINT uk_ai_chats_user_id_sender_turn_index UNIQUE (user_id, sender, turn_index)
 ) ENGINE = INNODB;
 
 CREATE TABLE ai_utterance_reports (
@@ -54,6 +54,19 @@ CREATE TABLE anon_session_agreements (
     CONSTRAINT pk_anon_session_agreements PRIMARY KEY (id),
     CONSTRAINT fk_anon_session_agreements_anon_session_id FOREIGN KEY (anon_session_id) REFERENCES anon_sessions(id),
     CONSTRAINT fk_anon_session_agreements_policy_id FOREIGN KEY (policy_id) REFERENCES policies(id)
+) ENGINE = INNODB;
+
+CREATE TABLE anon_session_ai_chats (
+    id               BIGINT NOT NULL AUTO_INCREMENT,
+    anon_session_id  BIGINT NOT NULL,
+    sender           ENUM ('AI','USER') NOT NULL,
+    message          TEXT NOT NULL,
+    turn_index       INTEGER DEFAULT 0 NOT NULL,
+    created_at       DATETIME(6) DEFAULT (UTC_TIMESTAMP(6)) NOT NULL,
+
+    CONSTRAINT pk_anon_session_ai_chats PRIMARY KEY (id),
+    CONSTRAINT fk_anon_session_ai_chats_anon_session_id FOREIGN KEY (anon_session_id) REFERENCES anon_sessions(id),
+    CONSTRAINT uk_anon_session_ai_chats_session_sender_turn_index UNIQUE (anon_session_id, sender, turn_index)
 ) ENGINE = INNODB;
 
 CREATE TABLE anon_session_persona_elements (

@@ -1,6 +1,11 @@
 package com.nidus.twinly.auth.integration;
 
 import com.jayway.jsonpath.JsonPath;
+import com.nidus.twinly.aichat.domain.AiChatSender;
+import com.nidus.twinly.aichat.entity.AiChat;
+import com.nidus.twinly.aichat.entity.AnonSessionAiChat;
+import com.nidus.twinly.aichat.repository.AiChatRepository;
+import com.nidus.twinly.aichat.repository.AnonSessionAiChatRepository;
 import com.nidus.twinly.anon.entity.AnonSession;
 import com.nidus.twinly.anon.repository.AnonSessionRepository;
 import com.nidus.twinly.auth.entity.AnonSessionVerificationSession;
@@ -13,6 +18,9 @@ import com.nidus.twinly.auth.repository.VerificationSessionRepository;
 import com.nidus.twinly.common.crypto.BlindIndexHasher;
 import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.domain.VerificationType;
+import com.nidus.twinly.common.survey.SurveyOptionName;
+import com.nidus.twinly.onboarding.entity.SurveyAnswer;
+import com.nidus.twinly.onboarding.repository.SurveyAnswerRepository;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.support.AbstractIntegrationTest;
 import com.nidus.twinly.user.entity.User;
@@ -27,6 +35,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
@@ -50,6 +59,15 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     RefreshTokenRepository refreshTokenRepository;
+
+    @Autowired
+    AnonSessionAiChatRepository anonSessionAiChatRepository;
+
+    @Autowired
+    AiChatRepository aiChatRepository;
+
+    @Autowired
+    SurveyAnswerRepository surveyAnswerRepository;
 
     @Autowired
     BlindIndexHasher blindIndexHasher;
@@ -221,9 +239,9 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("회원가입: 익명 세션과 그 자식 행(인증 세션)이 모두 정리된다")
+    @DisplayName("회원가입: 익명 세션 자식 행이 모두 정리되고 AI 대화는 유저 소유로 이관된다")
     void signup_cleans_up_anon_session_and_children() throws Exception {
-        // given: 온보딩 정보와 SMS/EMAIL 인증 세션(= anon_sessions를 FK로 참조하는 자식 행)을 가진 익명 세션
+        // given: 온보딩 정보와 anon_sessions를 FK로 참조하는 자식 행들을 가진 익명 세션
         UUID anonToken = UUID.randomUUID();
         AnonSession anonSession = AnonSession.create(anonToken, Instant.now().plus(Duration.ofDays(1)));
         anonSession.changeNickname("cleanup-nick");
@@ -240,6 +258,9 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
         String email = "cleanup@test.com";
         anonSessionVerificationSessionRepository.save(verifiedAnonSession(anonSession.getId(), VerificationType.SMS, phone));
         anonSessionVerificationSessionRepository.save(verifiedAnonSession(anonSession.getId(), VerificationType.EMAIL, email));
+        anonSessionAiChatRepository.save(AnonSessionAiChat.create(anonSession.getId(), AiChatSender.AI, "취미가 무엇인가요?", 0));
+        anonSessionAiChatRepository.save(AnonSessionAiChat.create(anonSession.getId(), AiChatSender.USER, "등산을 좋아합니다.", 0));
+        surveyAnswerRepository.save(SurveyAnswer.create(anonSession.getId(), 1, SurveyOptionName.A));
 
         // when: 회원가입 API 호출
         mockMvc.perform(post("/api/v1/auth/signup")
@@ -253,6 +274,16 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
                 .findByAnonSessionIdAndType(anonSession.getId(), VerificationType.SMS)).isEmpty();
         assertThat(anonSessionVerificationSessionRepository
                 .findByAnonSessionIdAndType(anonSession.getId(), VerificationType.EMAIL)).isEmpty();
+        assertThat(anonSessionAiChatRepository.existsByAnonSessionId(anonSession.getId())).isFalse();
+        assertThat(surveyAnswerRepository.findAllByAnonSessionId(anonSession.getId())).isEmpty();
+
+        // then: AI 대화는 삭제되지 않고 가입된 유저 소유로 옮겨진다
+        User created = userRepository.findByPhoneNumberHash(blindIndexHasher.hash(phone)).orElseThrow();
+        assertThat(aiChatRepository.findAllByUserId(created.getId()))
+                .extracting(AiChat::getSender, AiChat::getMessage, AiChat::getTurnIndex)
+                .containsExactlyInAnyOrder(
+                        tuple(AiChatSender.AI, "취미가 무엇인가요?", 0),
+                        tuple(AiChatSender.USER, "등산을 좋아합니다.", 0));
     }
 
     @Test

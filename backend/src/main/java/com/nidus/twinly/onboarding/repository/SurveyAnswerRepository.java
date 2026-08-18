@@ -11,4 +11,6 @@ public interface SurveyAnswerRepository extends JpaRepository<SurveyAnswer, Long
     List<SurveyAnswer> findAllByAnonSessionId(Long anonSessionId);
 
     Optional<SurveyAnswer> findByAnonSessionIdAndQuestionId(Long anonSessionId, Integer questionId);
+
+    void deleteByAnonSessionId(Long anonSessionId);
 }

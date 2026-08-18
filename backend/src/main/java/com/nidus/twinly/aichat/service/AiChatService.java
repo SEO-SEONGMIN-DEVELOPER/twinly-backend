@@ -1,8 +1,8 @@
 package com.nidus.twinly.aichat.service;
 
 import com.nidus.twinly.aichat.domain.AiChatSender;
-import com.nidus.twinly.aichat.entity.AiChat;
-import com.nidus.twinly.aichat.repository.AiChatRepository;
+import com.nidus.twinly.aichat.entity.AnonSessionAiChat;
+import com.nidus.twinly.aichat.repository.AnonSessionAiChatRepository;
 import com.nidus.twinly.anon.dto.snapshot.AnonSessionSnapshot;
 import com.nidus.twinly.anon.entity.AnonSessionPersonaElement;
 import com.nidus.twinly.anon.repository.AnonSessionPersonaElementRepository;
@@ -30,7 +30,7 @@ public class AiChatService {
 
     private final BedrockService bedrockService;
 
-    private final AiChatRepository aiChatRepository;
+    private final AnonSessionAiChatRepository anonSessionAiChatRepository;
     private final AnonSessionPersonaElementRepository anonSessionPersonaElementRepository;
 
     @Transactional
@@ -38,7 +38,7 @@ public class AiChatService {
         Long anonSessionId = anonSessionSnapshot.id();
         int turnIndex = 0;
 
-        Optional<AiChat> started = aiChatRepository
+        Optional<AnonSessionAiChat> started = anonSessionAiChatRepository
                 .findByAnonSessionIdAndTurnIndexAndSender(anonSessionId, turnIndex, AiChatSender.AI);
         if (started.isPresent()) {
             return new OnboardingAiChatStartResult(started.get().getMessage(), turnIndex, false);
@@ -49,7 +49,7 @@ public class AiChatService {
         String prompt = buildInterestPrompt(anonSessionSnapshot, personaElements, List.of());
         String message = bedrockService.converse(prompt);
 
-        aiChatRepository.save(AiChat.create(anonSessionId, AiChatSender.AI, message, turnIndex));
+        anonSessionAiChatRepository.save(AnonSessionAiChat.create(anonSessionId, AiChatSender.AI, message, turnIndex));
 
         return new OnboardingAiChatStartResult(message, turnIndex, false);
     }
@@ -58,23 +58,23 @@ public class AiChatService {
     public OnboardingAiChatMessageResult aiChatMessage(AnonSessionSnapshot anonSessionSnapshot, OnboardingAiChatMessageCommand command) {
         Long anonSessionId = anonSessionSnapshot.id();
 
-        AiChat aiQuestion = aiChatRepository.findByAnonSessionIdAndTurnIndexAndSender(anonSessionId, command.turnIndex(), AiChatSender.AI)
+        AnonSessionAiChat aiQuestion = anonSessionAiChatRepository.findByAnonSessionIdAndTurnIndexAndSender(anonSessionId, command.turnIndex(), AiChatSender.AI)
                 .orElseThrow(() -> new BusinessException(ErrorCode.AI_QUESTION_NOT_FOUND, "해당 턴의 AI 질문이 존재하지 않습니다: " + command.turnIndex()));
 
-        if (aiChatRepository.findByAnonSessionIdAndTurnIndexAndSender(anonSessionId, command.turnIndex(), AiChatSender.USER).isPresent()) {
+        if (anonSessionAiChatRepository.findByAnonSessionIdAndTurnIndexAndSender(anonSessionId, command.turnIndex(), AiChatSender.USER).isPresent()) {
             if (command.turnIndex() >= MAX_TURN_INDEX) {
                 return new OnboardingAiChatMessageResult(LAST_MESSAGE, command.turnIndex(), true);
             }
 
             int nextTurnIndex = command.turnIndex() + 1;
-            AiChat nextQuestion = aiChatRepository
+            AnonSessionAiChat nextQuestion = anonSessionAiChatRepository
                     .findByAnonSessionIdAndTurnIndexAndSender(anonSessionId, nextTurnIndex, AiChatSender.AI)
                     .orElseThrow(() -> new BusinessException(ErrorCode.AI_QUESTION_NOT_FOUND, "다음 턴의 AI 질문이 존재하지 않습니다: " + nextTurnIndex));
 
             return new OnboardingAiChatMessageResult(nextQuestion.getMessage(), nextTurnIndex, false);
         }
 
-        aiChatRepository.save(AiChat.create(anonSessionId, AiChatSender.USER, command.message(), command.turnIndex()));
+        anonSessionAiChatRepository.save(AnonSessionAiChat.create(anonSessionId, AiChatSender.USER, command.message(), command.turnIndex()));
 
         String detail = "%s: %s".formatted(aiQuestion.getMessage(), command.message());
         anonSessionPersonaElementRepository.save(AnonSessionPersonaElement.create(anonSessionId, PersonaDimension.DETAIL, detail));
@@ -91,15 +91,15 @@ public class AiChatService {
                 : buildFollowUpPrompt(anonSessionSnapshot, personaElements, aiQuestion.getMessage(), command.message());
         String message = bedrockService.converse(nextQuestionPrompt);
 
-        aiChatRepository.save(AiChat.create(anonSessionId, AiChatSender.AI, message, nextTurnIndex));
+        anonSessionAiChatRepository.save(AnonSessionAiChat.create(anonSessionId, AiChatSender.AI, message, nextTurnIndex));
 
         return new OnboardingAiChatMessageResult(message, nextTurnIndex, false);
     }
 
     private List<String> askedQuestions(Long anonSessionId) {
-        return aiChatRepository.findByAnonSessionIdOrderByTurnIndexAscSenderDesc(anonSessionId).stream()
+        return anonSessionAiChatRepository.findByAnonSessionIdOrderByTurnIndexAscSenderDesc(anonSessionId).stream()
                 .filter(chat -> chat.getSender() == AiChatSender.AI)
-                .map(AiChat::getMessage)
+                .map(AnonSessionAiChat::getMessage)
                 .toList();
     }
 

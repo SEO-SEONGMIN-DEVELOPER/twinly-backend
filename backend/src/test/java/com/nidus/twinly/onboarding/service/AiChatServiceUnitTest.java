@@ -1,8 +1,8 @@
 package com.nidus.twinly.onboarding.service;
 
 import com.nidus.twinly.aichat.domain.AiChatSender;
-import com.nidus.twinly.aichat.entity.AiChat;
-import com.nidus.twinly.aichat.repository.AiChatRepository;
+import com.nidus.twinly.aichat.entity.AnonSessionAiChat;
+import com.nidus.twinly.aichat.repository.AnonSessionAiChatRepository;
 import com.nidus.twinly.aichat.service.AiChatService;
 import com.nidus.twinly.anon.dto.snapshot.AnonSessionSnapshot;
 import com.nidus.twinly.anon.entity.AnonSessionPersonaElement;
@@ -63,7 +63,7 @@ class AiChatServiceUnitTest {
     BedrockService bedrockService;
 
     @Mock
-    AiChatRepository aiChatRepository;
+    AnonSessionAiChatRepository anonSessionAiChatRepository;
 
     @Mock
     AnonSessionPersonaElementRepository anonSessionPersonaElementRepository;
@@ -88,8 +88,8 @@ class AiChatServiceUnitTest {
         then(bedrockService).should().converse(promptCaptor.capture());
         assertThat(promptCaptor.getValue()).contains("트윈리대학교", "사람 만나는 것을 좋아함");
 
-        ArgumentCaptor<AiChat> chatCaptor = ArgumentCaptor.forClass(AiChat.class);
-        then(aiChatRepository).should().save(chatCaptor.capture());
+        ArgumentCaptor<AnonSessionAiChat> chatCaptor = ArgumentCaptor.forClass(AnonSessionAiChat.class);
+        then(anonSessionAiChatRepository).should().save(chatCaptor.capture());
         assertThat(chatCaptor.getValue().getAnonSessionId()).isEqualTo(ANON_SESSION_ID);
         assertThat(chatCaptor.getValue().getSender()).isEqualTo(AiChatSender.AI);
         assertThat(chatCaptor.getValue().getMessage()).isEqualTo("요즘 제일 자주 가는 곳은 어디야?");
@@ -104,7 +104,7 @@ class AiChatServiceUnitTest {
     @DisplayName("해당 턴의 AI 질문이 없으면 AI_QUESTION_NOT_FOUND 예외가 발생하고 아무것도 저장하지 않는다")
     void aiChatMessage_when_ai_question_missing_throws() {
         // given: 0번 턴의 AI 질문이 없음
-        given(aiChatRepository.findByAnonSessionIdAndTurnIndexAndSender(ANON_SESSION_ID, 0, AiChatSender.AI))
+        given(anonSessionAiChatRepository.findByAnonSessionIdAndTurnIndexAndSender(ANON_SESSION_ID, 0, AiChatSender.AI))
                 .willReturn(Optional.empty());
 
         // when & then: AI_QUESTION_NOT_FOUND 예외 발생 + 저장 없음
@@ -114,7 +114,7 @@ class AiChatServiceUnitTest {
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.AI_QUESTION_NOT_FOUND);
 
-        then(aiChatRepository).should(never()).save(any());
+        then(anonSessionAiChatRepository).should(never()).save(any());
         then(anonSessionPersonaElementRepository).should(never()).save(any());
     }
 
@@ -122,8 +122,8 @@ class AiChatServiceUnitTest {
     @DisplayName("마지막 턴 이전이면 사용자 답변을 저장하고 DETAIL 페르소나를 남긴 뒤 다음 턴 질문을 반환한다")
     void aiChatMessage_middle_turn_returns_next_question() {
         // given: 0번 턴 AI 질문이 존재하고 모델이 다음 질문을 반환
-        given(aiChatRepository.findByAnonSessionIdAndTurnIndexAndSender(ANON_SESSION_ID, 0, AiChatSender.AI))
-                .willReturn(Optional.of(AiChat.create(ANON_SESSION_ID, AiChatSender.AI, "요즘 뭐 하고 지내?", 0)));
+        given(anonSessionAiChatRepository.findByAnonSessionIdAndTurnIndexAndSender(ANON_SESSION_ID, 0, AiChatSender.AI))
+                .willReturn(Optional.of(AnonSessionAiChat.create(ANON_SESSION_ID, AiChatSender.AI, "요즘 뭐 하고 지내?", 0)));
         given(anonSessionPersonaElementRepository.findAllByAnonSessionId(ANON_SESSION_ID)).willReturn(List.of());
         given(bedrockService.converse(anyString())).willReturn("그럼 거기서 뭘 주로 해?");
 
@@ -132,10 +132,10 @@ class AiChatServiceUnitTest {
                 new OnboardingAiChatMessageCommand("한강에 자주 가", 0));
 
         // then: 사용자 답변(0턴)과 다음 AI 질문(1턴)이 저장되고, 질문+답변이 DETAIL 페르소나로 남음
-        ArgumentCaptor<AiChat> chatCaptor = ArgumentCaptor.forClass(AiChat.class);
-        then(aiChatRepository).should(times(2)).save(chatCaptor.capture());
-        AiChat userChat = chatCaptor.getAllValues().get(0);
-        AiChat nextAiChat = chatCaptor.getAllValues().get(1);
+        ArgumentCaptor<AnonSessionAiChat> chatCaptor = ArgumentCaptor.forClass(AnonSessionAiChat.class);
+        then(anonSessionAiChatRepository).should(times(2)).save(chatCaptor.capture());
+        AnonSessionAiChat userChat = chatCaptor.getAllValues().get(0);
+        AnonSessionAiChat nextAiChat = chatCaptor.getAllValues().get(1);
         assertThat(userChat.getSender()).isEqualTo(AiChatSender.USER);
         assertThat(userChat.getMessage()).isEqualTo("한강에 자주 가");
         assertThat(userChat.getTurnIndex()).isZero();
@@ -175,13 +175,13 @@ class AiChatServiceUnitTest {
     @DisplayName("5번째 턴(인덱스 4) 질문은 직전 답변을 잇지 않고 관심사로 새 대화를 시작한다")
     void aiChatMessage_restart_turn_asks_new_interest_question() {
         // given: 3번 턴 AI 질문이 존재하고 0~3번 턴 AI 질문이 이미 쌓여 있음
-        given(aiChatRepository.findByAnonSessionIdAndTurnIndexAndSender(ANON_SESSION_ID, 3, AiChatSender.AI))
-                .willReturn(Optional.of(AiChat.create(ANON_SESSION_ID, AiChatSender.AI, "그 산 정상에서 뭐 했어?", 3)));
-        given(aiChatRepository.findByAnonSessionIdOrderByTurnIndexAscSenderDesc(ANON_SESSION_ID))
+        given(anonSessionAiChatRepository.findByAnonSessionIdAndTurnIndexAndSender(ANON_SESSION_ID, 3, AiChatSender.AI))
+                .willReturn(Optional.of(AnonSessionAiChat.create(ANON_SESSION_ID, AiChatSender.AI, "그 산 정상에서 뭐 했어?", 3)));
+        given(anonSessionAiChatRepository.findByAnonSessionIdOrderByTurnIndexAscSenderDesc(ANON_SESSION_ID))
                 .willReturn(List.of(
-                        AiChat.create(ANON_SESSION_ID, AiChatSender.AI, "등산은 어디로 자주 가?", 0),
-                        AiChat.create(ANON_SESSION_ID, AiChatSender.USER, "북한산", 0),
-                        AiChat.create(ANON_SESSION_ID, AiChatSender.AI, "그 산 정상에서 뭐 했어?", 3)));
+                        AnonSessionAiChat.create(ANON_SESSION_ID, AiChatSender.AI, "등산은 어디로 자주 가?", 0),
+                        AnonSessionAiChat.create(ANON_SESSION_ID, AiChatSender.USER, "북한산", 0),
+                        AnonSessionAiChat.create(ANON_SESSION_ID, AiChatSender.AI, "그 산 정상에서 뭐 했어?", 3)));
         given(anonSessionPersonaElementRepository.findAllByAnonSessionId(ANON_SESSION_ID))
                 .willReturn(List.of(
                         AnonSessionPersonaElement.create(ANON_SESSION_ID, PersonaDimension.INTEREST, "등산"),
@@ -208,8 +208,8 @@ class AiChatServiceUnitTest {
     @DisplayName("마지막 턴(7)에 답하면 모델 호출 없이 종료 메시지와 isEnd=true를 반환한다")
     void aiChatMessage_last_turn_ends_conversation() {
         // given: 7번 턴 AI 질문이 존재
-        given(aiChatRepository.findByAnonSessionIdAndTurnIndexAndSender(ANON_SESSION_ID, 7, AiChatSender.AI))
-                .willReturn(Optional.of(AiChat.create(ANON_SESSION_ID, AiChatSender.AI, "마지막 질문", 7)));
+        given(anonSessionAiChatRepository.findByAnonSessionIdAndTurnIndexAndSender(ANON_SESSION_ID, 7, AiChatSender.AI))
+                .willReturn(Optional.of(AnonSessionAiChat.create(ANON_SESSION_ID, AiChatSender.AI, "마지막 질문", 7)));
 
         // when: 7번 턴에 답변 전송
         OnboardingAiChatMessageResult result = aiChatService.aiChatMessage(ANON_SESSION,
@@ -220,6 +220,6 @@ class AiChatServiceUnitTest {
         assertThat(result.turnIndex()).isEqualTo(7);
         assertThat(result.isEnd()).isTrue();
         then(bedrockService).should(never()).converse(anyString());
-        then(aiChatRepository).should(times(1)).save(any());
+        then(anonSessionAiChatRepository).should(times(1)).save(any());
     }
 }

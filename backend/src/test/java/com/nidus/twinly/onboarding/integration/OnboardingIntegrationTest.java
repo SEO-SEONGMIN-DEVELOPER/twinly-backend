@@ -2,8 +2,8 @@ package com.nidus.twinly.onboarding.integration;
 
 import com.jayway.jsonpath.JsonPath;
 import com.nidus.twinly.aichat.domain.AiChatSender;
-import com.nidus.twinly.aichat.entity.AiChat;
-import com.nidus.twinly.aichat.repository.AiChatRepository;
+import com.nidus.twinly.aichat.entity.AnonSessionAiChat;
+import com.nidus.twinly.aichat.repository.AnonSessionAiChatRepository;
 import com.nidus.twinly.anon.entity.AnonSession;
 import com.nidus.twinly.anon.entity.AnonSessionAgreement;
 import com.nidus.twinly.anon.entity.AnonSessionPersonaElement;
@@ -66,7 +66,7 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
     SurveyAnswerRepository surveyAnswerRepository;
 
     @Autowired
-    AiChatRepository aiChatRepository;
+    AnonSessionAiChatRepository anonSessionAiChatRepository;
 
     @Autowired
     AnonSessionPhotoRepository anonSessionPhotoRepository;
@@ -238,7 +238,7 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
 
         // then: DB에 0번 턴 AI 메시지가 저장됨
         flushAndClear();
-        AiChat saved = aiChatRepository
+        AnonSessionAiChat saved = anonSessionAiChatRepository
                 .findByAnonSessionIdAndTurnIndexAndSender(session.getId(), 0, AiChatSender.AI)
                 .orElseThrow();
         assertThat(saved.getMessage()).isEqualTo("요즘 제일 자주 가는 곳은 어디야?");
@@ -249,7 +249,7 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
     void aiChatMessage_is_idempotent() throws Exception {
         // given: 0번 턴 AI 질문이 저장된 상태
         AnonSession session = saveAnonSession();
-        aiChatRepository.save(AiChat.create(session.getId(), AiChatSender.AI, "요즘 뭐에 빠져 있어?", 0));
+        anonSessionAiChatRepository.save(AnonSessionAiChat.create(session.getId(), AiChatSender.AI, "요즘 뭐에 빠져 있어?", 0));
         given(bedrockService.converse(anyString())).willReturn("그거 언제부터 좋아했어?");
         flushAndClear();
 
@@ -269,7 +269,7 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
 
         // then: 사용자 답변·다음 질문·DETAIL 요소가 각각 한 건씩만 남고 모델도 한 번만 불린다
         flushAndClear();
-        assertThat(aiChatRepository.findByAnonSessionIdOrderByTurnIndexAscSenderDesc(session.getId())).hasSize(3);
+        assertThat(anonSessionAiChatRepository.findByAnonSessionIdOrderByTurnIndexAscSenderDesc(session.getId())).hasSize(3);
         assertThat(anonSessionPersonaElementRepository.findAllByAnonSessionId(session.getId())).hasSize(1);
         then(bedrockService).should(times(1)).converse(anyString());
     }
@@ -293,7 +293,7 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
 
         // then: 0번 턴 AI 메시지는 한 건만 남고, 모델은 첫 호출에서만 불린다 (재호출은 비용이므로)
         flushAndClear();
-        assertThat(aiChatRepository.findByAnonSessionIdOrderByTurnIndexAscSenderDesc(session.getId())).hasSize(1);
+        assertThat(anonSessionAiChatRepository.findByAnonSessionIdOrderByTurnIndexAscSenderDesc(session.getId())).hasSize(1);
         then(bedrockService).should(times(1)).converse(anyString());
     }
 
@@ -526,7 +526,7 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
     void aiChatMessage_end_to_end() throws Exception {
         // given: 0번 턴 AI 질문이 이미 저장된 상태 + 다음 질문은 Bedrock 목으로 스텁
         AnonSession session = saveAnonSession();
-        aiChatRepository.save(AiChat.create(session.getId(), AiChatSender.AI, "요즘 뭐에 빠져 있어?", 0));
+        anonSessionAiChatRepository.save(AnonSessionAiChat.create(session.getId(), AiChatSender.AI, "요즘 뭐에 빠져 있어?", 0));
         given(bedrockService.converse(anyString())).willReturn("그거 언제부터 좋아했어?");
         flushAndClear();
 
@@ -544,9 +544,9 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
 
         // then: 사용자 답변(0턴)과 다음 AI 질문(1턴)이 DB에 저장되고, DETAIL 페르소나 요소가 생성됨
         flushAndClear();
-        assertThat(aiChatRepository.findByAnonSessionIdAndTurnIndexAndSender(session.getId(), 0, AiChatSender.USER)
+        assertThat(anonSessionAiChatRepository.findByAnonSessionIdAndTurnIndexAndSender(session.getId(), 0, AiChatSender.USER)
                 .orElseThrow().getMessage()).isEqualTo("요즘 등산에 빠졌어");
-        assertThat(aiChatRepository.findByAnonSessionIdAndTurnIndexAndSender(session.getId(), 1, AiChatSender.AI)
+        assertThat(anonSessionAiChatRepository.findByAnonSessionIdAndTurnIndexAndSender(session.getId(), 1, AiChatSender.AI)
                 .orElseThrow().getMessage()).isEqualTo("그거 언제부터 좋아했어?");
         assertThat(anonSessionPersonaElementRepository.findAllByAnonSessionId(session.getId()))
                 .extracting(AnonSessionPersonaElement::getExplanation)

@@ -1,5 +1,9 @@
 package com.nidus.twinly.auth.service;
 
+import com.nidus.twinly.aichat.entity.AiChat;
+import com.nidus.twinly.aichat.entity.AnonSessionAiChat;
+import com.nidus.twinly.aichat.repository.AiChatRepository;
+import com.nidus.twinly.aichat.repository.AnonSessionAiChatRepository;
 import com.nidus.twinly.anon.dto.snapshot.AnonSessionSnapshot;
 import com.nidus.twinly.anon.entity.AnonSession;
 import com.nidus.twinly.anon.entity.AnonSessionAgreement;
@@ -25,6 +29,7 @@ import com.nidus.twinly.common.jwt.JwtService;
 import com.nidus.twinly.common.photo.ProfileThumbnailService;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
+import com.nidus.twinly.onboarding.repository.SurveyAnswerRepository;
 import com.nidus.twinly.organization.entity.Organization;
 import com.nidus.twinly.organization.service.OrganizationCatalog;
 import com.nidus.twinly.user.entity.PersonaElement;
@@ -60,6 +65,9 @@ public class AuthService {
     private final AnonSessionPhotoRepository anonSessionPhotoRepository;
     private final AnonSessionAgreementRepository anonSessionAgreementRepository;
     private final AnonSessionPersonaElementRepository anonSessionPersonaElementRepository;
+    private final AnonSessionAiChatRepository anonSessionAiChatRepository;
+    private final AiChatRepository aiChatRepository;
+    private final SurveyAnswerRepository surveyAnswerRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final AgreementRepository agreementRepository;
     private final PhotoRepository photoRepository;
@@ -294,6 +302,22 @@ public class AuthService {
         ));
 
         anonSessionPersonaElementRepository.deleteAll(anonSessionPersonaElements);
+
+        List<AnonSessionAiChat> anonSessionAiChats = anonSessionAiChatRepository.findAllByAnonSessionId(anonSessionId);
+
+        anonSessionAiChats.forEach(anonSessionAiChat -> aiChatRepository.save(
+                AiChat.create(
+                        user.getId(),
+                        anonSessionAiChat.getSender(),
+                        anonSessionAiChat.getMessage(),
+                        anonSessionAiChat.getTurnIndex(),
+                        anonSessionAiChat.getCreatedAt()
+                )
+        ));
+
+        anonSessionAiChatRepository.deleteAll(anonSessionAiChats);
+
+        surveyAnswerRepository.deleteByAnonSessionId(anonSessionId);
 
         anonSessionRepository.delete(anonSession);
 
