@@ -90,7 +90,7 @@ class SecurityRuleIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(get("/api/v1/onboarding/survey-questions"))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(get("/api/v1/onboarding/schools"))
+        mockMvc.perform(get("/api/v1/onboarding/organizations"))
                 .andExpect(status().isOk());
     }
 

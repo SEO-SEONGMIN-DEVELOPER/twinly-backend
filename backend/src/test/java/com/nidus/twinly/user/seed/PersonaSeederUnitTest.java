@@ -217,7 +217,7 @@ class PersonaSeederUnitTest {
 
     @Test
     @DisplayName("성별은 남녀 10명씩이고 학교는 세 곳이 섞여 있다")
-    void run_keeps_gender_and_school_mix() {
+    void run_keeps_gender_and_organization_mix() {
         // given: 아직 시드 유저가 없는 상태
         given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
 
@@ -233,7 +233,7 @@ class PersonaSeederUnitTest {
                 Map.entry(Gender.MALE, 10L),
                 Map.entry(Gender.FEMALE, 10L));
 
-        assertThat(users).extracting(User::getSchool)
+        assertThat(users).extracting(User::getOrganization)
                 .containsOnly("성균관대학교", "고려대학교", "성신여자대학교");
     }
 

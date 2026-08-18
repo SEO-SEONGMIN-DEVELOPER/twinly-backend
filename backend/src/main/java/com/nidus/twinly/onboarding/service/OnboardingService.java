@@ -28,20 +28,20 @@ import com.nidus.twinly.legal.service.PolicyCatalog;
 import com.nidus.twinly.legal.service.PolicyCatalog.PolicyKey;
 import com.nidus.twinly.onboarding.dto.command.*;
 import com.nidus.twinly.onboarding.dto.result.OnboardingAffiliationsResult;
+import com.nidus.twinly.onboarding.dto.result.OnboardingOrganizationsItemResult;
+import com.nidus.twinly.onboarding.dto.result.OnboardingOrganizationsResult;
 import com.nidus.twinly.onboarding.dto.result.OnboardingProfileNicknameCheckResult;
 import com.nidus.twinly.onboarding.dto.result.OnboardingProfilePhotoCommitResult;
 import com.nidus.twinly.onboarding.dto.result.OnboardingProfilePhotoPresignResult;
-import com.nidus.twinly.onboarding.dto.result.OnboardingSchoolsItemResult;
-import com.nidus.twinly.onboarding.dto.result.OnboardingSchoolsResult;
 import com.nidus.twinly.onboarding.entity.SurveyAnswer;
 import com.nidus.twinly.onboarding.repository.SurveyAnswerRepository;
-import com.nidus.twinly.school.entity.School;
-import com.nidus.twinly.school.entity.SchoolAffiliation;
-import com.nidus.twinly.school.entity.SchoolDomain;
-import com.nidus.twinly.school.repository.SchoolAffiliationRepository;
-import com.nidus.twinly.school.repository.SchoolDomainRepository;
-import com.nidus.twinly.school.repository.SchoolRepository;
-import com.nidus.twinly.school.service.SchoolCatalog;
+import com.nidus.twinly.organization.entity.Organization;
+import com.nidus.twinly.organization.entity.OrganizationAffiliation;
+import com.nidus.twinly.organization.entity.OrganizationDomain;
+import com.nidus.twinly.organization.repository.OrganizationAffiliationRepository;
+import com.nidus.twinly.organization.repository.OrganizationDomainRepository;
+import com.nidus.twinly.organization.repository.OrganizationRepository;
+import com.nidus.twinly.organization.service.OrganizationCatalog;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -68,13 +68,13 @@ public class OnboardingService {
 
     private final PresignService presignService;
     private final PhotoCommitService photoCommitService;
-    private final SchoolCatalog schoolCatalog;
+    private final OrganizationCatalog organizationCatalog;
 
     private final AnonSessionRepository anonSessionRepository;
     private final AnonSessionVerificationSessionRepository anonSessionVerificationSessionRepository;
-    private final SchoolRepository schoolRepository;
-    private final SchoolDomainRepository schoolDomainRepository;
-    private final SchoolAffiliationRepository schoolAffiliationRepository;
+    private final OrganizationRepository organizationRepository;
+    private final OrganizationDomainRepository organizationDomainRepository;
+    private final OrganizationAffiliationRepository organizationAffiliationRepository;
     private final AnonSessionPhotoRepository anonSessionPhotoRepository;
     private final AnonSessionPersonaElementRepository anonSessionPersonaElementRepository;
     private final AnonSessionAgreementRepository anonSessionAgreementRepository;
@@ -286,28 +286,28 @@ public class OnboardingService {
         return trimmed;
     }
 
-    public OnboardingSchoolsResult schools() {
-        Map<Long, List<String>> domainsBySchoolId = schoolDomainRepository.findAll().stream()
+    public OnboardingOrganizationsResult organizations() {
+        Map<Long, List<String>> domainsByOrganizationId = organizationDomainRepository.findAll().stream()
                 .collect(Collectors.groupingBy(
-                        SchoolDomain::getSchoolId,
-                        Collectors.mapping(SchoolDomain::getDomain, Collectors.toList())
+                        OrganizationDomain::getOrganizationId,
+                        Collectors.mapping(OrganizationDomain::getDomain, Collectors.toList())
                 ));
 
-        List<OnboardingSchoolsItemResult> schools = schoolRepository.findAllByOrderByNameAsc().stream()
-                .map(school -> new OnboardingSchoolsItemResult(
-                        school.getName(),
-                        domainsBySchoolId.getOrDefault(school.getId(), List.of())
+        List<OnboardingOrganizationsItemResult> organizations = organizationRepository.findAllByOrderByNameAsc().stream()
+                .map(organization -> new OnboardingOrganizationsItemResult(
+                        organization.getName(),
+                        domainsByOrganizationId.getOrDefault(organization.getId(), List.of())
                 ))
                 .toList();
 
-        return new OnboardingSchoolsResult(schools);
+        return new OnboardingOrganizationsResult(organizations);
     }
 
     public OnboardingAffiliationsResult affiliations(AnonSessionSnapshot anonSessionSnapshot) {
-        School school = schoolCatalog.findByEmail(verifiedEmail(anonSessionSnapshot.id()));
+        Organization organization = organizationCatalog.findByEmail(verifiedEmail(anonSessionSnapshot.id()));
 
-        List<String> affiliations = schoolAffiliationRepository.findAllBySchoolIdOrderByNameAsc(school.getId()).stream()
-                .map(SchoolAffiliation::getName)
+        List<String> affiliations = organizationAffiliationRepository.findAllByOrganizationIdOrderByNameAsc(organization.getId()).stream()
+                .map(OrganizationAffiliation::getName)
                 .toList();
 
         return new OnboardingAffiliationsResult(affiliations);

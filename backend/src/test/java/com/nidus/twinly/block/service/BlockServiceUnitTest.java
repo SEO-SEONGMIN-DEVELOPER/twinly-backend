@@ -118,7 +118,7 @@ class BlockServiceUnitTest {
     private User user(String familyName, String givenName, Instant deletedAt) {
         User user = User.create(
                 "nick", familyName, "familyHash", givenName, "givenHash",
-                Gender.MALE, "school", "schoolHash", "aff", "affHash", "affNo", "affNoHash",
+                Gender.MALE, "organization", "organizationHash", "aff", "affHash", "affNo", "affNoHash",
                 "2000-01-01", "birthHash", "phone", "phoneHash", "email", "emailHash");
         if (deletedAt != null) {
             ReflectionTestUtils.setField(user, "deletedAt", deletedAt);

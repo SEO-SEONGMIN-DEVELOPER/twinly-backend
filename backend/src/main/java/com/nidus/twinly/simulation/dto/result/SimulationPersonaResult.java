@@ -12,7 +12,7 @@ public record SimulationPersonaResult(
         String familyName,
         String givenName,
         Gender gender,
-        String school,
+        String organization,
         String affiliation,
         LocalDate birthDate,
         Map<PersonaDimension, List<String>> personaElements

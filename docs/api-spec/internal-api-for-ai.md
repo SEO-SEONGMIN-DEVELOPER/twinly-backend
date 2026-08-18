@@ -293,7 +293,7 @@ JS/JSON 파서의 정수 정밀도 문제를 피하기 위한 규칙입니다. �
 | `familyName` | string | X | 성 |
 | `givenName` | string | X | 이름 |
 | `gender` | `"male"` \| `"female"` | X | 성별 |
-| `school` | string | X | 학교 |
+| `organization` | string | X | 학교 |
 | `affiliation` | string | X | 소속(학과 등) |
 | `birthDate` | string(`YYYY-MM-DD`) | X | 생년월일 |
 | `personaElements` | object | X | 차원별 성향 목록. 아래 참고 |
@@ -304,7 +304,7 @@ JS/JSON 파서의 정수 정밀도 문제를 피하기 위한 규칙입니다. �
   "familyName": "서",
   "givenName": "성민",
   "gender": "male",
-  "school": "성균관대학교",
+  "organization": "성균관대학교",
   "affiliation": "컴퓨터공학과",
   "birthDate": "1999-03-21",
   "personaElements": {

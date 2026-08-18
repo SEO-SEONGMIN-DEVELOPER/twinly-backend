@@ -29,11 +29,11 @@ import com.nidus.twinly.onboarding.dto.command.OnboardingSurveyAnswerCommand;
 import com.nidus.twinly.onboarding.dto.result.OnboardingAffiliationsResult;
 import com.nidus.twinly.onboarding.dto.result.OnboardingAiChatMessageResult;
 import com.nidus.twinly.onboarding.dto.result.OnboardingAiChatStartResult;
+import com.nidus.twinly.onboarding.dto.result.OnboardingOrganizationsItemResult;
+import com.nidus.twinly.onboarding.dto.result.OnboardingOrganizationsResult;
 import com.nidus.twinly.onboarding.dto.result.OnboardingProfileNicknameCheckResult;
 import com.nidus.twinly.onboarding.dto.result.OnboardingProfilePhotoCommitResult;
 import com.nidus.twinly.onboarding.dto.result.OnboardingProfilePhotoPresignResult;
-import com.nidus.twinly.onboarding.dto.result.OnboardingSchoolsItemResult;
-import com.nidus.twinly.onboarding.dto.result.OnboardingSchoolsResult;
 import com.nidus.twinly.onboarding.service.OnboardingService;
 import com.nidus.twinly.user.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
@@ -111,19 +111,19 @@ class OnboardingControllerUnitTest {
     }
 
     @Test
-    @DisplayName("학교 목록 조회는 익명 세션 없이도 200과 schools 배열을 반환한다")
-    void schools_success() throws Exception {
+    @DisplayName("학교 목록 조회는 익명 세션 없이도 200과 organizations 배열을 반환한다")
+    void organizations_success() throws Exception {
         // given: 가입 가능한 학교 1곳
-        given(onboardingService.schools()).willReturn(new OnboardingSchoolsResult(
-                List.of(new OnboardingSchoolsItemResult("트윈리대학교", List.of("nidus.ac.kr")))));
+        given(onboardingService.organizations()).willReturn(new OnboardingOrganizationsResult(
+                List.of(new OnboardingOrganizationsItemResult("트윈리대학교", List.of("nidus.ac.kr")))));
 
         // when: 인증 헤더 없이 학교 목록 API 호출 (이메일 입력 전 단계라 세션 유무와 무관)
-        var result = mockMvc.perform(get("/api/v1/onboarding/schools"));
+        var result = mockMvc.perform(get("/api/v1/onboarding/organizations"));
 
         // then: 앱이 도메인을 고정 입력할 수 있도록 이름과 도메인이 함께 나감
         result.andExpect(status().isOk())
-                .andExpect(jsonPath("$.schools[0].schoolName").value("트윈리대학교"))
-                .andExpect(jsonPath("$.schools[0].domains[0]").value("nidus.ac.kr"));
+                .andExpect(jsonPath("$.organizations[0].organizationName").value("트윈리대학교"))
+                .andExpect(jsonPath("$.organizations[0].domains[0]").value("nidus.ac.kr"));
     }
 
     @Test

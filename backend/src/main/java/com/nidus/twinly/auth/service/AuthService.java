@@ -25,8 +25,8 @@ import com.nidus.twinly.common.jwt.JwtService;
 import com.nidus.twinly.common.photo.ProfileThumbnailService;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
-import com.nidus.twinly.school.entity.School;
-import com.nidus.twinly.school.service.SchoolCatalog;
+import com.nidus.twinly.organization.entity.Organization;
+import com.nidus.twinly.organization.service.OrganizationCatalog;
 import com.nidus.twinly.user.entity.PersonaElement;
 import com.nidus.twinly.user.entity.Photo;
 import com.nidus.twinly.user.entity.User;
@@ -51,7 +51,7 @@ public class AuthService {
     private final VerificationCodeIssuer verificationCodeIssuer;
     private final JwtService jwtService;
     private final VerificationService verificationService;
-    private final SchoolCatalog schoolCatalog;
+    private final OrganizationCatalog organizationCatalog;
 
     private final VerificationSessionRepository verificationSessionRepository;
     private final AnonSessionVerificationSessionRepository anonSessionVerificationSessionRepository;
@@ -71,7 +71,7 @@ public class AuthService {
 
     @Transactional
     public AuthEmailSendResult onboardingEmailSend(AnonSessionSnapshot anonSessionSnapshot, AuthEmailSendCommand command) {
-        schoolCatalog.requireSupportedDomain(command.email());
+        organizationCatalog.requireSupportedDomain(command.email());
 
         String code = verificationCodeIssuer.issue(command.email());
         Instant codeExpiresAt = verificationCodeIssuer.codeExpiresAt();
@@ -89,12 +89,12 @@ public class AuthService {
         Long anonSessionId = anonSessionSnapshot.id();
 
         AnonSessionVerificationSession session = verifyAnonSession(anonSessionId, command, VerificationType.EMAIL);
-        School school = schoolCatalog.findByEmail(session.getContact());
+        Organization organization = organizationCatalog.findByEmail(session.getContact());
 
         AnonSession anonSession = anonSessionRepository.findById(anonSessionId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_ANON_SESSION));
 
-        anonSession.changeSchool(school.getName());
+        anonSession.changeOrganization(organization.getName());
     }
 
     @Transactional
@@ -225,7 +225,7 @@ public class AuthService {
 
         String familyNameHash = blindIndexHasher.hash(anonSession.getFamilyName());
         String givenNameHash = blindIndexHasher.hash(anonSession.getGivenName());
-        String schoolHash = blindIndexHasher.hash(anonSession.getSchool());
+        String organizationHash = blindIndexHasher.hash(anonSession.getOrganization());
         String affiliationHash = blindIndexHasher.hash(anonSession.getAffiliation());
         String affiliationNumberHash = blindIndexHasher.hash(anonSession.getAffiliationNumber());
         String birthDateHash = blindIndexHasher.hash(anonSession.getBirthDate());
@@ -236,7 +236,7 @@ public class AuthService {
                         anonSession.getFamilyName(), familyNameHash,
                         anonSession.getGivenName(), givenNameHash,
                         anonSession.getGender(),
-                        anonSession.getSchool(), schoolHash,
+                        anonSession.getOrganization(), organizationHash,
                         anonSession.getAffiliation(), affiliationHash,
                         anonSession.getAffiliationNumber(), affiliationNumberHash,
                         anonSession.getBirthDate(), birthDateHash,
@@ -331,7 +331,7 @@ public class AuthService {
                 || anonSession.getFamilyName() == null
                 || anonSession.getGivenName() == null
                 || anonSession.getGender() == null
-                || anonSession.getSchool() == null
+                || anonSession.getOrganization() == null
                 || anonSession.getAffiliation() == null
                 || anonSession.getAffiliationNumber() == null
                 || anonSession.getBirthDate() == null) {

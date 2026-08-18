@@ -118,21 +118,21 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     @DisplayName("학교 목록: 인증 헤더 없이도 DB에 등록된 학교가 이름순으로 내려온다")
-    void schools_end_to_end() throws Exception {
+    void organizations_end_to_end() throws Exception {
         // given: 가입 가능한 학교 2곳을 이름 역순으로 저장 (시드로 들어온 실제 학교들과 섞인다)
-        saveSchool("트윈리대학교", "twinly.ac.kr");
-        saveSchool("소마대학교", "nidus.ac.kr", "grad.nidus.ac.kr");
+        saveOrganization("트윈리대학교", "twinly.ac.kr");
+        saveOrganization("소마대학교", "nidus.ac.kr", "grad.nidus.ac.kr");
         flushAndClear();
 
         // when: 인증 없이 학교 목록 조회
-        String body = mockMvc.perform(get("/api/v1/onboarding/schools"))
+        String body = mockMvc.perform(get("/api/v1/onboarding/organizations"))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 
         // then: 이름순으로 정렬되어 이름·도메인이 함께 내려온다
-        assertThat(JsonPath.<List<String>>read(body, "$.schools[*].schoolName"))
+        assertThat(JsonPath.<List<String>>read(body, "$.organizations[*].organizationName"))
                 .containsSubsequence("소마대학교", "트윈리대학교");
-        assertThat(JsonPath.<List<List<String>>>read(body, "$.schools[?(@.schoolName == '소마대학교')].domains"))
+        assertThat(JsonPath.<List<List<String>>>read(body, "$.organizations[?(@.organizationName == '소마대학교')].domains"))
                 .containsExactly(List.of("nidus.ac.kr", "grad.nidus.ac.kr"));
     }
 
@@ -140,11 +140,11 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
     @DisplayName("학과 목록: 요청 파라미터 없이 인증된 이메일의 학교 학과만 내려오고 다른 학교 학과는 섞이지 않는다")
     void affiliations_end_to_end() throws Exception {
         // given: 학교 2곳과 각각의 학과, 그리고 소마대학교 이메일로 인증을 마친 익명 세션
-        Long nidusId = saveSchool("소마대학교", "nidus.ac.kr");
-        saveSchoolAffiliation(nidusId, "컴퓨터공학과");
-        saveSchoolAffiliation(nidusId, "경영학과");
-        Long twinlyId = saveSchool("트윈리대학교", "twinly.ac.kr");
-        saveSchoolAffiliation(twinlyId, "의예과");
+        Long nidusId = saveOrganization("소마대학교", "nidus.ac.kr");
+        saveOrganizationAffiliation(nidusId, "컴퓨터공학과");
+        saveOrganizationAffiliation(nidusId, "경영학과");
+        Long twinlyId = saveOrganization("트윈리대학교", "twinly.ac.kr");
+        saveOrganizationAffiliation(twinlyId, "의예과");
 
         AnonSession session = saveAnonSession();
         saveVerifiedEmailSession(session.getId(), "student@nidus.ac.kr");
@@ -629,21 +629,21 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
         return "Bearer " + session.getToken();
     }
 
-    /** 학교와 이메일 도메인을 직접 insert하고 schools.id를 반환한다. (운영에서도 마이그레이션 SQL로 주입되는 카탈로그 데이터) */
-    private Long saveSchool(String name, String... domains) {
-        jdbcTemplate.update("INSERT INTO schools (name) VALUES (?)", name);
-        Long schoolId = jdbcTemplate.queryForObject("SELECT id FROM schools WHERE name = ?", Long.class, name);
+    /** 학교와 이메일 도메인을 직접 insert하고 organizations.id를 반환한다. (운영에서도 마이그레이션 SQL로 주입되는 카탈로그 데이터) */
+    private Long saveOrganization(String name, String... domains) {
+        jdbcTemplate.update("INSERT INTO organizations (name) VALUES (?)", name);
+        Long organizationId = jdbcTemplate.queryForObject("SELECT id FROM organizations WHERE name = ?", Long.class, name);
 
         for (String domain : domains) {
-            jdbcTemplate.update("INSERT INTO school_domains (school_id, domain) VALUES (?, ?)", schoolId, domain);
+            jdbcTemplate.update("INSERT INTO organization_domains (organization_id, domain) VALUES (?, ?)", organizationId, domain);
         }
 
-        return schoolId;
+        return organizationId;
     }
 
     /** 특정 학교의 학과를 직접 insert한다. */
-    private void saveSchoolAffiliation(Long schoolId, String name) {
-        jdbcTemplate.update("INSERT INTO school_affiliations (school_id, name) VALUES (?, ?)", schoolId, name);
+    private void saveOrganizationAffiliation(Long organizationId, String name) {
+        jdbcTemplate.update("INSERT INTO organization_affiliations (organization_id, name) VALUES (?, ?)", organizationId, name);
     }
 
     /** 이메일 인증까지 끝난 인증 세션을 직접 insert한다. (학과 목록 조회가 인증된 학교를 요구한다) */

@@ -1,4 +1,4 @@
-package com.nidus.twinly.school.entity;
+package com.nidus.twinly.organization.entity;
 
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -8,17 +8,17 @@ import org.hibernate.annotations.DynamicUpdate;
 
 @Entity
 @DynamicUpdate
-@Table(name = "school_affiliations")
+@Table(name = "organization_domains")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class SchoolAffiliation {
+public class OrganizationDomain {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private Long schoolId;
+    private Long organizationId;
 
-    @Column(length = 100)
-    private String name;
+    @Column(length = 255)
+    private String domain;
 }

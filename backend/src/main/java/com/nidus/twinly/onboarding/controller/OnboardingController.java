@@ -7,10 +7,10 @@ import com.nidus.twinly.onboarding.dto.request.*;
 import com.nidus.twinly.onboarding.dto.response.OnboardingAffiliationsResponse;
 import com.nidus.twinly.onboarding.dto.response.OnboardingAiChatMessageResponse;
 import com.nidus.twinly.onboarding.dto.response.OnboardingAiChatStartResponse;
+import com.nidus.twinly.onboarding.dto.response.OnboardingOrganizationsResponse;
 import com.nidus.twinly.onboarding.dto.response.OnboardingProfileNicknameCheckResponse;
 import com.nidus.twinly.onboarding.dto.response.OnboardingProfilePhotoCommitResponse;
 import com.nidus.twinly.onboarding.dto.response.OnboardingProfilePhotoPresignResponse;
-import com.nidus.twinly.onboarding.dto.response.OnboardingSchoolsResponse;
 import com.nidus.twinly.onboarding.dto.response.OnboardingSurveyQuestionResponse;
 import com.nidus.twinly.onboarding.service.OnboardingService;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -122,9 +122,9 @@ public class OnboardingController {
         onboardingService.revokeConsents(anonSessionSnapshot, OnboardingRevokeConsentsCommand.from(request));
     }
 
-    @GetMapping("/api/v1/onboarding/schools")
-    public OnboardingSchoolsResponse schools() {
-        return OnboardingSchoolsResponse.from(onboardingService.schools());
+    @GetMapping("/api/v1/onboarding/organizations")
+    public OnboardingOrganizationsResponse organizations() {
+        return OnboardingOrganizationsResponse.from(onboardingService.organizations());
     }
 
     @ApiResponses({

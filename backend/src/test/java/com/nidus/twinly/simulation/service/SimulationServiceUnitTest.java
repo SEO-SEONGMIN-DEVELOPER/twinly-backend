@@ -189,7 +189,7 @@ class SimulationServiceUnitTest {
         assertThat(result.familyName()).isEqualTo("서");
         assertThat(result.givenName()).isEqualTo("성민");
         assertThat(result.gender()).isEqualTo(Gender.MALE);
-        assertThat(result.school()).isEqualTo("성균관대학교");
+        assertThat(result.organization()).isEqualTo("성균관대학교");
         assertThat(result.affiliation()).isEqualTo("컴퓨터공학과");
         assertThat(result.birthDate()).isEqualTo(LocalDate.of(1999, 3, 21));
         assertThat(result.personaElements())
@@ -247,7 +247,7 @@ class SimulationServiceUnitTest {
     private User user(Long id, String familyName, String givenName, String affiliation, String birthDate) {
         User user = User.create(
                 "nickname", familyName, "familyNameHash", givenName, "givenNameHash", Gender.MALE,
-                "성균관대학교", "schoolHash",
+                "성균관대학교", "organizationHash",
                 affiliation, "affiliationHash", "20191234", "affiliationNumberHash",
                 birthDate, "birthDateHash", "01012345678", "phoneNumberHash", "a@b.ac.kr", "emailHash");
         ReflectionTestUtils.setField(user, "id", id);
