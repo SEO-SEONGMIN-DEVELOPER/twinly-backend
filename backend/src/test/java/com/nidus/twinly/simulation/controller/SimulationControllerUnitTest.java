@@ -71,7 +71,7 @@ class SimulationControllerUnitTest {
                 .andExpect(jsonPath("$.familyName", is("서")))
                 .andExpect(jsonPath("$.givenName", is("성민")))
                 .andExpect(jsonPath("$.gender", is("male")))
-                .andExpect(jsonPath("$.school", is("성균관대학교")))
+                .andExpect(jsonPath("$.organization", is("성균관대학교")))
                 .andExpect(jsonPath("$.affiliation", is("컴퓨터공학과")))
                 .andExpect(jsonPath("$.birthDate", is("1999-03-21")))
                 .andExpect(jsonPath("$.personaElements.openness", hasSize(1)))

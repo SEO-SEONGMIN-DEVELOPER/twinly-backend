@@ -4,6 +4,7 @@ import com.nidus.twinly.activity.domain.QuestionType;
 import com.nidus.twinly.activity.domain.SceneType;
 import com.nidus.twinly.activity.dto.result.ActivityActionSceneResult;
 import com.nidus.twinly.common.scene.SceneBubbleLine;
+import com.nidus.twinly.common.scene.SceneNameRenderer;
 import com.nidus.twinly.common.scene.SceneNarrationLine;
 import com.nidus.twinly.activity.dto.result.ActivityDialogueSceneResult;
 import com.nidus.twinly.activity.dto.result.ActivityQuestionResult;
@@ -42,6 +43,7 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -84,7 +86,7 @@ class ActivityServiceUnitTest {
     void setUp() {
         // lines(JSON) 파싱은 서비스의 실제 책임이므로 ObjectMapper는 mock이 아닌 실제 객체를 주입한다.
         activityService = new ActivityService(
-                sceneRepository, scenePartnerRepository, questionRepository, userRepository, photoRepository, cloudFrontService, currentSeasonReader, new ObjectMapper());
+                sceneRepository, scenePartnerRepository, questionRepository, userRepository, photoRepository, cloudFrontService, currentSeasonReader, new SceneNameRenderer(), new ObjectMapper());
 
         // 현재 시즌은 DB의 활성 시즌에서 읽어오므로 리포지토리 스텁으로 대체한다.
         Season currentSeason = BeanUtils.instantiateClass(Season.class);
@@ -127,6 +129,46 @@ class ActivityServiceUnitTest {
         assertThat(result.userInfos()).containsExactly(
                 new ActivityUserInfoResult(USER_ID, "자신", null),
                 new ActivityUserInfoResult(100L, "길동", null));
+    }
+
+    @Test
+    @DisplayName("씬 본문의 이름 자리는 실제 유저 이름으로 치환해서 내려간다")
+    void activity_replaces_name_placeholders() {
+        // given: 나레이션·속마음에는 파트너(100), 대사에는 본인(1)의 이름 자리가 들어 있다
+        Scene action = actionScene(10L, "v1", "학교 복도",
+                DATE.atTime(9, 0), DATE.atTime(10, 0),
+                "{user_100}과 복도를 걸었다", "{user_100}은 오늘 조용했다");
+        String linesJson = """
+                [
+                  {"t":"narr","text":"{user_100}이 교실에 들어왔다","occursAt":"2026-07-26T12:00:00"},
+                  {"t":"bubble","userId":100,"action":"{user_1}을 보며","text":"{user_1}아 안녕","occursAt":"2026-07-26T12:05:00"}
+                ]
+                """;
+        Scene dialogue = dialogueScene(11L, "v1", "교실",
+                DATE.atTime(12, 0), DATE.atTime(12, 30), linesJson);
+        given(sceneRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of(action, dialogue));
+        given(scenePartnerRepository.findAllBySceneIdIn(List.of(10L, 11L)))
+                .willReturn(List.of(scenePartner(10L, 100L), scenePartner(11L, 100L)));
+        given(userRepository.findAllById(List.of(USER_ID, 100L)))
+                .willReturn(List.of(user(USER_ID, "나", "자신"), user(100L, "홍", "길동")));
+        given(userRepository.findAllById(Set.of(USER_ID, 100L)))
+                .willReturn(List.of(user(USER_ID, "나", "자신"), user(100L, "홍", "길동")));
+        given(questionRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of());
+
+        // when: 활동 조회
+        ActivityResult result = activityService.activity(USER_ID, DATE);
+
+        // then: 나레이션/속마음과 대사의 행동·본문 모두 이름으로 바뀐다
+        ActivityActionSceneResult actionResult = (ActivityActionSceneResult) result.scenes().get(0);
+        assertThat(actionResult.narration()).isEqualTo("길동과 복도를 걸었다");
+        assertThat(actionResult.mind()).isEqualTo("길동은 오늘 조용했다");
+
+        ActivityDialogueSceneResult dialogueResult = (ActivityDialogueSceneResult) result.scenes().get(1);
+        assertThat(((SceneNarrationLine) dialogueResult.lines().get(0)).text()).isEqualTo("길동이 교실에 들어왔다");
+
+        SceneBubbleLine bubble = (SceneBubbleLine) dialogueResult.lines().get(1);
+        assertThat(bubble.action()).isEqualTo("자신을 보며");
+        assertThat(bubble.text()).isEqualTo("자신아 안녕");
     }
 
     @Test
@@ -374,7 +416,7 @@ class ActivityServiceUnitTest {
     private User user(Long id, String familyName, String givenName) {
         User user = User.create(
                 "nick", familyName, "familyHash", givenName, "givenHash",
-                Gender.MALE, "school", "schoolHash", "aff", "affHash", "affNo", "affNoHash",
+                Gender.MALE, "organization", "organizationHash", "aff", "affHash", "affNo", "affNoHash",
                 "2000-01-01", "birthHash", "phone", "phoneHash", "email", "emailHash");
         ReflectionTestUtils.setField(user, "id", id);
         return user;

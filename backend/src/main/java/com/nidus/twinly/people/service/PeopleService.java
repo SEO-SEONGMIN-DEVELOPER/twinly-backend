@@ -10,6 +10,7 @@ import com.nidus.twinly.chat.entity.ChatRoom;
 import com.nidus.twinly.chat.repository.ChatRoomRepository;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
 import com.nidus.twinly.common.scene.SceneLine;
+import com.nidus.twinly.common.scene.SceneNameRenderer;
 import com.nidus.twinly.common.scene.StoredSceneBubbleLine;
 import com.nidus.twinly.common.scene.StoredSceneLine;
 import com.nidus.twinly.common.scene.StoredSceneNarrationLine;
@@ -79,6 +80,7 @@ public class PeopleService {
     private final BlockRepository blockRepository;
 
     private final CloudFrontService cloudFrontService;
+    private final SceneNameRenderer sceneNameRenderer;
     private final ObjectMapper objectMapper;
 
     public PeopleResult people(Long userId, Long cursor, Integer limit) {
@@ -299,6 +301,11 @@ public class PeopleService {
             previous = current;
         }
 
+        List<Scene> previewScenes = pageDates.stream()
+                .map(date -> scenesByDate.get(date).get(0))
+                .toList();
+        Map<Long, String> nameByUserId = nameByUserId(previewScenes);
+
         List<PeopleEventsItemResult> events = pageDates.stream()
                 .map(date -> {
                     Scene firstScene = scenesByDate.get(date).get(0);
@@ -307,7 +314,7 @@ public class PeopleService {
                             changeByDate.get(date),
                             deltaByDate.get(date),
                             firstScene.getPlace(),
-                            preview(firstScene)
+                            preview(firstScene, nameByUserId)
                     );
                 })
                 .toList();
@@ -326,9 +333,9 @@ public class PeopleService {
                 userId, partnerUserId, pageDates.get(pageDates.size() - 1), pageDates.get(0));
     }
 
-    private String preview(Scene scene) {
+    private String preview(Scene scene, Map<Long, String> nameByUserId) {
         if (scene.getType() == SceneType.ACTION) {
-            return scene.getNarration();
+            return sceneNameRenderer.render(scene.getNarration(), nameByUserId);
         }
 
         List<StoredSceneLine> lines = parseLines(scene);
@@ -336,15 +343,32 @@ public class PeopleService {
             return null;
         }
 
-        return switch (lines.get(0)) {
+        String text = switch (lines.get(0)) {
             case StoredSceneNarrationLine narration -> narration.text();
             case StoredSceneBubbleLine bubble -> bubble.text();
         };
+
+        return sceneNameRenderer.render(text, nameByUserId);
     }
 
-    private List<SceneLine> toSceneLines(Scene scene) {
+    private Map<Long, String> nameByUserId(List<Scene> scenes) {
+        Set<Long> userIds = scenes.stream()
+                .flatMap(scene -> Stream.of(scene.getNarration(), scene.getMind(), scene.getLines()))
+                .flatMap(text -> sceneNameRenderer.userIds(text).stream())
+                .collect(Collectors.toSet());
+
+        if (userIds.isEmpty()) {
+            return Map.of();
+        }
+
+        return userRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(User::getId, User::displayGivenName));
+    }
+
+    private List<SceneLine> toSceneLines(Scene scene, Map<Long, String> nameByUserId) {
         return parseLines(scene).stream()
                 .map(SceneLine::from)
+                .map(line -> sceneNameRenderer.render(line, nameByUserId))
                 .toList();
     }
 
@@ -380,8 +404,10 @@ public class PeopleService {
         Map<Long, User> userById = userRepository.findAllById(userInfoUserIds).stream()
                 .collect(Collectors.toMap(User::getId, Function.identity()));
 
+        Map<Long, String> nameByUserId = nameByUserId(scenes);
+
         List<PeopleEventSceneResult> sceneResults = scenes.stream()
-                .map(scene -> toSceneResult(scene, partnerUserIdsBySceneId.get(scene.getId())))
+                .map(scene -> toSceneResult(scene, partnerUserIdsBySceneId.get(scene.getId()), nameByUserId))
                 .toList();
 
         String version = scenes.isEmpty() ? null : scenes.get(0).getVersion();
@@ -405,7 +431,7 @@ public class PeopleService {
                 .toList();
     }
 
-    private PeopleEventSceneResult toSceneResult(Scene scene, List<Long> with) {
+    private PeopleEventSceneResult toSceneResult(Scene scene, List<Long> with, Map<Long, String> nameByUserId) {
         OffsetDateTime startsAt = KstTimes.toKstOffsetDateTime(scene.getStartsAt());
         OffsetDateTime endsAt = KstTimes.toKstOffsetDateTime(scene.getEndsAt());
 
@@ -417,8 +443,8 @@ public class PeopleService {
                     endsAt,
                     scene.getPlace(),
                     with,
-                    scene.getNarration(),
-                    scene.getMind()
+                    sceneNameRenderer.render(scene.getNarration(), nameByUserId),
+                    sceneNameRenderer.render(scene.getMind(), nameByUserId)
             );
             case DIALOGUE -> new PeopleEventDialogueSceneResult(
                     scene.getId(),
@@ -427,7 +453,7 @@ public class PeopleService {
                     endsAt,
                     scene.getPlace(),
                     with,
-                    toSceneLines(scene)
+                    toSceneLines(scene, nameByUserId)
             );
         };
     }

@@ -44,20 +44,20 @@ import com.nidus.twinly.onboarding.dto.command.OnboardingRevokeConsentsCommand;
 import com.nidus.twinly.onboarding.dto.command.OnboardingRevokeConsentsItemCommand;
 import com.nidus.twinly.onboarding.dto.command.OnboardingSurveyAnswerCommand;
 import com.nidus.twinly.onboarding.dto.result.OnboardingAffiliationsResult;
+import com.nidus.twinly.onboarding.dto.result.OnboardingOrganizationsItemResult;
+import com.nidus.twinly.onboarding.dto.result.OnboardingOrganizationsResult;
 import com.nidus.twinly.onboarding.dto.result.OnboardingProfileNicknameCheckResult;
 import com.nidus.twinly.onboarding.dto.result.OnboardingProfilePhotoCommitResult;
 import com.nidus.twinly.onboarding.dto.result.OnboardingProfilePhotoPresignResult;
-import com.nidus.twinly.onboarding.dto.result.OnboardingSchoolsItemResult;
-import com.nidus.twinly.onboarding.dto.result.OnboardingSchoolsResult;
 import com.nidus.twinly.onboarding.entity.SurveyAnswer;
 import com.nidus.twinly.onboarding.repository.SurveyAnswerRepository;
-import com.nidus.twinly.school.entity.School;
-import com.nidus.twinly.school.entity.SchoolAffiliation;
-import com.nidus.twinly.school.entity.SchoolDomain;
-import com.nidus.twinly.school.repository.SchoolAffiliationRepository;
-import com.nidus.twinly.school.repository.SchoolDomainRepository;
-import com.nidus.twinly.school.repository.SchoolRepository;
-import com.nidus.twinly.school.service.SchoolCatalog;
+import com.nidus.twinly.organization.entity.Organization;
+import com.nidus.twinly.organization.entity.OrganizationAffiliation;
+import com.nidus.twinly.organization.entity.OrganizationDomain;
+import com.nidus.twinly.organization.repository.OrganizationAffiliationRepository;
+import com.nidus.twinly.organization.repository.OrganizationDomainRepository;
+import com.nidus.twinly.organization.repository.OrganizationRepository;
+import com.nidus.twinly.organization.service.OrganizationCatalog;
 import com.nidus.twinly.user.repository.UserRepository;
 import org.springframework.beans.BeanUtils;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -142,16 +142,16 @@ class OnboardingServiceUnitTest {
     SurveyLoader surveyLoader;
 
     @Mock
-    SchoolCatalog schoolCatalog;
+    OrganizationCatalog organizationCatalog;
 
     @Mock
-    SchoolRepository schoolRepository;
+    OrganizationRepository organizationRepository;
 
     @Mock
-    SchoolDomainRepository schoolDomainRepository;
+    OrganizationDomainRepository organizationDomainRepository;
 
     @Mock
-    SchoolAffiliationRepository schoolAffiliationRepository;
+    OrganizationAffiliationRepository organizationAffiliationRepository;
 
     @Mock
     AnonSessionVerificationSessionRepository anonSessionVerificationSessionRepository;
@@ -213,29 +213,29 @@ class OnboardingServiceUnitTest {
 
     @Test
     @DisplayName("학교 목록 조회는 저장된 학교의 이름과 이메일 도메인을 그대로 반환한다")
-    void schools_returns_name_and_domains() {
+    void organizations_returns_name_and_domains() {
         // given: 가입 가능한 학교 1곳이 도메인 2개로 등록되어 있음
-        given(schoolRepository.findAllByOrderByNameAsc()).willReturn(List.of(school(1L, "트윈리대학교")));
-        given(schoolDomainRepository.findAll())
-                .willReturn(List.of(schoolDomain(1L, "nidus.ac.kr"), schoolDomain(1L, "grad.nidus.ac.kr")));
+        given(organizationRepository.findAllByOrderByNameAsc()).willReturn(List.of(organization(1L, "트윈리대학교")));
+        given(organizationDomainRepository.findAll())
+                .willReturn(List.of(organizationDomain(1L, "nidus.ac.kr"), organizationDomain(1L, "grad.nidus.ac.kr")));
 
         // when: 학교 목록 조회
-        OnboardingSchoolsResult result = onboardingService.schools();
+        OnboardingOrganizationsResult result = onboardingService.organizations();
 
         // then: 앱이 도메인을 자동 입력할 수 있도록 이름과 도메인 전체가 함께 나감
-        assertThat(result.schools()).containsExactly(
-                new OnboardingSchoolsItemResult("트윈리대학교", List.of("nidus.ac.kr", "grad.nidus.ac.kr")));
+        assertThat(result.organizations()).containsExactly(
+                new OnboardingOrganizationsItemResult("트윈리대학교", List.of("nidus.ac.kr", "grad.nidus.ac.kr")));
     }
 
     @Test
     @DisplayName("학과 목록은 인증 완료된 이메일이 속한 학교의 학과만 반환한다")
-    void affiliations_returns_affiliations_of_verified_school() {
+    void affiliations_returns_affiliations_of_verified_organization() {
         // given: 이메일 인증이 끝난 세션과, 그 도메인에 해당하는 학교의 학과 2개
         given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.EMAIL))
                 .willReturn(Optional.of(verifiedEmailSession("student@nidus.ac.kr")));
-        given(schoolCatalog.findByEmail("student@nidus.ac.kr")).willReturn(school(1L, "트윈리대학교"));
-        given(schoolAffiliationRepository.findAllBySchoolIdOrderByNameAsc(1L))
-                .willReturn(List.of(schoolAffiliation("경영학과"), schoolAffiliation("컴퓨터공학과")));
+        given(organizationCatalog.findByEmail("student@nidus.ac.kr")).willReturn(organization(1L, "트윈리대학교"));
+        given(organizationAffiliationRepository.findAllByOrganizationIdOrderByNameAsc(1L))
+                .willReturn(List.of(organizationAffiliation("경영학과"), organizationAffiliation("컴퓨터공학과")));
 
         // when: 학과 목록 조회
         OnboardingAffiliationsResult result = onboardingService.affiliations(ANON_SESSION);
@@ -287,22 +287,22 @@ class OnboardingServiceUnitTest {
                 .isEqualTo(ErrorCode.INVALID_ANON_SESSION);
     }
 
-    private School school(Long id, String name) {
-        School school = BeanUtils.instantiateClass(School.class);
-        ReflectionTestUtils.setField(school, "id", id);
-        ReflectionTestUtils.setField(school, "name", name);
-        return school;
+    private Organization organization(Long id, String name) {
+        Organization organization = BeanUtils.instantiateClass(Organization.class);
+        ReflectionTestUtils.setField(organization, "id", id);
+        ReflectionTestUtils.setField(organization, "name", name);
+        return organization;
     }
 
-    private SchoolDomain schoolDomain(Long schoolId, String domain) {
-        SchoolDomain schoolDomain = BeanUtils.instantiateClass(SchoolDomain.class);
-        ReflectionTestUtils.setField(schoolDomain, "schoolId", schoolId);
-        ReflectionTestUtils.setField(schoolDomain, "domain", domain);
-        return schoolDomain;
+    private OrganizationDomain organizationDomain(Long organizationId, String domain) {
+        OrganizationDomain organizationDomain = BeanUtils.instantiateClass(OrganizationDomain.class);
+        ReflectionTestUtils.setField(organizationDomain, "organizationId", organizationId);
+        ReflectionTestUtils.setField(organizationDomain, "domain", domain);
+        return organizationDomain;
     }
 
-    private SchoolAffiliation schoolAffiliation(String name) {
-        SchoolAffiliation affiliation = BeanUtils.instantiateClass(SchoolAffiliation.class);
+    private OrganizationAffiliation organizationAffiliation(String name) {
+        OrganizationAffiliation affiliation = BeanUtils.instantiateClass(OrganizationAffiliation.class);
         ReflectionTestUtils.setField(affiliation, "name", name);
         return affiliation;
     }

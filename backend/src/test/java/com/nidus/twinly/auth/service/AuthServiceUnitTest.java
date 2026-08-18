@@ -1,5 +1,7 @@
 package com.nidus.twinly.auth.service;
 
+import com.nidus.twinly.aichat.repository.AiChatRepository;
+import com.nidus.twinly.aichat.repository.AnonSessionAiChatRepository;
 import com.nidus.twinly.anon.dto.snapshot.AnonSessionSnapshot;
 import com.nidus.twinly.anon.entity.AnonSession;
 import com.nidus.twinly.anon.repository.AnonSessionAgreementRepository;
@@ -31,8 +33,9 @@ import com.nidus.twinly.common.jwt.JwtService;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.legal.repository.AgreementRepository;
-import com.nidus.twinly.school.entity.School;
-import com.nidus.twinly.school.service.SchoolCatalog;
+import com.nidus.twinly.organization.entity.Organization;
+import com.nidus.twinly.onboarding.repository.SurveyAnswerRepository;
+import com.nidus.twinly.organization.service.OrganizationCatalog;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.PersonaElementRepository;
 import com.nidus.twinly.user.repository.PhotoRepository;
@@ -118,6 +121,15 @@ class AuthServiceUnitTest {
     AnonSessionPersonaElementRepository anonSessionPersonaElementRepository;
 
     @Mock
+    AnonSessionAiChatRepository anonSessionAiChatRepository;
+
+    @Mock
+    AiChatRepository aiChatRepository;
+
+    @Mock
+    SurveyAnswerRepository surveyAnswerRepository;
+
+    @Mock
     RefreshTokenRepository refreshTokenRepository;
 
     @Mock
@@ -136,7 +148,7 @@ class AuthServiceUnitTest {
     BlindIndexHasher blindIndexHasher;
 
     @Mock
-    SchoolCatalog schoolCatalog;
+    OrganizationCatalog organizationCatalog;
 
     @InjectMocks
     AuthService authService;
@@ -199,7 +211,7 @@ class AuthServiceUnitTest {
     @DisplayName("온보딩 이메일 발송: 가입 가능한 학교의 도메인이 아니면 인증 세션을 만들지도, 메일을 보내지도 않는다")
     void onboardingEmailSend_with_unsupported_domain_throws() {
         // given: 학교 목록에 없는 도메인
-        willThrow(new BusinessException(ErrorCode.EMAIL_DOMAIN_NOT_SUPPORTED)).given(schoolCatalog).requireSupportedDomain(EMAIL);
+        willThrow(new BusinessException(ErrorCode.EMAIL_DOMAIN_NOT_SUPPORTED)).given(organizationCatalog).requireSupportedDomain(EMAIL);
 
         // when & then: EMAIL_DOMAIN_NOT_SUPPORTED 예외가 발생
         assertThatThrownBy(() -> authService.onboardingEmailSend(SNAPSHOT, new AuthEmailSendCommand(EMAIL)))
@@ -265,14 +277,14 @@ class AuthServiceUnitTest {
 
         AnonSession anonSession = AnonSession.create(SNAPSHOT.token(), Instant.now().plusSeconds(3600));
         given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(anonSession));
-        given(schoolCatalog.findByEmail(EMAIL)).willReturn(school("트윈리대학교"));
+        given(organizationCatalog.findByEmail(EMAIL)).willReturn(organization("트윈리대학교"));
 
         // when: 올바른 토큰·코드로 인증 확인
         authService.onboardingEmailVerify(SNAPSHOT, new AuthEmailVerifyCommand(session.getVerificationToken(), "123456"));
 
         // then: 세션에 인증 완료 시각이 기록되고, 학교는 사용자 입력이 아니라 인증된 도메인으로 결정됨
         assertThat(session.getVerifiedAt()).isNotNull();
-        assertThat(anonSession.getSchool()).isEqualTo("트윈리대학교");
+        assertThat(anonSession.getOrganization()).isEqualTo("트윈리대학교");
     }
 
     @Test
@@ -775,17 +787,17 @@ class AuthServiceUnitTest {
         anonSession.changeFamilyName("홍");
         anonSession.changeGivenName("길동");
         anonSession.changeGender(Gender.MALE);
-        anonSession.changeSchool("트윈리대학교");
+        anonSession.changeOrganization("트윈리대학교");
         anonSession.changeAffiliation("트윈리대학교");
         anonSession.changeAffiliationNumber("20250001");
         anonSession.changeBirthDate("2000-01-01");
         return anonSession;
     }
 
-    private School school(String name) {
-        School school = BeanUtils.instantiateClass(School.class);
-        ReflectionTestUtils.setField(school, "name", name);
-        return school;
+    private Organization organization(String name) {
+        Organization organization = BeanUtils.instantiateClass(Organization.class);
+        ReflectionTestUtils.setField(organization, "name", name);
+        return organization;
     }
 
     private User registeredUser() {

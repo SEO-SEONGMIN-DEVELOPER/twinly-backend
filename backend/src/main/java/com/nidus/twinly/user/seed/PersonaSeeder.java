@@ -53,16 +53,16 @@ public class PersonaSeeder implements ApplicationRunner {
     private final SurveyLoader surveyLoader;
     private final InterestLoader interestLoader;
 
-    private enum SeedSchool {
+    private enum SeedOrganization {
         SKKU("성균관대학교", "skku.edu"),
         KOREA("고려대학교", "korea.ac.kr"),
         SUNGSHIN("성신여자대학교", "sungshin.ac.kr");
 
-        private final String schoolName;
+        private final String organizationName;
         private final String domain;
 
-        SeedSchool(String schoolName, String domain) {
-            this.schoolName = schoolName;
+        SeedOrganization(String organizationName, String domain) {
+            this.organizationName = organizationName;
             this.domain = domain;
         }
     }
@@ -71,32 +71,32 @@ public class PersonaSeeder implements ApplicationRunner {
             String familyName,
             String givenName,
             Gender gender,
-            SeedSchool school,
+            SeedOrganization organization,
             String affiliation
     ) {
     }
 
     private static final List<SeedUser> SEED_USERS = List.of(
-            new SeedUser("김", "도윤", Gender.MALE, SeedSchool.SKKU, "미디어커뮤니케이션학과"),
-            new SeedUser("이", "시우", Gender.MALE, SeedSchool.SKKU, "경영학과"),
-            new SeedUser("박", "하준", Gender.MALE, SeedSchool.SKKU, "심리학과"),
-            new SeedUser("최", "은우", Gender.MALE, SeedSchool.SKKU, "통계학과"),
-            new SeedUser("정", "지호", Gender.MALE, SeedSchool.SKKU, "사회학과"),
-            new SeedUser("강", "서윤", Gender.FEMALE, SeedSchool.SKKU, "영어영문학과"),
-            new SeedUser("조", "하윤", Gender.FEMALE, SeedSchool.SKKU, "경제학과"),
-            new SeedUser("윤", "준서", Gender.MALE, SeedSchool.KOREA, "사회학과"),
-            new SeedUser("장", "유찬", Gender.MALE, SeedSchool.KOREA, "철학과"),
-            new SeedUser("임", "서준", Gender.MALE, SeedSchool.KOREA, "영어영문학과"),
-            new SeedUser("한", "이든", Gender.MALE, SeedSchool.KOREA, "국어국문학과"),
-            new SeedUser("오", "재이", Gender.MALE, SeedSchool.KOREA, "한국사학과"),
-            new SeedUser("서", "지우", Gender.FEMALE, SeedSchool.KOREA, "사학과"),
-            new SeedUser("신", "서연", Gender.FEMALE, SeedSchool.KOREA, "독어독문학과"),
-            new SeedUser("권", "다인", Gender.FEMALE, SeedSchool.SUNGSHIN, "국어국문학과"),
-            new SeedUser("황", "예린", Gender.FEMALE, SeedSchool.SUNGSHIN, "영어영문학과"),
-            new SeedUser("안", "시아", Gender.FEMALE, SeedSchool.SUNGSHIN, "일본어문·문화학과"),
-            new SeedUser("송", "유주", Gender.FEMALE, SeedSchool.SUNGSHIN, "문화예술경영학과"),
-            new SeedUser("류", "채원", Gender.FEMALE, SeedSchool.SUNGSHIN, "중국어문·문화학과"),
-            new SeedUser("전", "지아", Gender.FEMALE, SeedSchool.SUNGSHIN, "프랑스어문·문화학과")
+            new SeedUser("김", "도윤", Gender.MALE, SeedOrganization.SKKU, "미디어커뮤니케이션학과"),
+            new SeedUser("이", "시우", Gender.MALE, SeedOrganization.SKKU, "경영학과"),
+            new SeedUser("박", "하준", Gender.MALE, SeedOrganization.SKKU, "심리학과"),
+            new SeedUser("최", "은우", Gender.MALE, SeedOrganization.SKKU, "통계학과"),
+            new SeedUser("정", "지호", Gender.MALE, SeedOrganization.SKKU, "사회학과"),
+            new SeedUser("강", "서윤", Gender.FEMALE, SeedOrganization.SKKU, "영어영문학과"),
+            new SeedUser("조", "하윤", Gender.FEMALE, SeedOrganization.SKKU, "경제학과"),
+            new SeedUser("윤", "준서", Gender.MALE, SeedOrganization.KOREA, "사회학과"),
+            new SeedUser("장", "유찬", Gender.MALE, SeedOrganization.KOREA, "철학과"),
+            new SeedUser("임", "서준", Gender.MALE, SeedOrganization.KOREA, "영어영문학과"),
+            new SeedUser("한", "이든", Gender.MALE, SeedOrganization.KOREA, "국어국문학과"),
+            new SeedUser("오", "재이", Gender.MALE, SeedOrganization.KOREA, "한국사학과"),
+            new SeedUser("서", "지우", Gender.FEMALE, SeedOrganization.KOREA, "사학과"),
+            new SeedUser("신", "서연", Gender.FEMALE, SeedOrganization.KOREA, "독어독문학과"),
+            new SeedUser("권", "다인", Gender.FEMALE, SeedOrganization.SUNGSHIN, "국어국문학과"),
+            new SeedUser("황", "예린", Gender.FEMALE, SeedOrganization.SUNGSHIN, "영어영문학과"),
+            new SeedUser("안", "시아", Gender.FEMALE, SeedOrganization.SUNGSHIN, "일본어문·문화학과"),
+            new SeedUser("송", "유주", Gender.FEMALE, SeedOrganization.SUNGSHIN, "문화예술경영학과"),
+            new SeedUser("류", "채원", Gender.FEMALE, SeedOrganization.SUNGSHIN, "중국어문·문화학과"),
+            new SeedUser("전", "지아", Gender.FEMALE, SeedOrganization.SUNGSHIN, "프랑스어문·문화학과")
     );
 
 
@@ -159,7 +159,7 @@ public class PersonaSeeder implements ApplicationRunner {
 
     private User toUser(SeedUser seed, int index) {
         String nickname = seed.givenName() + sequence(index);
-        String school = seed.school().schoolName;
+        String organization = seed.organization().organizationName;
         String affiliationNumber = affiliationNumber(index);
         String birthDate = birthDate(index);
         String phoneNumber = PHONE_PREFIX + (PHONE_START + index);
@@ -170,7 +170,7 @@ public class PersonaSeeder implements ApplicationRunner {
                 seed.familyName(), blindIndexHasher.hash(seed.familyName()),
                 seed.givenName(), blindIndexHasher.hash(seed.givenName()),
                 seed.gender(),
-                school, blindIndexHasher.hash(school),
+                organization, blindIndexHasher.hash(organization),
                 seed.affiliation(), blindIndexHasher.hash(seed.affiliation()),
                 affiliationNumber, blindIndexHasher.hash(affiliationNumber),
                 birthDate, blindIndexHasher.hash(birthDate),
@@ -214,7 +214,7 @@ public class PersonaSeeder implements ApplicationRunner {
     }
 
     private String email(SeedUser seed, int index) {
-        return EMAIL_LOCAL_PREFIX + sequence(index) + "@" + seed.school().domain;
+        return EMAIL_LOCAL_PREFIX + sequence(index) + "@" + seed.organization().domain;
     }
 
     private String affiliationNumber(int index) {

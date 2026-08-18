@@ -15,13 +15,13 @@ public record SimulationPersonaResponse(
         String familyName,
         String givenName,
         Gender gender,
-        String school,
+        String organization,
         String affiliation,
         LocalDate birthDate,
         Map<PersonaDimension, List<String>> personaElements
 ) {
 
     public static SimulationPersonaResponse from(SimulationPersonaResult result) {
-        return new SimulationPersonaResponse(result.userId(), result.familyName(), result.givenName(), result.gender(), result.school(), result.affiliation(), result.birthDate(), result.personaElements());
+        return new SimulationPersonaResponse(result.userId(), result.familyName(), result.givenName(), result.gender(), result.organization(), result.affiliation(), result.birthDate(), result.personaElements());
     }
 }

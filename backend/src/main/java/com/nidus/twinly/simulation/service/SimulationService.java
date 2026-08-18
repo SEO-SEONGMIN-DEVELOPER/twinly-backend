@@ -269,7 +269,7 @@ public class SimulationService {
                 user.getFamilyName(),
                 user.getGivenName(),
                 user.getGender(),
-                user.getSchool(),
+                user.getOrganization(),
                 user.getAffiliation(),
                 birthDate(user),
                 personaElements

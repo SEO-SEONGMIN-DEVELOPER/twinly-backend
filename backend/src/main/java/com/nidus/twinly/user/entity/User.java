@@ -48,10 +48,10 @@ public class User {
 
     @Convert(converter = EncryptedStringConverter.class)
     @Column(columnDefinition = "TEXT")
-    private String school;
+    private String organization;
 
     @Column(columnDefinition = "TEXT")
-    private String schoolHash;
+    private String organizationHash;
 
     @Convert(converter = EncryptedStringConverter.class)
     @Column(columnDefinition = "TEXT")
@@ -100,7 +100,7 @@ public class User {
                               String familyName, String familyNameHash,
                               String givenName, String givenNameHash,
                               Gender gender,
-                              String school, String schoolHash,
+                              String organization, String organizationHash,
                               String affiliation, String affiliationHash,
                               String affiliationNumber, String affiliationNumberHash,
                               String birthDate, String birthDateHash,
@@ -114,8 +114,8 @@ public class User {
         user.givenName = givenName;
         user.givenNameHash = givenNameHash;
         user.gender = gender;
-        user.school = school;
-        user.schoolHash = schoolHash;
+        user.organization = organization;
+        user.organizationHash = organizationHash;
         user.affiliation = affiliation;
         user.affiliationHash = affiliationHash;
         user.affiliationNumber = affiliationNumber;

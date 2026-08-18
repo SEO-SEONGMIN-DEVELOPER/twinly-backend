@@ -1,6 +1,11 @@
 package com.nidus.twinly.auth.integration;
 
 import com.jayway.jsonpath.JsonPath;
+import com.nidus.twinly.aichat.domain.AiChatSender;
+import com.nidus.twinly.aichat.entity.AiChat;
+import com.nidus.twinly.aichat.entity.AnonSessionAiChat;
+import com.nidus.twinly.aichat.repository.AiChatRepository;
+import com.nidus.twinly.aichat.repository.AnonSessionAiChatRepository;
 import com.nidus.twinly.anon.entity.AnonSession;
 import com.nidus.twinly.anon.repository.AnonSessionRepository;
 import com.nidus.twinly.auth.entity.AnonSessionVerificationSession;
@@ -13,6 +18,9 @@ import com.nidus.twinly.auth.repository.VerificationSessionRepository;
 import com.nidus.twinly.common.crypto.BlindIndexHasher;
 import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.domain.VerificationType;
+import com.nidus.twinly.common.survey.SurveyOptionName;
+import com.nidus.twinly.onboarding.entity.SurveyAnswer;
+import com.nidus.twinly.onboarding.repository.SurveyAnswerRepository;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.support.AbstractIntegrationTest;
 import com.nidus.twinly.user.entity.User;
@@ -27,6 +35,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
@@ -52,6 +61,15 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
     RefreshTokenRepository refreshTokenRepository;
 
     @Autowired
+    AnonSessionAiChatRepository anonSessionAiChatRepository;
+
+    @Autowired
+    AiChatRepository aiChatRepository;
+
+    @Autowired
+    SurveyAnswerRepository surveyAnswerRepository;
+
+    @Autowired
     BlindIndexHasher blindIndexHasher;
 
     @Autowired
@@ -64,7 +82,7 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
         UUID anonToken = UUID.randomUUID();
         AnonSession anonSession = anonSessionRepository.save(
                 AnonSession.create(anonToken, Instant.now().plus(Duration.ofDays(1))));
-        saveSchool("트윈리대학교", "nidus.ac.kr");
+        saveOrganization("트윈리대학교", "nidus.ac.kr");
         willDoNothing().given(sesService).send(anyString(), anyString(), anyString());
 
         // when: 익명 세션 토큰을 Bearer로 붙여 온보딩 이메일 발송 API 호출
@@ -98,7 +116,7 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
         UUID anonToken = UUID.randomUUID();
         AnonSession anonSession = anonSessionRepository.save(
                 AnonSession.create(anonToken, Instant.now().plus(Duration.ofDays(1))));
-        saveSchool("트윈리대학교", "nidus.ac.kr");
+        saveOrganization("트윈리대학교", "nidus.ac.kr");
 
         // when: 목록에 없는 도메인으로 발송 요청 (앱 UI를 우회한 직접 호출)
         mockMvc.perform(post("/api/v1/auth/onboarding/email/send")
@@ -127,7 +145,7 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
         anonSession.changeFamilyName("홍");
         anonSession.changeGivenName("길동");
         anonSession.changeGender(Gender.MALE);
-        anonSession.changeSchool("트윈리대학교");
+        anonSession.changeOrganization("트윈리대학교");
         anonSession.changeAffiliation("트윈리대학교");
         anonSession.changeAffiliationNumber("20250001");
         anonSession.changeBirthDate("2000-01-01");
@@ -221,16 +239,16 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("회원가입: 익명 세션과 그 자식 행(인증 세션)이 모두 정리된다")
+    @DisplayName("회원가입: 익명 세션 자식 행이 모두 정리되고 AI 대화는 유저 소유로 이관된다")
     void signup_cleans_up_anon_session_and_children() throws Exception {
-        // given: 온보딩 정보와 SMS/EMAIL 인증 세션(= anon_sessions를 FK로 참조하는 자식 행)을 가진 익명 세션
+        // given: 온보딩 정보와 anon_sessions를 FK로 참조하는 자식 행들을 가진 익명 세션
         UUID anonToken = UUID.randomUUID();
         AnonSession anonSession = AnonSession.create(anonToken, Instant.now().plus(Duration.ofDays(1)));
         anonSession.changeNickname("cleanup-nick");
         anonSession.changeFamilyName("정");
         anonSession.changeGivenName("수민");
         anonSession.changeGender(Gender.FEMALE);
-        anonSession.changeSchool("트윈리대학교");
+        anonSession.changeOrganization("트윈리대학교");
         anonSession.changeAffiliation("트윈리대학교");
         anonSession.changeAffiliationNumber("20250004");
         anonSession.changeBirthDate("2000-04-04");
@@ -240,6 +258,9 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
         String email = "cleanup@test.com";
         anonSessionVerificationSessionRepository.save(verifiedAnonSession(anonSession.getId(), VerificationType.SMS, phone));
         anonSessionVerificationSessionRepository.save(verifiedAnonSession(anonSession.getId(), VerificationType.EMAIL, email));
+        anonSessionAiChatRepository.save(AnonSessionAiChat.create(anonSession.getId(), AiChatSender.AI, "취미가 무엇인가요?", 0));
+        anonSessionAiChatRepository.save(AnonSessionAiChat.create(anonSession.getId(), AiChatSender.USER, "등산을 좋아합니다.", 0));
+        surveyAnswerRepository.save(SurveyAnswer.create(anonSession.getId(), 1, SurveyOptionName.A));
 
         // when: 회원가입 API 호출
         mockMvc.perform(post("/api/v1/auth/signup")
@@ -253,6 +274,16 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
                 .findByAnonSessionIdAndType(anonSession.getId(), VerificationType.SMS)).isEmpty();
         assertThat(anonSessionVerificationSessionRepository
                 .findByAnonSessionIdAndType(anonSession.getId(), VerificationType.EMAIL)).isEmpty();
+        assertThat(anonSessionAiChatRepository.existsByAnonSessionId(anonSession.getId())).isFalse();
+        assertThat(surveyAnswerRepository.findAllByAnonSessionId(anonSession.getId())).isEmpty();
+
+        // then: AI 대화는 삭제되지 않고 가입된 유저 소유로 옮겨진다
+        User created = userRepository.findByPhoneNumberHash(blindIndexHasher.hash(phone)).orElseThrow();
+        assertThat(aiChatRepository.findAllByUserId(created.getId()))
+                .extracting(AiChat::getSender, AiChat::getMessage, AiChat::getTurnIndex)
+                .containsExactlyInAnyOrder(
+                        tuple(AiChatSender.AI, "취미가 무엇인가요?", 0),
+                        tuple(AiChatSender.USER, "등산을 좋아합니다.", 0));
     }
 
     @Test
@@ -341,7 +372,7 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
         UUID anonToken = UUID.randomUUID();
         AnonSession anonSession = anonSessionRepository.save(
                 AnonSession.create(anonToken, Instant.now().plus(Duration.ofDays(1))));
-        saveSchool("트윈리대학교", "nidus.ac.kr");
+        saveOrganization("트윈리대학교", "nidus.ac.kr");
         AnonSessionVerificationSession session = anonSessionVerificationSessionRepository.save(
                 AnonSessionVerificationSession.create(VerificationType.EMAIL, anonSession.getId(),
                         "verify@nidus.ac.kr", "123456", Instant.now().plus(Duration.ofMinutes(5))));
@@ -359,7 +390,7 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
         AnonSessionVerificationSession verified = anonSessionVerificationSessionRepository
                 .findByAnonSessionIdAndType(anonSession.getId(), VerificationType.EMAIL).orElseThrow();
         assertThat(verified.getVerifiedAt()).isNotNull();
-        assertThat(anonSessionRepository.findById(anonSession.getId()).orElseThrow().getSchool())
+        assertThat(anonSessionRepository.findById(anonSession.getId()).orElseThrow().getOrganization())
                 .isEqualTo("트윈리대학교");
     }
 
@@ -626,10 +657,10 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
 
     /** 지정한 전화번호·이메일로 실제 users 행을 만든다 (블라인드 인덱스 해시 포함). */
     /** 가입 가능한 학교와 이메일 도메인을 직접 insert한다. (운영에서도 마이그레이션 SQL로 주입되는 카탈로그 데이터) */
-    private void saveSchool(String name, String domain) {
-        jdbcTemplate.update("INSERT INTO schools (name) VALUES (?)", name);
-        Long schoolId = jdbcTemplate.queryForObject("SELECT id FROM schools WHERE name = ?", Long.class, name);
-        jdbcTemplate.update("INSERT INTO school_domains (school_id, domain) VALUES (?, ?)", schoolId, domain);
+    private void saveOrganization(String name, String domain) {
+        jdbcTemplate.update("INSERT INTO organizations (name) VALUES (?)", name);
+        Long organizationId = jdbcTemplate.queryForObject("SELECT id FROM organizations WHERE name = ?", Long.class, name);
+        jdbcTemplate.update("INSERT INTO organization_domains (organization_id, domain) VALUES (?, ?)", organizationId, domain);
     }
 
     private User saveUserWith(String phone, String email) {

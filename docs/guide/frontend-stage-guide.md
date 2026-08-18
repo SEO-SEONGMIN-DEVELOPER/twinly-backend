@@ -40,9 +40,9 @@
 
 1. `POST /api/v1/anon/start` → 익명 세션 토큰 발급
 2. 이후 온보딩 API 는 익명 세션 토큰을 `Bearer` 로 실어 호출
-   - 회원가입 필수값: `nickname`, `familyName`, `givenName`, `gender`, `school`, `affiliation`, `affiliationNumber`, `birthDate`
+   - 회원가입 필수값: `nickname`, `familyName`, `givenName`, `gender`, `organization`, `affiliation`, `affiliationNumber`, `birthDate`
    - 하나라도 비면 `PROFILE_NOT_COMPLETED`
-   - `school`, `affiliation` 은 미리 시드된 값을 써야 합니다 (8절 참고)
+   - `organization`, `affiliation` 은 미리 시드된 값을 써야 합니다 (8절 참고)
 3. `POST /api/v1/auth/onboarding/sms/send` → `smsVerificationToken` 수신 → `POST /api/v1/auth/onboarding/sms/verify` (`code: "000000"`)
 4. 이메일도 동일하게 `send` → `verify`
 5. `POST /api/v1/auth/signup` → `accessToken`, `refreshToken` 발급
@@ -187,7 +187,7 @@ POST /internal/v1/users/{userId}/simulations
 
 ### 8-1. 학교 / 소속
 
-회원가입의 `school`, `affiliation` 에 쓸 값입니다. 아래 학교가 시드되어 있습니다.
+회원가입의 `organization`, `affiliation` 에 쓸 값입니다. 아래 학교가 시드되어 있습니다.
 
 - 성균관대학교
 - 성신여자대학교

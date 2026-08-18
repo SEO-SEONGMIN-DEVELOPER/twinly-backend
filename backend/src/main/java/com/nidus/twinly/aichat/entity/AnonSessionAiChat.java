@@ -11,16 +11,16 @@ import java.time.Instant;
 
 @Entity
 @DynamicUpdate
-@Table(name = "ai_chats")
+@Table(name = "anon_session_ai_chats")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class AiChat {
+public class AnonSessionAiChat {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private Long userId;
+    private Long anonSessionId;
 
     @Enumerated(EnumType.STRING)
     private AiChatSender sender;
@@ -32,14 +32,13 @@ public class AiChat {
 
     private Instant createdAt;
 
-    public static AiChat create(Long userId, AiChatSender sender, String message, Integer turnIndex, Instant createdAt) {
-        AiChat aiChat = new AiChat();
-        aiChat.userId = userId;
+    public static AnonSessionAiChat create(Long anonSessionId, AiChatSender sender, String message, Integer turnIndex) {
+        AnonSessionAiChat aiChat = new AnonSessionAiChat();
+        aiChat.anonSessionId = anonSessionId;
         aiChat.sender = sender;
         aiChat.message = message;
         aiChat.turnIndex = turnIndex;
-        aiChat.createdAt = createdAt;
-
+        aiChat.createdAt = Instant.now();
         return aiChat;
     }
 }

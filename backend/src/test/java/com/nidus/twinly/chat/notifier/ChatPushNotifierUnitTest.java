@@ -161,7 +161,7 @@ class ChatPushNotifierUnitTest {
                 "김", "familyHash",
                 "나야", "givenHash",
                 Gender.FEMALE,
-                "school", "schoolHash",
+                "organization", "organizationHash",
                 "aff", "affHash",
                 "affNo", "affNoHash",
                 "2000-01-01", "birthHash",

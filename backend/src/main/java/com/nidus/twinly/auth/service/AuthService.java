@@ -1,5 +1,9 @@
 package com.nidus.twinly.auth.service;
 
+import com.nidus.twinly.aichat.entity.AiChat;
+import com.nidus.twinly.aichat.entity.AnonSessionAiChat;
+import com.nidus.twinly.aichat.repository.AiChatRepository;
+import com.nidus.twinly.aichat.repository.AnonSessionAiChatRepository;
 import com.nidus.twinly.anon.dto.snapshot.AnonSessionSnapshot;
 import com.nidus.twinly.anon.entity.AnonSession;
 import com.nidus.twinly.anon.entity.AnonSessionAgreement;
@@ -25,8 +29,9 @@ import com.nidus.twinly.common.jwt.JwtService;
 import com.nidus.twinly.common.photo.ProfileThumbnailService;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
-import com.nidus.twinly.school.entity.School;
-import com.nidus.twinly.school.service.SchoolCatalog;
+import com.nidus.twinly.onboarding.repository.SurveyAnswerRepository;
+import com.nidus.twinly.organization.entity.Organization;
+import com.nidus.twinly.organization.service.OrganizationCatalog;
 import com.nidus.twinly.user.entity.PersonaElement;
 import com.nidus.twinly.user.entity.Photo;
 import com.nidus.twinly.user.entity.User;
@@ -51,7 +56,7 @@ public class AuthService {
     private final VerificationCodeIssuer verificationCodeIssuer;
     private final JwtService jwtService;
     private final VerificationService verificationService;
-    private final SchoolCatalog schoolCatalog;
+    private final OrganizationCatalog organizationCatalog;
 
     private final VerificationSessionRepository verificationSessionRepository;
     private final AnonSessionVerificationSessionRepository anonSessionVerificationSessionRepository;
@@ -60,6 +65,9 @@ public class AuthService {
     private final AnonSessionPhotoRepository anonSessionPhotoRepository;
     private final AnonSessionAgreementRepository anonSessionAgreementRepository;
     private final AnonSessionPersonaElementRepository anonSessionPersonaElementRepository;
+    private final AnonSessionAiChatRepository anonSessionAiChatRepository;
+    private final AiChatRepository aiChatRepository;
+    private final SurveyAnswerRepository surveyAnswerRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final AgreementRepository agreementRepository;
     private final PhotoRepository photoRepository;
@@ -71,7 +79,7 @@ public class AuthService {
 
     @Transactional
     public AuthEmailSendResult onboardingEmailSend(AnonSessionSnapshot anonSessionSnapshot, AuthEmailSendCommand command) {
-        schoolCatalog.requireSupportedDomain(command.email());
+        organizationCatalog.requireSupportedDomain(command.email());
 
         String code = verificationCodeIssuer.issue(command.email());
         Instant codeExpiresAt = verificationCodeIssuer.codeExpiresAt();
@@ -89,12 +97,12 @@ public class AuthService {
         Long anonSessionId = anonSessionSnapshot.id();
 
         AnonSessionVerificationSession session = verifyAnonSession(anonSessionId, command, VerificationType.EMAIL);
-        School school = schoolCatalog.findByEmail(session.getContact());
+        Organization organization = organizationCatalog.findByEmail(session.getContact());
 
         AnonSession anonSession = anonSessionRepository.findById(anonSessionId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_ANON_SESSION));
 
-        anonSession.changeSchool(school.getName());
+        anonSession.changeOrganization(organization.getName());
     }
 
     @Transactional
@@ -225,7 +233,7 @@ public class AuthService {
 
         String familyNameHash = blindIndexHasher.hash(anonSession.getFamilyName());
         String givenNameHash = blindIndexHasher.hash(anonSession.getGivenName());
-        String schoolHash = blindIndexHasher.hash(anonSession.getSchool());
+        String organizationHash = blindIndexHasher.hash(anonSession.getOrganization());
         String affiliationHash = blindIndexHasher.hash(anonSession.getAffiliation());
         String affiliationNumberHash = blindIndexHasher.hash(anonSession.getAffiliationNumber());
         String birthDateHash = blindIndexHasher.hash(anonSession.getBirthDate());
@@ -236,7 +244,7 @@ public class AuthService {
                         anonSession.getFamilyName(), familyNameHash,
                         anonSession.getGivenName(), givenNameHash,
                         anonSession.getGender(),
-                        anonSession.getSchool(), schoolHash,
+                        anonSession.getOrganization(), organizationHash,
                         anonSession.getAffiliation(), affiliationHash,
                         anonSession.getAffiliationNumber(), affiliationNumberHash,
                         anonSession.getBirthDate(), birthDateHash,
@@ -295,6 +303,22 @@ public class AuthService {
 
         anonSessionPersonaElementRepository.deleteAll(anonSessionPersonaElements);
 
+        List<AnonSessionAiChat> anonSessionAiChats = anonSessionAiChatRepository.findAllByAnonSessionId(anonSessionId);
+
+        anonSessionAiChats.forEach(anonSessionAiChat -> aiChatRepository.save(
+                AiChat.create(
+                        user.getId(),
+                        anonSessionAiChat.getSender(),
+                        anonSessionAiChat.getMessage(),
+                        anonSessionAiChat.getTurnIndex(),
+                        anonSessionAiChat.getCreatedAt()
+                )
+        ));
+
+        anonSessionAiChatRepository.deleteAll(anonSessionAiChats);
+
+        surveyAnswerRepository.deleteByAnonSessionId(anonSessionId);
+
         anonSessionRepository.delete(anonSession);
 
         verificationRepository.save(Verification.create(user.getId(), VerificationType.SMS, smsSession.getVerifiedAt()));
@@ -331,7 +355,7 @@ public class AuthService {
                 || anonSession.getFamilyName() == null
                 || anonSession.getGivenName() == null
                 || anonSession.getGender() == null
-                || anonSession.getSchool() == null
+                || anonSession.getOrganization() == null
                 || anonSession.getAffiliation() == null
                 || anonSession.getAffiliationNumber() == null
                 || anonSession.getBirthDate() == null) {

@@ -1,9 +1,9 @@
-package com.nidus.twinly.school.service;
+package com.nidus.twinly.organization.service;
 
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
-import com.nidus.twinly.school.entity.School;
-import com.nidus.twinly.school.repository.SchoolDomainRepository;
+import com.nidus.twinly.organization.entity.Organization;
+import com.nidus.twinly.organization.repository.OrganizationDomainRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -11,14 +11,14 @@ import java.util.Locale;
 
 @Component
 @RequiredArgsConstructor
-public class SchoolCatalog {
+public class OrganizationCatalog {
 
-    private final SchoolDomainRepository schoolDomainRepository;
+    private final OrganizationDomainRepository organizationDomainRepository;
 
-    public School findByEmail(String email) {
+    public Organization findByEmail(String email) {
         String domain = extractDomain(email);
 
-        return schoolDomainRepository.findSchoolByDomain(domain)
+        return organizationDomainRepository.findOrganizationByDomain(domain)
                 .orElseThrow(() -> new BusinessException(ErrorCode.EMAIL_DOMAIN_NOT_SUPPORTED, "가입할 수 없는 이메일 도메인입니다: " + domain));
     }
 

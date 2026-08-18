@@ -16,16 +16,16 @@ CREATE TABLE agreements (
 ) ENGINE = INNODB;
 
 CREATE TABLE ai_chats (
-    id               BIGINT NOT NULL AUTO_INCREMENT,
-    anon_session_id  BIGINT NOT NULL,
-    sender           ENUM ('AI','USER') NOT NULL,
-    message          TEXT NOT NULL,
-    turn_index       INTEGER DEFAULT 0 NOT NULL,
-    created_at       DATETIME(6) DEFAULT (UTC_TIMESTAMP(6)) NOT NULL,
+    id          BIGINT NOT NULL AUTO_INCREMENT,
+    user_id     BIGINT NOT NULL,
+    sender      ENUM ('AI','USER') NOT NULL,
+    message     TEXT NOT NULL,
+    turn_index  INTEGER DEFAULT 0 NOT NULL,
+    created_at  DATETIME(6) DEFAULT (UTC_TIMESTAMP(6)) NOT NULL,
 
     CONSTRAINT pk_ai_chats PRIMARY KEY (id),
-    CONSTRAINT fk_ai_chats_anon_session_id FOREIGN KEY (anon_session_id) REFERENCES anon_sessions(id),
-    CONSTRAINT uk_ai_chats_anon_session_id_sender_turn_index UNIQUE (anon_session_id, sender, turn_index)
+    CONSTRAINT fk_ai_chats_user_id FOREIGN KEY (user_id) REFERENCES users(id),
+    CONSTRAINT uk_ai_chats_user_id_sender_turn_index UNIQUE (user_id, sender, turn_index)
 ) ENGINE = INNODB;
 
 CREATE TABLE ai_utterance_reports (
@@ -54,6 +54,19 @@ CREATE TABLE anon_session_agreements (
     CONSTRAINT pk_anon_session_agreements PRIMARY KEY (id),
     CONSTRAINT fk_anon_session_agreements_anon_session_id FOREIGN KEY (anon_session_id) REFERENCES anon_sessions(id),
     CONSTRAINT fk_anon_session_agreements_policy_id FOREIGN KEY (policy_id) REFERENCES policies(id)
+) ENGINE = INNODB;
+
+CREATE TABLE anon_session_ai_chats (
+    id               BIGINT NOT NULL AUTO_INCREMENT,
+    anon_session_id  BIGINT NOT NULL,
+    sender           ENUM ('AI','USER') NOT NULL,
+    message          TEXT NOT NULL,
+    turn_index       INTEGER DEFAULT 0 NOT NULL,
+    created_at       DATETIME(6) DEFAULT (UTC_TIMESTAMP(6)) NOT NULL,
+
+    CONSTRAINT pk_anon_session_ai_chats PRIMARY KEY (id),
+    CONSTRAINT fk_anon_session_ai_chats_anon_session_id FOREIGN KEY (anon_session_id) REFERENCES anon_sessions(id),
+    CONSTRAINT uk_anon_session_ai_chats_session_sender_turn_index UNIQUE (anon_session_id, sender, turn_index)
 ) ENGINE = INNODB;
 
 CREATE TABLE anon_session_persona_elements (
@@ -111,7 +124,7 @@ CREATE TABLE anon_sessions (
     family_name         TEXT,
     given_name          TEXT,
     gender              ENUM ('MALE','FEMALE'),
-    school              TEXT,
+    organization        TEXT,
     affiliation         TEXT,
     affiliation_number  TEXT,
     birth_date          TEXT,
@@ -325,6 +338,34 @@ CREATE TABLE notifications (
 
 CREATE INDEX ix_notifications_user_id ON notifications (user_id);
 
+CREATE TABLE organization_affiliations (
+    id               BIGINT NOT NULL AUTO_INCREMENT,
+    organization_id  BIGINT NOT NULL,
+    name             VARCHAR(100) NOT NULL,
+
+    CONSTRAINT pk_organization_affiliations PRIMARY KEY (id),
+    CONSTRAINT fk_organization_affiliations_organization_id FOREIGN KEY (organization_id) REFERENCES organizations(id),
+    CONSTRAINT uk_organization_affiliations_organization_id_name UNIQUE (organization_id, name)
+) ENGINE = INNODB;
+
+CREATE TABLE organization_domains (
+    id               BIGINT NOT NULL AUTO_INCREMENT,
+    organization_id  BIGINT NOT NULL,
+    domain           VARCHAR(255) NOT NULL,
+
+    CONSTRAINT pk_organization_domains PRIMARY KEY (id),
+    CONSTRAINT fk_organization_domains_organization_id FOREIGN KEY (organization_id) REFERENCES organizations(id),
+    CONSTRAINT uk_organization_domains_domain UNIQUE (domain)
+) ENGINE = INNODB;
+
+CREATE TABLE organizations (
+    id    BIGINT NOT NULL AUTO_INCREMENT,
+    name  VARCHAR(100) NOT NULL,
+
+    CONSTRAINT pk_organizations PRIMARY KEY (id),
+    CONSTRAINT uk_organizations_name UNIQUE (name)
+) ENGINE = INNODB;
+
 CREATE TABLE persona_elements (
     id           BIGINT NOT NULL AUTO_INCREMENT,
     user_id      BIGINT NOT NULL,
@@ -490,34 +531,6 @@ CREATE TABLE scenes (
 
 CREATE INDEX ix_scenes_user_id_date ON scenes (user_id, date);
 
-CREATE TABLE school_affiliations (
-    id         BIGINT NOT NULL AUTO_INCREMENT,
-    school_id  BIGINT NOT NULL,
-    name       VARCHAR(100) NOT NULL,
-
-    CONSTRAINT pk_school_affiliations PRIMARY KEY (id),
-    CONSTRAINT fk_school_affiliations_school_id FOREIGN KEY (school_id) REFERENCES schools(id),
-    CONSTRAINT uk_school_affiliations_school_id_name UNIQUE (school_id, name)
-) ENGINE = INNODB;
-
-CREATE TABLE school_domains (
-    id         BIGINT NOT NULL AUTO_INCREMENT,
-    school_id  BIGINT NOT NULL,
-    domain     VARCHAR(255) NOT NULL,
-
-    CONSTRAINT pk_school_domains PRIMARY KEY (id),
-    CONSTRAINT fk_school_domains_school_id FOREIGN KEY (school_id) REFERENCES schools(id),
-    CONSTRAINT uk_school_domains_domain UNIQUE (domain)
-) ENGINE = INNODB;
-
-CREATE TABLE schools (
-    id    BIGINT NOT NULL AUTO_INCREMENT,
-    name  VARCHAR(100) NOT NULL,
-
-    CONSTRAINT pk_schools PRIMARY KEY (id),
-    CONSTRAINT uk_schools_name UNIQUE (name)
-) ENGINE = INNODB;
-
 CREATE TABLE season_participations (
     id                  BIGINT NOT NULL AUTO_INCREMENT,
     user_id             BIGINT NOT NULL,
@@ -570,8 +583,8 @@ CREATE TABLE users (
     given_name               TEXT,
     given_name_hash          TEXT,
     gender                   ENUM ('MALE','FEMALE') NOT NULL,
-    school                   TEXT NOT NULL,
-    school_hash              TEXT NOT NULL,
+    organization             TEXT NOT NULL,
+    organization_hash        TEXT NOT NULL,
     affiliation              TEXT NOT NULL,
     affiliation_hash         TEXT NOT NULL,
     affiliation_number       TEXT,
