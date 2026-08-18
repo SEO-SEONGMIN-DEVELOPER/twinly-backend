@@ -9,6 +9,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 
 @Component
@@ -20,6 +21,7 @@ public class ParallelRelationLoader {
     private static final String OTHER_NAME_PLACEHOLDER = "{B";
 
     private final ObjectMapper objectMapper;
+    private final ParallelStoryRenderer parallelStoryRenderer;
 
     private Map<ParallelRelation, ParallelRelationContent> contentMap;
 
@@ -34,6 +36,12 @@ public class ParallelRelationLoader {
 
             if (!content.story().contains(NAME_PLACEHOLDER) || !content.story().contains(OTHER_NAME_PLACEHOLDER)) {
                 throw new IllegalStateException("이름 자리가 빠진 평행우주 이야기가 있습니다: " + content.relation());
+            }
+
+            List<String> unsupportedPlaceholders = parallelStoryRenderer.unsupportedPlaceholders(content.story());
+            if (!unsupportedPlaceholders.isEmpty()) {
+                throw new IllegalStateException(
+                        "채울 수 없는 이름 자리가 있는 평행우주 이야기가 있습니다: " + content.relation() + " " + unsupportedPlaceholders);
             }
 
             if (contentMap.put(content.relation(), content) != null) {

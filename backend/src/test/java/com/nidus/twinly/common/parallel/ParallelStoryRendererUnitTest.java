@@ -79,4 +79,34 @@ class ParallelStoryRendererUnitTest {
         // then
         assertThat(rendered).isEqualTo("Alex와 민서는 만났습니다.");
     }
+
+    @Test
+    @DisplayName("지원하는 이름 자리만 있으면 걸리는 것이 없다")
+    void supported_placeholders_are_not_reported() {
+        // given: 조사가 붙은 자리와 조사가 없는 자리를 모두 쓴다
+        String story = "{A와} {B는} 만났고 {A가} 웃었습니다. 그리고 {A}, {B}.";
+
+        // when & then
+        assertThat(renderer.unsupportedPlaceholders(story)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("채울 수 없는 조사가 붙은 이름 자리를 모두 찾아낸다")
+    void unsupported_placeholders_are_all_reported() {
+        // given: 의, 한테는 렌더링 대상이 아니라 화면에 그대로 나간다
+        String story = "{A의} 부모님이 {B한테} 물었고 {B는} 웃었습니다.";
+
+        // when & then: 한 번에 다 보여줘야 고치고 재기동을 반복하지 않는다
+        assertThat(renderer.unsupportedPlaceholders(story)).containsExactly("{A의}", "{B한테}");
+    }
+
+    @Test
+    @DisplayName("A와 B가 아닌 이름 자리도 걸러낸다")
+    void placeholder_with_unknown_name_slot_is_reported() {
+        // given: 오타로 C가 들어간 경우
+        String story = "{A와} {C는} 만났습니다.";
+
+        // when & then
+        assertThat(renderer.unsupportedPlaceholders(story)).containsExactly("{C는}");
+    }
 }

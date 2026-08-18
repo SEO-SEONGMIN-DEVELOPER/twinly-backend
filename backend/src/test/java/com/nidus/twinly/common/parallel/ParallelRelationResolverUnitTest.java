@@ -20,7 +20,7 @@ class ParallelRelationResolverUnitTest {
     @BeforeEach
     void setUp() throws IOException {
         // given: 실제 문구 파일과 운영 기본값과 같은 경계값으로 조립한다
-        loader = new ParallelRelationLoader(new ObjectMapper());
+        loader = new ParallelRelationLoader(new ObjectMapper(), new ParallelStoryRenderer());
         loader.load();
 
         resolver = new ParallelRelationResolver(new ParallelRelationProperties(thresholds()), loader, new ParallelStoryRenderer());
@@ -53,7 +53,7 @@ class ParallelRelationResolverUnitTest {
         ParallelRelationResult result = resolver.resolve(1.0, "지훈", "서연");
 
         // then: 공유 화면에 그대로 나갈 문장이므로 자리표시자가 남거나 조사가 틀리면 안 된다
-        assertThat(result.title()).isEqualTo("베스트 프렌드");
+        assertThat(result.title()).isEqualTo("아무때나 전화해도 좋아하는 사이");
         assertThat(result.story()).startsWith("지훈과 서연은 다른 평행우주에서는");
         assertThat(result.story()).doesNotContain("{A", "{B");
     }
