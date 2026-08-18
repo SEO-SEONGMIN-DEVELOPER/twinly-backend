@@ -18,6 +18,7 @@ import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.match.entity.Match;
 import com.nidus.twinly.match.repository.MatchRepository;
+import com.nidus.twinly.common.scene.SceneNameRenderer;
 import com.nidus.twinly.common.scene.StoredSceneNarrationLine;
 import com.nidus.twinly.people.dto.result.PeopleEventActionSceneResult;
 import com.nidus.twinly.people.dto.result.PeopleEventResult;
@@ -49,6 +50,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
+import org.mockito.Spy;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -63,6 +65,7 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -118,6 +121,9 @@ class PeopleServiceUnitTest {
 
     @Mock
     ObjectMapper objectMapper;
+
+    @Spy
+    SceneNameRenderer sceneNameRenderer = new SceneNameRenderer();
 
     @InjectMocks
     PeopleService peopleService;
@@ -558,6 +564,52 @@ class PeopleServiceUnitTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.USER_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("이벤트 목록의 미리보기도 이름 자리를 실제 유저 이름으로 치환한다")
+    void events_replaces_name_placeholders_in_preview() {
+        // given: 첫 씬의 나레이션에 상대(20)의 이름 자리가 들어 있다
+        LocalDate day = LocalDate.of(2026, 7, 20);
+
+        given(userRepository.findById(20L)).willReturn(Optional.of(user(20L, "김", "철수")));
+        given(relationshipRepository.findLatestByUserIdAndPartnerUserId(ME, 20L)).willReturn(Optional.empty());
+        given(sceneRepository.findDistinctDatesFromCursorByUserIdAndWithPartnerUserId(ME, 20L, null, 21))
+                .willReturn(List.of(day));
+        given(sceneRepository.findAllByUserIdAndWithPartnerUserIdAndDateIn(ME, 20L, List.of(day)))
+                .willReturn(List.of(scene(100L, ME, day, "v1", "카페", SceneType.ACTION, "{user_20}와 카페에 갔다", null, null)));
+        given(relationshipRepository.findForDeltaRange(ME, 20L, day, day)).willReturn(List.of());
+        given(userRepository.findAllById(Set.of(20L))).willReturn(List.of(user(20L, "김", "철수")));
+
+        // when: 이벤트 목록 조회
+        PeopleEventsResult result = peopleService.events(ME, 20L, null, null);
+
+        // then: 목록의 미리보기에도 자리표시자가 남지 않는다
+        assertThat(result.events().getFirst().preview()).isEqualTo("철수와 카페에 갔다");
+    }
+
+    @Test
+    @DisplayName("이벤트 상세의 씬 본문도 이름 자리를 실제 유저 이름으로 치환한다")
+    void event_replaces_name_placeholders() {
+        given(userRepository.existsById(20L)).willReturn(true);
+        // given: 나레이션과 속마음에 상대(20)의 이름 자리가 들어 있는 행동 씬
+        LocalDate date = LocalDate.of(2026, 7, 20);
+        given(sceneRepository.findAllByUserIdAndWithPartnerUserIdAndDateIn(ME, 20L, List.of(date)))
+                .willReturn(List.of(
+                        scene(100L, ME, date, "v1", "학교 복도", SceneType.ACTION, "{user_20}와 복도를 걸었다", "{user_20}는 조용했다", null)));
+        given(scenePartnerRepository.findAllBySceneIdIn(List.of(100L)))
+                .willReturn(List.of(scenePartner(100L, 20L)));
+        given(userRepository.findAllById(List.of(ME, 20L)))
+                .willReturn(List.of(user(ME, "나", "자신"), user(20L, "김", "철수")));
+        given(userRepository.findAllById(Set.of(20L))).willReturn(List.of(user(20L, "김", "철수")));
+
+        // when: 이벤트 상세 조회
+        PeopleEventResult result = peopleService.event(ME, 20L, date);
+
+        // then
+        PeopleEventActionSceneResult actionScene = (PeopleEventActionSceneResult) result.scenes().get(0);
+        assertThat(actionScene.narration()).isEqualTo("철수와 복도를 걸었다");
+        assertThat(actionScene.mind()).isEqualTo("철수는 조용했다");
     }
 
     @Test
