@@ -46,4 +46,27 @@ class SurveyLoaderUnitTest {
         assertThat(questions.subList(0, questions.size() - 1))
                 .allSatisfy(question -> assertThat(surveyLoader.isLastQuestion(question.id())).isFalse());
     }
+
+    @Test
+    @DisplayName("모든 선택지의 trait 문자열로 원래 문항과 선택지를 역추적할 수 있다")
+    void findTraitRef_restores_every_option() {
+        // given: 파일에 실린 모든 문항
+        List<SurveyQuestion> questions = surveyLoader.getAllQuestions();
+
+        // when & then: 어떤 선택지든 trait 문자열만으로 문항 id, 차원, 선택지가 복원된다
+        assertThat(questions).allSatisfy(question ->
+                question.options().forEach((optionName, option) ->
+                        assertThat(surveyLoader.findTraitRef(option.trait()))
+                                .contains(new SurveyTraitRef(question.id(), question.dimension(), optionName))));
+    }
+
+    @Test
+    @DisplayName("설문에 없는 문자열은 역추적되지 않는다")
+    void findTraitRef_empty_for_unknown_trait() {
+        // given: 관심사나 개정 전 설문에서 넘어온, 현재 설문에 없는 문자열
+        String unknown = "등산";
+
+        // when & then: 예외 없이 비어 있는 결과를 준다
+        assertThat(surveyLoader.findTraitRef(unknown)).isEmpty();
+    }
 }
