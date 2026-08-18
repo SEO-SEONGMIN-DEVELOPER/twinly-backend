@@ -58,7 +58,7 @@ class SimulationControllerUnitTest {
         Map<PersonaDimension, List<String>> personaElements = new LinkedHashMap<>();
         personaElements.put(PersonaDimension.OPENNESS, List.of("새로운 시도를 즐긴다"));
         personaElements.put(PersonaDimension.CONFLICT_STYLE, List.of("직접 말하기보다 시간을 둔다"));
-        personaElements.put(PersonaDimension.INTERESTS, List.of("등산", "재즈"));
+        personaElements.put(PersonaDimension.INTEREST, List.of("등산", "재즈"));
         given(simulationService.persona(USER_ID)).willReturn(new SimulationPersonaResult(
                 USER_ID, "서", "성민", Gender.MALE, "성균관대학교", "컴퓨터공학과", LocalDate.of(1999, 3, 21), personaElements));
 
@@ -77,7 +77,7 @@ class SimulationControllerUnitTest {
                 .andExpect(jsonPath("$.personaElements.openness", hasSize(1)))
                 .andExpect(jsonPath("$.personaElements.openness[0]", is("새로운 시도를 즐긴다")))
                 .andExpect(jsonPath("$.personaElements.conflictStyle[0]", is("직접 말하기보다 시간을 둔다")))
-                .andExpect(jsonPath("$.personaElements.interests", hasSize(2)));
+                .andExpect(jsonPath("$.personaElements.interest", hasSize(2)));
         then(simulationService).should().persona(USER_ID);
     }
 

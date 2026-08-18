@@ -158,8 +158,8 @@ class AiChatServiceUnitTest {
         // given: 세션의 관심사가 2건 있음
         given(anonSessionPersonaElementRepository.findAllByAnonSessionId(ANON_SESSION_ID))
                 .willReturn(List.of(
-                        AnonSessionPersonaElement.create(ANON_SESSION_ID, PersonaDimension.INTERESTS, "등산"),
-                        AnonSessionPersonaElement.create(ANON_SESSION_ID, PersonaDimension.INTERESTS, "재즈")));
+                        AnonSessionPersonaElement.create(ANON_SESSION_ID, PersonaDimension.INTEREST, "등산"),
+                        AnonSessionPersonaElement.create(ANON_SESSION_ID, PersonaDimension.INTEREST, "재즈")));
         given(bedrockService.converse(anyString())).willReturn("등산은 어디로 자주 가?");
 
         // when: AI 채팅 시작
@@ -184,8 +184,8 @@ class AiChatServiceUnitTest {
                         AiChat.create(ANON_SESSION_ID, AiChatSender.AI, "그 산 정상에서 뭐 했어?", 3)));
         given(anonSessionPersonaElementRepository.findAllByAnonSessionId(ANON_SESSION_ID))
                 .willReturn(List.of(
-                        AnonSessionPersonaElement.create(ANON_SESSION_ID, PersonaDimension.INTERESTS, "등산"),
-                        AnonSessionPersonaElement.create(ANON_SESSION_ID, PersonaDimension.INTERESTS, "재즈")));
+                        AnonSessionPersonaElement.create(ANON_SESSION_ID, PersonaDimension.INTEREST, "등산"),
+                        AnonSessionPersonaElement.create(ANON_SESSION_ID, PersonaDimension.INTEREST, "재즈")));
         given(bedrockService.converse(anyString())).willReturn("재즈는 어떤 아티스트 좋아해?");
 
         // when: 3번 턴에 답변 전송

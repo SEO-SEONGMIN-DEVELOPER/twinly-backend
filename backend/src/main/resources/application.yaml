@@ -103,6 +103,14 @@ anon:
 chat:
   room-intimacy-threshold: 70
 
+parallel:
+  relation-thresholds:
+    enemy: 0.0
+    stranger: 0.36
+    awkward: 0.48
+    close: 0.60
+    best-friend: 0.72
+
 server:
   port: 8080
   tomcat:

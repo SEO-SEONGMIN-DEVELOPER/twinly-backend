@@ -149,10 +149,10 @@ public class OnboardingService {
     public void interests(AnonSessionSnapshot anonSessionSnapshot, OnboardingInterestsCommand command) {
         Long anonSessionId = anonSessionSnapshot.id();
 
-        anonSessionPersonaElementRepository.deleteByAnonSessionIdAndDimensionIn(anonSessionId, Set.of(PersonaDimension.INTERESTS));
+        anonSessionPersonaElementRepository.deleteByAnonSessionIdAndDimensionIn(anonSessionId, Set.of(PersonaDimension.INTEREST));
 
         for (String interest : command.interests()) {
-            anonSessionPersonaElementRepository.save(AnonSessionPersonaElement.create(anonSessionId, PersonaDimension.INTERESTS, interest));
+            anonSessionPersonaElementRepository.save(AnonSessionPersonaElement.create(anonSessionId, PersonaDimension.INTEREST, interest));
         }
     }
 

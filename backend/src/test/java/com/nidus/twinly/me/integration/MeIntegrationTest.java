@@ -778,8 +778,8 @@ class MeIntegrationTest extends AbstractIntegrationTest {
                 PersonaElement.create(me.getId(), PersonaDimension.CONSCIENTIOUSNESS, "약속은 꼭 지킨다", Instant.now()),
                 PersonaElement.create(me.getId(), PersonaDimension.EXTRAVERSION, "먼저 말을 건다", Instant.now()),
                 PersonaElement.create(me.getId(), PersonaDimension.AGREEABLENESS, "잘 맞춰준다", Instant.now()),
-                PersonaElement.create(me.getId(), PersonaDimension.INTERESTS, "등산", Instant.now()),
-                PersonaElement.create(me.getId(), PersonaDimension.INTERESTS, "영화", Instant.now())));
+                PersonaElement.create(me.getId(), PersonaDimension.INTEREST, "등산", Instant.now()),
+                PersonaElement.create(me.getId(), PersonaDimension.INTEREST, "영화", Instant.now())));
 
         // given: 만난 기록 2건 — 하나는 내가 userA, 하나는 내가 userB로 정렬되도록 양방향 저장
         encounterRepository.save(Encounter.create(me.getId(), friend.getId()));

@@ -998,8 +998,8 @@ class MeServiceUnitTest {
                 personaElement(PersonaDimension.CONSCIENTIOUSNESS, "약속은 꼭 지킨다"),
                 personaElement(PersonaDimension.EXTRAVERSION, "먼저 말을 건다"),
                 personaElement(PersonaDimension.AGREEABLENESS, "잘 맞춰준다"),
-                personaElement(PersonaDimension.INTERESTS, "등산"),
-                personaElement(PersonaDimension.INTERESTS, "영화")));
+                personaElement(PersonaDimension.INTEREST, "등산"),
+                personaElement(PersonaDimension.INTEREST, "영화")));
 
         given(encounterRepository.findAllPartnerUserIdsByUserId(ME)).willReturn(List.of(10L, 20L));
         given(relationshipRepository.findLatestByUserIdAndPartnerUserIdIn(ME, List.of(10L, 20L)))
