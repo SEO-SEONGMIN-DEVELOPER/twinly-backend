@@ -2,7 +2,7 @@ package com.nidus.twinly.common.parallel;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-public enum ParallelRelation {
+public enum ParallelRelationType {
     @JsonProperty("enemy") ENEMY,
     @JsonProperty("stranger") STRANGER,
     @JsonProperty("awkward") AWKWARD,

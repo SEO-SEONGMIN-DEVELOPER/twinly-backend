@@ -28,8 +28,8 @@ class ParallelRelationPropertiesBindingUnitTest {
                 .orElseThrow(() -> new IllegalStateException("parallel 설정을 바인딩하지 못했습니다"));
 
         // then: yaml의 케밥 표기가 enum과 하나도 어긋나지 않는다
-        assertThat(properties.relationThresholds()).containsOnlyKeys(ParallelRelation.values());
-        assertThat(properties.relationThresholds().get(ParallelRelation.ENEMY)).isEqualTo(0.0);
-        assertThat(properties.relationThresholds().get(ParallelRelation.BEST_FRIEND)).isEqualTo(0.72);
+        assertThat(properties.relationThresholds()).containsOnlyKeys(ParallelRelationType.values());
+        assertThat(properties.relationThresholds().get(ParallelRelationType.ENEMY)).isEqualTo(0.0);
+        assertThat(properties.relationThresholds().get(ParallelRelationType.BEST_FRIEND)).isEqualTo(0.72);
     }
 }
