@@ -12,6 +12,8 @@ public interface SceneRepository extends JpaRepository<Scene, Long> {
 
     List<Scene> findAllByUserIdAndDate(Long userId, LocalDate date);
 
+    List<Scene> findAllByUserIdAndDateOrderByStartsAtAsc(Long userId, LocalDate date);
+
     @Query(value = """
             SELECT DISTINCT s.date
             FROM scenes s

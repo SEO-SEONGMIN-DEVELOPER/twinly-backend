@@ -101,6 +101,9 @@ public enum ErrorCode {
     OWN_PARALLEL_RELATION_CODE(HttpStatus.UNPROCESSABLE_CONTENT, "본인이 발급한 코드입니다."),
     PERSONA_NOT_FOUND(HttpStatus.UNPROCESSABLE_CONTENT, "페르소나가 아직 만들어지지 않은 유저입니다."),
 
+    // 하루 관람
+    SHOWCASE_TARGET_NOT_FOUND(HttpStatus.NOT_FOUND, "오늘 관람할 수 있는 대상이 없습니다."),
+
     // 외부 연동
     EMAIL_SEND_FAILED(HttpStatus.BAD_GATEWAY, "이메일 발송에 실패했습니다."),
     SMS_SEND_FAILED(HttpStatus.BAD_GATEWAY, "SMS 발송에 실패했습니다."),

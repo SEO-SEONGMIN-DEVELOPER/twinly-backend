@@ -28,3 +28,17 @@ CREATE TABLE parallel_relations (
 ) ENGINE = INNODB;
 
 CREATE INDEX ix_parallel_relations_user_b_id ON parallel_relations (user_b_id);
+
+CREATE TABLE showcases (
+    id              BIGINT NOT NULL AUTO_INCREMENT,
+    viewer_user_id  BIGINT NOT NULL,
+    target_user_id  BIGINT NOT NULL,
+    `date`          DATE NOT NULL,
+    created_at      DATETIME(6) DEFAULT (UTC_TIMESTAMP(6)) NOT NULL,
+
+    CONSTRAINT pk_showcases PRIMARY KEY (id),
+    CONSTRAINT fk_showcases_target_user_id FOREIGN KEY (target_user_id) REFERENCES users(id),
+    CONSTRAINT fk_showcases_viewer_user_id FOREIGN KEY (viewer_user_id) REFERENCES users(id),
+    CONSTRAINT uk_showcases_viewer_user_id_date UNIQUE (viewer_user_id, `date`),
+    CONSTRAINT ck_showcases_self_showcase_prevention CHECK ((viewer_user_id <> target_user_id))
+) ENGINE = INNODB;
