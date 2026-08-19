@@ -1,6 +1,7 @@
 package com.nidus.twinly.common.photo;
 
 import com.nidus.twinly.common.aws.s3.S3Service;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -87,6 +88,21 @@ class ProfileThumbnailServiceUnitTest {
         String thumbnailKey = profileThumbnailService.generate(SOURCE_KEY, position());
 
         // then: 내려받지 않고 조용히 포기한다
+        assertThat(thumbnailKey).isNull();
+        then(s3Service).should(never()).download(any(), any());
+    }
+
+    @Test
+    @DisplayName("크기를 모르는데 원본 조회가 S3 예외로 실패해도 null을 돌려준다")
+    void generate_without_known_size_returns_null_when_lookup_fails() {
+        // given: 버킷 이름이 바뀌었거나 권한이 어긋나 HEAD가 NoSuchKey가 아닌 예외로 실패하는 상황
+        given(s3Service.contentLength(SOURCE_KEY))
+                .willThrow(S3Exception.builder().statusCode(403).message("Access Denied").build());
+
+        // when: 크기 없이 썸네일 생성
+        String thumbnailKey = profileThumbnailService.generate(SOURCE_KEY, position());
+
+        // then: 썸네일만 포기한다 (아바타 장식 때문에 회원가입이 통째로 실패하면 안 된다)
         assertThat(thumbnailKey).isNull();
         then(s3Service).should(never()).download(any(), any());
     }
