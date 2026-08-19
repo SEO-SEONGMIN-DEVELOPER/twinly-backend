@@ -95,6 +95,12 @@ public enum ErrorCode {
     UPLOAD_NOT_COMPLETED(HttpStatus.UNPROCESSABLE_CONTENT, "업로드가 완료되지 않은 key입니다."),
     UNSUPPORTED_IMAGE_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "지원하지 않는 이미지 형식입니다."),
 
+    // 평행우주 관계
+    PARALLEL_RELATION_CODE_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 코드입니다."),
+    PARALLEL_RELATION_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 평행우주 관계 결과입니다."),
+    OWN_PARALLEL_RELATION_CODE(HttpStatus.UNPROCESSABLE_CONTENT, "본인이 발급한 코드입니다."),
+    PERSONA_NOT_FOUND(HttpStatus.UNPROCESSABLE_CONTENT, "페르소나가 아직 만들어지지 않은 유저입니다."),
+
     // 외부 연동
     EMAIL_SEND_FAILED(HttpStatus.BAD_GATEWAY, "이메일 발송에 실패했습니다."),
     SMS_SEND_FAILED(HttpStatus.BAD_GATEWAY, "SMS 발송에 실패했습니다."),
