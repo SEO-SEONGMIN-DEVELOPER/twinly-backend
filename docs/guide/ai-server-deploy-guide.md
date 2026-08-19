@@ -296,7 +296,7 @@ MySQL 마스터 비밀번호 제약은 8~41자, `/`, `"`, `@`, 공백 불가입�
 
 ## 3. 백엔드 호출 경로
 
-AI 서버가 부르는 백엔드 API 계약은 [docs/api-spec/internal-api-for-ai.md](../api-spec/internal-api-for-ai.md) 를 보세요. 여기서는 **네트워크 경로만** 다룹니다.
+AI 서버가 부르는 백엔드 API 계약은 [docs/api-spec/internal-api-for-ai.md](../api-spec/internal-api-for-ai_v1.md) 를 보세요. 여기서는 **네트워크 경로만** 다룹니다.
 
 현재 백엔드는 AI 서버를 호출하지 않습니다. 트래픽은 **AI → 백엔드 단방향**뿐이므로 백엔드 쪽 보안그룹에 열어줄 것도 없습니다.
 
