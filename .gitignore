@@ -26,3 +26,6 @@ COMMIT_MSG
 PR_BODY
 # loadtest
 loadtest/results
+
+# docs/api-spec
+docs/api-spec

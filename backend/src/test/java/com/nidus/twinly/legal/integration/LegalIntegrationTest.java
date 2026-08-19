@@ -1,6 +1,7 @@
 package com.nidus.twinly.legal.integration;
 
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontProperties;
+import com.nidus.twinly.legal.domain.PolicyKind;
 import com.nidus.twinly.legal.entity.Policy;
 import com.nidus.twinly.legal.entity.PolicyName;
 import com.nidus.twinly.legal.repository.PolicyNameRepository;
@@ -124,6 +125,35 @@ class LegalIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.policies[2].policyId").value("aaa_policy"));
     }
 
+    @Test
+    @DisplayName("정책 목록 조회: kind로 목록이 갈리고 서로 섞이지 않는다")
+    void policies_split_by_kind_end_to_end() throws Exception {
+        // given: 온보딩 정책 1건과 평행우주 입장 정책 1건(is_required=false로 저장)
+        PolicyName terms = savePolicyName("serviceTerms", "서비스 이용약관", false);
+        savePolicy(terms.getId(), "1", "legal/terms/v1.html", true, Instant.parse("2020-01-01T00:00:00Z"));
+
+        PolicyName provision = savePolicyName("parallelRelationProvision", "평행우주 관계 제3자 제공 동의", false, PolicyKind.PARALLEL_ENTRY);
+        savePolicy(provision.getId(), "1", "legal/parallel/v1.html", false, Instant.parse("2020-01-01T00:00:00Z"));
+        flushAndClear();
+
+        // when: 파라미터 없이 조회
+        var onboarding = mockMvc.perform(get("/api/v1/legal/policies"));
+
+        // then: 평행우주 정책은 빠진다
+        onboarding.andExpect(status().isOk())
+                .andExpect(jsonPath("$.policies.length()").value(1))
+                .andExpect(jsonPath("$.policies[0].policyId").value("serviceTerms"));
+
+        // when: kind=parallelEntry로 조회
+        var parallelEntry = mockMvc.perform(get("/api/v1/legal/policies").param("kind", "parallelEntry"));
+
+        // then: 평행우주 정책만 나오고, isRequired는 저장된 값 그대로 내려간다
+        parallelEntry.andExpect(status().isOk())
+                .andExpect(jsonPath("$.policies.length()").value(1))
+                .andExpect(jsonPath("$.policies[0].policyId").value("parallelRelationProvision"))
+                .andExpect(jsonPath("$.policies[0].isRequired").value(false));
+    }
+
     /** 영속성 컨텍스트를 비워 이후 조회가 실제 DB를 타도록 강제한다. */
     private void flushAndClear() {
         entityManager.flush();
@@ -131,7 +161,12 @@ class LegalIntegrationTest extends AbstractIntegrationTest {
     }
 
     private PolicyName savePolicyName(String identifier, String name, boolean deprecated) {
+        return savePolicyName(identifier, name, deprecated, PolicyKind.ONBOARDING);
+    }
+
+    private PolicyName savePolicyName(String identifier, String name, boolean deprecated, PolicyKind kind) {
         PolicyName policyName = BeanUtils.instantiateClass(PolicyName.class);
+        ReflectionTestUtils.setField(policyName, "kind", kind);
         ReflectionTestUtils.setField(policyName, "identifier", identifier);
         ReflectionTestUtils.setField(policyName, "name", name);
         ReflectionTestUtils.setField(policyName, "requiresAgreement", true);

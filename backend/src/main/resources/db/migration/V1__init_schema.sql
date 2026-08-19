@@ -415,6 +415,7 @@ CREATE TABLE policy_names (
     id                  BIGINT NOT NULL AUTO_INCREMENT,
     name                TEXT NOT NULL,
     identifier          VARCHAR(100) NOT NULL,
+    kind                ENUM ('ONBOARDING','PARALLEL_ENTRY') DEFAULT 'ONBOARDING' NOT NULL,
     requires_agreement  BOOLEAN DEFAULT 1 NOT NULL,
     is_deprecated       BOOLEAN DEFAULT 0 NOT NULL,
 

@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -21,15 +23,17 @@ class ParallelRelationLoaderUnitTest {
     }
 
     @Test
-    @DisplayName("모든 등급에 제목과 이야기가 있다")
-    void every_relation_has_content() {
+    @DisplayName("모든 등급에 제목과 이야기가 여러 개 있다")
+    void every_relation_has_contents() {
         // when & then: 등급을 추가하고 문구를 빠뜨리면 기동 시점에 실패한다
-        assertThat(ParallelRelation.values()).allSatisfy(relation -> {
-            ParallelRelationContent content = loader.getContent(relation);
+        assertThat(ParallelRelationType.values()).allSatisfy(relation -> {
+            List<ParallelRelationContent> contents = loader.getContents(relation);
 
-            assertThat(content).isNotNull();
-            assertThat(content.title()).isNotBlank();
-            assertThat(content.story()).isNotBlank();
+            assertThat(contents).isNotEmpty();
+            assertThat(contents).allSatisfy(content -> {
+                assertThat(content.title()).isNotBlank();
+                assertThat(content.story()).isNotBlank();
+            });
         });
     }
 
@@ -37,20 +41,21 @@ class ParallelRelationLoaderUnitTest {
     @DisplayName("모든 이야기에 두 사람의 이름 자리가 들어 있다")
     void every_story_has_both_name_placeholders() {
         // when & then: 공유용 문구에서 이름이 빠지는 사고를 막는다
-        assertThat(ParallelRelation.values()).allSatisfy(relation ->
-                assertThat(loader.getContent(relation).story()).contains("{A", "{B"));
+        assertThat(ParallelRelationType.values()).allSatisfy(relation ->
+                assertThat(loader.getContents(relation)).allSatisfy(content ->
+                        assertThat(content.story()).contains("{A", "{B")));
     }
 
     @Test
-    @DisplayName("등급마다 제목이 서로 다르다")
+    @DisplayName("이야기 제목이 전부 서로 다르다")
     void titles_are_distinct() {
-        // when
-        long distinctTitles = java.util.Arrays.stream(ParallelRelation.values())
-                .map(relation -> loader.getContent(relation).title())
-                .distinct()
-                .count();
+        // given
+        List<String> titles = Arrays.stream(ParallelRelationType.values())
+                .flatMap(relation -> loader.getContents(relation).stream())
+                .map(ParallelRelationContent::title)
+                .toList();
 
-        // then: 복사 후 수정을 잊은 문구를 잡아낸다
-        assertThat(distinctTitles).isEqualTo(ParallelRelation.values().length);
+        // when & then: 복사 후 수정을 잊은 문구를 잡아낸다
+        assertThat(titles).doesNotHaveDuplicates();
     }
 }

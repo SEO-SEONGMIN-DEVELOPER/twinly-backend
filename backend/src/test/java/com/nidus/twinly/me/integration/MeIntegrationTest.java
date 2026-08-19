@@ -10,6 +10,7 @@ import com.nidus.twinly.common.photo.PhotoType;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.legal.entity.Agreement;
 import com.nidus.twinly.legal.entity.Policy;
+import com.nidus.twinly.legal.domain.PolicyKind;
 import com.nidus.twinly.legal.entity.PolicyName;
 import com.nidus.twinly.legal.repository.AgreementRepository;
 import com.nidus.twinly.legal.repository.PolicyNameRepository;
@@ -712,6 +713,7 @@ class MeIntegrationTest extends AbstractIntegrationTest {
 
     private PolicyName policyName(String name, String identifier) {
         PolicyName policyName = BeanUtils.instantiateClass(PolicyName.class);
+        ReflectionTestUtils.setField(policyName, "kind", PolicyKind.ONBOARDING);
         ReflectionTestUtils.setField(policyName, "name", name);
         ReflectionTestUtils.setField(policyName, "identifier", identifier);
         ReflectionTestUtils.setField(policyName, "requiresAgreement", true);

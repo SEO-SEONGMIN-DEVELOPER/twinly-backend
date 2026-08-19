@@ -9,8 +9,10 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.util.EnumMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Component
 @RequiredArgsConstructor
@@ -23,40 +25,60 @@ public class ParallelRelationLoader {
     private final ObjectMapper objectMapper;
     private final ParallelStoryRenderer parallelStoryRenderer;
 
-    private Map<ParallelRelation, ParallelRelationContent> contentMap;
+    private Map<ParallelRelationType, List<ParallelRelationContent>> contentMap;
 
     @PostConstruct
     public void load() throws IOException {
         ClassPathResource resource = new ClassPathResource(RESOURCE_PATH);
         JsonNode relations = objectMapper.readTree(resource.getInputStream());
 
-        contentMap = new EnumMap<>(ParallelRelation.class);
+        contentMap = new EnumMap<>(ParallelRelationType.class);
         for (JsonNode relationNode : relations.get("relations")) {
-            ParallelRelationContent content = objectMapper.treeToValue(relationNode, ParallelRelationContent.class);
+            ParallelRelationStories relationStories =
+                    objectMapper.treeToValue(relationNode, ParallelRelationStories.class);
 
-            if (!content.story().contains(NAME_PLACEHOLDER) || !content.story().contains(OTHER_NAME_PLACEHOLDER)) {
-                throw new IllegalStateException("이름 자리가 빠진 평행우주 이야기가 있습니다: " + content.relation());
-            }
+            validate(relationStories);
 
-            List<String> unsupportedPlaceholders = parallelStoryRenderer.unsupportedPlaceholders(content.story());
-            if (!unsupportedPlaceholders.isEmpty()) {
-                throw new IllegalStateException(
-                        "채울 수 없는 이름 자리가 있는 평행우주 이야기가 있습니다: " + content.relation() + " " + unsupportedPlaceholders);
-            }
-
-            if (contentMap.put(content.relation(), content) != null) {
-                throw new IllegalStateException("중복된 평행우주 관계가 있습니다: " + content.relation());
+            if (contentMap.put(relationStories.relation(), List.copyOf(relationStories.stories())) != null) {
+                throw new IllegalStateException("중복된 평행우주 관계가 있습니다: " + relationStories.relation());
             }
         }
 
-        for (ParallelRelation relation : ParallelRelation.values()) {
+        for (ParallelRelationType relation : ParallelRelationType.values()) {
             if (!contentMap.containsKey(relation)) {
                 throw new IllegalStateException("이야기가 없는 평행우주 관계가 있습니다: " + relation);
             }
         }
     }
 
-    public ParallelRelationContent getContent(ParallelRelation relation) {
+    public List<ParallelRelationContent> getContents(ParallelRelationType relation) {
         return contentMap.get(relation);
+    }
+
+    private void validate(ParallelRelationStories relationStories) {
+        ParallelRelationType relation = relationStories.relation();
+
+        if (relationStories.stories() == null || relationStories.stories().isEmpty()) {
+            throw new IllegalStateException("이야기가 없는 평행우주 관계가 있습니다: " + relation);
+        }
+
+        Set<String> titles = new HashSet<>();
+        for (ParallelRelationContent content : relationStories.stories()) {
+            if (!content.story().contains(NAME_PLACEHOLDER) || !content.story().contains(OTHER_NAME_PLACEHOLDER)) {
+                throw new IllegalStateException(
+                        "이름 자리가 빠진 평행우주 이야기가 있습니다: " + relation + " " + content.title());
+            }
+
+            List<String> unsupportedPlaceholders = parallelStoryRenderer.unsupportedPlaceholders(content.story());
+            if (!unsupportedPlaceholders.isEmpty()) {
+                throw new IllegalStateException("채울 수 없는 이름 자리가 있는 평행우주 이야기가 있습니다: "
+                        + relation + " " + content.title() + " " + unsupportedPlaceholders);
+            }
+
+            if (!titles.add(content.title())) {
+                throw new IllegalStateException(
+                        "제목이 중복된 평행우주 이야기가 있습니다: " + relation + " " + content.title());
+            }
+        }
     }
 }

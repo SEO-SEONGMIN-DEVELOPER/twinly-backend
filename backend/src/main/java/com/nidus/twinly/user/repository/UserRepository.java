@@ -24,6 +24,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     List<User> findAllByDeletedAtIsNullAndWithdrawalScheduledAtLessThanEqual(Instant now, Pageable pageable);
 
+    int countByDeletedAtIsNull();
+
+    int countByDeletedAtIsNullAndOrganizationHash(String organizationHash);
+
     @Query(value = """
             SELECT u.id
             FROM users u

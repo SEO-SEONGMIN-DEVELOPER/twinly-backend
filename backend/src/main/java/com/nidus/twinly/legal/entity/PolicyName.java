@@ -1,5 +1,6 @@
 package com.nidus.twinly.legal.entity;
 
+import com.nidus.twinly.legal.domain.PolicyKind;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -22,6 +23,9 @@ public class PolicyName {
 
     @Column(length = 100)
     private String identifier;
+
+    @Enumerated(EnumType.STRING)
+    private PolicyKind kind;
 
     private Boolean requiresAgreement;
 

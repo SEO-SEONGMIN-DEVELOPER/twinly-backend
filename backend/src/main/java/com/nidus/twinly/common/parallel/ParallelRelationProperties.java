@@ -9,6 +9,6 @@ import java.util.Map;
 @Validated
 @ConfigurationProperties(prefix = "parallel")
 public record ParallelRelationProperties(
-        @NotEmpty Map<ParallelRelation, Double> relationThresholds
+        @NotEmpty Map<ParallelRelationType, Double> relationThresholds
 ) {
 }
