@@ -4,12 +4,16 @@ import com.nidus.twinly.activity.repository.QuestionPartnerRepository;
 import com.nidus.twinly.activity.repository.QuestionRepository;
 import com.nidus.twinly.activity.repository.SceneRepository;
 import com.nidus.twinly.activity.repository.ScenePartnerRepository;
+import com.google.firebase.messaging.BatchResponse;
 import com.nidus.twinly.chat.entity.ChatRoom;
 import com.nidus.twinly.chat.entity.ChatRoomParticipation;
 import com.nidus.twinly.chat.repository.ChatRoomParticipationRepository;
 import com.nidus.twinly.chat.repository.ChatRoomRepository;
 import com.nidus.twinly.match.entity.Match;
 import com.nidus.twinly.match.repository.MatchRepository;
+import com.nidus.twinly.device.domain.DevicePlatform;
+import com.nidus.twinly.device.entity.Device;
+import com.nidus.twinly.device.repository.DeviceRepository;
 import com.nidus.twinly.notification.domain.AppNotificationFeedType;
 import com.nidus.twinly.notification.entity.AppNotificationFeed;
 import com.nidus.twinly.notification.repository.AppNotificationFeedRepository;
@@ -30,9 +34,16 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.timeout;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -84,6 +95,9 @@ class SimulationChatRoomIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     SceneRepository sceneRepository;
 
+    @Autowired
+    DeviceRepository deviceRepository;
+
     @Test
     @DisplayName("친밀도가 임계치를 넘으면 매치·채팅방·참여자와 매칭 알림이 실제로 만들어진다")
     void simulations_opens_chat_room_when_rapport_reaches_threshold() throws Exception {
@@ -112,10 +126,35 @@ class SimulationChatRoomIntegrationTest extends AbstractIntegrationTest {
                         tuple(partner.getId(), AppNotificationFeedType.MATCH));
     }
 
+    @Test
+    @DisplayName("매칭 알림이 생기면 등록된 기기로 실제 푸시 발송까지 이어진다")
+    void simulations_sends_push_when_device_registered() throws Exception {
+        // given: 기기가 없으면 리스너가 조기 반환해 발송 경로를 타지 않으므로, 푸시 토큰을 가진 기기를 등록해 둔다
+        seasonRepository.save(Season.create(
+                Instant.now().minus(Duration.ofDays(1)), Instant.now().plus(Duration.ofDays(30))));
+        User me = saveUser();
+        User partner = saveUser();
+        deviceRepository.save(Device.create(me.getId(), UUID.randomUUID(), DevicePlatform.IOS, "push-token-me"));
+        deviceRepository.save(Device.create(partner.getId(), UUID.randomUUID(), DevicePlatform.IOS, "push-token-partner"));
+
+        // given: 스텁하지 않으면 목이 null을 돌려줘 FcmSender 가 응답을 훑다가 비동기 스레드에서 NPE 를 낸다
+        BatchResponse batchResponse = mock(BatchResponse.class);
+        given(batchResponse.getResponses()).willReturn(List.of());
+        given(firebaseMessaging.sendEach(any())).willReturn(batchResponse);
+
+        // when: 임계치를 넘는 친밀도로 하루치 결과를 반영
+        simulate(me, partner, RAPPORT_OVER_THRESHOLD);
+
+        // then: 푸시 리스너는 커밋 뒤 별도 스레드에서 돌기 때문에 즉시 단언하면 간헐적으로 실패한다.
+        //       발송 횟수는 알림 피드 개수를 따르므로(매칭 2건 + 친구 1건) 여기서는 경로가 타는지만 본다
+        then(firebaseMessaging).should(timeout(5_000).atLeastOnce()).sendEach(any());
+    }
+
     @AfterEach
     void cleanUp() {
         // 롤백이 없으므로 직접 지운다. 순서는 FK 의존의 역방향(자식 → 부모)
         appNotificationFeedRepository.deleteAll();
+        deviceRepository.deleteAll();
         chatRoomParticipationRepository.deleteAll();
         chatRoomRepository.deleteAll();
         matchRepository.deleteAll();
