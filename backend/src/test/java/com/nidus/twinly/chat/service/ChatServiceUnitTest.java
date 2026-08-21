@@ -380,7 +380,7 @@ class ChatServiceUnitTest {
     }
 
     @Test
-    @DisplayName("메시지 목록은 내가 보낸 메시지를 ME, 상대가 보낸 메시지를 THEM으로 매핑하고 더 없으면 커서를 비운다")
+    @DisplayName("메시지 목록은 내가 보낸 메시지를 ME, 상대가 보낸 메시지를 THEM으로 매핑하고, clientMsgId는 내 메시지에만 담으며 더 없으면 커서를 비운다")
     void messages_maps_sender_type_and_last_page() {
         // given: 내가 보낸 1건 + 상대가 보낸 1건만 존재
         given(chatRoomRepository.findById(ROOM_ID)).willReturn(Optional.of(room(ROOM_ID, MATCH_ID)));
@@ -395,9 +395,11 @@ class ChatServiceUnitTest {
         // when: limit 10으로 메시지 목록 조회
         ChatMessagesResult result = chatService.messages(ME, ROOM_ID, null, 10);
 
-        // then: 발신자 타입이 ME/THEM으로 매핑되고 다음 페이지가 없음
+        // then: 발신자 타입이 ME/THEM으로 매핑되고, 상대 기기가 만든 clientMsgId는 노출하지 않으며 다음 페이지가 없음
         assertThat(result.messages()).extracting(ChatMessageItemResult::senderType)
                 .containsExactly(ChatSenderType.ME, ChatSenderType.THEM);
+        assertThat(result.messages()).extracting(ChatMessageItemResult::clientMsgId)
+                .containsExactly("client-2", null);
         assertThat(result.page().hasMore()).isFalse();
         assertThat(result.page().nextCursor()).isNull();
     }

@@ -3,6 +3,7 @@ package com.nidus.twinly.chat.dto.response;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.nidus.twinly.chat.dto.result.ChatMessageItemResult;
 import com.nidus.twinly.chat.domain.ChatSenderType;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.Instant;
 
@@ -12,6 +13,7 @@ public record ChatMessageItemResponse(
         ChatSenderType senderType,
         String text,
         Instant sentAt,
+        @Schema(nullable = true)
         String clientMsgId
 ) {
 
