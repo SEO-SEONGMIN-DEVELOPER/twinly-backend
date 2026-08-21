@@ -885,7 +885,7 @@ class ChatServiceUnitTest {
         assertThat(result.partner().disclosedFields().affiliationNumber()).isNull();
         assertThat(result.partner().intimacy()).isEqualTo(45);
         assertThat(result.partner().relationshipSpecificType())
-                .isEqualTo(RelationshipSpecificType.RELATIONSHIP_SPECIFIC_TYPE_2);
+                .isEqualTo(RelationshipSpecificType.CLOSE);
         assertThat(result.entryStatus().myEntryAgreed()).isTrue();
         assertThat(result.entryStatus().partnerEntryAgreed()).isFalse();
     }

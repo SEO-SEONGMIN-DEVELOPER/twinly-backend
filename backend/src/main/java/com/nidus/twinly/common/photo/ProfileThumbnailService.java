@@ -22,9 +22,14 @@ public class ProfileThumbnailService {
     private final ThumbnailGenerator thumbnailGenerator;
 
     public String generate(String sourceKey, PhotoPosInfo position) {
-        return s3Service.contentLength(sourceKey)
-                .map(sourceBytes -> generate(sourceKey, position, sourceBytes))
-                .orElse(null);
+        try {
+            return s3Service.contentLength(sourceKey)
+                    .map(sourceBytes -> generate(sourceKey, position, sourceBytes))
+                    .orElse(null);
+        } catch (RuntimeException e) {
+            log.warn("원본 정보를 읽지 못해 썸네일 없이 진행합니다. key={}", sourceKey, e);
+            return null;
+        }
     }
 
     public String generate(String sourceKey, PhotoPosInfo position, long sourceBytes) {

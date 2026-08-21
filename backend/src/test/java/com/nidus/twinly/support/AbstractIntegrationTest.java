@@ -27,6 +27,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * - RANDOM_PORT: 실제 서블릿 컨테이너 기동(WebSocketConfig 요구), MockMvc는 in-process 디스패치
  * - @Transactional: 각 테스트 후 롤백으로 DB 정리
  * - Testcontainers MySQL(@ServiceConnection): 격리된 실제 MySQL, Flyway가 스키마 적용
+ *   - 콜레이션은 운영 RDS와 같은 ai_ci. cs로 두면 닉네임 중복 판정이 운영과 달라진다.
+ *   - connectionTimeZone=UTC는 운영 URL의 serverTimezone=UTC와 같은 설정. 없으면 JVM 기본
+ *     시간대를 쓰게 되어, SQL의 UTC_TIMESTAMP()와 섞이는 지점이 로컬(KST)에서만 9시간 어긋난다.
  * - 외부 어댑터 @MockitoBean: 실제 AWS/SOLAPI 호출 차단
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -40,7 +43,8 @@ public abstract class AbstractIntegrationTest {
     // Ryuk이 JVM 종료 시 컨테이너를 정리한다.
     @ServiceConnection
     static final MySQLContainer MYSQL = new MySQLContainer("mysql:8.4")
-            .withCommand("--character-set-server=utf8mb4", "--collation-server=utf8mb4_0900_as_cs");
+            .withCommand("--character-set-server=utf8mb4", "--collation-server=utf8mb4_0900_ai_ci")
+            .withUrlParam("connectionTimeZone", "UTC");
 
     @ServiceConnection
     static final GenericContainer<?> REDIS = new GenericContainer<>("redis:7.4").withExposedPorts(6379);

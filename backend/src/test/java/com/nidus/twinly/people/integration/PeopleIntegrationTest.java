@@ -15,7 +15,10 @@ import com.nidus.twinly.people.repository.EncounterRepository;
 import com.nidus.twinly.relationship.entity.Relationship;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
 import com.nidus.twinly.support.AbstractIntegrationTest;
+import com.nidus.twinly.common.photo.PhotoType;
+import com.nidus.twinly.user.entity.Photo;
 import com.nidus.twinly.user.entity.User;
+import com.nidus.twinly.user.repository.PhotoRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -55,6 +58,9 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     BlockRepository blockRepository;
+
+    @Autowired
+    PhotoRepository photoRepository;
 
     @Test
     @DisplayName("사람 목록 조회: 실제 관계 데이터를 파트너 id 오름차순으로 관통 조회해 친밀도·관계 타입을 내려준다")
@@ -106,6 +112,60 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.people.length()").value(1))
                 .andExpect(jsonPath("$.people[0].userId").value(partner1.getId().toString()))
                 .andExpect(jsonPath("$.page.hasMore").value(false));
+    }
+
+    @Test
+    @DisplayName("사람 목록 조회: 탈퇴한 파트너는 목록에 남되 이름이 가려지고 사진은 내려가지 않는다")
+    void people_masks_withdrawn_partner() throws Exception {
+        // given: 파트너 둘 다 프로필 사진을 가진 상태에서 한 명만 탈퇴시킨다.
+        //        사진 행이 있어야 "사진이 빠졌다"가 필터의 결과임이 증명된다 (없으면 어차피 null이라 무의미)
+        User me = saveUser();
+        User active = saveUser();
+        User withdrawn = saveUser();
+        savePhoto(active.getId());
+        savePhoto(withdrawn.getId());
+        withdrawn.delete();
+        userRepository.save(withdrawn);
+        saveRelationship(me.getId(), active.getId(), DAY_2, 40, "{}");
+        saveRelationship(me.getId(), withdrawn.getId(), DAY_2, 80, "{}");
+
+        // when: 사람 목록 조회
+        var result = mockMvc.perform(get("/api/v1/people")
+                .header("Authorization", bearer(me.getId())));
+
+        // then: 탈퇴자도 목록에는 남는다 (관계 이력이 사라지면 안 되므로) 대신 이름과 사진이 가려진다
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.people.length()").value(2))
+                .andExpect(jsonPath("$.people[0].userId").value(active.getId().toString()))
+                .andExpect(jsonPath("$.people[0].userName").value(active.getGivenName()))
+                .andExpect(jsonPath("$.people[0].profilePhoto").exists())
+                .andExpect(jsonPath("$.people[1].userId").value(withdrawn.getId().toString()))
+                .andExpect(jsonPath("$.people[1].userName").value(User.WITHDRAWN_NAME))
+                .andExpect(jsonPath("$.people[1].profilePhoto").isEmpty());
+    }
+
+    @Test
+    @DisplayName("프로필 조회: 탈퇴한 상대는 이름·사진·공개 필드가 모두 가려지고 isDeleted로 표시된다")
+    void profile_masks_withdrawn_partner() throws Exception {
+        // given: 사진을 가진 상대가 탈퇴한 상태
+        User me = saveUser();
+        User partner = saveUser();
+        savePhoto(partner.getId());
+        partner.delete();
+        userRepository.save(partner);
+        saveRelationship(me.getId(), partner.getId(), DAY_2, 75, "{}");
+
+        // when: 프로필 조회
+        var result = mockMvc.perform(get("/api/v1/people/{userId}/profile", partner.getId().toString())
+                .header("Authorization", bearer(me.getId())));
+
+        // then: 관계는 유지되나 신원은 드러나지 않는다
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.userName").value(User.WITHDRAWN_NAME))
+                .andExpect(jsonPath("$.profilePhoto").isEmpty())
+                .andExpect(jsonPath("$.isDeleted").value(true))
+                .andExpect(jsonPath("$.disclosedFields.affiliation").isEmpty())
+                .andExpect(jsonPath("$.disclosedFields.affiliationNumber").isEmpty());
     }
 
     @Test
@@ -226,7 +286,7 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.events[0].place").value("카페"))
                 .andExpect(jsonPath("$.events[0].preview").value("커피를 마셨다"))
                 .andExpect(jsonPath("$.events[0].intimacyDelta").value(30))
-                .andExpect(jsonPath("$.events[0].relationshipChange").value("RELATIONSHIP_SPECIFIC_TYPE_2"))
+                .andExpect(jsonPath("$.events[0].relationshipChange").value("친한 사이"))
                 .andExpect(jsonPath("$.page.hasMore").value(false));
     }
 
@@ -285,6 +345,11 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
     }
 
     // ------------------------------------------------------------------ fixtures
+
+    private void savePhoto(Long userId) {
+        photoRepository.save(Photo.create(userId, PhotoType.PROFILE, "profile/" + userId + "/key",
+                0, 0, 100, 100, Instant.now()));
+    }
 
     private Relationship saveRelationship(Long userId, Long partnerUserId, LocalDate date, int intimacy, String partnerModel) {
         Relationship relationship = newInstance(Relationship.class);
