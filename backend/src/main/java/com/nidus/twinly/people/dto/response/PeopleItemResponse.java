@@ -10,7 +10,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 public record PeopleItemResponse(
         @JsonFormat(shape = JsonFormat.Shape.STRING)
         Long userId,
-        @Schema(nullable = true)
         String userName,
         @Schema(nullable = true)
         ProfilePhotoInfo profilePhoto,
