@@ -391,13 +391,16 @@ public class ChatService {
         List<Chat> pageChats = hasMore ? chats.subList(0, effectiveLimit) : chats;
 
         List<ChatMessageItemResult> messages = pageChats.stream()
-                .map(chat -> new ChatMessageItemResult(
-                        chat.getId(),
-                        chat.getSenderUserId().equals(userId) ? ChatSenderType.ME : ChatSenderType.THEM,
-                        chat.getMessage(),
-                        chat.getSentAt(),
-                        chat.getClientMsgId()
-                ))
+                .map(chat -> {
+                    ChatSenderType senderType = chat.getSenderUserId().equals(userId) ? ChatSenderType.ME : ChatSenderType.THEM;
+                    return new ChatMessageItemResult(
+                            chat.getId(),
+                            senderType,
+                            chat.getMessage(),
+                            chat.getSentAt(),
+                            senderType == ChatSenderType.ME ? chat.getClientMsgId() : null
+                    );
+                })
                 .toList();
 
         Long nextCursor = hasMore ? pageChats.getLast().getId() : null;

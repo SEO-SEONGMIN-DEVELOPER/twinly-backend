@@ -205,21 +205,64 @@ class AiChatServiceUnitTest {
     }
 
     @Test
-    @DisplayName("마지막 턴(7)에 답하면 모델 호출 없이 종료 메시지와 isEnd=true를 반환한다")
-    void aiChatMessage_last_turn_ends_conversation() {
-        // given: 7번 턴 AI 질문이 존재
+    @DisplayName("마지막 턴(7)에 답하면 다음 질문 대신 대화 전체를 요약한 SUMMARY 요소를 저장하고 isEnd=true를 반환한다")
+    void aiChatMessage_last_turn_saves_summary_and_ends_conversation() {
+        // given: 7번 턴 AI 질문이 존재하고, 세션에 관심사·성격·지난 대화 요소가 쌓여 있으며 모델이 요약 문장을 반환
         given(anonSessionAiChatRepository.findByAnonSessionIdAndTurnIndexAndSender(ANON_SESSION_ID, 7, AiChatSender.AI))
                 .willReturn(Optional.of(AnonSessionAiChat.create(ANON_SESSION_ID, AiChatSender.AI, "마지막 질문", 7)));
+        given(anonSessionPersonaElementRepository.findAllByAnonSessionId(ANON_SESSION_ID))
+                .willReturn(List.of(
+                        AnonSessionPersonaElement.create(ANON_SESSION_ID, PersonaDimension.INTEREST, "등산"),
+                        AnonSessionPersonaElement.create(ANON_SESSION_ID, PersonaDimension.EXTRAVERSION, "사람 만나는 것을 좋아함"),
+                        AnonSessionPersonaElement.create(ANON_SESSION_ID, PersonaDimension.DETAIL, "등산은 어디로 자주 가?: 북한산")));
+        given(bedrockService.converse(anyString())).willReturn("  주말마다 북한산에 오르며 사진으로 순간을 남기는 사람\n");
 
         // when: 7번 턴에 답변 전송
         OnboardingAiChatMessageResult result = aiChatService.aiChatMessage(ANON_SESSION,
                 new OnboardingAiChatMessageCommand("재밌었어", 7));
 
-        // then: 종료 응답 + 모델 호출 없음 + 사용자 답변만 1건 저장
+        // then: 종료 응답 + 사용자 답변만 1건 저장(다음 AI 질문 없음)
         assertThat(result.message()).isEqualTo("지금까지 이야기 들려줘서 고마워!");
         assertThat(result.turnIndex()).isEqualTo(7);
         assertThat(result.isEnd()).isTrue();
-        then(bedrockService).should(never()).converse(anyString());
         then(anonSessionAiChatRepository).should(times(1)).save(any());
+
+        // then: 요약 프롬프트에 소속·관심사·성격·지난 대화가 모두 담기고 "~한 사람" 형식을 지시함
+        ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
+        then(bedrockService).should().converse(promptCaptor.capture());
+        assertThat(promptCaptor.getValue())
+                .contains("트윈리대학교", "[관심사]", "등산", "[성격 특성]", "사람 만나는 것을 좋아함",
+                        "[나눈 대화]", "등산은 어디로 자주 가?: 북한산", "~한 사람");
+
+        // then: DETAIL 다음에 공백이 정리된 SUMMARY 요소가 저장됨
+        ArgumentCaptor<AnonSessionPersonaElement> personaCaptor = ArgumentCaptor.forClass(AnonSessionPersonaElement.class);
+        then(anonSessionPersonaElementRepository).should(times(2)).save(personaCaptor.capture());
+        AnonSessionPersonaElement detail = personaCaptor.getAllValues().get(0);
+        AnonSessionPersonaElement summary = personaCaptor.getAllValues().get(1);
+        assertThat(detail.getDimension()).isEqualTo(PersonaDimension.DETAIL);
+        assertThat(detail.getExplanation()).isEqualTo("마지막 질문: 재밌었어");
+        assertThat(summary.getAnonSessionId()).isEqualTo(ANON_SESSION_ID);
+        assertThat(summary.getDimension()).isEqualTo(PersonaDimension.SUMMARY);
+        assertThat(summary.getExplanation()).isEqualTo("주말마다 북한산에 오르며 사진으로 순간을 남기는 사람");
+    }
+
+    @Test
+    @DisplayName("마지막 턴(7)에 이미 답한 뒤 같은 요청이 다시 오면 요약을 다시 만들지 않고 종료 응답만 반환한다")
+    void aiChatMessage_last_turn_is_idempotent() {
+        // given: 7번 턴의 AI 질문과 사용자 답변이 모두 존재
+        given(anonSessionAiChatRepository.findByAnonSessionIdAndTurnIndexAndSender(ANON_SESSION_ID, 7, AiChatSender.AI))
+                .willReturn(Optional.of(AnonSessionAiChat.create(ANON_SESSION_ID, AiChatSender.AI, "마지막 질문", 7)));
+        given(anonSessionAiChatRepository.findByAnonSessionIdAndTurnIndexAndSender(ANON_SESSION_ID, 7, AiChatSender.USER))
+                .willReturn(Optional.of(AnonSessionAiChat.create(ANON_SESSION_ID, AiChatSender.USER, "재밌었어", 7)));
+
+        // when: 7번 턴에 같은 답변을 다시 전송
+        OnboardingAiChatMessageResult result = aiChatService.aiChatMessage(ANON_SESSION,
+                new OnboardingAiChatMessageCommand("재밌었어", 7));
+
+        // then: 종료 응답만 반환하고 모델 호출·저장은 일어나지 않음
+        assertThat(result.isEnd()).isTrue();
+        then(bedrockService).should(never()).converse(anyString());
+        then(anonSessionAiChatRepository).should(never()).save(any());
+        then(anonSessionPersonaElementRepository).should(never()).save(any());
     }
 }

@@ -35,6 +35,7 @@ import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
@@ -46,6 +47,7 @@ class PersonaSeederUnitTest {
     private static final int SEED_USER_COUNT = 20;
     private static final int INTERESTS_PER_USER = 5;
     private static final int DETAIL_ELEMENTS_PER_USER = 5;
+    private static final int SUMMARY_ELEMENTS_PER_USER = 1;
 
     @Mock
     UserRepository userRepository;
@@ -93,7 +95,7 @@ class PersonaSeederUnitTest {
         // when: 시더 실행
         personaSeeder.run(null);
 
-        // then: 유저 20명 저장 + 유저별로 설문 23문항 + 관심사 5개 + 대화 5개
+        // then: 유저 20명 저장 + 유저별로 설문 23문항 + 관심사 5개 + 대화 5개 + 요약 1개
         then(userRepository).should(org.mockito.Mockito.times(SEED_USER_COUNT)).save(any(User.class));
 
         List<PersonaElement> elements = savedElements();
@@ -107,6 +109,7 @@ class PersonaSeederUnitTest {
         assertThat(countByUserAndDimension.values()).allSatisfy(byDimension -> {
             assertThat(byDimension.get(PersonaDimension.INTEREST)).isEqualTo(INTERESTS_PER_USER);
             assertThat(byDimension.get(PersonaDimension.DETAIL)).isEqualTo(DETAIL_ELEMENTS_PER_USER);
+            assertThat(byDimension.get(PersonaDimension.SUMMARY)).isEqualTo(1L);
 
             surveyLoader.getAllQuestions().stream()
                     .collect(Collectors.groupingBy(SurveyQuestion::dimension, Collectors.counting()))
@@ -128,10 +131,11 @@ class PersonaSeederUnitTest {
         // when: 시더 실행
         personaSeeder.run(null);
 
-        // then: 관심사와 대화를 뺀 나머지는 전부 설문 선택지 문장이다
+        // then: 관심사·대화·요약을 뺀 나머지는 전부 설문 선택지 문장이다
         List<String> surveyExplanations = savedElements().stream()
                 .filter(element -> element.getDimension() != PersonaDimension.INTEREST)
                 .filter(element -> element.getDimension() != PersonaDimension.DETAIL)
+                .filter(element -> element.getDimension() != PersonaDimension.SUMMARY)
                 .map(PersonaElement::getExplanation)
                 .toList();
 
@@ -187,6 +191,7 @@ class PersonaSeederUnitTest {
         Map<Long, Set<String>> traitsByUser = savedElements().stream()
                 .filter(element -> element.getDimension() != PersonaDimension.INTEREST)
                 .filter(element -> element.getDimension() != PersonaDimension.DETAIL)
+                .filter(element -> element.getDimension() != PersonaDimension.SUMMARY)
                 .collect(Collectors.groupingBy(PersonaElement::getUserId,
                         Collectors.mapping(PersonaElement::getExplanation, Collectors.toSet())));
 
@@ -243,6 +248,7 @@ class PersonaSeederUnitTest {
         // given: 시드 유저도 페르소나도 이미 존재하는 상태
         given(userRepository.findByEmailHash(any())).willAnswer(invocation -> Optional.of(existingUser()));
         given(personaElementRepository.existsByUserId(any())).willReturn(true);
+        given(personaElementRepository.existsByUserIdAndDimension(any(), eq(PersonaDimension.SUMMARY))).willReturn(true);
 
         // when: 시더 실행
         personaSeeder.run(null);
@@ -250,6 +256,47 @@ class PersonaSeederUnitTest {
         // then: 아무것도 저장하지 않음
         then(userRepository).should(never()).save(any(User.class));
         then(personaElementRepository).should(never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("페르소나는 있지만 SUMMARY만 없는 기존 시드 유저에게는 유저별 요약 한 건만 채운다")
+    void run_backfills_summary_only() {
+        // given: 요약 시드가 생기기 전에 시드된 유저라 다른 요소는 있고 SUMMARY 만 없는 상태
+        given(userRepository.findByEmailHash(any())).willAnswer(invocation -> Optional.of(existingUser()));
+        given(personaElementRepository.existsByUserId(any())).willReturn(true);
+        given(personaElementRepository.existsByUserIdAndDimension(any(), eq(PersonaDimension.SUMMARY))).willReturn(false);
+
+        // when: 시더 실행
+        personaSeeder.run(null);
+
+        // then: 유저·다른 요소는 건드리지 않고 유저마다 SUMMARY 한 건씩만 저장하며, 문장은 유저 순번에 맞는다
+        then(userRepository).should(never()).save(any(User.class));
+
+        List<PersonaElement> elements = savedElements();
+        assertThat(elements).hasSize(SEED_USER_COUNT);
+        assertThat(elements).extracting(PersonaElement::getDimension).containsOnly(PersonaDimension.SUMMARY);
+        assertThat(elements).extracting(PersonaElement::getUserId).doesNotHaveDuplicates();
+        assertThat(elements.getFirst().getExplanation()).isEqualTo(PersonaSeedElements.SUMMARY.getFirst());
+        assertThat(elements.getLast().getExplanation()).isEqualTo(PersonaSeedElements.SUMMARY.getLast());
+    }
+
+    @Test
+    @DisplayName("요약 문장은 유저마다 다르고 모두 \"사람\"으로 끝난다")
+    void run_assigns_distinct_summary_per_user() {
+        // given: 아직 시드 유저가 없는 상태
+        given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
+
+        // when: 시더 실행
+        personaSeeder.run(null);
+
+        // then: 프로필 한 줄 소개로 쓰이므로 중복이 없고 "~한 사람" 형식을 지킨다
+        List<String> summaries = savedElements().stream()
+                .filter(element -> element.getDimension() == PersonaDimension.SUMMARY)
+                .map(PersonaElement::getExplanation)
+                .toList();
+
+        assertThat(summaries).hasSize(SEED_USER_COUNT).doesNotHaveDuplicates();
+        assertThat(summaries).allSatisfy(summary -> assertThat(summary).endsWith("사람").hasSizeLessThanOrEqualTo(60));
     }
 
     @Test
@@ -275,7 +322,7 @@ class PersonaSeederUnitTest {
     }
 
     private int elementsPerUser() {
-        return surveyLoader.getAllQuestions().size() + INTERESTS_PER_USER + DETAIL_ELEMENTS_PER_USER;
+        return surveyLoader.getAllQuestions().size() + INTERESTS_PER_USER + DETAIL_ELEMENTS_PER_USER + SUMMARY_ELEMENTS_PER_USER;
     }
 
     private User existingUser() {

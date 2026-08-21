@@ -23,6 +23,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.nullValue;
+import static org.hamcrest.Matchers.hasKey;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -282,13 +284,17 @@ class ChatIntegrationTest extends AbstractIntegrationTest {
                 .header("Authorization", bearer(fixture.me().getId())));
 
         // then: 최신(id 내림차순) 순으로 2건, 발신자 구분이 ME/THEM으로 응답되고 다음 페이지는 없음
+        // then: clientMsgId 는 내 메시지에만 값이 있고 상대 메시지는 키는 있되 null (WS 와 달리 REST 는 키를 유지)
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.roomId").value(fixture.roomId().toString()))
                 .andExpect(jsonPath("$.messages.length()").value(2))
                 .andExpect(jsonPath("$.messages[0].messageId").value(theirs.getId().toString()))
                 .andExpect(jsonPath("$.messages[0].senderType").value("them"))
+                .andExpect(jsonPath("$.messages[0]", hasKey("clientMsgId")))
+                .andExpect(jsonPath("$.messages[0].clientMsgId").value(nullValue()))
                 .andExpect(jsonPath("$.messages[1].messageId").value(mine.getId().toString()))
                 .andExpect(jsonPath("$.messages[1].senderType").value("me"))
+                .andExpect(jsonPath("$.messages[1].clientMsgId").value("c-1"))
                 .andExpect(jsonPath("$.page.hasMore").value(false))
                 .andExpect(jsonPath("$.page.nextCursor").doesNotExist());
     }

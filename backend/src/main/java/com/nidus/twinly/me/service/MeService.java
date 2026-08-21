@@ -497,6 +497,11 @@ public class MeService {
     }
 
     private String persona(Map<PersonaDimension, List<String>> explanationsByDimension) {
+        List<String> summaries = explanationsByDimension.getOrDefault(PersonaDimension.SUMMARY, List.of());
+        if (!summaries.isEmpty()) {
+            return summaries.getLast();
+        }
+
         List<String> explanations = PERSONA_SUMMARY_DIMENSIONS.stream()
                 .map(dimension -> explanationsByDimension.getOrDefault(dimension, List.of()))
                 .filter(dimensionExplanations -> !dimensionExplanations.isEmpty())

@@ -4,7 +4,6 @@ import io.github.springwolf.core.asyncapi.components.postprocessors.SchemasPostP
 import io.swagger.v3.oas.models.media.Schema;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -19,7 +18,6 @@ public class AsyncApiSchemaPostProcessor implements SchemasPostProcessor {
             return;
         }
 
-        schema.setRequired(new ArrayList<>(properties.keySet()));
         properties.values().forEach(this::keepNullable);
     }
 

@@ -12,5 +12,6 @@ public enum PersonaDimension {
     @JsonProperty("conflictStyle") CONFLICT_STYLE,
     @JsonProperty("communicationStyle") COMMUNICATION_STYLE,
     @JsonProperty("interest") INTEREST,
-    @JsonProperty("detail") DETAIL
+    @JsonProperty("detail") DETAIL,
+    @JsonProperty("summary") SUMMARY
 }

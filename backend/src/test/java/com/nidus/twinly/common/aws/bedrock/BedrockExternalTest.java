@@ -118,4 +118,49 @@ class BedrockExternalTest {
 
         assertThat(answer).isNotBlank();
     }
+
+    @Test
+    @DisplayName("대화 요약: 채팅 종료 시점의 전체 페르소나로 \"~한 사람\" 한 문장이 생성된다")
+    void converse_summary() {
+        // given: AiChatService.buildSummaryPrompt와 같은 형태.
+        //        7번 턴까지 끝난 시점이라 관심사·성격·DETAIL(문답)이 모두 쌓여 있다.
+        String prompt = """
+                당신은 사용자와 나눈 대화를 바탕으로 그 사람이 어떤 사람인지 한 문장으로 소개하는 작가입니다.
+                아래는 지금까지 파악한 사용자의 정보입니다.
+
+                [소속 정보]
+                - 소속: 우아한테크코스
+
+                [관심사]
+                - 등산
+                - 사진
+                - 커피
+
+                [성격 특성]
+                - EXTRAVERSION: 혼자 있는 시간에 에너지를 회복한다
+                - OPENNESS: 새로운 기술을 먼저 시도해보는 편이다
+                - LIFE_STYLE: 계획을 세우기보다 그때그때 정하는 편이다
+
+                [나눈 대화]
+                - 등산은 어디로 자주 가?: 북한산, 주말 아침에 혼자 올라가
+                - 정상에서 뭐 해?: 필름 카메라로 사진 찍고 보온병에 담아간 커피 마셔
+                - 요즘 제일 행복한 순간은?: 정상에서 바람 맞으면서 커피 마실 때
+
+                위 정보를 바탕으로 이 사람이 어떤 사람인지 한국어 한 문장으로 요약하세요.
+                반드시 "~한 사람"으로 끝나는 형태여야 합니다. (예: 주말마다 북한산에 오르며 사진으로 순간을 남기는 사람)
+                성격 특성을 그대로 나열하지 말고, 대화에서 드러난 구체적인 모습을 중심으로 쓰세요.
+                60자 이내로 쓰세요.
+                요약 문장 외에 다른 설명, 따옴표, 마침표는 붙이지 마세요.
+                """;
+
+        // when: 실제 모델을 호출한다
+        String answer = bedrockService.converse(prompt);
+
+        // then: 응답이 왔는지만 단언한다. 형식("~한 사람"·길이)은 모델 출력이라 단언하지 않고 출력으로 확인한다
+        System.out.println("\n===== [대화 요약] 보낸 프롬프트 =====\n" + prompt);
+        System.out.println("===== [대화 요약] 받은 응답 =====\n" + answer + "\n");
+        System.out.println("===== [대화 요약] 길이(공백 제거 후) = " + answer.strip().length() + "\n");
+
+        assertThat(answer).isNotBlank();
+    }
 }

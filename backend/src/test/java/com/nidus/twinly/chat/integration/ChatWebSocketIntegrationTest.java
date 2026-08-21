@@ -113,6 +113,50 @@ class ChatWebSocketIntegrationTest extends AbstractWebSocketIntegrationTest {
     }
 
     @Test
+    @DisplayName("메시지 전송 e2e: created 페이로드의 clientMsgId 는 발신자에게만 있고 상대에게는 키 자체가 내려가지 않는다")
+    void createdEvent_exposes_clientMsgId_only_to_sender() throws Exception {
+        // given: 두 유저가 참여 중인 방, 각자 STOMP 로 접속해 같은 방 큐를 구독
+        saveCurrentSeason();
+        User me = saveUser();
+        User partner = saveUser();
+        long matchId = saveMatch(me.getId(), partner.getId());
+        ChatRoom room = chatRoomRepository.save(ChatRoom.create(matchId));
+        chatRoomParticipationRepository.save(ChatRoomParticipation.create(room.getId(), me.getId()));
+        chatRoomParticipationRepository.save(ChatRoomParticipation.create(room.getId(), partner.getId()));
+
+        StompSession mySession = connect(issueWsTicket(me.getId()));
+        StompSession partnerSession = connect(issueWsTicket(partner.getId()));
+        BlockingQueue<WebSocketEventBody> myRoomQueue =
+                subscribe(mySession, "/user/queue/chat/rooms/" + room.getId(), WebSocketEventBody.class);
+        BlockingQueue<WebSocketEventBody> partnerRoomQueue =
+                subscribe(partnerSession, "/user/queue/chat/rooms/" + room.getId(), WebSocketEventBody.class);
+
+        // when: 내가 메시지를 전송
+        mySession.send("/app/chat/messages", new WebSocketRequestBody<>(
+                1, WebSocketBodyKind.COMMAND, WebSocketBodyType.CHAT_MESSAGE_SEND, "command-1",
+                new ChatMessageSendPayload(room.getId(), "cmid-1", "안녕")));
+
+        // then: 양쪽 모두 created 이벤트를 받는다
+        WebSocketEventBody mine = myRoomQueue.poll(5, TimeUnit.SECONDS);
+        WebSocketEventBody theirs = partnerRoomQueue.poll(5, TimeUnit.SECONDS);
+        assertThat(mine).isNotNull();
+        assertThat(theirs).isNotNull();
+
+        // then: 발신자 프레임은 me + clientMsgId, 상대 프레임은 them + clientMsgId 키 없음 (null 이 아니라 부재)
+        @SuppressWarnings("unchecked")
+        Map<String, Object> myMessage = (Map<String, Object>) ((Map<String, Object>) mine.payload()).get("message");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> theirMessage = (Map<String, Object>) ((Map<String, Object>) theirs.payload()).get("message");
+        assertThat(myMessage.get("senderType")).isEqualTo("me");
+        assertThat(myMessage.get("clientMsgId")).isEqualTo("cmid-1");
+        assertThat(theirMessage.get("senderType")).isEqualTo("them");
+        assertThat(theirMessage).doesNotContainKey("clientMsgId");
+
+        mySession.disconnect();
+        partnerSession.disconnect();
+    }
+
+    @Test
     @DisplayName("읽음 처리 e2e: /app/chat/read 전송→read committed 프레임 수신·읽음 커서 DB 반영까지 관통한다")
     void readMessages_end_to_end() throws Exception {
         // given: 시즌·유저 2명·매치·방 + 내 참여 정보 + 상대가 보낸 메시지 1건을 실제 DB에 커밋

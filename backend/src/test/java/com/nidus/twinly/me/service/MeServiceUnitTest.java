@@ -999,7 +999,8 @@ class MeServiceUnitTest {
                 personaElement(PersonaDimension.EXTRAVERSION, "먼저 말을 건다"),
                 personaElement(PersonaDimension.AGREEABLENESS, "잘 맞춰준다"),
                 personaElement(PersonaDimension.INTEREST, "등산"),
-                personaElement(PersonaDimension.INTEREST, "영화")));
+                personaElement(PersonaDimension.INTEREST, "영화"),
+                personaElement(PersonaDimension.SUMMARY, "주말마다 북한산에 오르며 사진으로 순간을 남기는 사람")));
 
         given(encounterRepository.findAllPartnerUserIdsByUserId(ME)).willReturn(List.of(10L, 20L));
         given(relationshipRepository.findLatestByUserIdAndPartnerUserIdIn(ME, List.of(10L, 20L)))
@@ -1008,16 +1009,38 @@ class MeServiceUnitTest {
         // when: 내 프로필 조회
         MeProfileResult result = meService.profile(ME);
 
-        // then: 본인 화면이므로 성+이름, 페르소나는 차원별 첫 문장 3개까지만 요약, 지인은 친구 수에서 빠진다
+        // then: 본인 화면이므로 성+이름, 페르소나는 AI 채팅 종료 시 만든 SUMMARY 문장, 지인은 친구 수에서 빠진다
         assertThat(result.userId()).isEqualTo(ME);
         assertThat(result.userName()).isEqualTo("홍길동");
         assertThat(result.profilePhoto().photoUrl()).isEqualTo("https://cdn/signed.jpg");
         assertThat(result.profilePhoto().position())
                 .isEqualTo(new PhotoPosInfo(new PhotoPosInfo.StartPos(10, 20), 100, 200));
-        assertThat(result.persona()).isEqualTo("새로운 걸 좋아한다, 약속은 꼭 지킨다, 먼저 말을 건다...");
+        assertThat(result.persona()).isEqualTo("주말마다 북한산에 오르며 사진으로 순간을 남기는 사람");
         assertThat(result.interests()).containsExactly("등산", "영화");
         assertThat(result.encounteredPeopleCount()).isEqualTo(2);
         assertThat(result.encounteredFriendCount()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("SUMMARY 요소가 없는 기존 유저는 차원별 첫 문장 3개를 이어 붙인 요약으로 대체한다")
+    void myProfile_without_summary_falls_back_to_trait_join() {
+        // given: AI 채팅 요약이 생기기 전에 가입한 유저라 SUMMARY 요소가 없음
+        User user = user();
+        ReflectionTestUtils.setField(user, "id", ME);
+        given(userRepository.findById(ME)).willReturn(Optional.of(user));
+        given(personaElementRepository.findAllByUserIdOrderByIdAsc(ME)).willReturn(List.of(
+                personaElement(PersonaDimension.OPENNESS, "새로운 걸 좋아한다"),
+                personaElement(PersonaDimension.OPENNESS, "낯선 곳도 잘 간다"),
+                personaElement(PersonaDimension.CONSCIENTIOUSNESS, "약속은 꼭 지킨다"),
+                personaElement(PersonaDimension.EXTRAVERSION, "먼저 말을 건다"),
+                personaElement(PersonaDimension.AGREEABLENESS, "잘 맞춰준다"),
+                personaElement(PersonaDimension.DETAIL, "요즘 뭐 해?: 등산")));
+
+        // when: 내 프로필 조회
+        MeProfileResult result = meService.profile(ME);
+
+        // then: 설문 차원의 첫 문장 3개까지만 이어 붙이고 DETAIL은 섞이지 않음
+        assertThat(result.persona()).isEqualTo("새로운 걸 좋아한다, 약속은 꼭 지킨다, 먼저 말을 건다...");
     }
 
     @Test

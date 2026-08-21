@@ -118,6 +118,8 @@ public class PersonaSeeder implements ApplicationRunner {
 
             if (!personaElementRepository.existsByUserId(userId)) {
                 elements.addAll(toPersonaElements(userId, index, now));
+            } else if (!personaElementRepository.existsByUserIdAndDimension(userId, PersonaDimension.SUMMARY)) {
+                elements.add(summaryElement(userId, index, now));
             }
         }
 
@@ -141,6 +143,11 @@ public class PersonaSeeder implements ApplicationRunner {
         if (PersonaSeedElements.DETAIL.size() < required) {
             throw new IllegalStateException("페르소나 시드 문장이 부족합니다. dimension=%s, required=%d, actual=%d"
                     .formatted(PersonaDimension.DETAIL, required, PersonaSeedElements.DETAIL.size()));
+        }
+
+        if (PersonaSeedElements.SUMMARY.size() < SEED_USERS.size()) {
+            throw new IllegalStateException("페르소나 시드 문장이 부족합니다. dimension=%s, required=%d, actual=%d"
+                    .formatted(PersonaDimension.SUMMARY, SEED_USERS.size(), PersonaSeedElements.SUMMARY.size()));
         }
 
         if (INTEREST_POOL.size() < INTERESTS_PER_USER) {
@@ -197,7 +204,13 @@ public class PersonaSeeder implements ApplicationRunner {
             elements.add(PersonaElement.create(userId, PersonaDimension.DETAIL, detail, createdAt));
         }
 
+        elements.add(summaryElement(userId, index, createdAt));
+
         return List.copyOf(elements);
+    }
+
+    private PersonaElement summaryElement(Long userId, int index, Instant createdAt) {
+        return PersonaElement.create(userId, PersonaDimension.SUMMARY, PersonaSeedElements.SUMMARY.get(index), createdAt);
     }
 
     private List<String> interests(Random random) {
