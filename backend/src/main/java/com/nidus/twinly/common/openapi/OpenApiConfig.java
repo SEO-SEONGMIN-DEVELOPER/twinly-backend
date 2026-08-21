@@ -187,22 +187,6 @@ public class OpenApiConfig {
     }
 
     @Bean
-    public OpenApiCustomizer allFieldsRequiredCustomizer() {
-        return openApi -> {
-            Components components = openApi.getComponents();
-            if (components == null || components.getSchemas() == null) {
-                return;
-            }
-
-            for (Schema schema : components.getSchemas().values()) {
-                if (schema.getProperties() != null && !schema.getProperties().isEmpty()) {
-                    schema.setRequired(new ArrayList<>(schema.getProperties().keySet()));
-                }
-            }
-        };
-    }
-
-    @Bean
     public OpenApiCustomizer nullableRefOneOfCustomizer() {
         return openApi -> {
             Components components = openApi.getComponents();
