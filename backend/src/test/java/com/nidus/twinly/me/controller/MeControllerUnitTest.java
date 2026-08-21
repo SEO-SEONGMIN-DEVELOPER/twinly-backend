@@ -764,7 +764,7 @@ class MeControllerUnitTest {
         given(meService.profile(ME))
                 .willReturn(new MeProfileResult(1L, "홍길동",
                         new ProfilePhotoInfo("profile/1/key", "https://cdn/p.jpg", new PhotoPosInfo(new PhotoPosInfo.StartPos(10, 20), 100, 200)),
-                        "새로운 걸 좋아한다, 약속은 꼭 지킨다, 먼저 말을 건다...",
+                        "주말마다 북한산에 오르며 사진으로 순간을 남기는 사람",
                         List.of("등산", "영화"), 2, 1));
 
         // when: 내 프로필 조회 API 호출
@@ -777,7 +777,7 @@ class MeControllerUnitTest {
                 .andExpect(jsonPath("$.userName").value("홍길동"))
                 .andExpect(jsonPath("$.profilePhoto.key").value("profile/1/key"))
                 .andExpect(jsonPath("$.profilePhoto.photoUrl").value("https://cdn/p.jpg"))
-                .andExpect(jsonPath("$.persona").value("새로운 걸 좋아한다, 약속은 꼭 지킨다, 먼저 말을 건다..."))
+                .andExpect(jsonPath("$.persona").value("주말마다 북한산에 오르며 사진으로 순간을 남기는 사람"))
                 .andExpect(jsonPath("$.interests[0]").value("등산"))
                 .andExpect(jsonPath("$.interests[1]").value("영화"))
                 .andExpect(jsonPath("$.encounteredPeopleCount").value(2))
