@@ -216,7 +216,7 @@ class ChatControllerUnitTest {
                 .andExpect(jsonPath("$.matchId").value("100"))
                 .andExpect(jsonPath("$.partner.userId").value("2"))
                 .andExpect(jsonPath("$.partner.intimacy").value(45))
-                .andExpect(jsonPath("$.partner.relationshipSpecificType").value("RELATIONSHIP_SPECIFIC_TYPE_2"))
+                .andExpect(jsonPath("$.partner.relationshipSpecificType").value("친한 사이"))
                 .andExpect(jsonPath("$.partner.disclosedFields.affiliation").value("aff"))
                 .andExpect(jsonPath("$.partner.disclosedFields.affiliationNumber").isEmpty())
                 .andExpect(jsonPath("$.isCurrentSeason").value(true));
@@ -358,7 +358,7 @@ class ChatControllerUnitTest {
                         "partner",
                         null,
                         45,
-                        RelationshipSpecificType.RELATIONSHIP_SPECIFIC_TYPE_2,
+                        RelationshipSpecificType.CLOSE,
                         new ChatRoomDetailDisclosedFieldsResult("aff", null)
                 ),
                 null,

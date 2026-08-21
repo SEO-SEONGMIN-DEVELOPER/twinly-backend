@@ -158,7 +158,7 @@ class ChatIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.entryStatus.partnerEntryAgreed").value(false))
                 .andExpect(jsonPath("$.partner.userId").value(fixture.partner().getId().toString()))
                 .andExpect(jsonPath("$.partner.intimacy").value(0))
-                .andExpect(jsonPath("$.partner.relationshipSpecificType").value("RELATIONSHIP_SPECIFIC_TYPE_1"))
+                .andExpect(jsonPath("$.partner.relationshipSpecificType").value("스친 인연"))
                 .andExpect(jsonPath("$.isCurrentSeason").value(true));
 
         // then: 영속성 컨텍스트를 비우고 다시 읽어도 DB에 동의 시각이 남아 있음

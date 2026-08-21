@@ -92,7 +92,7 @@ class SimulationServiceUnitTest {
     @Test
     @DisplayName("친밀도가 친구 기준을 처음 넘으면 그 날짜로 friend 피드를 남긴다")
     void simulations_writes_friend_feed_when_relationship_type_becomes_friend() {
-        // given: 직전 관계는 지인(20)이고 이번 시뮬레이션에서 친구 기준(30)을 넘김
+        // given: 직전 관계는 지인(20)이고 이번 시뮬레이션에서 친구 기준(35)을 넘김
         givenEmptyPreviousSimulation();
         given(relationshipRepository.findLatestByUserIdAndPartnerUserIdBeforeDate(USER_ID, PARTNER_ID, DATE))
                 .willReturn(Optional.of(relationship(20)));
@@ -113,7 +113,7 @@ class SimulationServiceUnitTest {
                 .willReturn(Optional.empty());
 
         // when: 친구 기준을 넘는 친밀도로 저장
-        simulationService.simulations(USER_ID, simulationsCommand(30));
+        simulationService.simulations(USER_ID, simulationsCommand(35));
 
         // then: 지인에서 올라온 것으로 보고 피드를 남김
         then(appNotificationFeedWriter).should().writeFriend(USER_ID, PARTNER_ID, DATE);
@@ -143,7 +143,7 @@ class SimulationServiceUnitTest {
                 .willReturn(Optional.of(relationship(10)));
 
         // when: 친구 기준 미만으로 저장
-        simulationService.simulations(USER_ID, simulationsCommand(29));
+        simulationService.simulations(USER_ID, simulationsCommand(34));
 
         // then: 피드 없음
         then(appNotificationFeedWriter).should(never()).writeFriend(any(), any(), any());

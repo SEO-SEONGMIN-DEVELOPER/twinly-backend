@@ -88,7 +88,7 @@ class PeopleControllerUnitTest {
                                         new PhotoPosInfo(new PhotoPosInfo.StartPos(10, 20), 100, 200)),
                                 55,
                                 RelationshipType.FRIEND,
-                                RelationshipSpecificType.RELATIONSHIP_SPECIFIC_TYPE_2,
+                                RelationshipSpecificType.GO_TO,
                                 3,
                                 7L,
                                 true)),
@@ -110,7 +110,7 @@ class PeopleControllerUnitTest {
                 .andExpect(jsonPath("$.people[0].profilePhoto.position.height").value(200))
                 .andExpect(jsonPath("$.people[0].intimacy").value(55))
                 .andExpect(jsonPath("$.people[0].relationshipType").value("friend"))
-                .andExpect(jsonPath("$.people[0].relationshipSpecificType").value("RELATIONSHIP_SPECIFIC_TYPE_2"))
+                .andExpect(jsonPath("$.people[0].relationshipSpecificType").value("자주 찾는 사이"))
                 .andExpect(jsonPath("$.people[0].sceneElementCount").value(3))
                 .andExpect(jsonPath("$.people[0].chatRoomId").value("7"))
                 .andExpect(jsonPath("$.people[0].isFavorited").value(true))
@@ -179,7 +179,7 @@ class PeopleControllerUnitTest {
                         null,
                         80,
                         RelationshipType.BEST_FRIEND,
-                        RelationshipSpecificType.RELATIONSHIP_SPECIFIC_TYPE_3,
+                        RelationshipSpecificType.SPECIAL,
                         true,
                         new PeopleProfileDisclosedFieldsResult("트윈리대학교", null),
                         false,
@@ -196,7 +196,7 @@ class PeopleControllerUnitTest {
                 .andExpect(jsonPath("$.profilePhoto").isEmpty())
                 .andExpect(jsonPath("$.intimacy").value(80))
                 .andExpect(jsonPath("$.relationshipType").value("bestFriend"))
-                .andExpect(jsonPath("$.relationshipSpecificType").value("RELATIONSHIP_SPECIFIC_TYPE_3"))
+                .andExpect(jsonPath("$.relationshipSpecificType").value("특별한 사이"))
                 .andExpect(jsonPath("$.isFavorited").value(true))
                 .andExpect(jsonPath("$.isHighlighted").doesNotExist())
                 .andExpect(jsonPath("$.disclosedFields.affiliation").value("트윈리대학교"))
@@ -276,10 +276,10 @@ class PeopleControllerUnitTest {
         // given: 서비스가 상대 정보와 이벤트 1건, 다음 커서를 반환
         given(peopleService.events(1L, 42L, LocalDate.of(2026, 7, 20), 5))
                 .willReturn(new PeopleEventsResult(
-                        new PeopleEventsPartnerResult(42L, "홍길동", null, 45, RelationshipSpecificType.RELATIONSHIP_SPECIFIC_TYPE_2),
+                        new PeopleEventsPartnerResult(42L, "홍길동", null, 45, RelationshipSpecificType.CLOSE),
                         List.of(new PeopleEventsItemResult(
                                 LocalDate.of(2026, 7, 19),
-                                "RELATIONSHIP_SPECIFIC_TYPE_2",
+                                RelationshipSpecificType.CLOSE,
                                 5,
                                 "카페",
                                 "커피를 마셨다")),
@@ -296,9 +296,9 @@ class PeopleControllerUnitTest {
                 .andExpect(jsonPath("$.partner.userId").value("42"))
                 .andExpect(jsonPath("$.partner.userName").value("홍길동"))
                 .andExpect(jsonPath("$.partner.intimacy").value(45))
-                .andExpect(jsonPath("$.partner.relationshipSpecificType").value("RELATIONSHIP_SPECIFIC_TYPE_2"))
+                .andExpect(jsonPath("$.partner.relationshipSpecificType").value("친한 사이"))
                 .andExpect(jsonPath("$.events[0].date").value("2026-07-19"))
-                .andExpect(jsonPath("$.events[0].relationshipChange").value("RELATIONSHIP_SPECIFIC_TYPE_2"))
+                .andExpect(jsonPath("$.events[0].relationshipChange").value("친한 사이"))
                 .andExpect(jsonPath("$.events[0].intimacyDelta").value(5))
                 .andExpect(jsonPath("$.events[0].place").value("카페"))
                 .andExpect(jsonPath("$.events[0].preview").value("커피를 마셨다"))

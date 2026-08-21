@@ -1,6 +1,7 @@
 package com.nidus.twinly.people.dto.response;
 
 import com.nidus.twinly.people.dto.result.PeopleEventsItemResult;
+import com.nidus.twinly.relationship.domain.RelationshipSpecificType;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDate;
@@ -8,7 +9,7 @@ import java.time.LocalDate;
 public record PeopleEventsItemResponse(
         LocalDate date,
         @Schema(nullable = true)
-        String relationshipChange,
+        RelationshipSpecificType relationshipChange,
         @Schema(nullable = true)
         Integer intimacyDelta,
         String place,

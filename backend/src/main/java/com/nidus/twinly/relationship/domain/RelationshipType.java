@@ -8,7 +8,7 @@ public enum RelationshipType {
     @JsonProperty("bestFriend")   BEST_FRIEND;
 
     public static RelationshipType fromIntimacy(int intimacy) {
-        if (intimacy < 30) {
+        if (intimacy < 35) {
             return ACQUAINTANCE;
         } else if (intimacy < 70) {
             return FRIEND;

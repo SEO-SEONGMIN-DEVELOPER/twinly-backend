@@ -286,7 +286,7 @@ public class PeopleService {
                         .collect(Collectors.groupingBy(Scene::getDate, LinkedHashMap::new, Collectors.toList()));
 
         Map<LocalDate, Integer> deltaByDate = new HashMap<>();
-        Map<LocalDate, String> changeByDate = new HashMap<>();
+        Map<LocalDate, RelationshipSpecificType> changeByDate = new HashMap<>();
         Relationship previous = null;
         for (Relationship current : relationshipsForDelta(userId, partnerUserId, pageDates)) {
             if (previous != null) {
@@ -295,7 +295,7 @@ public class PeopleService {
                 RelationshipSpecificType previousType = RelationshipSpecificType.fromIntimacy(previous.getIntimacy());
                 RelationshipSpecificType currentType = RelationshipSpecificType.fromIntimacy(current.getIntimacy());
                 if (currentType != previousType) {
-                    changeByDate.put(current.getDate(), currentType.name());
+                    changeByDate.put(current.getDate(), currentType);
                 }
             }
             previous = current;

@@ -168,7 +168,7 @@ class PeopleServiceUnitTest {
                 .isEqualTo(new PhotoPosInfo(new PhotoPosInfo.StartPos(10, 20), 100, 200));
         assertThat(result.people().get(0).intimacy()).isEqualTo(40);
         assertThat(result.people().get(0).relationshipType()).isEqualTo(RelationshipType.FRIEND);
-        assertThat(result.people().get(0).relationshipSpecificType()).isEqualTo(RelationshipSpecificType.RELATIONSHIP_SPECIFIC_TYPE_2);
+        assertThat(result.people().get(0).relationshipSpecificType()).isEqualTo(RelationshipSpecificType.CLOSE);
         assertThat(result.people().get(0).sceneElementCount()).isEqualTo(3);
         assertThat(result.people().get(0).chatRoomId()).isEqualTo(7L);
         assertThat(result.people().get(0).isFavorited()).isTrue();
@@ -536,12 +536,12 @@ class PeopleServiceUnitTest {
         // then: 상대 정보와 날짜별 이벤트(변화량/관계 변화/미리보기)가 채워진다
         assertThat(result.partner().userName()).isEqualTo("철수");
         assertThat(result.partner().intimacy()).isEqualTo(45);
-        assertThat(result.partner().relationshipSpecificType()).isEqualTo(RelationshipSpecificType.RELATIONSHIP_SPECIFIC_TYPE_2);
+        assertThat(result.partner().relationshipSpecificType()).isEqualTo(RelationshipSpecificType.CLOSE);
 
         assertThat(result.events()).hasSize(2);
         assertThat(result.events().get(0).date()).isEqualTo(day2);
         assertThat(result.events().get(0).intimacyDelta()).isEqualTo(25);
-        assertThat(result.events().get(0).relationshipChange()).isEqualTo(RelationshipSpecificType.RELATIONSHIP_SPECIFIC_TYPE_2.name());
+        assertThat(result.events().get(0).relationshipChange()).isEqualTo(RelationshipSpecificType.CLOSE);
         assertThat(result.events().get(0).place()).isEqualTo("카페");
         assertThat(result.events().get(0).preview()).isEqualTo("커피를 마셨다");
 

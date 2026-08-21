@@ -286,7 +286,7 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.events[0].place").value("카페"))
                 .andExpect(jsonPath("$.events[0].preview").value("커피를 마셨다"))
                 .andExpect(jsonPath("$.events[0].intimacyDelta").value(30))
-                .andExpect(jsonPath("$.events[0].relationshipChange").value("RELATIONSHIP_SPECIFIC_TYPE_2"))
+                .andExpect(jsonPath("$.events[0].relationshipChange").value("친한 사이"))
                 .andExpect(jsonPath("$.page.hasMore").value(false));
     }
 
