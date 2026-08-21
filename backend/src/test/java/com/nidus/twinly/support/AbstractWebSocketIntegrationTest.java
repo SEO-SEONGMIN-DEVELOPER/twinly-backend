@@ -45,6 +45,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  *       트랜잭션으로 일어난다. 테스트 스레드의 트랜잭션 롤백은 그 스레드를 감싸지 못하고, 반대로 픽스처를
  *       미커밋 상태로 두면 핸들러 스레드가 아예 못 본다. 따라서 픽스처는 <b>실제 커밋</b>하고 정리는 수동으로 한다.</li>
  *   <li><b>실제 소켓 필요</b>: MockMvc(in-process)로는 검증 불가. WebSocketStompClient로 실제로 연결한다.</li>
+ *   <li><b>운영과 같은 콜레이션·연결 시간대</b>: ai_ci 와 connectionTimeZone=UTC 로 맞춘다.
+ *       어긋나면 닉네임 중복 판정과 UTC_TIMESTAMP() 비교가 운영과 다르게 동작한다.</li>
  *   <li><b>전용 싱글턴 컨테이너</b>: 별도 컨테이너라 DB가 완전히 격리 → 하위 테스트는 @AfterEach에서
  *       deleteAll로 안전하게 정리하면 된다.</li>
  * </ul>
@@ -55,7 +57,8 @@ public abstract class AbstractWebSocketIntegrationTest {
 
     @ServiceConnection
     protected static final MySQLContainer MYSQL = new MySQLContainer("mysql:8.4")
-            .withCommand("--character-set-server=utf8mb4", "--collation-server=utf8mb4_0900_as_cs");
+            .withCommand("--character-set-server=utf8mb4", "--collation-server=utf8mb4_0900_ai_ci")
+            .withUrlParam("connectionTimeZone", "UTC");
 
     @ServiceConnection
     protected static final GenericContainer<?> REDIS = new GenericContainer<>("redis:7.4").withExposedPorts(6379);
