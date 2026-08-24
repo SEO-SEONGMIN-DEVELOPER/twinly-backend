@@ -223,6 +223,42 @@ class ChatServiceUnitTest {
     }
 
     @Test
+    @DisplayName("내가 입장에 동의하지 않았으면 ROOM_ENTRY_NOT_AGREED 예외가 발생하고 저장하지 않는다")
+    void sendMessage_my_entry_not_agreed_throws() {
+        // given: 상대는 동의했지만 내가 아직 입장하지 않은 방
+        given(chatRoomRepository.findById(ROOM_ID)).willReturn(Optional.of(room(ROOM_ID, MATCH_ID)));
+        given(matchRepository.findById(MATCH_ID)).willReturn(Optional.of(match(MATCH_ID, ME, PARTNER, CURRENT_SEASON_ID)));
+        given(chatRoomParticipationRepository.findAllByRoomId(ROOM_ID))
+                .willReturn(List.of(notAgreedParticipation(ROOM_ID, ME), participation(ROOM_ID, PARTNER)));
+
+        // when & then: 동의 전에는 전송 불가 + 저장 없음
+        assertThatThrownBy(() -> chatService.sendMessage(ME, ROOM_ID, new ChatSendMessageCommand("hello", "client-1")))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.ROOM_ENTRY_NOT_AGREED);
+
+        then(chatRepository).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("상대가 입장에 동의하지 않았으면 내가 동의했어도 ROOM_ENTRY_NOT_AGREED 예외가 발생한다")
+    void sendMessage_partner_entry_not_agreed_throws() {
+        // given: 나는 동의했지만 상대가 아직 입장하지 않은 방
+        given(chatRoomRepository.findById(ROOM_ID)).willReturn(Optional.of(room(ROOM_ID, MATCH_ID)));
+        given(matchRepository.findById(MATCH_ID)).willReturn(Optional.of(match(MATCH_ID, ME, PARTNER, CURRENT_SEASON_ID)));
+        given(chatRoomParticipationRepository.findAllByRoomId(ROOM_ID))
+                .willReturn(List.of(participation(ROOM_ID, ME), notAgreedParticipation(ROOM_ID, PARTNER)));
+
+        // when & then: 한쪽만 동의해도 전송 불가 + 저장 없음
+        assertThatThrownBy(() -> chatService.sendMessage(ME, ROOM_ID, new ChatSendMessageCommand("hello", "client-1")))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.ROOM_ENTRY_NOT_AGREED);
+
+        then(chatRepository).should(never()).save(any());
+    }
+
+    @Test
     @DisplayName("매칭 참여자가 아닌 유저가 메시지를 보내면 NOT_MATCH_PARTICIPANT 예외가 발생한다")
     void sendMessage_not_participant_throws() {
         // given: 매칭 당사자가 5번·6번 유저인 방
@@ -688,10 +724,10 @@ class ChatServiceUnitTest {
     @Test
     @DisplayName("방을 나간 유저가 채팅방에 입장하면 NOT_ACTIVE_ROOM_PARTICIPANT 예외가 발생하고 동의 시각을 남기지 않는다")
     void enterRoom_left_participant_throws() {
-        // given: 내가 이미 나간 방
+        // given: 입장에 동의하지 않은 채로 이미 나간 방
         given(chatRoomRepository.findById(ROOM_ID)).willReturn(Optional.of(room(ROOM_ID, MATCH_ID)));
         given(matchRepository.findById(MATCH_ID)).willReturn(Optional.of(match(MATCH_ID, ME, PARTNER, CURRENT_SEASON_ID)));
-        ChatRoomParticipation mine = participation(ROOM_ID, ME);
+        ChatRoomParticipation mine = notAgreedParticipation(ROOM_ID, ME);
         mine.leave();
         given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, ME)).willReturn(Optional.of(mine));
 
@@ -949,6 +985,12 @@ class ChatServiceUnitTest {
     }
 
     private ChatRoomParticipation participation(Long roomId, Long userId) {
+        ChatRoomParticipation participation = ChatRoomParticipation.create(roomId, userId);
+        participation.agree();
+        return participation;
+    }
+
+    private ChatRoomParticipation notAgreedParticipation(Long roomId, Long userId) {
         return ChatRoomParticipation.create(roomId, userId);
     }
 

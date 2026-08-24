@@ -77,8 +77,8 @@ class ChatWebSocketIntegrationTest extends AbstractWebSocketIntegrationTest {
         User partner = saveUser();
         long matchId = saveMatch(me.getId(), partner.getId());
         ChatRoom room = chatRoomRepository.save(ChatRoom.create(matchId));
-        chatRoomParticipationRepository.save(ChatRoomParticipation.create(room.getId(), me.getId()));
-        chatRoomParticipationRepository.save(ChatRoomParticipation.create(room.getId(), partner.getId()));
+        chatRoomParticipationRepository.save(agreedParticipation(room.getId(), me.getId()));
+        chatRoomParticipationRepository.save(agreedParticipation(room.getId(), partner.getId()));
         UUID ticket = issueWsTicket(me.getId());
 
         // when: 티켓으로 STOMP 연결 → 두 개인 큐 구독 → /app/chat/messages 로 명령 전송
@@ -121,8 +121,8 @@ class ChatWebSocketIntegrationTest extends AbstractWebSocketIntegrationTest {
         User partner = saveUser();
         long matchId = saveMatch(me.getId(), partner.getId());
         ChatRoom room = chatRoomRepository.save(ChatRoom.create(matchId));
-        chatRoomParticipationRepository.save(ChatRoomParticipation.create(room.getId(), me.getId()));
-        chatRoomParticipationRepository.save(ChatRoomParticipation.create(room.getId(), partner.getId()));
+        chatRoomParticipationRepository.save(agreedParticipation(room.getId(), me.getId()));
+        chatRoomParticipationRepository.save(agreedParticipation(room.getId(), partner.getId()));
 
         StompSession mySession = connect(issueWsTicket(me.getId()));
         StompSession partnerSession = connect(issueWsTicket(partner.getId()));
@@ -165,7 +165,7 @@ class ChatWebSocketIntegrationTest extends AbstractWebSocketIntegrationTest {
         User partner = saveUser();
         long matchId = saveMatch(me.getId(), partner.getId());
         ChatRoom room = chatRoomRepository.save(ChatRoom.create(matchId));
-        chatRoomParticipationRepository.save(ChatRoomParticipation.create(room.getId(), me.getId()));
+        chatRoomParticipationRepository.save(agreedParticipation(room.getId(), me.getId()));
         Chat received = chatRepository.save(
                 Chat.create("cmid-partner", room.getId(), partner.getId(), me.getId(), ChatMessageType.TEXT, "먼저 보냄"));
         UUID ticket = issueWsTicket(me.getId());
@@ -276,8 +276,8 @@ class ChatWebSocketIntegrationTest extends AbstractWebSocketIntegrationTest {
         User partner = saveUser();
         long matchId = saveMatch(me.getId(), partner.getId());
         ChatRoom room = chatRoomRepository.save(ChatRoom.create(matchId));
-        chatRoomParticipationRepository.save(ChatRoomParticipation.create(room.getId(), me.getId()));
-        chatRoomParticipationRepository.save(ChatRoomParticipation.create(room.getId(), partner.getId()));
+        chatRoomParticipationRepository.save(agreedParticipation(room.getId(), me.getId()));
+        chatRoomParticipationRepository.save(agreedParticipation(room.getId(), partner.getId()));
 
         StompSession deviceA = connect(issueWsTicket(me.getId()));
         StompSession deviceB = connect(issueWsTicket(me.getId()));
@@ -319,8 +319,8 @@ class ChatWebSocketIntegrationTest extends AbstractWebSocketIntegrationTest {
         User partner = saveUser();
         long matchId = saveMatch(me.getId(), partner.getId());
         ChatRoom room = chatRoomRepository.save(ChatRoom.create(matchId));
-        chatRoomParticipationRepository.save(ChatRoomParticipation.create(room.getId(), me.getId()));
-        chatRoomParticipationRepository.save(ChatRoomParticipation.create(room.getId(), partner.getId()));
+        chatRoomParticipationRepository.save(agreedParticipation(room.getId(), me.getId()));
+        chatRoomParticipationRepository.save(agreedParticipation(room.getId(), partner.getId()));
         Chat received = chatRepository.save(
                 Chat.create("cmid-partner", room.getId(), partner.getId(), me.getId(), ChatMessageType.TEXT, "먼저 보냄"));
 
@@ -369,8 +369,8 @@ class ChatWebSocketIntegrationTest extends AbstractWebSocketIntegrationTest {
         User partner = saveUser();
         long matchId = saveMatch(me.getId(), partner.getId());
         ChatRoom room = chatRoomRepository.save(ChatRoom.create(matchId));
-        chatRoomParticipationRepository.save(ChatRoomParticipation.create(room.getId(), me.getId()));
-        chatRoomParticipationRepository.save(ChatRoomParticipation.create(room.getId(), partner.getId()));
+        chatRoomParticipationRepository.save(agreedParticipation(room.getId(), me.getId()));
+        chatRoomParticipationRepository.save(agreedParticipation(room.getId(), partner.getId()));
         Chat first = chatRepository.save(
                 Chat.create("cmid-p1", room.getId(), partner.getId(), me.getId(), ChatMessageType.TEXT, "1"));
         Chat second = chatRepository.save(
@@ -427,5 +427,12 @@ class ChatWebSocketIntegrationTest extends AbstractWebSocketIntegrationTest {
         return jdbcTemplate.queryForObject("""
                 SELECT id FROM matches WHERE user_a_id = ? AND user_b_id = ?
                 """, Long.class, userAId, userBId);
+    }
+
+    /** 입장 동의까지 마친 참여 정보를 만든다. 메시지 전송은 둘 다 동의한 방에서만 가능하다. */
+    private ChatRoomParticipation agreedParticipation(Long roomId, Long userId) {
+        ChatRoomParticipation participation = ChatRoomParticipation.create(roomId, userId);
+        participation.agree();
+        return participation;
     }
 }

@@ -16,6 +16,7 @@ public enum WebSocketErrorCode {
     NOT_A_PARTICIPANT(true),
     NOT_ACTIVE_PARTICIPANT(true),
     ROOM_CLOSED(true),
+    ROOM_ENTRY_NOT_AGREED(true),
     TEXT_SIZE_LIMIT_EXCEEDED(true),
     INTERNAL(true),
 
@@ -50,6 +51,7 @@ public enum WebSocketErrorCode {
             case NOT_MATCH_PARTICIPANT -> NOT_A_PARTICIPANT;
             case NOT_ACTIVE_ROOM_PARTICIPANT -> NOT_ACTIVE_PARTICIPANT;
             case ROOM_CLOSED -> ROOM_CLOSED;
+            case ROOM_ENTRY_NOT_AGREED -> ROOM_ENTRY_NOT_AGREED;
             case CLIENT_MSG_ID_CONFLICT -> CLIENT_MSG_ID_CONFLICT;
             case MESSAGE_LENGTH_EXCEEDED -> TEXT_SIZE_LIMIT_EXCEEDED;
             case MESSAGE_NOT_IN_ROOM -> INVALID_MESSAGE_CURSOR;
