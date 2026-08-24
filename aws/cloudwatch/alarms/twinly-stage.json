@@ -16,7 +16,7 @@
     },
     {
         "name": "twinly-stage-api-a-mem-used",
-        "description": "호스트 메모리 사용률 85% 초과. 방치하면 커널 OOM Killer 가 프로세스를 SIGKILL 로 죽이는데, 이 경우 앱 로그가 남지 않아 oom 메트릭 필터가 잡지 못한다.\n\nGrafana 의 힙 사용률 알림으로는 대체되지 않는다. JVM 힙은 실제 사용량의 일부일 뿐이고(실측 힙 121MB / 컨테이너 RSS 640MB), 호스트 메모리가 마르면 prometheus·grafana 도 함께 죽어 알릴 주체가 사라진다.\n\n조치:\n1. SSM으로 접속해 free -m 과 docker stats 로 어느 컨테이너가 쓰는지 확인\n2. Grafana 힙 사용률 패널로 JVM 힙인지 힙 바깥인지 구분\n3. 힙이면 mem_limit 또는 MaxRAMPercentage 조정, 힙 바깥이면 네이티브 메모리 누수 의심\n4. api-a 는 prometheus·grafana 도 함께 올라가 있으므로 각 컨테이너의 mem_limit 초과 여부 확인",
+        "description": "호스트 메모리 사용률 85% 초과. 방치하면 커널 OOM Killer 가 프로세스를 SIGKILL 로 죽이는데, 이 경우 앱 로그가 남지 않아 oom 메트릭 필터가 잡지 못한다.\n\nGrafana 의 힙 사용률 알림으로는 대체되지 않는다. JVM 힙은 실제 사용량의 일부일 뿐이고, 호스트 메모리가 마르면 prometheus·grafana 도 함께 죽어 알릴 주체가 사라진다.\n\nt4g.small 은 가용 1836MiB 이고 OS·docker·CloudWatch 에이전트가 약 510MiB 를 고정으로 쓴다. api-c 는 앱(900m) 만 올라가 상한을 다 써도 77% 지만, api-a 는 prometheus(220m)·grafana(180m) 가 함께 올라가 컨테이너 상한 합계가 1300m 다. 최악의 경우 호스트 여유가 26MiB 뿐이므로, 이 알람이 실제로 울릴 수 있는 stage 호스트는 api-a 다.\n\n조치:\n1. SSM으로 접속해 free -m 과 docker stats 로 어느 컨테이너가 쓰는지 확인\n2. Grafana 힙 사용률 패널로 JVM 힙인지 힙 바깥인지 구분\n3. 힙이면 mem_limit 또는 MaxRAMPercentage 조정. 비힙이 약 350MiB 로 고정이라 앱 mem_limit 을 875m 아래로 내리면 힙 상한과 겹쳐 컨테이너 OOM 이 난다\n4. 힙 바깥이면 네이티브 메모리 누수 의심 — 스레드 수와 Metaspace 부터 확인\n5. api-a 는 prometheus·grafana 도 함께 올라가 있으므로 각 컨테이너의 mem_limit 초과 여부 확인",
         "namespace": "CWAgent",
         "metric": "mem_used_percent",
         "statistic": "Average",
@@ -61,7 +61,7 @@
     },
     {
         "name": "twinly-stage-api-c-mem-used",
-        "description": "호스트 메모리 사용률 85% 초과. 방치하면 커널 OOM Killer 가 프로세스를 SIGKILL 로 죽이는데, 이 경우 앱 로그가 남지 않아 oom 메트릭 필터가 잡지 못한다.\n\nGrafana 의 힙 사용률 알림으로는 대체되지 않는다. JVM 힙은 실제 사용량의 일부일 뿐이고(실측 힙 121MB / 컨테이너 RSS 640MB), 호스트 메모리가 마르면 prometheus·grafana 도 함께 죽어 알릴 주체가 사라진다.\n\n조치:\n1. SSM으로 접속해 free -m 과 docker stats 로 어느 컨테이너가 쓰는지 확인\n2. Grafana 힙 사용률 패널로 JVM 힙인지 힙 바깥인지 구분\n3. 힙이면 mem_limit 또는 MaxRAMPercentage 조정, 힙 바깥이면 네이티브 메모리 누수 의심\n4. api-a 는 prometheus·grafana 도 함께 올라가 있으므로 각 컨테이너의 mem_limit 초과 여부 확인",
+        "description": "호스트 메모리 사용률 85% 초과. 방치하면 커널 OOM Killer 가 프로세스를 SIGKILL 로 죽이는데, 이 경우 앱 로그가 남지 않아 oom 메트릭 필터가 잡지 못한다.\n\nGrafana 의 힙 사용률 알림으로는 대체되지 않는다. JVM 힙은 실제 사용량의 일부일 뿐이고, 호스트 메모리가 마르면 prometheus·grafana 도 함께 죽어 알릴 주체가 사라진다.\n\nt4g.small 은 가용 1836MiB 이고 OS·docker·CloudWatch 에이전트가 약 510MiB 를 고정으로 쓴다. api-c 는 앱(900m) 만 올라가 상한을 다 써도 77% 지만, api-a 는 prometheus(220m)·grafana(180m) 가 함께 올라가 컨테이너 상한 합계가 1300m 다. 최악의 경우 호스트 여유가 26MiB 뿐이므로, 이 알람이 실제로 울릴 수 있는 stage 호스트는 api-a 다.\n\n조치:\n1. SSM으로 접속해 free -m 과 docker stats 로 어느 컨테이너가 쓰는지 확인\n2. Grafana 힙 사용률 패널로 JVM 힙인지 힙 바깥인지 구분\n3. 힙이면 mem_limit 또는 MaxRAMPercentage 조정. 비힙이 약 350MiB 로 고정이라 앱 mem_limit 을 875m 아래로 내리면 힙 상한과 겹쳐 컨테이너 OOM 이 난다\n4. 힙 바깥이면 네이티브 메모리 누수 의심 — 스레드 수와 Metaspace 부터 확인\n5. api-a 는 prometheus·grafana 도 함께 올라가 있으므로 각 컨테이너의 mem_limit 초과 여부 확인",
         "namespace": "CWAgent",
         "metric": "mem_used_percent",
         "statistic": "Average",

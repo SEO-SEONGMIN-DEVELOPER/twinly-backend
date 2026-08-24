@@ -12,7 +12,7 @@ services:
     volumes:
       - ./monitoring/prometheus/stage.yml:/etc/prometheus/prometheus.yml:ro
       - promdata-twinly:/prometheus
-    mem_limit: 400m
+    mem_limit: 220m
     logging:
       driver: json-file
       options:
@@ -35,7 +35,7 @@ services:
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
       - grafanadata-twinly:/var/lib/grafana
-    mem_limit: 300m
+    mem_limit: 180m
     logging:
       driver: json-file
       options:
