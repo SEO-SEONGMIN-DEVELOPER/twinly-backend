@@ -21,11 +21,13 @@ import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.match.entity.Match;
 import com.nidus.twinly.match.repository.MatchRepository;
+import com.nidus.twinly.people.domain.TwinViewKind;
 import com.nidus.twinly.people.dto.result.*;
 import com.nidus.twinly.people.entity.Encounter;
 import com.nidus.twinly.people.entity.EncounterPreference;
 import com.nidus.twinly.people.repository.EncounterPreferenceRepository;
 import com.nidus.twinly.people.repository.EncounterRepository;
+import com.nidus.twinly.people.writer.TwinViewWriter;
 import com.nidus.twinly.relationship.domain.RelationshipSpecificType;
 import com.nidus.twinly.relationship.domain.RelationshipType;
 import com.nidus.twinly.relationship.entity.Relationship;
@@ -82,6 +84,7 @@ public class PeopleService {
     private final CloudFrontService cloudFrontService;
     private final SceneNameRenderer sceneNameRenderer;
     private final ObjectMapper objectMapper;
+    private final TwinViewWriter twinViewWriter;
 
     public PeopleResult people(Long userId, Long cursor, Integer limit) {
         int effectiveLimit = (limit != null && limit > 0) ? limit : DEFAULT_LIMIT;
@@ -162,6 +165,8 @@ public class PeopleService {
     public PeopleProfileResult profile(Long userId, Long partnerUserId) {
         User partner = userRepository.findById(partnerUserId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        twinViewWriter.write(partnerUserId, userId, TwinViewKind.PROFILE);
 
         int intimacy = relationshipRepository.findLatestByUserIdAndPartnerUserId(userId, partnerUserId)
                 .map(Relationship::getIntimacy)
@@ -256,6 +261,8 @@ public class PeopleService {
     public PeopleEventsResult events(Long userId, Long partnerUserId, LocalDate cursor, Integer limit) {
         User partner = userRepository.findById(partnerUserId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        twinViewWriter.write(partnerUserId, userId, TwinViewKind.EVENT);
 
         int intimacy = relationshipRepository.findLatestByUserIdAndPartnerUserId(userId, partnerUserId)
                 .map(Relationship::getIntimacy)
