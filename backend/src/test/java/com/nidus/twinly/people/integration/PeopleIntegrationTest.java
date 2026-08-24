@@ -88,6 +88,9 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.people[1].userId").value(partner2.getId().toString()))
                 .andExpect(jsonPath("$.people[1].intimacy").value(80))
                 .andExpect(jsonPath("$.people[1].relationshipType").value("bestFriend"))
+                .andExpect(jsonPath("$.threshold.acquaintance").value(0))
+                .andExpect(jsonPath("$.threshold.friend").value(35))
+                .andExpect(jsonPath("$.threshold.bestFriend").value(70))
                 .andExpect(jsonPath("$.page.hasMore").value(false))
                 .andExpect(jsonPath("$.page.nextCursor").isEmpty());
     }

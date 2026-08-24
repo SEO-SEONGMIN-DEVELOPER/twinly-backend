@@ -103,9 +103,6 @@ fcm:
 anon:
   session-ttl: 14d
 
-chat:
-  room-intimacy-threshold: 70
-
 parallel:
   relation-thresholds:
     enemy: 0.0

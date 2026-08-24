@@ -1,6 +1,5 @@
 package com.nidus.twinly.chat.opener;
 
-import com.nidus.twinly.chat.config.ChatProperties;
 import com.nidus.twinly.chat.entity.ChatRoom;
 import com.nidus.twinly.chat.event.ChatChangedEvent;
 import com.nidus.twinly.chat.repository.ChatRoomParticipationRepository;
@@ -8,6 +7,7 @@ import com.nidus.twinly.chat.repository.ChatRoomRepository;
 import com.nidus.twinly.match.entity.Match;
 import com.nidus.twinly.match.repository.MatchRepository;
 import com.nidus.twinly.notification.writer.AppNotificationFeedWriter;
+import com.nidus.twinly.relationship.domain.RelationshipType;
 import com.nidus.twinly.season.entity.Season;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,7 +31,7 @@ import static org.mockito.Mockito.never;
 @ExtendWith(MockitoExtension.class)
 class ChatRoomOpenerUnitTest {
 
-    private static final int THRESHOLD = 70;
+    private static final int THRESHOLD = RelationshipType.BEST_FRIEND.minIntimacy();
     private static final Long ME = 1L;
     private static final Long PARTNER = 2L;
     private static final Long MATCH_ID = 100L;
@@ -61,7 +61,7 @@ class ChatRoomOpenerUnitTest {
     @BeforeEach
     void setUp() {
         chatRoomOpener = new ChatRoomOpener(matchRepository, chatRoomRepository, chatRoomParticipationRepository,
-                appNotificationFeedWriter, currentSeasonReader, new ChatProperties(THRESHOLD), eventPublisher);
+                appNotificationFeedWriter, currentSeasonReader, eventPublisher);
     }
 
     @Test

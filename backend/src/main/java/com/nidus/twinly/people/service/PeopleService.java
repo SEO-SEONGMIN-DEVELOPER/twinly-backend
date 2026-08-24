@@ -92,7 +92,7 @@ public class PeopleService {
         List<Long> partnerUserIds = hasMore ? fetched.subList(0, effectiveLimit) : fetched;
 
         if (partnerUserIds.isEmpty()) {
-            return new PeopleResult(List.of(), new PeoplePageResult(null, false));
+            return new PeopleResult(List.of(), PeopleThresholdResult.of(), new PeoplePageResult(null, false));
         }
 
         Map<Long, User> userByPartnerUserId = userRepository.findAllById(partnerUserIds).stream()
@@ -152,7 +152,7 @@ public class PeopleService {
 
         Long nextCursor = hasMore ? partnerUserIds.get(partnerUserIds.size() - 1) : null;
 
-        return new PeopleResult(people, new PeoplePageResult(nextCursor, hasMore));
+        return new PeopleResult(people, PeopleThresholdResult.of(), new PeoplePageResult(nextCursor, hasMore));
     }
 
     private Long partnerUserIdOf(Long userAId, Long userBId, Long userId) {

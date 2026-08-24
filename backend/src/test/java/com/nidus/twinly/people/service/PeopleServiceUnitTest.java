@@ -30,6 +30,7 @@ import com.nidus.twinly.people.dto.result.PeopleItemResult;
 import com.nidus.twinly.people.dto.result.PeopleLearnedFactsResult;
 import com.nidus.twinly.people.dto.result.PeopleProfileResult;
 import com.nidus.twinly.people.dto.result.PeopleResult;
+import com.nidus.twinly.people.dto.result.PeopleThresholdResult;
 import com.nidus.twinly.people.entity.Encounter;
 import com.nidus.twinly.people.entity.EncounterPreference;
 import com.nidus.twinly.people.repository.EncounterPreferenceRepository;
@@ -239,6 +240,10 @@ class PeopleServiceUnitTest {
         assertThat(result.people()).isEmpty();
         assertThat(result.page().hasMore()).isFalse();
         assertThat(result.page().nextCursor()).isNull();
+        assertThat(result.threshold())
+                .extracting(PeopleThresholdResult::acquaintance, PeopleThresholdResult::friend,
+                        PeopleThresholdResult::bestFriend)
+                .containsExactly(0, 35, 70);
         then(userRepository).should(never()).findAllById(any());
         then(photoRepository).should(never()).findAllByUserIdInAndType(any(), any());
     }
