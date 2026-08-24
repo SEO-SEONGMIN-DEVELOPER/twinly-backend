@@ -1,0 +1,46 @@
+[
+    {
+        "listener": "twinly-stage-alb HTTPS:443",
+        "rules": [
+            {
+                "priority": 10,
+                "conditions": {
+                    "pathPattern": ["/internal/*"],
+                    "sourceIp": ["43.200.93.8/32"]
+                },
+                "action": "forward -> twinly-stage-api-tg",
+                "description": "stage NAT EIP 에서 온 /internal/* 만 통과. AI 서버를 포함한 stage 사설 서브넷의 아웃바운드가 이 IP 로 나온다."
+            },
+            {
+                "priority": 20,
+                "conditions": {
+                    "pathPattern": ["/internal/*"]
+                },
+                "action": "fixed-response 403 (text/plain, \"Forbidden\")",
+                "description": "그 외 출처의 /internal/* 는 앱까지 가지 않고 ALB 에서 차단. 로컬 PC 에서의 직접 호출도 여기 걸린다."
+            }
+        ]
+    },
+    {
+        "listener": "twinly-prod-alb HTTPS:443",
+        "rules": [
+            {
+                "priority": 10,
+                "conditions": {
+                    "pathPattern": ["/internal/*"],
+                    "sourceIp": ["52.78.136.250/32", "43.200.73.21/32"]
+                },
+                "action": "forward -> twinly-prod-api-tg",
+                "description": "prod NAT EIP(AZ-a, AZ-c) 에서 온 /internal/* 만 통과."
+            },
+            {
+                "priority": 20,
+                "conditions": {
+                    "pathPattern": ["/internal/*"]
+                },
+                "action": "fixed-response 403 (text/plain, \"Forbidden\")",
+                "description": "그 외 출처의 /internal/* 차단."
+            }
+        ]
+    }
+]

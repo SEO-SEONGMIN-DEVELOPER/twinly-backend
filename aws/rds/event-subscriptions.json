@@ -1,0 +1,10 @@
+[
+    {
+        "name": "twinly-prod-api-rds-events",
+        "sourceType": "db-instance",
+        "sourceIds": ["twinly-prod-api-rds"],
+        "categories": ["failover", "availability", "failure"],
+        "snsTopic": "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts",
+        "description": "prod RDS 의 인스턴스 수준 사건(failover·가용성 상실·장애)을 SNS 경유로 Slack 에 즉시 통지한다. 지표 알람과 역할이 다르다 — 알람은 임계값을 걸 수 있는 추세(커넥션·메모리·CPU)를 잡고, 이 구독은 지표가 없거나(failover) 지표가 끊기는(인스턴스 사망) 사건을 잡는다.\n\nstage 에는 두지 않는다. 즉시 통지는 사람이 바로 대응해야 하는 환경에서만 의미가 있고, stage 장애는 개발 중에 바로 드러나므로 알림 노이즈만 늘린다.\n\n카테고리를 failover·availability·failure 로 좁힌 것도 의도다. backup·maintenance 까지 구독하면 일상 사건에 묻혀 정작 장애 통지를 놓친다."
+    }
+]
