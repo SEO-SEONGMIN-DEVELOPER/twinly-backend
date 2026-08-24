@@ -1,7 +1,7 @@
 # AI 서버 배포 가이드 (인프라)
 
 AI 서버를 stage / prod 에 올릴 때 필요한 네트워크·계정 정보와, 새로 만들어야 하는 리소스 목록입니다.
-**VPC·서브넷·NAT·라우팅은 이미 만들어져 있고, AI 서버용 자리도 미리 잘라놨습니다. 데이터베이스와 DB 계정도 준비를 마쳤습니다.** AI 팀은 그 자리에 인스턴스를 올리고 배포 파이프라인을 붙이면 됩니다.
+**VPC·서브넷·NAT·라우팅은 이미 만들어져 있고, AI 서버용 자리도 미리 잘라놨습니다.** AI 팀은 그 자리에 인스턴스를 올리고 배포 파이프라인을 붙이면 됩니다. 데이터베이스는 **AI 전용 RDS 를 따로 띄웁니다** — [ai-server-infra-change-guide.md](ai-server-infra-change-guide.md) 를 보세요.
 
 | 항목 | 값 |
 | --- | --- |
@@ -54,7 +54,7 @@ stage 와 prod 는 **완전히 분리된 VPC** 입니다. 피어링이 없으므
 
 `private-ai` 서브넷은 **AI 서버 전용으로 비워둔 자리**입니다. `/22` 라 AZ 당 약 1,000개의 사설 IP가 있으니 인스턴스 수를 늘려도 IP가 모자랄 일은 없습니다.
 
-**AI 서버는 반드시 `private-ai` 서브넷에 올리세요.** 서브넷 위치가 곧 권한 경계입니다. DB 계정이 접속 가능한 IP 대역을 이 서브넷 범위로 묶어놨기 때문에(2-6 참고), 다른 서브넷에 띄우면 비밀번호가 맞아도 DB 로그인이 거부됩니다.
+**AI 서버는 반드시 `private-ai` 서브넷에 올리세요.** 서브넷 위치가 곧 권한 경계입니다. 보안그룹과 ALB 호출 출처 제한이 이 서브넷 배치를 기준으로 동작합니다([ai-server-infra-change-guide.md](ai-server-infra-change-guide.md) 참고).
 
 ### 1-3. 라우팅 / 인터넷 연결
 
@@ -76,12 +76,12 @@ stage 와 prod 는 **완전히 분리된 VPC** 입니다. 피어링이 없으므
 | stage | API 도메인 | `https://stage-api.trytwinly.com` |
 | stage | ALB | `twinly-stage-alb` / SG `sg-06e0f2662d4362983` |
 | stage | API 인스턴스 | `i-0373d39748d04d49b`(a), `i-09ddde9020d7a94ca`(c) / SG `sg-0c26384f3e1a5f3ab` |
-| stage | RDS | `twinly-stage-rds` / SG `sg-0021f4ca79dafe10b` (`twinly-stage-rds-sg`) |
+| stage | RDS | `twinly-stage-api-rds` / SG `sg-07f04cde29b45da5f` (`twinly-stage-api-rds-sg`) |
 | stage | 모니터링 | API-a 인스턴스에 함께 기동 (전용 인스턴스 없음) |
 | prod | API 도메인 | `https://api.trytwinly.com` |
 | prod | ALB | `twinly-prod-alb` / SG `sg-00999185cfed7cce7` |
 | prod | API 인스턴스 | `i-08903483652243fec`(a), `i-027f1e44635da471e`(c) / SG `sg-0e53de8cd50b33929` |
-| prod | RDS | `twinly-prod-rds` / SG `sg-0dcf454b6a6ba0611` (`twinly-prod-rds-sg`) |
+| prod | RDS | `twinly-prod-api-rds` / SG `sg-09362c60a1248fe03` (`twinly-prod-api-rds-sg`) |
 | prod | 모니터링 | `i-0f9ae4a42137c72f9` / SG `sg-037b89a9f0043787f` |
 
 API 서버는 8080(서비스) / 8081(actuator) 을 열고, **인바운드는 ALB 와 모니터링 SG 에서만** 허용합니다.
@@ -100,10 +100,9 @@ VPC 레벨은 손댈 게 없습니다. 아래 8개가 전부이고, 그중 하�
 | 4 | SSM 파라미터(환경변수) | `/twinly/stage/ai/env` | `/twinly/prod/ai/env` | 해야 함 | 2-4 |
 | 5 | CloudWatch 로그 그룹 | `/twinly/stage/ai` | `/twinly/prod/ai` | 해야 함 | 2-5 |
 | 6 | AI 서버 EC2 | `twinly-stage-ai-a` / `-c` | `twinly-prod-ai-a` / `-c` | 해야 함 | 6절 |
-| 7 | 데이터베이스 + DB 계정 | `twinly_ai` DB, `twinly_ai` 계정 | 동일 | **완료** | 2-6 |
-| 8 | RDS 보안그룹 인바운드 | 3306 ← `twinly-stage-ai-sg` | 3306 ← `twinly-prod-ai-sg` | 해야 함 | 2-6 |
+| 7 | AI 전용 RDS + SG | `twinly-stage-ai-rds-sg` 등 | 동일 | 해야 함 | [ai-server-infra-change-guide.md](ai-server-infra-change-guide.md) 3절 |
 
-만드는 순서는 **1 → 2 → 6 → 3·4·5 → 8** 입니다. 보안그룹과 IAM 역할은 EC2 를 만들 때 필요하고, 나머지는 EC2 가 뜬 뒤 배포 단계에서 쓰입니다. 8번은 1번이 있어야 걸 수 있습니다.
+만드는 순서는 **1 → 2 → 6 → 3·4·5 → 7** 입니다. 보안그룹과 IAM 역할은 EC2 를 만들 때 필요하고, 나머지는 EC2 가 뜬 뒤 배포 단계에서 쓰입니다. 7번(AI RDS 의 SG)은 1번이 있어야 걸 수 있습니다.
 
 ### 2-1. 보안그룹
 
@@ -188,10 +187,10 @@ aws ec2 create-security-group --profile infra --region ap-northeast-2 \
 
 ```
 BASE_URL=https://stage-api.trytwinly.com
-DB_HOST=twinly-stage-rds.c3ue242e8vwz.ap-northeast-2.rds.amazonaws.com
-DB_PORT=3306
-DB_NAME=twinly_ai
-DB_USERNAME=twinly_ai
+DB_HOST=<AI 전용 RDS 엔드포인트 — ai-server-infra-change-guide.md 3절 참고>
+DB_PORT=<엔진 포트, PostgreSQL 이면 5432>
+DB_NAME=...
+DB_USERNAME=...
 DB_PASSWORD=...
 IMAGE_TAG=...
 AWS_REGION=ap-northeast-2
@@ -205,92 +204,15 @@ AWS_REGION=ap-northeast-2
 
 `docker compose` 의 `awslogs` 드라이버로 CloudWatch 에 직접 보냅니다(백엔드와 동일). 로그 그룹 `/twinly/{env}/ai`, 스트림은 인스턴스 ID 로 두면 어느 인스턴스가 뱉은 로그인지 바로 구분됩니다.
 
-### 2-6. 데이터베이스 (백엔드 RDS 공유)
+### 2-6. 데이터베이스
 
-#### AI 서버가 쓸 접속 정보
-
-먼저 결론부터. **AI 서버는 아래 계정과 데이터베이스만 씁니다.**
-
-| 항목 | stage | prod |
-| --- | --- | --- |
-| 호스트 | `twinly-stage-rds.c3ue242e8vwz.ap-northeast-2.rds.amazonaws.com` | `twinly-prod-rds.c3ue242e8vwz.ap-northeast-2.rds.amazonaws.com` |
-| 포트 | `3306` | `3306` |
-| **계정** | **`twinly_ai`** | **`twinly_ai`** |
-| **데이터베이스** | **`twinly_ai`** | **`twinly_ai`** |
-| 비밀번호 | `/twinly/stage/ai/env` 의 `DB_PASSWORD` | `/twinly/prod/ai/env` 의 `DB_PASSWORD` |
-
-계정 이름과 데이터베이스 이름이 똑같아서 헷갈리기 쉽습니다. **`twinly_ai` 계정으로 로그인해서 `twinly_ai` 데이터베이스를 쓴다**고 기억하세요.
-
-쓰면 안 되는 것도 명확합니다.
-
-| 쓰지 말 것 | 이유 |
-| --- | --- |
-| `admin` (마스터 계정) | RDS 인스턴스 전체 권한입니다. 애플리케이션이 들고 있을 이유가 없고, 백엔드도 쓰지 않습니다. 계정 관리 작업에만 임시로 씁니다 |
-| `twinly_api` 계정 | 백엔드 전용입니다. AI 서브넷에서는 로그인 자체가 거부됩니다 |
-| `twinly_api` 데이터베이스 | 백엔드 데이터입니다. `twinly_ai` 계정에는 권한이 없어 조회하면 오류가 납니다. 백엔드 데이터가 필요하면 `/internal/v1/**` API 로 받으세요 |
-
-테이블 생성·마이그레이션은 `twinly_ai` 데이터베이스 안에서 자유롭게 하시면 됩니다. 그 안에서는 `ALL PRIVILEGES` 라 DDL 에 제약이 없습니다.
-
-#### 왜 이런 구조인지
-
-**AI 전용 RDS 를 따로 띄우지 않습니다.** 비용 때문에 백엔드 RDS 인스턴스를 공유하되, 그 안에서 **데이터베이스·계정·커넥션 상한 세 겹으로 격리**했습니다. 인스턴스를 공유한다는 건 하드웨어를 공유한다는 뜻이지 데이터를 공유한다는 뜻이 아닙니다.
-
-| 격리 수단 | 막는 것 |
-| --- | --- |
-| 데이터베이스 분리 | 테이블 이름 충돌, 마이그레이션 간섭 |
-| 계정 분리 + 데이터베이스 단위 GRANT | AI가 백엔드 테이블을 읽거나 쓰는 것 |
-| `MAX_USER_CONNECTIONS` | AI 커넥션 누수가 백엔드를 DB에서 밀어내는 것 |
-
-세 번째가 가장 중요합니다. 공유 구조에서 서비스 장애로 번지는 가장 현실적인 경로가 커넥션 고갈이고, 상한 한 줄이면 구조적으로 막힙니다.
-
-#### 이미 만들어져 있는 것
-
-| 항목 | stage | prod |
-| --- | --- | --- |
-| RDS 인스턴스 | `twinly-stage-rds` (MySQL 8.4.9, `db.m7g.large`, 단일 AZ) | `twinly-prod-rds` (동일 스펙, Multi-AZ) |
-| 엔드포인트 | `twinly-stage-rds.c3ue242e8vwz.ap-northeast-2.rds.amazonaws.com` | `twinly-prod-rds.c3ue242e8vwz.ap-northeast-2.rds.amazonaws.com` |
-| 데이터베이스 | `twinly_api` (백엔드), **`twinly_ai`** (AI) | 동일 |
-| AI 계정 | `twinly_ai@10.0.32.0/255.255.248.0` | `twinly_ai@10.1.32.0/255.255.248.0` |
-| AI 계정 권한 | `twinly_ai.*` 전체, 그 밖은 없음 | 동일 |
-| AI 커넥션 상한 | 20 | 20 |
-
-계정의 접속 허용 대역이 **AI 서브넷 두 개(`10.x.32.0/21`)로 묶여** 있습니다. 보안그룹이 이미 막고 있지만, SG 규칙이 잘못 열려도 DB 계정이 두 번째 방어선이 됩니다. 대신 **AI 서버를 다른 서브넷에 띄우면 비밀번호가 맞아도 로그인이 거부**되니, 반드시 `private-ai` 서브넷에 올리세요.
-
-백엔드도 같은 방식으로 `twinly_api@10.x.16.0/21` 계정을 쓰고, 상한은 150 입니다(앱 2대 × HikariCP 풀 30 = 60 사용).
-
-#### 해야 할 것 (2가지)
-
-**첫째, RDS 보안그룹에 인바운드 추가.** `twinly-{env}-ai-sg` 를 만든 뒤 실행하세요.
-
-```bash
-aws ec2 authorize-security-group-ingress --profile infra --region ap-northeast-2 \
-  --group-id sg-0021f4ca79dafe10b \
-  --ip-permissions 'IpProtocol=tcp,FromPort=3306,ToPort=3306,UserIdGroupPairs=[{GroupId={twinly-stage-ai-sg 의 ID},Description="from ai server"}]'
-```
-
-prod 는 `--group-id sg-0dcf454b6a6ba0611` 입니다. CIDR 로 열지 말고 반드시 **SG 출처**로 지정하세요. 인스턴스를 교체해도 규칙을 고칠 필요가 없습니다.
-
-**둘째, `twinly_ai` 계정 비밀번호 설정.** 계정은 만들어져 있지만 비밀번호를 아는 사람이 없습니다(사본을 남기지 않는 원칙). 계정 관리에는 마스터 권한이 필요한데 백엔드도 더 이상 마스터 계정을 쓰지 않으므로, 순서가 이렇습니다.
-
-1. 마스터 비밀번호 재설정 — 재부팅도 서비스 영향도 없습니다
-
-```bash
-printf '%s' '새비밀번호' > /tmp/pw && aws rds modify-db-instance --profile infra --region ap-northeast-2 \
-  --db-instance-identifier twinly-stage-rds --master-user-password file:///tmp/pw --apply-immediately && rm -f /tmp/pw
-```
-
-2. API 인스턴스에서 SSM 으로 접속해 `ALTER USER 'twinly_ai'@'10.0.32.0/255.255.248.0' IDENTIFIED BY '...'` 실행
-3. 같은 값을 `/twinly/{env}/ai/env` 의 `DB_PASSWORD` 에 기록
-
-마스터 비밀번호는 **한 번 쓰고 버리는 값**으로 취급하세요. 필요할 때 재설정해서 쓰면 되고, prod 는 `/twinly/prod/db-master-password` 에 현재 값이 있습니다.
-
-MySQL 마스터 비밀번호 제약은 8~41자, `/`, `"`, `@`, 공백 불가입니다.
-
-#### 공유이기 때문에 알아둘 것
-
-- **백업·복구가 통합됩니다.** AI 데이터 사고로 특정 시점 복구를 하면 백엔드 데이터도 같이 되돌아갑니다. AI 데이터만 되살리려면 스냅샷을 별도 인스턴스로 복원해 `mysqldump` 로 뽑아오는 절차를 밟아야 합니다.
-- **스토리지 20GB 를 나눠 씁니다.** 배치가 매일 쌓기만 하는 데이터는 용량 고갈이 가장 흔한 장애 원인입니다. 기존 `twinly-{env}-rds-free-storage` 알람이 4GB 미만에서 울리는데, AI 데이터가 쌓이기 시작하면 임계값을 재검토하세요.
-- **DB 파라미터 그룹은 인스턴스 전체에 적용됩니다.** AI 쪽만 다른 설정이 필요해지면 백엔드도 함께 영향을 받습니다.
+> **이 절은 폐기되었습니다.** 백엔드 RDS 공유안이 AI 전용 RDS 분리로 확정되면서
+> 여기 있던 내용 전체(`twinly_ai` 계정·데이터베이스, 백엔드 RDS 보안그룹 규칙 추가,
+> 마스터 비밀번호 절차)가 무효입니다. 백엔드 RDS 에는 접속하지 않으며, SG 에 규칙을
+> 추가하지도 않습니다.
+>
+> 현행 지침은 [ai-server-infra-change-guide.md](ai-server-infra-change-guide.md) 를 보세요.
+> 3절에 AI 전용 RDS 의 권장 사양·네트워크·접속 정보 관리가 정리되어 있습니다.
 
 ---
 
@@ -416,8 +338,7 @@ AZ-c 는 `--subnet-id subnet-070efd393c092035d`, Name 태그 `twinly-stage-ai-c`
 | 아웃바운드 | 인스턴스 안에서 `curl -I https://api.trytwinly.com` | 라우팅/SG 확인 |
 | ECR pull | ECR 로그인 후 `docker pull` | 역할에 `AmazonEC2ContainerRegistryReadOnly` 누락 |
 | 파라미터 조회 | `aws ssm get-parameter --name /twinly/{env}/ai/env --with-decryption` | `Twinly{Env}AiReadEnv` 정책 누락 |
-| DB 접속 | `twinly_ai` 계정으로 `twinly_ai` 데이터베이스 접속 | RDS SG 인바운드(2-6) 또는 비밀번호 미설정 |
-| DB 격리 | 같은 계정으로 `SHOW TABLES IN twinly_api` → **거부되어야 정상** | 통과하면 GRANT 가 잘못된 것이니 즉시 인프라에 알리세요 |
+| DB 접속 | AI 전용 RDS 에 접속 ([ai-server-infra-change-guide.md](ai-server-infra-change-guide.md) 3절) | `twinly-{env}-ai-rds-sg` 인바운드 또는 계정 설정 확인 |
 
 ---
 
@@ -441,7 +362,7 @@ AZ-c 는 `--subnet-id subnet-070efd393c092035d`, Name 태그 `twinly-stage-ai-c`
 
 | 대상 | 지표 | 상태 |
 | --- | --- | --- |
-| RDS | `FreeStorageSpace`, `DatabaseConnections`, `CPUUtilization`, `FreeableMemory` | **이미 있음** (`twinly-{env}-rds-*`). AI 부하가 더해지므로 임계값만 재검토 |
+| RDS | `FreeStorageSpace`, `DatabaseConnections`, `CPUUtilization`, `FreeableMemory` | **AI 전용 RDS 용으로 신규 생성.** 백엔드 것(`twinly-{env}-api-rds-*`)을 참고해 같은 형식으로 |
 | EC2 | `StatusCheckFailed` | AI 인스턴스용으로 신규 생성 |
 | 배치 자체 | 실패 시 로그 metric filter → 알람 | 신규 생성. 인스턴스는 멀쩡한데 배치만 실패하는 경우를 잡음 |
 

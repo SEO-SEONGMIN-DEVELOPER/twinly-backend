@@ -120,23 +120,23 @@
         ]
     },
     {
-        "name": "twinly-prod-rds-connections",
-        "description": "DB 커넥션 수 400 이상. max_connections 는 {DBInstanceClassMemory/12582880} 로 db.m7g.large 기준 약 682 이므로 60% 수준이다.\n\n평시 커넥션은 60 안팎이다(앱 2대 × HikariCP 풀 30). 400 까지 올랐다면 정상적인 트래픽 증가가 아니라 커넥션 누수나 풀 설정 오류를 의심해야 한다. max_connections 에 도달하면 새 연결이 거부되어 앱 전체가 멈춘다.\n\n조치:\n1. SHOW PROCESSLIST 로 어떤 상태의 커넥션이 쌓였는지 확인 (Sleep 이 많으면 누수 의심)\n2. 앱의 HikariCP maximum-pool-size 와 인스턴스 수를 곱해 이론상 최대치와 비교\n3. 트랜잭션이 길게 열려 있는지 확인\n4. 부하테스트 중이라면 풀 크기를 의도적으로 올렸는지 확인",
+        "name": "twinly-prod-api-rds-connections",
+        "description": "DB 커넥션 수 45 이상. max_connections 는 {DBInstanceClassMemory/12582880} 로 db.t4g.micro 기준 실측 60 이므로 75% 수준이다.\n\n평시 커넥션은 10~20 안팎이다(앱 2대 × HikariCP 풀 5, 유휴 시 2개씩 유지). 45 까지 올랐다면 정상적인 트래픽 증가가 아니라 커넥션 누수나 풀 설정 오류를 의심해야 한다. max_connections 에 도달하면 새 연결이 거부되어 앱 전체가 멈춘다.\n\n조치:\n1. SHOW PROCESSLIST 로 어떤 상태의 커넥션이 쌓였는지 확인 (Sleep 이 많으면 누수 의심)\n2. 앱의 HikariCP maximum-pool-size 와 인스턴스 수를 곱해 이론상 최대치와 비교\n3. 트랜잭션이 길게 열려 있는지 확인\n4. 부하테스트 중이라면 풀 크기를 의도적으로 올렸는지 확인 — 그 경우 DB 클래스도 함께 올려야 한다",
         "namespace": "AWS/RDS",
         "metric": "DatabaseConnections",
         "statistic": "Maximum",
         "period": 300,
         "evaluationPeriods": 2,
         "comparisonOperator": "GreaterThanOrEqualToThreshold",
-        "threshold": 400.0,
+        "threshold": 45.0,
         "treatMissingData": "missing",
         "alarmActions": [
             "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
         ]
     },
     {
-        "name": "twinly-prod-rds-cpu",
-        "description": "DB 인스턴스 CPU 사용률 80% 초과. db.m7g.large 는 버스터블이 아니라 고정 성능이므로, 크레딧 소진이 아니라 실제로 처리량 한계에 접근했다는 뜻이다.\n\n앱은 readiness 에 DB 상태를 포함하지 않으므로, DB 가 느려져도 ALB 는 계속 트래픽을 보낸다. 즉 이 알람이 울릴 때 healthy-hosts 알람은 조용하다.\n\n조치:\n1. Performance Insights 에서 상위 대기 이벤트와 상위 SQL 확인 (보존 7일)\n2. 특정 쿼리가 튀는지, 전반적으로 오른 것인지 구분\n3. 특정 쿼리면 실행계획과 인덱스 점검\n4. 전반적이면 커넥션 수·트래픽 증가 여부 확인\n5. 부하테스트 중이라면 예상된 상황인지 먼저 확인",
+        "name": "twinly-prod-api-rds-cpu",
+        "description": "DB 인스턴스 CPU 사용률 80% 초과. db.t4g.micro 는 버스터블이라 기준 성능은 vCPU 당 10% 이고, 그 이상은 CPU 크레딧을 소모하며 낸다. RDS 의 T 계열은 unlimited 모드로 동작하므로 크레딧이 바닥나도 성능이 깎이는 대신 초과 비용이 청구된다(cpu-surplus-credits 알람이 그 시점을 잡는다).\n\n앱은 readiness 에 DB 상태를 포함하지 않으므로, DB 가 느려져도 ALB 는 계속 트래픽을 보낸다. 즉 이 알람이 울릴 때 healthy-hosts 알람은 조용하다.\n\n조치:\n1. CPUCreditBalance 추이로 크레딧 소진이 임박했는지 확인\n2. 슬로우 쿼리 로그와 SHOW PROCESSLIST 로 특정 쿼리가 튀는지, 전반적으로 오른 것인지 구분 (Performance Insights 는 micro 미지원으로 꺼져 있다)\n3. 특정 쿼리면 실행계획과 인덱스 점검\n4. 전반적이면 커넥션 수·트래픽 증가 여부 확인\n5. 지속적인 고부하면 버스터블이 맞지 않는 단계이므로 인스턴스 클래스 상향 검토",
         "namespace": "AWS/RDS",
         "metric": "CPUUtilization",
         "statistic": "Average",
@@ -150,7 +150,22 @@
         ]
     },
     {
-        "name": "twinly-prod-rds-free-storage",
+        "name": "twinly-prod-api-rds-cpu-surplus-credits",
+        "description": "버스터블 CPU 크레딧이 바닥나 초과 크레딧 과금이 시작됨. db.t4g.micro 는 unlimited 모드라 크레딧 소진 시 성능이 깎이는 대신 vCPU-시간당 추가 비용이 청구된다.\n\n이 알람이 울리면 기준 성능(vCPU 당 10%)을 넘는 부하가 장시간 지속되고 있다는 뜻이다. 짧은 스파이크는 잔여 크레딧으로 흡수되므로 여기까지 오지 않는다.\n\n조치:\n1. CPUUtilization 과 CPUCreditBalance 추이로 언제부터 소진됐는지 확인\n2. 슬로우 쿼리 로그로 원인 쿼리 확인\n3. 부하테스트 중이라면 예상된 상황인지 확인\n4. 일상 트래픽이 원인이면 버스터블이 맞지 않는 단계다 — 초과 과금을 계속 내느니 클래스 상향이 더 쌀 수 있다",
+        "namespace": "AWS/RDS",
+        "metric": "CPUSurplusCreditsCharged",
+        "statistic": "Sum",
+        "period": 300,
+        "evaluationPeriods": 1,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 1.0,
+        "treatMissingData": "notBreaching",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ]
+    },
+    {
+        "name": "twinly-prod-api-rds-free-storage",
         "description": "사용 가능 스토리지 4GiB 미만. 할당량은 20GiB 이며 최대 100GiB 까지 자동 확장된다.\n\n자동 확장이 있으므로 즉시 장애로 이어지지는 않는다. 다만 확장은 무료가 아니고, 확장이 반복된다면 데이터가 예상보다 빠르게 늘고 있다는 신호다. 스토리지가 실제로 차면 DB 는 읽기 전용으로 전환되어 모든 쓰기가 실패한다.\n\n조치:\n1. 어느 테이블이 커졌는지 확인 (information_schema.tables)\n2. 부하테스트나 배치가 만든 데이터라면 정리\n3. binlog·슬로우로그 보존 기간 확인\n4. 정상 증가라면 MaxAllocatedStorage 상향 검토",
         "namespace": "AWS/RDS",
         "metric": "FreeStorageSpace",
@@ -165,15 +180,15 @@
         ]
     },
     {
-        "name": "twinly-prod-rds-freeable-memory",
-        "description": "사용 가능 메모리 800MiB 미만. db.m7g.large 는 8GiB 이므로 10% 아래로 떨어진 상태다.\n\n더 줄면 InnoDB 버퍼 풀이 밀려나 디스크 읽기가 늘고, 그때부터 지연이 급격히 커진다. 메모리 부족은 CPU 처럼 완만하게 나빠지지 않고 임계를 넘는 순간 성능이 무너진다.\n\n조치:\n1. Enhanced Monitoring 에서 실제 메모리 분포 확인\n2. DatabaseConnections 급증이 동반됐는지 확인 — 커넥션마다 버퍼를 쓴다\n3. Performance Insights 로 대량 정렬·임시 테이블을 쓰는 쿼리 확인\n4. 지속되면 인스턴스 클래스 상향 검토",
+        "name": "twinly-prod-api-rds-freeable-memory",
+        "description": "사용 가능 메모리 50MiB 미만. db.t4g.micro 전환 직후 실측 평시 값이 100MiB 안팎이므로, 그 절반 아래로 떨어진 상태다.\n\nmicro 는 InnoDB 버퍼 풀이 128MiB 에 불과해 여유가 원래 작다. 더 줄면 스왑이 시작되고, 그때부터 지연이 급격히 커진다. 메모리 부족은 CPU 처럼 완만하게 나빠지지 않고 임계를 넘는 순간 성능이 무너진다.\n\n조치:\n1. Enhanced Monitoring 에서 실제 메모리 분포와 SwapUsage 확인\n2. DatabaseConnections 급증이 동반됐는지 확인 — 커넥션마다 버퍼를 쓴다\n3. 슬로우 쿼리 로그로 대량 정렬·임시 테이블을 쓰는 쿼리 확인 (Performance Insights 는 micro 미지원으로 꺼져 있다)\n4. 지속되면 인스턴스 클래스 상향 검토",
         "namespace": "AWS/RDS",
         "metric": "FreeableMemory",
         "statistic": "Average",
         "period": 300,
         "evaluationPeriods": 2,
         "comparisonOperator": "LessThanThreshold",
-        "threshold": 838860800.0,
+        "threshold": 52428800.0,
         "treatMissingData": "missing",
         "alarmActions": [
             "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
