@@ -16,7 +16,7 @@
     },
     {
         "name": "twinly-prod-api-a-mem-used",
-        "description": "호스트 메모리 사용률 85% 초과. 방치하면 커널 OOM Killer 가 프로세스를 SIGKILL 로 죽이는데, 이 경우 앱 로그가 남지 않아 oom 메트릭 필터가 잡지 못한다.\n\nprod API 인스턴스에는 앱 컨테이너만 올라간다(prometheus·grafana 는 twinly-prod-monitoring 으로 분리). 따라서 이 알람은 사실상 앱 단독의 메모리 증가를 가리킨다.\n\n조치:\n1. SSM으로 접속해 free -m 과 docker stats 로 확인\n2. Grafana 힙 사용률 패널로 JVM 힙인지 힙 바깥인지 구분\n3. 힙이면 docker-compose.prod.yaml 의 mem_limit(2400m) 또는 MaxRAMPercentage 조정\n4. 힙 바깥이면 네이티브 메모리 누수 의심 — 스레드 수와 Metaspace 부터 확인\n5. 한 대만 오르면 그 인스턴스를 대상 그룹에서 빼고 재기동, 두 대 모두 오르면 직전 배포 버전을 의심",
+        "description": "호스트 메모리 사용률 85% 초과. 방치하면 커널 OOM Killer 가 프로세스를 SIGKILL 로 죽이는데, 이 경우 앱 로그가 남지 않아 oom 메트릭 필터가 잡지 못한다.\n\nprod API 인스턴스에는 앱 컨테이너만 올라간다(prometheus·grafana 는 twinly-prod-monitoring 으로 분리). 따라서 이 알람은 사실상 앱 단독의 메모리 증가를 가리킨다.\n\nt4g.small 은 가용 1836MiB 이고 OS·docker·CloudWatch 에이전트가 약 510MiB 를 고정으로 쓴다. 앱 mem_limit 이 900m 이므로 컨테이너가 상한을 다 써도 호스트는 77% 에 그친다. 즉 이 알람이 울린다면 앱 컨테이너 바깥이 늘어난 것이다. 앱 컨테이너 자체의 폭주는 호스트가 아니라 컨테이너 OOM 으로 먼저 끊기고, 그때는 재기동으로 healthy-hosts 알람이 대신 잡는다.\n\n조치:\n1. SSM으로 접속해 free -m 과 docker stats 로 확인\n2. 컨테이너 합계가 평소와 같으면 호스트 쪽이다 — journald 로그, docker 이미지 캐시, CloudWatch 에이전트부터 확인\n3. 앱 컨테이너가 늘었으면 Grafana 힙 사용률 패널로 JVM 힙인지 힙 바깥인지 구분\n4. 힙이면 docker-compose.prod.yaml 의 mem_limit(900m) 또는 MaxRAMPercentage 조정. 비힙이 약 350MiB 로 고정이라 mem_limit 을 875m 아래로 내리면 힙 상한과 겹쳐 컨테이너 OOM 이 난다\n5. 힙 바깥이면 네이티브 메모리 누수 의심 — 스레드 수와 Metaspace 부터 확인\n6. 한 대만 오르면 그 인스턴스를 대상 그룹에서 빼고 재기동, 두 대 모두 오르면 직전 배포 버전을 의심",
         "namespace": "CWAgent",
         "metric": "mem_used_percent",
         "statistic": "Average",
@@ -61,7 +61,7 @@
     },
     {
         "name": "twinly-prod-api-c-mem-used",
-        "description": "호스트 메모리 사용률 85% 초과. 방치하면 커널 OOM Killer 가 프로세스를 SIGKILL 로 죽이는데, 이 경우 앱 로그가 남지 않아 oom 메트릭 필터가 잡지 못한다.\n\nprod API 인스턴스에는 앱 컨테이너만 올라간다(prometheus·grafana 는 twinly-prod-monitoring 으로 분리). 따라서 이 알람은 사실상 앱 단독의 메모리 증가를 가리킨다.\n\n조치:\n1. SSM으로 접속해 free -m 과 docker stats 로 확인\n2. Grafana 힙 사용률 패널로 JVM 힙인지 힙 바깥인지 구분\n3. 힙이면 docker-compose.prod.yaml 의 mem_limit(2400m) 또는 MaxRAMPercentage 조정\n4. 힙 바깥이면 네이티브 메모리 누수 의심 — 스레드 수와 Metaspace 부터 확인\n5. 한 대만 오르면 그 인스턴스를 대상 그룹에서 빼고 재기동, 두 대 모두 오르면 직전 배포 버전을 의심",
+        "description": "호스트 메모리 사용률 85% 초과. 방치하면 커널 OOM Killer 가 프로세스를 SIGKILL 로 죽이는데, 이 경우 앱 로그가 남지 않아 oom 메트릭 필터가 잡지 못한다.\n\nprod API 인스턴스에는 앱 컨테이너만 올라간다(prometheus·grafana 는 twinly-prod-monitoring 으로 분리). 따라서 이 알람은 사실상 앱 단독의 메모리 증가를 가리킨다.\n\nt4g.small 은 가용 1836MiB 이고 OS·docker·CloudWatch 에이전트가 약 510MiB 를 고정으로 쓴다. 앱 mem_limit 이 900m 이므로 컨테이너가 상한을 다 써도 호스트는 77% 에 그친다. 즉 이 알람이 울린다면 앱 컨테이너 바깥이 늘어난 것이다. 앱 컨테이너 자체의 폭주는 호스트가 아니라 컨테이너 OOM 으로 먼저 끊기고, 그때는 재기동으로 healthy-hosts 알람이 대신 잡는다.\n\n조치:\n1. SSM으로 접속해 free -m 과 docker stats 로 확인\n2. 컨테이너 합계가 평소와 같으면 호스트 쪽이다 — journald 로그, docker 이미지 캐시, CloudWatch 에이전트부터 확인\n3. 앱 컨테이너가 늘었으면 Grafana 힙 사용률 패널로 JVM 힙인지 힙 바깥인지 구분\n4. 힙이면 docker-compose.prod.yaml 의 mem_limit(900m) 또는 MaxRAMPercentage 조정. 비힙이 약 350MiB 로 고정이라 mem_limit 을 875m 아래로 내리면 힙 상한과 겹쳐 컨테이너 OOM 이 난다\n5. 힙 바깥이면 네이티브 메모리 누수 의심 — 스레드 수와 Metaspace 부터 확인\n6. 한 대만 오르면 그 인스턴스를 대상 그룹에서 빼고 재기동, 두 대 모두 오르면 직전 배포 버전을 의심",
         "namespace": "CWAgent",
         "metric": "mem_used_percent",
         "statistic": "Average",
