@@ -25,7 +25,7 @@ public class SurveyLoader {
 
     @PostConstruct
     public void load() throws IOException {
-        ClassPathResource resource = new ClassPathResource("survey/survey_v1_mixed.json");
+        ClassPathResource resource = new ClassPathResource("survey/survey_v2_mixed.json");
         JsonNode survey = objectMapper.readTree(resource.getInputStream());
 
         questionMap = new LinkedHashMap<>();
@@ -48,7 +48,7 @@ public class SurveyLoader {
 
         lastQuestionId = questionMap.keySet().stream()
                 .reduce((first, second) -> second)
-                .orElseThrow(() -> new IllegalStateException("설문 문항이 비어 있습니다: survey/survey_v1_mixed.json"));
+                .orElseThrow(() -> new IllegalStateException("설문 문항이 비어 있습니다: survey/survey_v2_mixed.json"));
     }
 
     public SurveyQuestion getQuestion(Integer id) {
