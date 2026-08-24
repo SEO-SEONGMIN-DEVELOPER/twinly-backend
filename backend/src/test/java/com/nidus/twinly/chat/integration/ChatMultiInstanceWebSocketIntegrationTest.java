@@ -195,12 +195,19 @@ class ChatMultiInstanceWebSocketIntegrationTest extends AbstractWebSocketIntegra
                 """, Long.class, userAId, userBId);
 
         ChatRoom room = chatRoomRepository.save(ChatRoom.create(matchId));
-        chatRoomParticipationRepository.save(ChatRoomParticipation.create(room.getId(), me.getId()));
-        chatRoomParticipationRepository.save(ChatRoomParticipation.create(room.getId(), partner.getId()));
+        chatRoomParticipationRepository.save(agreedParticipation(room.getId(), me.getId()));
+        chatRoomParticipationRepository.save(agreedParticipation(room.getId(), partner.getId()));
 
         return new Fixture(me, partner, room.getId());
     }
 
     private record Fixture(User me, User partner, long roomId) {
+    }
+
+    /** 입장 동의까지 마친 참여 정보를 만든다. 메시지 전송은 둘 다 동의한 방에서만 가능하다. */
+    private ChatRoomParticipation agreedParticipation(Long roomId, Long userId) {
+        ChatRoomParticipation participation = ChatRoomParticipation.create(roomId, userId);
+        participation.agree();
+        return participation;
     }
 }

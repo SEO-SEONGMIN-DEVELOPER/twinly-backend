@@ -1,6 +1,5 @@
 package com.nidus.twinly.chat.opener;
 
-import com.nidus.twinly.chat.config.ChatProperties;
 import com.nidus.twinly.chat.entity.ChatRoom;
 import com.nidus.twinly.chat.entity.ChatRoomParticipation;
 import com.nidus.twinly.chat.event.ChatChangedEvent;
@@ -9,6 +8,7 @@ import com.nidus.twinly.chat.repository.ChatRoomRepository;
 import com.nidus.twinly.match.entity.Match;
 import com.nidus.twinly.match.repository.MatchRepository;
 import com.nidus.twinly.notification.writer.AppNotificationFeedWriter;
+import com.nidus.twinly.relationship.domain.RelationshipType;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -27,12 +27,11 @@ public class ChatRoomOpener {
     private final ChatRoomParticipationRepository chatRoomParticipationRepository;
     private final AppNotificationFeedWriter appNotificationFeedWriter;
     private final CurrentSeasonReader currentSeasonReader;
-    private final ChatProperties chatProperties;
     private final ApplicationEventPublisher eventPublisher;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void openIfEligible(Long userId, Long partnerUserId, Integer intimacy) {
-        if (intimacy < chatProperties.roomIntimacyThreshold()) {
+        if (RelationshipType.fromIntimacy(intimacy) != RelationshipType.BEST_FRIEND) {
             return;
         }
 

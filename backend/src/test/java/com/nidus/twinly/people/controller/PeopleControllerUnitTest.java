@@ -18,6 +18,7 @@ import com.nidus.twinly.people.dto.result.PeoplePageResult;
 import com.nidus.twinly.people.dto.result.PeopleProfileDisclosedFieldsResult;
 import com.nidus.twinly.people.dto.result.PeopleProfileResult;
 import com.nidus.twinly.people.dto.result.PeopleResult;
+import com.nidus.twinly.people.dto.result.PeopleThresholdResult;
 import com.nidus.twinly.people.service.PeopleService;
 import com.nidus.twinly.relationship.domain.RelationshipSpecificType;
 import com.nidus.twinly.relationship.domain.RelationshipType;
@@ -92,6 +93,7 @@ class PeopleControllerUnitTest {
                                 3,
                                 7L,
                                 true)),
+                        PeopleThresholdResult.of(),
                         new PeoplePageResult(42L, true)));
 
         // when: 인증 상태로 사람 목록 조회 API 호출
@@ -115,6 +117,9 @@ class PeopleControllerUnitTest {
                 .andExpect(jsonPath("$.people[0].chatRoomId").value("7"))
                 .andExpect(jsonPath("$.people[0].isFavorited").value(true))
                 .andExpect(jsonPath("$.people[0].isHighlighted").doesNotExist())
+                .andExpect(jsonPath("$.threshold.acquaintance").value(0))
+                .andExpect(jsonPath("$.threshold.friend").value(35))
+                .andExpect(jsonPath("$.threshold.bestFriend").value(70))
                 .andExpect(jsonPath("$.page.nextCursor").value("42"))
                 .andExpect(jsonPath("$.page.hasMore").value(true));
         then(peopleService).should().people(1L, null, null);
@@ -125,7 +130,7 @@ class PeopleControllerUnitTest {
     void people_with_cursor_and_limit() throws Exception {
         // given: 서비스가 빈 목록을 반환
         given(peopleService.people(1L, 10L, 5))
-                .willReturn(new PeopleResult(List.of(), new PeoplePageResult(null, false)));
+                .willReturn(new PeopleResult(List.of(), PeopleThresholdResult.of(), new PeoplePageResult(null, false)));
 
         // when: cursor/limit 쿼리 파라미터와 함께 사람 목록 조회 API 호출
         var result = mockMvc.perform(get("/api/v1/people")

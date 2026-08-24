@@ -20,6 +20,7 @@ import com.nidus.twinly.match.entity.Match;
 import com.nidus.twinly.match.repository.MatchRepository;
 import com.nidus.twinly.common.scene.SceneNameRenderer;
 import com.nidus.twinly.common.scene.StoredSceneNarrationLine;
+import com.nidus.twinly.people.domain.TwinViewKind;
 import com.nidus.twinly.people.dto.result.PeopleEventActionSceneResult;
 import com.nidus.twinly.people.dto.result.PeopleEventResult;
 import com.nidus.twinly.people.dto.result.PeopleEventUserInfoResult;
@@ -30,10 +31,12 @@ import com.nidus.twinly.people.dto.result.PeopleItemResult;
 import com.nidus.twinly.people.dto.result.PeopleLearnedFactsResult;
 import com.nidus.twinly.people.dto.result.PeopleProfileResult;
 import com.nidus.twinly.people.dto.result.PeopleResult;
+import com.nidus.twinly.people.dto.result.PeopleThresholdResult;
 import com.nidus.twinly.people.entity.Encounter;
 import com.nidus.twinly.people.entity.EncounterPreference;
 import com.nidus.twinly.people.repository.EncounterPreferenceRepository;
 import com.nidus.twinly.people.repository.EncounterRepository;
+import com.nidus.twinly.people.writer.TwinViewWriter;
 import com.nidus.twinly.relationship.domain.RelationshipSpecificType;
 import com.nidus.twinly.relationship.domain.RelationshipType;
 import com.nidus.twinly.relationship.entity.Relationship;
@@ -121,6 +124,9 @@ class PeopleServiceUnitTest {
 
     @Mock
     ObjectMapper objectMapper;
+
+    @Mock
+    TwinViewWriter twinViewWriter;
 
     @Spy
     SceneNameRenderer sceneNameRenderer = new SceneNameRenderer();
@@ -239,6 +245,10 @@ class PeopleServiceUnitTest {
         assertThat(result.people()).isEmpty();
         assertThat(result.page().hasMore()).isFalse();
         assertThat(result.page().nextCursor()).isNull();
+        assertThat(result.threshold())
+                .extracting(PeopleThresholdResult::acquaintance, PeopleThresholdResult::friend,
+                        PeopleThresholdResult::bestFriend)
+                .containsExactly(0, 35, 70);
         then(userRepository).should(never()).findAllById(any());
         then(photoRepository).should(never()).findAllByUserIdInAndType(any(), any());
     }
@@ -253,6 +263,30 @@ class PeopleServiceUnitTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.USER_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("프로필을 조회하면 대상은 상대, 조회자는 나로 조회 기록을 위임한다")
+    void profile_records_view() {
+        // given: 조회 가능한 상대
+        given(userRepository.findById(20L)).willReturn(Optional.of(user(20L, "김", "철수")));
+
+        // when: 프로필 조회
+        peopleService.profile(ME, 20L);
+
+        // then: 대상·조회자 순서로 기록 위임
+        then(twinViewWriter).should().write(20L, ME, TwinViewKind.PROFILE);
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 상대의 프로필 조회는 조회 기록을 남기지 않는다")
+    void profile_does_not_record_view_when_user_not_found() {
+        // when: 없는 상대 조회로 예외 발생
+        assertThatThrownBy(() -> peopleService.profile(ME, 20L))
+                .isInstanceOf(BusinessException.class);
+
+        // then: 기록 위임 없음
+        then(twinViewWriter).should(never()).write(any(), any(), any());
     }
 
     @Test
@@ -451,6 +485,30 @@ class PeopleServiceUnitTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.USER_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("이벤트 목록을 조회하면 EVENT 종류로 열람 기록을 위임한다")
+    void events_records_view_as_event_kind() {
+        // given: 조회 가능한 상대
+        given(userRepository.findById(20L)).willReturn(Optional.of(user(20L, "김", "철수")));
+
+        // when: 이벤트 목록 조회
+        peopleService.events(ME, 20L, null, null);
+
+        // then: 대상·조회자 순서로 EVENT 종류 기록
+        then(twinViewWriter).should().write(20L, ME, TwinViewKind.EVENT);
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 상대의 이벤트 목록 조회는 열람 기록을 남기지 않는다")
+    void events_does_not_record_view_when_user_not_found() {
+        // when: 없는 상대 조회로 예외 발생
+        assertThatThrownBy(() -> peopleService.events(ME, 20L, null, null))
+                .isInstanceOf(BusinessException.class);
+
+        // then: 기록 위임 없음
+        then(twinViewWriter).should(never()).write(any(), any(), any());
     }
 
     @Test

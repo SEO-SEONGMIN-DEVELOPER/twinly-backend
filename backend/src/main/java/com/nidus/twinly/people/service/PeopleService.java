@@ -21,11 +21,13 @@ import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.match.entity.Match;
 import com.nidus.twinly.match.repository.MatchRepository;
+import com.nidus.twinly.people.domain.TwinViewKind;
 import com.nidus.twinly.people.dto.result.*;
 import com.nidus.twinly.people.entity.Encounter;
 import com.nidus.twinly.people.entity.EncounterPreference;
 import com.nidus.twinly.people.repository.EncounterPreferenceRepository;
 import com.nidus.twinly.people.repository.EncounterRepository;
+import com.nidus.twinly.people.writer.TwinViewWriter;
 import com.nidus.twinly.relationship.domain.RelationshipSpecificType;
 import com.nidus.twinly.relationship.domain.RelationshipType;
 import com.nidus.twinly.relationship.entity.Relationship;
@@ -82,6 +84,7 @@ public class PeopleService {
     private final CloudFrontService cloudFrontService;
     private final SceneNameRenderer sceneNameRenderer;
     private final ObjectMapper objectMapper;
+    private final TwinViewWriter twinViewWriter;
 
     public PeopleResult people(Long userId, Long cursor, Integer limit) {
         int effectiveLimit = (limit != null && limit > 0) ? limit : DEFAULT_LIMIT;
@@ -92,7 +95,7 @@ public class PeopleService {
         List<Long> partnerUserIds = hasMore ? fetched.subList(0, effectiveLimit) : fetched;
 
         if (partnerUserIds.isEmpty()) {
-            return new PeopleResult(List.of(), new PeoplePageResult(null, false));
+            return new PeopleResult(List.of(), PeopleThresholdResult.of(), new PeoplePageResult(null, false));
         }
 
         Map<Long, User> userByPartnerUserId = userRepository.findAllById(partnerUserIds).stream()
@@ -152,7 +155,7 @@ public class PeopleService {
 
         Long nextCursor = hasMore ? partnerUserIds.get(partnerUserIds.size() - 1) : null;
 
-        return new PeopleResult(people, new PeoplePageResult(nextCursor, hasMore));
+        return new PeopleResult(people, PeopleThresholdResult.of(), new PeoplePageResult(nextCursor, hasMore));
     }
 
     private Long partnerUserIdOf(Long userAId, Long userBId, Long userId) {
@@ -162,6 +165,8 @@ public class PeopleService {
     public PeopleProfileResult profile(Long userId, Long partnerUserId) {
         User partner = userRepository.findById(partnerUserId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        twinViewWriter.write(partnerUserId, userId, TwinViewKind.PROFILE);
 
         int intimacy = relationshipRepository.findLatestByUserIdAndPartnerUserId(userId, partnerUserId)
                 .map(Relationship::getIntimacy)
@@ -256,6 +261,8 @@ public class PeopleService {
     public PeopleEventsResult events(Long userId, Long partnerUserId, LocalDate cursor, Integer limit) {
         User partner = userRepository.findById(partnerUserId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        twinViewWriter.write(partnerUserId, userId, TwinViewKind.EVENT);
 
         int intimacy = relationshipRepository.findLatestByUserIdAndPartnerUserId(userId, partnerUserId)
                 .map(Relationship::getIntimacy)

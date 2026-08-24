@@ -37,4 +37,18 @@ public class AsyncConfig implements AsyncConfigurer {
 
         return executor;
     }
+
+    @Bean(defaultCandidate = false)
+    public TaskExecutor twinViewTaskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(4);
+        executor.setQueueCapacity(1000);
+        executor.setThreadNamePrefix("twin-view-");
+        executor.setRejectedExecutionHandler((rejected, threadPoolExecutor) ->
+                log.warn("트윈 열람 기록 큐가 가득 차 기록을 건너뜁니다. queued={}", threadPoolExecutor.getQueue().size()));
+
+        return executor;
+    }
 }

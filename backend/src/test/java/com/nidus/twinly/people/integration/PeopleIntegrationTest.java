@@ -8,10 +8,13 @@ import com.nidus.twinly.activity.repository.SceneRepository;
 import com.nidus.twinly.block.entity.Block;
 import com.nidus.twinly.block.repository.BlockRepository;
 import com.nidus.twinly.common.time.KstTimes;
+import com.nidus.twinly.people.domain.TwinViewKind;
 import com.nidus.twinly.people.entity.Encounter;
 import com.nidus.twinly.people.entity.EncounterPreference;
+import com.nidus.twinly.people.entity.TwinView;
 import com.nidus.twinly.people.repository.EncounterPreferenceRepository;
 import com.nidus.twinly.people.repository.EncounterRepository;
+import com.nidus.twinly.people.repository.TwinViewRepository;
 import com.nidus.twinly.relationship.entity.Relationship;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
 import com.nidus.twinly.support.AbstractIntegrationTest;
@@ -22,14 +25,18 @@ import com.nidus.twinly.user.repository.PhotoRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.context.transaction.TestTransaction;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.lang.reflect.Constructor;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -62,6 +69,9 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     PhotoRepository photoRepository;
 
+    @Autowired
+    TwinViewRepository twinViewRepository;
+
     @Test
     @DisplayName("사람 목록 조회: 실제 관계 데이터를 파트너 id 오름차순으로 관통 조회해 친밀도·관계 타입을 내려준다")
     void people_success_end_to_end() throws Exception {
@@ -88,6 +98,9 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.people[1].userId").value(partner2.getId().toString()))
                 .andExpect(jsonPath("$.people[1].intimacy").value(80))
                 .andExpect(jsonPath("$.people[1].relationshipType").value("bestFriend"))
+                .andExpect(jsonPath("$.threshold.acquaintance").value(0))
+                .andExpect(jsonPath("$.threshold.friend").value(35))
+                .andExpect(jsonPath("$.threshold.bestFriend").value(70))
                 .andExpect(jsonPath("$.page.hasMore").value(false))
                 .andExpect(jsonPath("$.page.nextCursor").isEmpty());
     }
@@ -192,6 +205,46 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.isDeleted").value(false))
                 .andExpect(jsonPath("$.disclosedFields.affiliation").isEmpty())
                 .andExpect(jsonPath("$.disclosedFields.affiliationNumber").isEmpty());
+    }
+
+    @Test
+    @DisplayName("프로필·이벤트 조회: 읽기 전용 트랜잭션과 분리된 비동기 스레드에서 종류별 열람 기록이 커밋된다")
+    void profile_and_events_record_views_end_to_end() throws Exception {
+        // given: 비동기 스레드는 자기 트랜잭션으로 INSERT 하므로, FK 대상인 유저를 먼저 커밋해 둔다
+        User me = saveUser();
+        User partner = saveUser();
+        TestTransaction.flagForCommit();
+        TestTransaction.end();
+
+        try {
+            // when: 프로필과 이벤트 목록을 각각 조회
+            mockMvc.perform(get("/api/v1/people/{userId}/profile", partner.getId().toString())
+                            .header("Authorization", bearer(me.getId())))
+                    .andExpect(status().isOk());
+            mockMvc.perform(get("/api/v1/people/{userId}/events", partner.getId().toString())
+                            .header("Authorization", bearer(me.getId())))
+                    .andExpect(status().isOk());
+
+            // then: 응답과 무관한 별도 트랜잭션에서 커밋되므로 잠시 뒤 두 종류가 모두 관측된다
+            await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+                List<TwinView> views = twinViewRepository.findAll().stream()
+                        .filter(view -> view.getTargetUserId().equals(partner.getId()))
+                        .toList();
+
+                assertThat(views).hasSize(2);
+                assertThat(views).allSatisfy(view ->
+                        assertThat(view.getViewerUserId()).isEqualTo(me.getId()));
+                assertThat(views).extracting(TwinView::getKind)
+                        .containsExactlyInAnyOrder(TwinViewKind.PROFILE, TwinViewKind.EVENT);
+            });
+        } finally {
+            // 커밋한 데이터는 롤백되지 않으므로 직접 정리한다
+            TestTransaction.start();
+            twinViewRepository.deleteAll();
+            userRepository.deleteAll(List.of(me, partner));
+            TestTransaction.flagForCommit();
+            TestTransaction.end();
+        }
     }
 
     @Test

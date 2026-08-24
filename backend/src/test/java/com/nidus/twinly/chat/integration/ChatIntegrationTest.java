@@ -53,8 +53,9 @@ class ChatIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("메시지 전송 성공: 실제 유저·JWT 인증·MockMvc·DB까지 관통하여 chats 행이 생성된다")
     void sendMessage_success_end_to_end() throws Exception {
-        // given: 시즌·유저 2명·매칭·채팅방·참여 정보를 실제 DB에 저장
+        // given: 시즌·유저 2명·매칭·채팅방·참여 정보를 실제 DB에 저장하고 양쪽 입장 동의까지 마침
         Fixture fixture = saveChatRoomFixture();
+        agreeBothEntry(fixture);
 
         // when: 발신자의 실제 액세스 토큰으로 메시지 전송 API 호출
         mockMvc.perform(post("/api/v1/chat/rooms/{roomId}/messages", fixture.roomId().toString())
@@ -142,6 +143,28 @@ class ChatIntegrationTest extends AbstractIntegrationTest {
                         .header("Authorization", bearer(newbie.getId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.rooms.length()").value(0));
+    }
+
+    @Test
+    @DisplayName("메시지 전송 실패: 한쪽만 입장 동의했으면 409와 ROOM_ENTRY_NOT_AGREED 코드를 반환하고 chats 행을 만들지 않는다")
+    void sendMessage_when_entry_not_agreed_returns_409() throws Exception {
+        // given: 나만 입장 동의한 채팅방
+        Fixture fixture = saveChatRoomFixture();
+        chatRoomParticipationRepository.findByRoomIdAndUserId(fixture.roomId(), fixture.me().getId())
+                .orElseThrow().agree();
+        flushAndClear();
+
+        // when: 내 실제 액세스 토큰으로 메시지 전송 API 호출
+        var result = mockMvc.perform(post("/api/v1/chat/rooms/{roomId}/messages", fixture.roomId().toString())
+                .header("Authorization", bearer(fixture.me().getId()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"text\":\"hello\",\"clientMsgId\":\"client-1\"}"));
+
+        // then: 409 + ROOM_ENTRY_NOT_AGREED 로 매핑되고 DB에 채팅 행이 없음
+        result.andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value(ErrorCode.ROOM_ENTRY_NOT_AGREED.name()));
+
+        assertThat(chatRepository.findBySenderUserIdAndClientMsgId(fixture.me().getId(), "client-1")).isEmpty();
     }
 
     @Test
@@ -504,6 +527,13 @@ class ChatIntegrationTest extends AbstractIntegrationTest {
                 ChatMessageType.TEXT, "안읽은 메시지"));
 
         return room.getId();
+    }
+
+    /** 양쪽 참여자의 입장 동의를 채운다. 메시지 전송은 둘 다 동의한 방에서만 가능하다. */
+    private void agreeBothEntry(Fixture fixture) {
+        chatRoomParticipationRepository.findAllByRoomId(fixture.roomId())
+                .forEach(ChatRoomParticipation::agree);
+        flushAndClear();
     }
 
     /** 시즌 → 유저 2명 → 매칭 → 채팅방 → 참여 정보 순으로 저장한다 (FK 순서 준수). */

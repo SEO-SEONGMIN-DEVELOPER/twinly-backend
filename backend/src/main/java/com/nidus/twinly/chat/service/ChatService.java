@@ -90,6 +90,8 @@ public class ChatService {
             throw new BusinessException(ErrorCode.ROOM_CLOSED);
         }
 
+        checkAllEntryAgreed(participations);
+
         if (command.text().getBytes(StandardCharsets.UTF_8).length > MAX_TEXT_BYTES) {
             throw new BusinessException(ErrorCode.MESSAGE_LENGTH_EXCEEDED);
         }
@@ -153,6 +155,15 @@ public class ChatService {
     private void checkParticipationActive(ChatRoomParticipation participation) {
         if (!participation.isActive()) {
             throw new BusinessException(ErrorCode.NOT_ACTIVE_ROOM_PARTICIPANT);
+        }
+    }
+
+    private void checkAllEntryAgreed(List<ChatRoomParticipation> participations) {
+        boolean allAgreed = participations.stream()
+                .allMatch(participation -> participation.getEntryAgreedAt() != null);
+
+        if (!allAgreed) {
+            throw new BusinessException(ErrorCode.ROOM_ENTRY_NOT_AGREED);
         }
     }
 
