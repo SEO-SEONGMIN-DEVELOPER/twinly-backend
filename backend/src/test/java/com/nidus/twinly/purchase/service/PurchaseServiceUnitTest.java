@@ -1,12 +1,14 @@
 package com.nidus.twinly.purchase.service;
 
 import com.nidus.twinly.common.domain.Gender;
+import com.nidus.twinly.common.web.BusinessException;
+import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.purchase.RevenueCatProperties;
 import com.nidus.twinly.purchase.client.RevenueCatClient;
 import com.nidus.twinly.purchase.client.RevenueCatEntitlement;
 import com.nidus.twinly.purchase.domain.RevenueCatEnvironment;
 import com.nidus.twinly.purchase.dto.command.RevenueCatWebhookCommand;
-import com.nidus.twinly.purchase.writer.UserEntitlementWriter;
+import com.nidus.twinly.purchase.writer.PurchaseWriter;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,6 +24,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -45,14 +48,14 @@ class PurchaseServiceUnitTest {
     UserRepository userRepository;
 
     @Mock
-    UserEntitlementWriter userEntitlementWriter;
+    PurchaseWriter purchaseWriter;
 
     PurchaseService purchaseService;
 
     @BeforeEach
     void setUp() {
         RevenueCatProperties properties = new RevenueCatProperties("secret", "sk_test", RevenueCatEnvironment.SANDBOX);
-        purchaseService = new PurchaseService(properties, revenueCatClient, userRepository, userEntitlementWriter);
+        purchaseService = new PurchaseService(properties, revenueCatClient, userRepository, purchaseWriter);
     }
 
     @Test
@@ -68,7 +71,7 @@ class PurchaseServiceUnitTest {
         purchaseService.receiveWebhook(command("RENEWAL", "SANDBOX", List.of(APP_USER_ID)));
 
         // then: 조회한 권한 목록 그대로 교체 위임
-        then(userEntitlementWriter).should().replaceAll(eq(USER_ID), eq(entitlements), any());
+        then(purchaseWriter).should().replaceEntitlements(eq(USER_ID), eq(entitlements), any());
     }
 
     @Test
@@ -79,7 +82,7 @@ class PurchaseServiceUnitTest {
 
         // then: 외부 조회도 교체도 일어나지 않음
         then(revenueCatClient).should(never()).entitlements(anyString());
-        then(userEntitlementWriter).should(never()).replaceAll(anyLong(), anyList(), any());
+        then(purchaseWriter).should(never()).replaceEntitlements(anyLong(), anyList(), any());
     }
 
     @Test
@@ -93,7 +96,7 @@ class PurchaseServiceUnitTest {
         purchaseService.receiveWebhook(command("TRANSFER", null, List.of(APP_USER_ID)));
 
         // then: 동기화가 수행됨
-        then(userEntitlementWriter).should().replaceAll(anyLong(), anyList(), any());
+        then(purchaseWriter).should().replaceEntitlements(anyLong(), anyList(), any());
     }
 
     @Test
@@ -102,8 +105,8 @@ class PurchaseServiceUnitTest {
         // given: 두 유저 모두 우리 유저
         UUID from = UUID.fromString("11111111-1111-4111-8111-111111111111");
         UUID to = UUID.fromString("22222222-2222-4222-8222-222222222222");
-        given(userRepository.findByRevenueCatUserId(from)).willReturn(Optional.of(user(10L)));
-        given(userRepository.findByRevenueCatUserId(to)).willReturn(Optional.of(user(20L)));
+        given(userRepository.findByRevenueCatUserId(from)).willReturn(Optional.of(user(10L, from)));
+        given(userRepository.findByRevenueCatUserId(to)).willReturn(Optional.of(user(20L, to)));
         given(revenueCatClient.entitlements(anyString())).willReturn(List.of());
 
         // when: TRANSFER 이벤트 수신
@@ -112,8 +115,8 @@ class PurchaseServiceUnitTest {
         // then: 두 유저 모두 조회되고 각각 교체 위임
         then(revenueCatClient).should().entitlements(from.toString());
         then(revenueCatClient).should().entitlements(to.toString());
-        then(userEntitlementWriter).should().replaceAll(eq(10L), anyList(), any());
-        then(userEntitlementWriter).should().replaceAll(eq(20L), anyList(), any());
+        then(purchaseWriter).should().replaceEntitlements(eq(10L), anyList(), any());
+        then(purchaseWriter).should().replaceEntitlements(eq(20L), anyList(), any());
     }
 
     @Test
@@ -127,7 +130,7 @@ class PurchaseServiceUnitTest {
 
         // then: 외부 조회도 교체도 일어나지 않음
         then(revenueCatClient).should(never()).entitlements(anyString());
-        then(userEntitlementWriter).should(never()).replaceAll(anyLong(), anyList(), any());
+        then(purchaseWriter).should(never()).replaceEntitlements(anyLong(), anyList(), any());
     }
 
     @Test
@@ -141,20 +144,64 @@ class PurchaseServiceUnitTest {
         then(revenueCatClient).should(never()).entitlements(anyString());
     }
 
+    @Test
+    @DisplayName("마지막 동기화가 오래됐으면 RevenueCat 을 조회해 권한을 갱신한다")
+    void syncIfStale_syncs_when_stale() {
+        // given: 한 번도 동기화한 적 없는 유저
+        User user = user();
+        given(revenueCatClient.entitlements(APP_USER_ID)).willReturn(List.of());
+
+        // when: 조건부 동기화 호출
+        purchaseService.syncIfStale(user);
+
+        // then: 시도 시각을 먼저 기록하고 실제 조회까지 수행
+        then(purchaseWriter).should().markSyncAttempt(eq(USER_ID), any());
+        then(revenueCatClient).should().entitlements(APP_USER_ID);
+    }
+
+    @Test
+    @DisplayName("최근에 동기화했으면 RevenueCat 을 조회하지 않는다")
+    void syncIfStale_skips_when_fresh() {
+        // given: 방금 동기화한 유저
+        User user = user();
+        ReflectionTestUtils.setField(user, "purchasesSyncedAt", Instant.now());
+
+        // when: 조건부 동기화 호출
+        purchaseService.syncIfStale(user);
+
+        // then: 외부 조회도 기록도 하지 않음
+        then(revenueCatClient).should(never()).entitlements(anyString());
+        then(purchaseWriter).should(never()).markSyncAttempt(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("동기화가 실패해도 예외를 밖으로 내보내지 않는다")
+    void syncIfStale_swallows_failure() {
+        // given: RevenueCat 조회가 실패하는 상황
+        User user = user();
+        given(revenueCatClient.entitlements(APP_USER_ID))
+                .willThrow(new BusinessException(ErrorCode.REVENUE_CAT_SYNC_FAILED));
+
+        // when & then: 조회 API 가 동기화 실패로 같이 죽지 않아야 하므로 예외가 전파되지 않는다
+        assertThatCode(() -> purchaseService.syncIfStale(user)).doesNotThrowAnyException();
+        then(purchaseWriter).should(never()).replaceEntitlements(anyLong(), anyList(), any());
+    }
+
     private RevenueCatWebhookCommand command(String type, String environment, List<String> appUserIds) {
         return new RevenueCatWebhookCommand("evt_1", type, appUserIds, environment);
     }
 
     private User user() {
-        return user(USER_ID);
+        return user(USER_ID, REVENUE_CAT_USER_ID);
     }
 
-    private User user(Long id) {
+    private User user(Long id, UUID revenueCatUserId) {
         User user = User.create(
                 "nick", "홍", "familyHash", "길동", "givenHash",
                 Gender.MALE, "organization", "organizationHash", "니두스", "affHash", "2020123", "affNoHash",
                 "2000-01-01", "birthHash", "01000000000", "phoneHash", "me@test.com", "emailHash");
         ReflectionTestUtils.setField(user, "id", id);
+        ReflectionTestUtils.setField(user, "revenueCatUserId", revenueCatUserId);
         return user;
     }
 }

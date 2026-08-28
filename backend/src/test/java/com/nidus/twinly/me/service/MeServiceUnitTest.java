@@ -19,6 +19,7 @@ import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.purchase.entity.UserEntitlement;
 import com.nidus.twinly.purchase.repository.UserEntitlementRepository;
+import com.nidus.twinly.purchase.service.PurchaseService;
 import com.nidus.twinly.legal.entity.Agreement;
 import com.nidus.twinly.legal.entity.PolicyName;
 import com.nidus.twinly.legal.repository.PolicyRepository.PolicySummary;
@@ -167,6 +168,9 @@ class MeServiceUnitTest {
 
     @Mock
     UserEntitlementRepository userEntitlementRepository;
+
+    @Mock
+    PurchaseService purchaseService;
 
     @InjectMocks
     MeService meService;
@@ -1190,6 +1194,21 @@ class MeServiceUnitTest {
                 .isEqualTo(ErrorCode.USER_NOT_FOUND);
 
         then(userEntitlementRepository).should(never()).findAllByUserId(anyLong());
+    }
+
+    @Test
+    @DisplayName("구매 상태 조회는 오래된 동기화를 먼저 갱신한 뒤 결과를 반환한다")
+    void purchases_syncs_stale_state_first() {
+        // given: 유저가 존재하고 저장된 권한이 없음
+        User user = user();
+        given(userRepository.findById(ME)).willReturn(Optional.of(user));
+        given(userEntitlementRepository.findAllByUserId(ME)).willReturn(List.of());
+
+        // when: 구매 상태 조회
+        meService.purchases(ME);
+
+        // then: 조회 전에 조건부 동기화를 위임 (웹훅 유실이 조회 시점에 복구된다)
+        then(purchaseService).should().syncIfStale(user);
     }
 
     private User user() {
