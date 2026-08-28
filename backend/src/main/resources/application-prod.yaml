@@ -9,3 +9,6 @@ logging:
   level:
     root: INFO
     com.nidus.twinly: INFO
+
+revenue-cat:
+  environment: PRODUCTION

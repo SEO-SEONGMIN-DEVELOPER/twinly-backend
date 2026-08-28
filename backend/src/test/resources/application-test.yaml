@@ -24,6 +24,8 @@ jwt:
 
 revenue-cat:
   webhook-secret: test-revenue-cat-webhook-secret
+  secret-api-key: test-revenue-cat-secret-api-key
+  environment: SANDBOX
 
 aws:
   s3:

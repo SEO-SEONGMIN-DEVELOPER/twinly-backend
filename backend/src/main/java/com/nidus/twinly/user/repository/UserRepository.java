@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 public interface UserRepository extends JpaRepository<User, Long> {
 
@@ -21,6 +22,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByPhoneNumberHash(String phoneNumberHash);
 
     Optional<User> findByEmailHash(String emailHash);
+
+    Optional<User> findByRevenueCatUserId(UUID revenueCatUserId);
 
     List<User> findAllByDeletedAtIsNullAndWithdrawalScheduledAtLessThanEqual(Instant now, Pageable pageable);
 
