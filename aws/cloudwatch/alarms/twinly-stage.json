@@ -195,6 +195,21 @@
         ]
     },
     {
+        "name": "twinly-stage-api-revenue-cat-sync-failure",
+        "description": "RevenueCat 연동이 10분 넘게 계속 실패. 웹훅 반영과 조회 시 동기화가 모두 이 코드로 기록되므로, 두 경로 중 어디서든 지속 실패하면 걸린다. 일시적 네트워크 오류는 evaluationPeriods 2 로 걸러진다.\n\n가장 흔한 원인은 설정이다. REVENUECAT_SECRET_API_KEY 가 폐기·오타이면 재시도해도 영원히 401 이라 사람이 고쳐야 한다.\n\n조치:\n1. 원인 구분 (401 인지 타임아웃인지)\n   fields @timestamp, @logStream, log | filter log like /REVENUE_CAT_SYNC_FAILED/ | sort @timestamp desc\n2. 401 이면 RevenueCat 대시보드 API keys 에서 키 상태 확인 후 SSM /twinly/stage/api/env 갱신\n3. 5xx·타임아웃이면 RevenueCat 상태 페이지 확인. 우리 조치는 없고 복구되면 자동으로 따라잡는다.\n\n유저 영향: 새 결제가 반영되지 않는다. 기존 권한은 유지되고 조회 API 도 정상 응답하므로 앱이 멈추지는 않는다.",
+        "namespace": "twinly/stage/api",
+        "metric": "RevenueCatSyncFailureCount",
+        "statistic": "Sum",
+        "period": 300,
+        "evaluationPeriods": 2,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 1.0,
+        "treatMissingData": "notBreaching",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-stage-alerts"
+        ]
+    },
+    {
         "name": "twinly-stage-api-stack-overflow",
         "description": "StackOverflowError 발생. 무한 재귀 가능성. JVM Error 계열이라 해당 요청 스레드는 복구 불가.\n\n조치:\n1. 어느 인스턴스인지, 어느 코드 경로인지 확인\n   fields @timestamp, @logStream, log | filter log like /StackOverflowError/ | sort @timestamp desc\n2. 스택트레이스에서 반복되는 메서드 호출 구간을 찾아 재귀 종료 조건 점검\n3. 최근 배포와 연관 있는지 확인",
         "namespace": "twinly/stage/api",

@@ -3,6 +3,7 @@ package com.nidus.twinly.user.repository;
 import com.nidus.twinly.user.entity.User;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -24,6 +25,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByEmailHash(String emailHash);
 
     Optional<User> findByRevenueCatUserId(UUID revenueCatUserId);
+
+    @Modifying
+    @Query("UPDATE User u SET u.purchasesSyncedAt = :syncedAt WHERE u.id = :userId")
+    void markPurchasesSynced(@Param("userId") Long userId, @Param("syncedAt") Instant syncedAt);
 
     List<User> findAllByDeletedAtIsNullAndWithdrawalScheduledAtLessThanEqual(Instant now, Pageable pageable);
 

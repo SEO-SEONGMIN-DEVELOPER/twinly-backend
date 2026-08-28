@@ -16,6 +16,14 @@
         "defaultValue": 0.0
     },
     {
+        "name": "twinly-stage-api-revenue-cat-sync-failure",
+        "pattern": "{ $.errorCode = \"REVENUE_CAT_SYNC_FAILED\" }",
+        "metric": "RevenueCatSyncFailureCount",
+        "namespace": "twinly/stage/api",
+        "value": "1",
+        "defaultValue": 0.0
+    },
+    {
         "name": "twinly-stage-api-stack-overflow",
         "pattern": "StackOverflowError",
         "metric": "StackOverflowCount",

@@ -6,14 +6,18 @@ import com.nidus.twinly.purchase.entity.UserEntitlement;
 import com.nidus.twinly.purchase.repository.UserEntitlementRepository;
 import com.nidus.twinly.support.AbstractIntegrationTest;
 import com.nidus.twinly.user.entity.User;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -24,12 +28,30 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+// 구매 상태 조회는 동기화 때문에 트랜잭션 밖에서 돈다. 롤백에 기대면 픽스처가 보이지 않으므로
+// 커밋해서 쓰고 직접 지운다.
+@Transactional(propagation = Propagation.NOT_SUPPORTED)
 class PurchaseIntegrationTest extends AbstractIntegrationTest {
 
     private static final String WEBHOOK_SECRET = "Bearer test-revenue-cat-webhook-secret";
 
     @Autowired
     UserEntitlementRepository userEntitlementRepository;
+
+    private final List<Long> createdUserIds = new ArrayList<>();
+
+    @AfterEach
+    void cleanUp() {
+        createdUserIds.forEach(userId -> userEntitlementRepository.deleteAll(userEntitlementRepository.findAllByUserId(userId)));
+        createdUserIds.forEach(userRepository::deleteById);
+        createdUserIds.clear();
+    }
+
+    private User saveUserForTest() {
+        User user = saveUser();
+        createdUserIds.add(user.getId());
+        return user;
+    }
 
     // RevenueCat REST 호출 차단. 웹훅은 트리거일 뿐이고 진짜 상태는 이 응답이 결정한다.
     @MockitoBean
@@ -39,7 +61,7 @@ class PurchaseIntegrationTest extends AbstractIntegrationTest {
     @DisplayName("웹훅 수신: 실제 시크릿 인증을 통과해 RevenueCat 조회 결과가 user_entitlements 로 저장된다")
     void webhook_saves_entitlements_end_to_end() throws Exception {
         // given: 실제 유저 저장 + RevenueCat 이 premium 권한을 돌려주도록 설정
-        User user = saveUser();
+        User user = saveUserForTest();
         Instant expiresAt = Instant.now().plus(Duration.ofDays(30));
         given(revenueCatClient.entitlements(user.getRevenueCatUserId().toString()))
                 .willReturn(List.of(new RevenueCatEntitlement("premium", expiresAt)));
@@ -61,7 +83,7 @@ class PurchaseIntegrationTest extends AbstractIntegrationTest {
     @DisplayName("웹훅으로 저장된 권한이 구매 상태 조회 API 응답에 그대로 나온다")
     void webhook_then_purchases_returns_entitlement() throws Exception {
         // given: 실제 유저 저장 후 웹훅으로 premium 권한을 반영
-        User user = saveUser();
+        User user = saveUserForTest();
         given(revenueCatClient.entitlements(anyString()))
                 .willReturn(List.of(new RevenueCatEntitlement("premium", Instant.now().plus(Duration.ofDays(30)))));
 
@@ -75,17 +97,20 @@ class PurchaseIntegrationTest extends AbstractIntegrationTest {
         var result = mockMvc.perform(get("/api/v1/me/purchases")
                 .header("Authorization", bearer(user.getId())));
 
-        // then: 식별자와 권한이 함께 내려옴
+        // then: 식별자가 내려오고, 권한은 응답이 아니라 DB 에 반영돼 있다 (유료 API 가 이 값을 본다)
         result.andExpect(status().isOk())
-                .andExpect(jsonPath("$.revenueCatUserId").value(user.getRevenueCatUserId().toString()))
-                .andExpect(jsonPath("$.entitlements[0]").value("premium"));
+                .andExpect(jsonPath("$.revenueCatUserId").value(user.getRevenueCatUserId().toString()));
+
+        assertThat(userEntitlementRepository.findAllByUserId(user.getId()))
+                .extracting(UserEntitlement::getEntitlement)
+                .containsExactly("premium");
     }
 
     @Test
     @DisplayName("환불 반영: RevenueCat 응답에서 빠진 권한은 DB에서 삭제된다")
     void webhook_removes_revoked_entitlement() throws Exception {
         // given: premium 권한이 이미 저장된 유저
-        User user = saveUser();
+        User user = saveUserForTest();
         userEntitlementRepository.save(UserEntitlement.create(
                 user.getId(), "premium", Instant.now().plus(Duration.ofDays(30)), Instant.now().minusSeconds(3600)));
 
@@ -107,7 +132,7 @@ class PurchaseIntegrationTest extends AbstractIntegrationTest {
     @DisplayName("웹훅 인증 실패: 시크릿이 없으면 401이고 DB도 바뀌지 않는다")
     void webhook_without_secret_returns_401() throws Exception {
         // given: 실제 유저 저장
-        User user = saveUser();
+        User user = saveUserForTest();
 
         // when: 시크릿 없이 웹훅 호출
         mockMvc.perform(post("/webhook/v1/revenue-cat")
@@ -120,21 +145,23 @@ class PurchaseIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("구매 상태 조회: 만료된 권한은 응답에서 빠지고 식별자는 그대로 내려온다")
-    void purchases_excludes_expired_entitlement() throws Exception {
-        // given: 만료가 지난 권한만 저장된 유저
-        User user = saveUser();
+    @DisplayName("구매 상태 조회: RevenueCat 이 권한을 돌려주지 않으면 저장된 권한이 삭제된다")
+    void purchases_syncs_and_removes_revoked_entitlement() throws Exception {
+        // given: 권한이 저장돼 있고 RevenueCat 은 더 이상 그 권한을 주지 않음
+        User user = saveUserForTest();
         userEntitlementRepository.save(UserEntitlement.create(
-                user.getId(), "premium", Instant.now().minus(Duration.ofDays(1)), Instant.now()));
+                user.getId(), "premium", Instant.now().plus(Duration.ofDays(30)), Instant.now().minus(Duration.ofDays(1))));
+        given(revenueCatClient.entitlements(anyString())).willReturn(List.of());
 
         // when: 해당 유저의 실제 액세스 토큰으로 구매 상태 조회
         var result = mockMvc.perform(get("/api/v1/me/purchases")
                 .header("Authorization", bearer(user.getId())));
 
-        // then: 권한 목록은 비어 있고 식별자는 정상 반환
+        // then: 식별자는 정상 반환되고, 조회 과정의 동기화로 권한이 정리됨
         result.andExpect(status().isOk())
-                .andExpect(jsonPath("$.revenueCatUserId").value(user.getRevenueCatUserId().toString()))
-                .andExpect(jsonPath("$.entitlements").isEmpty());
+                .andExpect(jsonPath("$.revenueCatUserId").value(user.getRevenueCatUserId().toString()));
+
+        assertThat(userEntitlementRepository.findAllByUserId(user.getId())).isEmpty();
     }
 
     @Test

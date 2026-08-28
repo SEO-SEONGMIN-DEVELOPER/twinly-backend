@@ -49,8 +49,4 @@ public class UserEntitlement {
         this.expiresAt = expiresAt;
         this.syncedAt = syncedAt;
     }
-
-    public boolean isActiveAt(Instant now) {
-        return expiresAt == null || expiresAt.isAfter(now);
-    }
 }
