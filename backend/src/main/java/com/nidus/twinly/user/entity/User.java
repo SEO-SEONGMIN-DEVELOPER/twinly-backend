@@ -93,6 +93,8 @@ public class User {
 
     private UUID revenueCatUserId;
 
+    private Instant purchasesSyncedAt;
+
     private Instant withdrawalRequestedAt;
 
     private Instant withdrawalScheduledAt;
@@ -135,6 +137,10 @@ public class User {
         user.createdAt = Instant.now();
 
         return user;
+    }
+
+    public boolean needsPurchasesSync(Instant threshold) {
+        return purchasesSyncedAt == null || purchasesSyncedAt.isBefore(threshold);
     }
 
     public boolean isWithdrawn() {

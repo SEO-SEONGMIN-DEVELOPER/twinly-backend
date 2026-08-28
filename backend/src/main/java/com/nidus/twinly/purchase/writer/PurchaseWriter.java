@@ -3,6 +3,7 @@ package com.nidus.twinly.purchase.writer;
 import com.nidus.twinly.purchase.client.RevenueCatEntitlement;
 import com.nidus.twinly.purchase.entity.UserEntitlement;
 import com.nidus.twinly.purchase.repository.UserEntitlementRepository;
+import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,12 +16,18 @@ import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
-public class UserEntitlementWriter {
+public class PurchaseWriter {
 
     private final UserEntitlementRepository userEntitlementRepository;
+    private final UserRepository userRepository;
 
     @Transactional
-    public void replaceAll(Long userId, List<RevenueCatEntitlement> entitlements, Instant syncedAt) {
+    public void markSyncAttempt(Long userId, Instant attemptedAt) {
+        userRepository.markPurchasesSynced(userId, attemptedAt);
+    }
+
+    @Transactional
+    public void replaceEntitlements(Long userId, List<RevenueCatEntitlement> entitlements, Instant syncedAt) {
         List<UserEntitlement> stored = userEntitlementRepository.findAllByUserId(userId);
 
         if (stored.stream().anyMatch(entitlement -> entitlement.getSyncedAt().isAfter(syncedAt))) {
