@@ -1,6 +1,6 @@
-package com.nidus.twinly.subscription.repository;
+package com.nidus.twinly.purchase.repository;
 
-import com.nidus.twinly.subscription.entity.UserEntitlement;
+import com.nidus.twinly.purchase.entity.UserEntitlement;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;

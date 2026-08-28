@@ -21,3 +21,6 @@ springdoc:
 
 springwolf:
   enabled: true
+
+revenue-cat:
+  environment: SANDBOX

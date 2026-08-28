@@ -99,6 +99,7 @@ jwt:
 
 revenue-cat:
   webhook-secret: ${REVENUECAT_WEBHOOK_SECRET}
+  secret-api-key: ${REVENUECAT_SECRET_API_KEY}
 
 fcm:
   service-account-base64: ${FCM_SERVICE_ACCOUNT_BASE64}

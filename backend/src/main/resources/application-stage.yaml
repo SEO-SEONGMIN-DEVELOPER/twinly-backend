@@ -29,3 +29,6 @@ verification:
     code: "000000"
     phone-prefix: "0100000"
     email-prefix: "test"
+
+revenue-cat:
+  environment: SANDBOX

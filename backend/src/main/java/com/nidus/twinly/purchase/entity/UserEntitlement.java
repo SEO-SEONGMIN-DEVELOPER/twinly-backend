@@ -1,4 +1,4 @@
-package com.nidus.twinly.subscription.entity;
+package com.nidus.twinly.purchase.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -43,6 +43,11 @@ public class UserEntitlement {
         created.syncedAt = syncedAt;
         created.createdAt = Instant.now();
         return created;
+    }
+
+    public void sync(Instant expiresAt, Instant syncedAt) {
+        this.expiresAt = expiresAt;
+        this.syncedAt = syncedAt;
     }
 
     public boolean isActiveAt(Instant now) {

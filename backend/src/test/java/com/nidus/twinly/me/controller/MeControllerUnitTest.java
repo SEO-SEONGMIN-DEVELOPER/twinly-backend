@@ -29,6 +29,7 @@ import com.nidus.twinly.me.dto.result.MeProfileResult;
 import com.nidus.twinly.me.dto.result.MeProfilePhotoCommitResult;
 import com.nidus.twinly.me.dto.result.MeProfilePhotoPresignResult;
 import com.nidus.twinly.me.dto.result.MeProfileVisibilitySettingsResult;
+import com.nidus.twinly.me.dto.result.MePurchasesResult;
 import com.nidus.twinly.me.dto.result.MePushNotificationsResult;
 import com.nidus.twinly.me.dto.result.MePushNotificationsSettingsResult;
 import com.nidus.twinly.me.dto.result.MeStatusReportResult;
@@ -55,6 +56,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -811,5 +813,51 @@ class MeControllerUnitTest {
         // then: 401 반환 + 서비스는 호출되지 않음
         result.andExpect(status().isUnauthorized());
         then(meService).should(never()).profile(anyLong());
+    }
+
+    @Test
+    @DisplayName("구매 상태 조회 성공 시 200과 함께 RevenueCat 식별자·권한 목록을 반환한다")
+    void purchases_success() throws Exception {
+        // given: 서비스가 식별자와 권한 하나를 반환
+        UUID revenueCatUserId = UUID.fromString("0f8c1e2a-4b7d-4c31-9a6e-2f5b8c0d1e34");
+        given(meService.purchases(ME))
+                .willReturn(new MePurchasesResult(revenueCatUserId, List.of("premium")));
+
+        // when: 인증 상태로 구매 상태 조회 API 호출
+        var result = mockMvc.perform(get("/api/v1/me/purchases")
+                .header("Authorization", BEARER));
+
+        // then: 200 반환 + 식별자는 문자열로, 권한은 배열로 직렬화
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.revenueCatUserId").value(revenueCatUserId.toString()))
+                .andExpect(jsonPath("$.entitlements[0]").value("premium"));
+    }
+
+    @Test
+    @DisplayName("권한이 없으면 entitlements를 빈 배열로 반환한다")
+    void purchases_with_no_entitlements_returns_empty_array() throws Exception {
+        // given: 서비스가 권한 없는 결과를 반환
+        given(meService.purchases(ME))
+                .willReturn(new MePurchasesResult(UUID.randomUUID(), List.of()));
+
+        // when: 인증 상태로 구매 상태 조회 API 호출
+        var result = mockMvc.perform(get("/api/v1/me/purchases")
+                .header("Authorization", BEARER));
+
+        // then: 200 반환 + 빈 배열
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.entitlements").isArray())
+                .andExpect(jsonPath("$.entitlements").isEmpty());
+    }
+
+    @Test
+    @DisplayName("구매 상태 조회 시 인증 헤더가 없으면 401을 반환하고 서비스를 호출하지 않는다")
+    void purchases_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 구매 상태 조회 API 호출
+        var result = mockMvc.perform(get("/api/v1/me/purchases"));
+
+        // then: 401 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isUnauthorized());
+        then(meService).should(never()).purchases(anyLong());
     }
 }

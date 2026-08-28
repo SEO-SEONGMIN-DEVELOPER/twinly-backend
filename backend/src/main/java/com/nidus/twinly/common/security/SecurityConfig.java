@@ -1,7 +1,7 @@
 package com.nidus.twinly.common.security;
 
 import com.nidus.twinly.anon.service.AnonService;
-import com.nidus.twinly.subscription.RevenueCatProperties;
+import com.nidus.twinly.purchase.RevenueCatProperties;
 import com.nidus.twinly.user.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
