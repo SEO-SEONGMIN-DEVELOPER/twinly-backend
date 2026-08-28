@@ -97,10 +97,13 @@ class PurchaseIntegrationTest extends AbstractIntegrationTest {
         var result = mockMvc.perform(get("/api/v1/me/purchases")
                 .header("Authorization", bearer(user.getId())));
 
-        // then: 식별자와 권한이 함께 내려옴
+        // then: 식별자가 내려오고, 권한은 응답이 아니라 DB 에 반영돼 있다 (유료 API 가 이 값을 본다)
         result.andExpect(status().isOk())
-                .andExpect(jsonPath("$.revenueCatUserId").value(user.getRevenueCatUserId().toString()))
-                .andExpect(jsonPath("$.entitlements[0]").value("premium"));
+                .andExpect(jsonPath("$.revenueCatUserId").value(user.getRevenueCatUserId().toString()));
+
+        assertThat(userEntitlementRepository.findAllByUserId(user.getId()))
+                .extracting(UserEntitlement::getEntitlement)
+                .containsExactly("premium");
     }
 
     @Test
@@ -142,21 +145,23 @@ class PurchaseIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("구매 상태 조회: 만료된 권한은 응답에서 빠지고 식별자는 그대로 내려온다")
-    void purchases_excludes_expired_entitlement() throws Exception {
-        // given: 만료가 지난 권한만 저장된 유저
+    @DisplayName("구매 상태 조회: RevenueCat 이 권한을 돌려주지 않으면 저장된 권한이 삭제된다")
+    void purchases_syncs_and_removes_revoked_entitlement() throws Exception {
+        // given: 권한이 저장돼 있고 RevenueCat 은 더 이상 그 권한을 주지 않음
         User user = saveUserForTest();
         userEntitlementRepository.save(UserEntitlement.create(
-                user.getId(), "premium", Instant.now().minus(Duration.ofDays(1)), Instant.now()));
+                user.getId(), "premium", Instant.now().plus(Duration.ofDays(30)), Instant.now().minus(Duration.ofDays(1))));
+        given(revenueCatClient.entitlements(anyString())).willReturn(List.of());
 
         // when: 해당 유저의 실제 액세스 토큰으로 구매 상태 조회
         var result = mockMvc.perform(get("/api/v1/me/purchases")
                 .header("Authorization", bearer(user.getId())));
 
-        // then: 권한 목록은 비어 있고 식별자는 정상 반환
+        // then: 식별자는 정상 반환되고, 조회 과정의 동기화로 권한이 정리됨
         result.andExpect(status().isOk())
-                .andExpect(jsonPath("$.revenueCatUserId").value(user.getRevenueCatUserId().toString()))
-                .andExpect(jsonPath("$.entitlements").isEmpty());
+                .andExpect(jsonPath("$.revenueCatUserId").value(user.getRevenueCatUserId().toString()));
+
+        assertThat(userEntitlementRepository.findAllByUserId(user.getId())).isEmpty();
     }
 
     @Test

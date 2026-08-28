@@ -69,8 +69,6 @@ import com.nidus.twinly.relationship.repository.RelationshipRepository;
 import com.nidus.twinly.report.domain.ReportStatus;
 import com.nidus.twinly.report.entity.Report;
 import com.nidus.twinly.report.repository.ReportRepository;
-import com.nidus.twinly.purchase.entity.UserEntitlement;
-import com.nidus.twinly.purchase.repository.UserEntitlementRepository;
 import com.nidus.twinly.purchase.service.PurchaseService;
 import com.nidus.twinly.user.domain.DisclosureField;
 import com.nidus.twinly.user.entity.DisclosureAgreement;
@@ -137,7 +135,6 @@ public class MeService {
     private final PersonaElementRepository personaElementRepository;
     private final EncounterRepository encounterRepository;
     private final RelationshipRepository relationshipRepository;
-    private final UserEntitlementRepository userEntitlementRepository;
     private final PurchaseService purchaseService;
 
     private final PolicyCatalog policyCatalog;
@@ -544,15 +541,6 @@ public class MeService {
 
         purchaseService.syncIfStale(user);
 
-        return new MePurchasesResult(user.getRevenueCatUserId(), activeEntitlements(userId));
-    }
-
-    private List<String> activeEntitlements(Long userId) {
-        Instant now = Instant.now();
-
-        return userEntitlementRepository.findAllByUserId(userId).stream()
-                .filter(userEntitlement -> userEntitlement.isActiveAt(now))
-                .map(UserEntitlement::getEntitlement)
-                .toList();
+        return new MePurchasesResult(user.getRevenueCatUserId());
     }
 }
