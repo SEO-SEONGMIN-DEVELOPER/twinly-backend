@@ -17,6 +17,8 @@ import com.nidus.twinly.common.presign.PresignService;
 import com.nidus.twinly.common.presign.RequiredHeaders;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
+import com.nidus.twinly.purchase.entity.UserEntitlement;
+import com.nidus.twinly.purchase.repository.UserEntitlementRepository;
 import com.nidus.twinly.legal.entity.Agreement;
 import com.nidus.twinly.legal.entity.PolicyName;
 import com.nidus.twinly.legal.repository.PolicyRepository.PolicySummary;
@@ -48,6 +50,7 @@ import com.nidus.twinly.me.dto.result.MeProfileResult;
 import com.nidus.twinly.me.dto.result.MeProfilePhotoCommitResult;
 import com.nidus.twinly.me.dto.result.MeProfilePhotoPresignResult;
 import com.nidus.twinly.me.dto.result.MeProfileVisibilitySettingsResult;
+import com.nidus.twinly.me.dto.result.MePurchasesResult;
 import com.nidus.twinly.me.dto.result.MePushNotificationsResult;
 import com.nidus.twinly.me.dto.result.MeStatusResult;
 import com.nidus.twinly.me.dto.result.MeWithdrawResult;
@@ -161,6 +164,9 @@ class MeServiceUnitTest {
 
     @Mock
     RelationshipRepository relationshipRepository;
+
+    @Mock
+    UserEntitlementRepository userEntitlementRepository;
 
     @InjectMocks
     MeService meService;
@@ -1118,6 +1124,72 @@ class MeServiceUnitTest {
 
     private Relationship relationship(Long partnerUserId, int intimacy) {
         return Relationship.create(ME, LocalDate.of(2026, 7, 26), "v1", partnerUserId, intimacy, "model", null);
+    }
+
+    // ---------------------------------------------------------------- 구매 상태
+
+    @Test
+    @DisplayName("구매 상태 조회는 RevenueCat 식별자와 유효한 권한 목록을 함께 반환한다")
+    void purchases_returns_identifier_and_active_entitlements() {
+        // given: 유저가 존재하고 만료가 남은 premium 권한을 보유
+        User user = user();
+        Instant future = Instant.now().plus(Duration.ofDays(30));
+        given(userRepository.findById(ME)).willReturn(Optional.of(user));
+        given(userEntitlementRepository.findAllByUserId(ME))
+                .willReturn(List.of(UserEntitlement.create(ME, "premium", future, Instant.now())));
+
+        // when: 구매 상태 조회
+        MePurchasesResult result = meService.purchases(ME);
+
+        // then: 유저의 RevenueCat 식별자와 권한명이 반환됨
+        assertThat(result.revenueCatUserId()).isEqualTo(user.getRevenueCatUserId());
+        assertThat(result.entitlements()).containsExactly("premium");
+    }
+
+    @Test
+    @DisplayName("만료된 권한은 목록에서 제외하고 만료 없는 권한은 포함한다")
+    void purchases_excludes_expired_entitlements() {
+        // given: 만료된 premium, 만료 없는 noAds 를 함께 보유
+        Instant past = Instant.now().minus(Duration.ofDays(1));
+        given(userRepository.findById(ME)).willReturn(Optional.of(user()));
+        given(userEntitlementRepository.findAllByUserId(ME)).willReturn(List.of(
+                UserEntitlement.create(ME, "premium", past, Instant.now()),
+                UserEntitlement.create(ME, "noAds", null, Instant.now())));
+
+        // when: 구매 상태 조회
+        MePurchasesResult result = meService.purchases(ME);
+
+        // then: 만료 없는 권한만 남음
+        assertThat(result.entitlements()).containsExactly("noAds");
+    }
+
+    @Test
+    @DisplayName("권한이 하나도 없으면 빈 목록을 반환한다")
+    void purchases_with_no_entitlements_returns_empty() {
+        // given: 저장된 권한이 없음
+        given(userRepository.findById(ME)).willReturn(Optional.of(user()));
+        given(userEntitlementRepository.findAllByUserId(ME)).willReturn(List.of());
+
+        // when: 구매 상태 조회
+        MePurchasesResult result = meService.purchases(ME);
+
+        // then: 예외 없이 빈 목록
+        assertThat(result.entitlements()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("유저가 없으면 USER_NOT_FOUND 예외가 발생하고 권한을 조회하지 않는다")
+    void purchases_with_unknown_user_throws() {
+        // given: 해당 유저가 존재하지 않음
+        given(userRepository.findById(ME)).willReturn(Optional.empty());
+
+        // when & then: USER_NOT_FOUND 예외 발생 + 권한 조회 안 함
+        assertThatThrownBy(() -> meService.purchases(ME))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.USER_NOT_FOUND);
+
+        then(userEntitlementRepository).should(never()).findAllByUserId(anyLong());
     }
 
     private User user() {
