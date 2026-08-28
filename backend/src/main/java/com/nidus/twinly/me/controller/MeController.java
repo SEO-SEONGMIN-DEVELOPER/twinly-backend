@@ -28,6 +28,7 @@ import com.nidus.twinly.me.dto.response.MeHesitationsResponse;
 import com.nidus.twinly.me.dto.response.MePushNotificationsResponse;
 import com.nidus.twinly.me.dto.response.MeProfileEditViewResponse;
 import com.nidus.twinly.me.dto.response.MeProfileResponse;
+import com.nidus.twinly.me.dto.response.MePurchasesResponse;
 import com.nidus.twinly.me.dto.response.MeProfilePhotoCommitResponse;
 import com.nidus.twinly.me.dto.response.MeProfilePhotoPresignResponse;
 import com.nidus.twinly.me.dto.response.MeProfileVisibilitySettingsResponse;
@@ -207,5 +208,11 @@ public class MeController {
     @GetMapping("/api/v1/me/profile")
     public MeProfileResponse profile(@AuthenticationPrincipal UserInfo userInfo) {
         return MeProfileResponse.from(meService.profile(userInfo.id()));
+    }
+
+    @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND")
+    @GetMapping("/api/v1/me/purchases")
+    public MePurchasesResponse purchases(@AuthenticationPrincipal UserInfo userInfo) {
+        return MePurchasesResponse.from(meService.purchases(userInfo.id()));
     }
 }

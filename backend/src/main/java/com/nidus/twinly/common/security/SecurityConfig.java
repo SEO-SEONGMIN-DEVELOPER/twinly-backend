@@ -1,6 +1,7 @@
 package com.nidus.twinly.common.security;
 
 import com.nidus.twinly.anon.service.AnonService;
+import com.nidus.twinly.subscription.RevenueCatProperties;
 import com.nidus.twinly.user.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -20,7 +21,7 @@ import java.util.Arrays;
 
 @Configuration
 @EnableWebSecurity
-@EnableConfigurationProperties(AdminProperties.class)
+@EnableConfigurationProperties({AdminProperties.class, RevenueCatProperties.class})
 @RequiredArgsConstructor
 public class SecurityConfig {
 
@@ -39,9 +40,14 @@ public class SecurityConfig {
             "/admin/**"
     };
 
+    private static final String[] WEBHOOK_PATHS = {
+            "/webhook/v1/**"
+    };
+
     private final UserService userService;
     private final AnonService anonService;
     private final AdminProperties adminProperties;
+    private final RevenueCatProperties revenueCatProperties;
     private final JsonMapper jsonMapper;
 
     @Bean
@@ -57,6 +63,7 @@ public class SecurityConfig {
                         .requestMatchers(PUBLIC_ONBOARDING_PATHS).permitAll()
                         .requestMatchers(ANON_SESSION_PATHS).hasRole("ANON")
                         .requestMatchers(ADMIN_PATHS).hasRole("ADMIN")
+                        .requestMatchers(WEBHOOK_PATHS).hasRole("WEBHOOK")
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers("/api/v1/anon/**").permitAll()
                         .requestMatchers("/api/v1/legal/**").permitAll()
@@ -71,6 +78,8 @@ public class SecurityConfig {
                 .addFilterBefore(new AnonAuthenticationFilter(anonService, anonSessionPaths),
                         UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(new AdminTokenAuthenticationFilter(adminProperties.apiToken(), pathMatcher(ADMIN_PATHS)),
+                        JwtAuthenticationFilter.class)
+                .addFilterBefore(new RevenueCatWebhookAuthenticationFilter(revenueCatProperties.webhookSecret(), pathMatcher(WEBHOOK_PATHS)),
                         JwtAuthenticationFilter.class)
                 .build();
     }

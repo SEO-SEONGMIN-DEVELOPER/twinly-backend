@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.UUID;
 
 @Entity
 @DynamicUpdate
@@ -90,6 +91,8 @@ public class User {
     @Column(columnDefinition = "TEXT")
     private String emailHash;
 
+    private UUID revenueCatUserId;
+
     private Instant withdrawalRequestedAt;
 
     private Instant withdrawalScheduledAt;
@@ -128,6 +131,7 @@ public class User {
         user.phoneNumberHash = phoneNumberHash;
         user.email = email;
         user.emailHash = emailHash;
+        user.revenueCatUserId = UUID.randomUUID();
         user.createdAt = Instant.now();
 
         return user;

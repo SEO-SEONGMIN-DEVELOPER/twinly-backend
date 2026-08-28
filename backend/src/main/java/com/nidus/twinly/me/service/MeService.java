@@ -51,6 +51,7 @@ import com.nidus.twinly.me.dto.result.MeProfileResult;
 import com.nidus.twinly.me.dto.result.MeProfilePhotoCommitResult;
 import com.nidus.twinly.me.dto.result.MeProfilePhotoPresignResult;
 import com.nidus.twinly.me.dto.result.MeProfileVisibilitySettingsResult;
+import com.nidus.twinly.me.dto.result.MePurchasesResult;
 import com.nidus.twinly.me.dto.result.MeStatusReportResult;
 import com.nidus.twinly.me.dto.result.MeStatusResult;
 import com.nidus.twinly.me.dto.result.MeStatusWithdrawalResult;
@@ -68,6 +69,8 @@ import com.nidus.twinly.relationship.repository.RelationshipRepository;
 import com.nidus.twinly.report.domain.ReportStatus;
 import com.nidus.twinly.report.entity.Report;
 import com.nidus.twinly.report.repository.ReportRepository;
+import com.nidus.twinly.subscription.entity.UserEntitlement;
+import com.nidus.twinly.subscription.repository.UserEntitlementRepository;
 import com.nidus.twinly.user.domain.DisclosureField;
 import com.nidus.twinly.user.entity.DisclosureAgreement;
 import com.nidus.twinly.user.entity.PersonaElement;
@@ -132,6 +135,7 @@ public class MeService {
     private final PersonaElementRepository personaElementRepository;
     private final EncounterRepository encounterRepository;
     private final RelationshipRepository relationshipRepository;
+    private final UserEntitlementRepository userEntitlementRepository;
 
     private final PolicyCatalog policyCatalog;
 
@@ -528,5 +532,18 @@ public class MeService {
         }
 
         return question.getAnsweredAt() != null && Objects.equals(question.getChoice(), command.answer());
+    }
+
+    public MePurchasesResult purchases(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        Instant now = Instant.now();
+        List<String> entitlements = userEntitlementRepository.findAllByUserId(userId).stream()
+                .filter(userEntitlement -> userEntitlement.isActiveAt(now))
+                .map(UserEntitlement::getEntitlement)
+                .toList();
+
+        return new MePurchasesResult(user.getRevenueCatUserId(), entitlements);
     }
 }

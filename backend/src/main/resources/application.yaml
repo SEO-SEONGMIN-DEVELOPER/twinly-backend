@@ -97,6 +97,9 @@ solapi:
 jwt:
   secret-key: ${JWT_SECRET_KEY}
 
+revenue-cat:
+  webhook-secret: ${REVENUECAT_WEBHOOK_SECRET}
+
 fcm:
   service-account-base64: ${FCM_SERVICE_ACCOUNT_BASE64}
 
