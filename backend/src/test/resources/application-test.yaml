@@ -22,6 +22,9 @@ crypto:
 jwt:
   secret-key: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
 
+revenue-cat:
+  webhook-secret: test-revenue-cat-webhook-secret
+
 aws:
   s3:
     access-key-id: test
