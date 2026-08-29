@@ -93,6 +93,7 @@ public enum ErrorCode {
 
     // 사진/업로드
     NOT_KEY_OWNER(HttpStatus.FORBIDDEN, "본인 소유의 key가 아닙니다."),
+    SIMULATION_ACCESS_REQUIRED(HttpStatus.FORBIDDEN, "시뮬레이션 이용 권한이 없습니다."),
     UPLOAD_NOT_COMPLETED(HttpStatus.UNPROCESSABLE_CONTENT, "업로드가 완료되지 않은 key입니다."),
     UNSUPPORTED_IMAGE_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "지원하지 않는 이미지 형식입니다."),
 

@@ -17,6 +17,7 @@ import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.notification.writer.AppNotificationFeedWriter;
 import com.nidus.twinly.people.repository.EncounterRepository;
+import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.relationship.domain.RelationshipType;
 import com.nidus.twinly.relationship.entity.Relationship;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
@@ -59,6 +60,7 @@ public class SimulationService {
     private final AppNotificationFeedWriter appNotificationFeedWriter;
     private final UserRepository userRepository;
     private final PersonaElementRepository personaElementRepository;
+    private final EntitlementReader entitlementReader;
     private final ObjectMapper objectMapper;
 
     public void simulations(Long userId, SimulationsCommand command) {
@@ -255,6 +257,10 @@ public class SimulationService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
         if (user.isWithdrawn()) {
             throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+        }
+
+        if (!entitlementReader.hasSimulationAccess(userId)) {
+            throw new BusinessException(ErrorCode.SIMULATION_ACCESS_REQUIRED);
         }
 
         Map<PersonaDimension, List<String>> personaElements = personaElementRepository.findAllByUserIdOrderByIdAsc(userId).stream()

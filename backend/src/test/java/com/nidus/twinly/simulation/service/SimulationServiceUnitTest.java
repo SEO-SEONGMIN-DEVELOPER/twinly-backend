@@ -18,6 +18,7 @@ import com.nidus.twinly.simulation.dto.command.SimulationsRelationshipCommand;
 import com.nidus.twinly.simulation.dto.result.SimulationPersonaResult;
 import com.nidus.twinly.user.entity.PersonaElement;
 import com.nidus.twinly.user.entity.User;
+import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.user.repository.PersonaElementRepository;
 import com.nidus.twinly.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,6 +39,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
@@ -79,6 +81,9 @@ class SimulationServiceUnitTest {
     @Mock
     PersonaElementRepository personaElementRepository;
 
+    @Mock
+    EntitlementReader entitlementReader;
+
     SimulationService simulationService;
 
     @BeforeEach
@@ -86,7 +91,7 @@ class SimulationServiceUnitTest {
         simulationService = new SimulationService(
                 sceneRepository, scenePartnerRepository, questionRepository, questionPartnerRepository,
                 relationshipRepository, encounterRepository, chatRoomOpener, appNotificationFeedWriter, userRepository,
-                personaElementRepository, new ObjectMapper());
+                personaElementRepository, entitlementReader, new ObjectMapper());
     }
 
     @Test
@@ -172,6 +177,7 @@ class SimulationServiceUnitTest {
     @Test
     @DisplayName("유저 기본 정보와 성향을 차원별로 묶어 반환하고 birthDate를 LocalDate로 변환한다")
     void persona_groups_elements_by_dimension() {
+        given(entitlementReader.hasSimulationAccess(USER_ID)).willReturn(true);
         // given: 성향 4건(관심사 2건 포함)을 가진 유저
         given(userRepository.findById(USER_ID)).willReturn(Optional.of(user(USER_ID, "서", "성민", "컴퓨터공학과", "1999-03-21")));
         given(personaElementRepository.findAllByUserIdOrderByIdAsc(USER_ID)).willReturn(List.of(
@@ -201,6 +207,8 @@ class SimulationServiceUnitTest {
     @Test
     @DisplayName("성향이 하나도 없으면 personaElements는 빈 Map이다")
     void persona_without_elements_returns_empty_map() {
+        // given: 시뮬레이션 권한이 있고 성향이 한 건도 없는 유저
+        given(entitlementReader.hasSimulationAccess(USER_ID)).willReturn(true);
         // given: 성향이 한 건도 없는 유저
         given(userRepository.findById(USER_ID)).willReturn(Optional.of(user(USER_ID, "서", "성민", "컴퓨터공학과", "1999-03-21")));
         given(personaElementRepository.findAllByUserIdOrderByIdAsc(USER_ID)).willReturn(List.of());
@@ -225,6 +233,22 @@ class SimulationServiceUnitTest {
                 .isEqualTo(ErrorCode.USER_NOT_FOUND);
 
         then(personaElementRepository).should(never()).findAllByUserIdOrderByIdAsc(any());
+    }
+
+    @Test
+    @DisplayName("페르소나 조회 시 시뮬레이션 권한이 없으면 SIMULATION_ACCESS_REQUIRED 예외가 발생한다")
+    void persona_without_entitlement_throws() {
+        // given: 정상 유저이지만 구독 권한이 없음
+        given(userRepository.findById(USER_ID)).willReturn(Optional.of(user(USER_ID, "서", "성민", "컴퓨터공학과", "1999-03-21")));
+        given(entitlementReader.hasSimulationAccess(USER_ID)).willReturn(false);
+
+        // when & then: 파기(404)와 구분되는 403 코드로 실패하고 페르소나를 읽지 않는다
+        assertThatThrownBy(() -> simulationService.persona(USER_ID))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.SIMULATION_ACCESS_REQUIRED);
+
+        then(personaElementRepository).should(never()).findAllByUserIdOrderByIdAsc(anyLong());
     }
 
     @Test

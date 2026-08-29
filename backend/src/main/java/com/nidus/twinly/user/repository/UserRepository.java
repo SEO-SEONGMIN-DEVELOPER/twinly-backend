@@ -41,9 +41,18 @@ public interface UserRepository extends JpaRepository<User, Long> {
             FROM users u
             WHERE u.deleted_at IS NULL
               AND (:cursor IS NULL OR u.id > :cursor)
+              AND EXISTS (
+                  SELECT 1
+                  FROM user_entitlements e
+                  WHERE e.user_id = u.id
+                    AND e.entitlement = :entitlement
+                    AND (e.expires_at IS NULL OR e.expires_at > :now)
+              )
             ORDER BY u.id ASC
             LIMIT :limit
             """, nativeQuery = true)
     List<Long> findIdsAfterCursor(@Param("cursor") Long cursor,
+                                  @Param("entitlement") String entitlement,
+                                  @Param("now") Instant now,
                                   @Param("limit") int limit);
 }
