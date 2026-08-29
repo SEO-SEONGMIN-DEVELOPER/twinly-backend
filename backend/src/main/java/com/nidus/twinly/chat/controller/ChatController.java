@@ -1,5 +1,6 @@
 package com.nidus.twinly.chat.controller;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import com.nidus.twinly.chat.dto.command.ChatReadMessagesCommand;
 import com.nidus.twinly.chat.dto.command.ChatSendMessageCommand;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+@Tag(name = "채팅")
 @RestController
 @RequiredArgsConstructor
 public class ChatController {

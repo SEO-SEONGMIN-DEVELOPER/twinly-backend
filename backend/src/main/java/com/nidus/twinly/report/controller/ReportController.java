@@ -1,5 +1,6 @@
 package com.nidus.twinly.report.controller;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import com.nidus.twinly.report.dto.command.ReportAiUtteranceCommand;
 import com.nidus.twinly.report.dto.command.ReportUserCommand;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+@Tag(name = "신고")
 @RestController
 @RequiredArgsConstructor
 public class ReportController {

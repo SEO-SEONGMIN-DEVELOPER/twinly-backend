@@ -10,6 +10,7 @@ import com.nidus.twinly.people.dto.response.PeopleResponse;
 import com.nidus.twinly.people.service.PeopleService;
 import com.nidus.twinly.user.dto.header.UserInfo;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Max;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
 
+@Tag(name = "트윈")
 @RestController
 @RequiredArgsConstructor
 public class PeopleController {

@@ -1,5 +1,6 @@
 package com.nidus.twinly.connection.controller;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import com.nidus.twinly.connection.dto.command.ConnectionTokenCommand;
 import com.nidus.twinly.connection.dto.request.ConnectionTokenRequest;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+@Tag(name = "커넥션")
 @RestController
 @RequiredArgsConstructor
 public class ConnectionController {

@@ -4,12 +4,14 @@ import com.nidus.twinly.season.dto.response.SeasonParticipationResponse;
 import com.nidus.twinly.season.service.SeasonService;
 import com.nidus.twinly.user.dto.header.UserInfo;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+@Tag(name = "시즌")
 @RestController
 @RequiredArgsConstructor
 public class SeasonController {
