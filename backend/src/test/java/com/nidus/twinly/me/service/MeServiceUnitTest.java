@@ -17,7 +17,6 @@ import com.nidus.twinly.common.presign.PresignService;
 import com.nidus.twinly.common.presign.RequiredHeaders;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
-import com.nidus.twinly.purchase.service.PurchaseService;
 import com.nidus.twinly.legal.entity.Agreement;
 import com.nidus.twinly.legal.entity.PolicyName;
 import com.nidus.twinly.legal.repository.PolicyRepository.PolicySummary;
@@ -163,9 +162,6 @@ class MeServiceUnitTest {
 
     @Mock
     RelationshipRepository relationshipRepository;
-
-    @Mock
-    PurchaseService purchaseService;
 
     @InjectMocks
     MeService meService;
@@ -1128,8 +1124,8 @@ class MeServiceUnitTest {
     // ---------------------------------------------------------------- 구매 상태
 
     @Test
-    @DisplayName("구매 상태 조회는 오래된 동기화를 갱신한 뒤 RevenueCat 식별자를 반환한다")
-    void purchases_syncs_then_returns_identifier() {
+    @DisplayName("구매 상태 조회는 유저의 RevenueCat 식별자를 반환한다")
+    void purchases_returns_identifier() {
         // given: 유저가 존재
         User user = user();
         given(userRepository.findById(ME)).willReturn(Optional.of(user));
@@ -1137,8 +1133,7 @@ class MeServiceUnitTest {
         // when: 구매 상태 조회
         MePurchasesResult result = meService.purchases(ME);
 
-        // then: 조건부 동기화를 위임하고 식별자를 반환 (웹훅 유실이 조회 시점에 복구된다)
-        then(purchaseService).should().syncIfStale(user);
+        // then: SDK 로그인에 쓸 식별자를 반환
         assertThat(result.revenueCatUserId()).isEqualTo(user.getRevenueCatUserId());
     }
 
@@ -1154,7 +1149,6 @@ class MeServiceUnitTest {
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.USER_NOT_FOUND);
 
-        then(purchaseService).should(never()).syncIfStale(any());
     }
 
     private User user() {
