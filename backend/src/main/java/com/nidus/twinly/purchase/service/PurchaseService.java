@@ -11,6 +11,7 @@ import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -41,6 +42,7 @@ public class PurchaseService {
         command.appUserIds().forEach(this::sync);
     }
 
+    @Async("purchaseSyncTaskExecutor")
     public void syncIfStale(User user) {
         Instant now = Instant.now();
 

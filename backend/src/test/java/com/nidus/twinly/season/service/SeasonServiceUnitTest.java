@@ -10,7 +10,11 @@ import com.nidus.twinly.season.entity.SeasonParticipation;
 import com.nidus.twinly.season.event.SeasonChangedEvent;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.season.repository.SeasonParticipationRepository;
+import com.nidus.twinly.purchase.service.PurchaseService;
 import com.nidus.twinly.season.repository.SeasonRepository;
+import com.nidus.twinly.common.domain.Gender;
+import com.nidus.twinly.user.entity.User;
+import com.nidus.twinly.user.repository.UserRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -51,6 +55,12 @@ class SeasonServiceUnitTest {
 
     @Mock
     ApplicationEventPublisher eventPublisher;
+
+    @Mock
+    PurchaseService purchaseService;
+
+    @Mock
+    UserRepository userRepository;
 
     @InjectMocks
     SeasonService seasonService;
@@ -115,6 +125,21 @@ class SeasonServiceUnitTest {
         then(seasonParticipationRepository).should().upsert(USER_ID, CURRENT_SEASON_ID);
         then(seasonParticipationRepository).should(never()).existsByUserIdAndSeasonId(any(), any());
         then(seasonParticipationRepository).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("참가 조회 시 구매 상태 동기화를 위임한다")
+    void participation_delegates_purchase_sync() {
+        // given: 현재 시즌이 있고 유저도 존재
+        given(currentSeasonReader.read()).willReturn(joinableSeason());
+        User user = user();
+        given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+
+        // when: 참가 정보 조회 (앱 시작 시 가장 먼저 호출되는 API)
+        seasonService.participation(USER_ID);
+
+        // then: 조건부 동기화를 위임 (웹훅 유실이 앱 시작 시점에 복구된다)
+        then(purchaseService).should().syncIfStale(user);
     }
 
     @Test
@@ -228,5 +253,14 @@ class SeasonServiceUnitTest {
         ReflectionTestUtils.setField(season, "startedAt", startedAt);
         ReflectionTestUtils.setField(season, "endedAt", endedAt);
         return season;
+    }
+
+    private User user() {
+        User user = User.create(
+                "nick", "홍", "familyHash", "길동", "givenHash",
+                Gender.MALE, "organization", "organizationHash", "니두스", "affHash", "2020123", "affNoHash",
+                "2000-01-01", "birthHash", "01000000000", "phoneHash", "me@test.com", "emailHash");
+        ReflectionTestUtils.setField(user, "id", USER_ID);
+        return user;
     }
 }

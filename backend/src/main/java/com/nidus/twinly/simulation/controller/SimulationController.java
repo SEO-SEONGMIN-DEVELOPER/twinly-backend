@@ -6,6 +6,7 @@ import com.nidus.twinly.simulation.dto.request.SimulationsRequest;
 import com.nidus.twinly.simulation.dto.response.SimulationPersonaResponse;
 import com.nidus.twinly.simulation.service.SimulationService;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,7 +27,10 @@ public class SimulationController {
         simulationService.simulations(userId, SimulationsCommand.from(request));
     }
 
-    @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND")
+    @ApiResponses({
+            @ApiResponse(responseCode = "403", description = "SIMULATION_ACCESS_REQUIRED"),
+            @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND")
+    })
     @GetMapping("/internal/v1/users/{userId}/persona")
     public SimulationPersonaResponse persona(@PathVariable("userId") String userId) {
         return SimulationPersonaResponse.from(simulationService.persona(RequestId.toLong(userId, "userId")));

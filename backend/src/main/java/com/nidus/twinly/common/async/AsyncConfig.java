@@ -39,6 +39,20 @@ public class AsyncConfig implements AsyncConfigurer {
     }
 
     @Bean(defaultCandidate = false)
+    public TaskExecutor purchaseSyncTaskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(4);
+        executor.setQueueCapacity(1000);
+        executor.setThreadNamePrefix("purchase-sync-");
+        executor.setRejectedExecutionHandler((rejected, threadPoolExecutor) ->
+                log.warn("구매 상태 동기화 큐가 가득 차 동기화를 건너뜁니다. queued={}", threadPoolExecutor.getQueue().size()));
+
+        return executor;
+    }
+
+    @Bean(defaultCandidate = false)
     public TaskExecutor twinViewTaskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
 

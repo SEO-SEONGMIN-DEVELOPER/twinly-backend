@@ -9,10 +9,12 @@ import com.nidus.twinly.user.dto.result.UsersResult;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.UserRepository;
 import io.jsonwebtoken.JwtException;
+import com.nidus.twinly.purchase.reader.EntitlementReader;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.List;
 
 @Service
@@ -46,7 +48,7 @@ public class UserService {
     public UsersResult users(Long cursor, Integer limit) {
         int effectiveLimit = (limit != null && limit > 0) ? limit : DEFAULT_LIMIT;
 
-        List<Long> fetched = userRepository.findIdsAfterCursor(cursor, effectiveLimit + 1);
+        List<Long> fetched = userRepository.findIdsAfterCursor(cursor, EntitlementReader.SIMULATION_ACCESS, Instant.now(), effectiveLimit + 1);
 
         boolean hasMore = fetched.size() > effectiveLimit;
         List<Long> userIds = hasMore ? fetched.subList(0, effectiveLimit) : fetched;
