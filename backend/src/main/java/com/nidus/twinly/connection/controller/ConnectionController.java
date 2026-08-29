@@ -1,5 +1,6 @@
 package com.nidus.twinly.connection.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import com.nidus.twinly.connection.dto.command.ConnectionTokenCommand;
@@ -22,6 +23,7 @@ public class ConnectionController {
 
     private final ConnectionService connectionService;
 
+    @Operation(summary = "WebSocket 접속 토큰 발급")
     @ResponseStatus(HttpStatus.CREATED)
     @PostMapping("/api/v1/connection-tokens")
     public ConnectionTokenResponse token(@AuthenticationPrincipal UserInfo userInfo,

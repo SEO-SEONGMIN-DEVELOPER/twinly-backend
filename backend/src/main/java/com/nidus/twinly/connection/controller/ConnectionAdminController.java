@@ -3,6 +3,7 @@ package com.nidus.twinly.connection.controller;
 import com.nidus.twinly.connection.dto.command.ConnectionDrainingCommand;
 import com.nidus.twinly.connection.dto.request.ConnectionDrainingRequest;
 import com.nidus.twinly.connection.service.ConnectionService;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -18,6 +19,7 @@ public class ConnectionAdminController {
 
     private final ConnectionService connectionService;
 
+    @Operation(summary = "배포 전 커넥션 종료 예고")
     @ApiResponse(responseCode = "401", description = "UNAUTHORIZED")
     @ApiResponse(responseCode = "403", description = "FORBIDDEN")
     @PostMapping("/admin/connection/draining")

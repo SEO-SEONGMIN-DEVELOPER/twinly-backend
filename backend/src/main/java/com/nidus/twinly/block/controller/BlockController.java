@@ -4,6 +4,7 @@ import com.nidus.twinly.block.dto.response.BlockListResponse;
 import com.nidus.twinly.block.service.BlockService;
 import com.nidus.twinly.common.web.RequestId;
 import com.nidus.twinly.user.dto.header.UserInfo;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -22,6 +23,7 @@ public class BlockController {
 
     private final BlockService blockService;
 
+    @Operation(summary = "유저 차단")
     @ApiResponses({
             @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND"),
             @ApiResponse(responseCode = "422", description = "CANNOT_BLOCK_SELF")
@@ -32,12 +34,14 @@ public class BlockController {
         blockService.block(userInfo.id(), RequestId.toLong(userId, "userId"));
     }
 
+    @Operation(summary = "유저 차단 해제")
     @DeleteMapping("/api/v1/blocks/{userId}")
     public void unblock(@AuthenticationPrincipal UserInfo userInfo,
                         @PathVariable String userId) {
         blockService.unblock(userInfo.id(), RequestId.toLong(userId, "userId"));
     }
 
+    @Operation(summary = "차단 목록 조회")
     @GetMapping("/api/v1/blocks")
     public BlockListResponse blockList(@AuthenticationPrincipal UserInfo userInfo) {
         return BlockListResponse.from(blockService.blockList(userInfo.id()));

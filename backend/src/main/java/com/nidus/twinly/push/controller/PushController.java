@@ -1,5 +1,6 @@
 package com.nidus.twinly.push.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import com.nidus.twinly.push.dto.command.PushTokenRegisterCommand;
@@ -23,12 +24,14 @@ public class PushController {
 
     private final PushService pushService;
 
+    @Operation(summary = "푸시 토큰 등록")
     @PostMapping("/api/v1/push/tokens")
     public void register(@AuthenticationPrincipal UserInfo userInfo,
                       @Valid @RequestBody PushTokenRegisterRequest request) {
         pushService.register(userInfo.id(), PushTokenRegisterCommand.from(request));
     }
 
+    @Operation(summary = "푸시 토큰 해제")
     @DeleteMapping("/api/v1/push/tokens/{deviceId}")
     public void revoke(@AuthenticationPrincipal UserInfo userInfo,
                        @PathVariable UUID deviceId) {

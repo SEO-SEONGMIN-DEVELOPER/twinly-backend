@@ -3,6 +3,7 @@ package com.nidus.twinly.showcase.controller;
 import com.nidus.twinly.showcase.dto.response.ShowcaseTodayResponse;
 import com.nidus.twinly.showcase.service.ShowcaseService;
 import com.nidus.twinly.user.dto.header.UserInfo;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,7 @@ public class ShowcaseController {
 
     private final ShowcaseService showcaseService;
 
+    @Operation(summary = "오늘의 쇼케이스 조회")
     @ApiResponse(responseCode = "404", description = "SHOWCASE_TARGET_NOT_FOUND, USER_NOT_FOUND")
     @GetMapping("/api/v1/showcases/today")
     public ShowcaseTodayResponse today(@AuthenticationPrincipal UserInfo userInfo) {

@@ -4,6 +4,7 @@ import com.nidus.twinly.season.dto.command.SeasonChangeCommand;
 import com.nidus.twinly.season.dto.request.SeasonChangeRequest;
 import com.nidus.twinly.season.dto.response.SeasonChangeResponse;
 import com.nidus.twinly.season.service.SeasonService;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -19,6 +20,7 @@ public class SeasonAdminController {
 
     private final SeasonService seasonService;
 
+    @Operation(summary = "시즌 전환")
     @ApiResponse(responseCode = "401", description = "UNAUTHORIZED")
     @ApiResponse(responseCode = "403", description = "FORBIDDEN")
     @ApiResponse(responseCode = "422", description = "INVALID_SEASON_PERIOD")

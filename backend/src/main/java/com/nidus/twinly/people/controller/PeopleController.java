@@ -9,6 +9,7 @@ import com.nidus.twinly.people.dto.response.PeopleProfileResponse;
 import com.nidus.twinly.people.dto.response.PeopleResponse;
 import com.nidus.twinly.people.service.PeopleService;
 import com.nidus.twinly.user.dto.header.UserInfo;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Min;
@@ -31,6 +32,7 @@ public class PeopleController {
 
     private final PeopleService peopleService;
 
+    @Operation(summary = "트윈 목록 조회")
     @GetMapping("/api/v1/people")
     public PeopleResponse people(@AuthenticationPrincipal UserInfo userInfo,
                                     @RequestParam(required = false) String cursor,
@@ -38,6 +40,7 @@ public class PeopleController {
         return PeopleResponse.from(peopleService.people(userInfo.id(), RequestId.toLongOrNull(cursor, "cursor"), limit));
     }
 
+    @Operation(summary = "트윈 프로필 조회")
     @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND")
     @GetMapping("/api/v1/people/{userId}/profile")
     public PeopleProfileResponse profile(@AuthenticationPrincipal UserInfo userInfo,
@@ -45,6 +48,7 @@ public class PeopleController {
         return PeopleProfileResponse.from(peopleService.profile(userInfo.id(), RequestId.toLong(partnerUserId, "userId")));
     }
 
+    @Operation(summary = "트윈 즐겨찾기 등록")
     @ApiResponse(responseCode = "404", description = "ENCOUNTER_NOT_FOUND")
     @PutMapping("/api/v1/people/{userId}/favorite")
     public void favorite(@AuthenticationPrincipal UserInfo userInfo,
@@ -52,6 +56,7 @@ public class PeopleController {
         peopleService.favorite(userInfo.id(), RequestId.toLong(partnerUserId, "userId"));
     }
 
+    @Operation(summary = "트윈 즐겨찾기 해제")
     @ApiResponse(responseCode = "404", description = "ENCOUNTER_NOT_FOUND")
     @DeleteMapping("/api/v1/people/{userId}/favorite")
     public void deleteFavorite(@AuthenticationPrincipal UserInfo userInfo,
@@ -59,6 +64,7 @@ public class PeopleController {
         peopleService.deleteFavorite(userInfo.id(), RequestId.toLong(partnerUserId, "userId"));
     }
 
+    @Operation(summary = "트윈 친밀도 추이 조회")
     @ApiResponse(responseCode = "404", description = "RELATIONSHIP_NOT_FOUND")
     @GetMapping("/api/v1/people/{userId}/intimacy-series")
     public PeopleIntimacySeriesResponse intimacySeries(@AuthenticationPrincipal UserInfo userInfo,
@@ -66,6 +72,7 @@ public class PeopleController {
         return PeopleIntimacySeriesResponse.from(peopleService.intimacySeries(userInfo.id(), RequestId.toLong(partnerUserId, "userId")));
     }
 
+    @Operation(summary = "트윈 이벤트 목록 조회")
     @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND")
     @GetMapping("/api/v1/people/{userId}/events")
     public PeopleEventsResponse events(@AuthenticationPrincipal UserInfo userInfo,
@@ -75,6 +82,7 @@ public class PeopleController {
         return PeopleEventsResponse.from(peopleService.events(userInfo.id(), RequestId.toLong(partnerUserId, "userId"), cursor, limit));
     }
 
+    @Operation(summary = "날짜별 트윈 이벤트 조회")
     @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND")
     @GetMapping("/api/v1/people/{userId}/events/{date}")
     public PeopleEventResponse event(@AuthenticationPrincipal UserInfo userInfo,
@@ -83,6 +91,7 @@ public class PeopleController {
         return PeopleEventResponse.from(peopleService.event(userInfo.id(), RequestId.toLong(partnerUserId, "userId"), date));
     }
 
+    @Operation(summary = "트윈이 알게 된 정보 조회")
     @ApiResponse(responseCode = "404", description = "RELATIONSHIP_NOT_FOUND")
     @GetMapping("/api/v1/people/{userId}/learned-facts")
     public PeopleLearnedFactsResponse learnedFacts(@AuthenticationPrincipal UserInfo userInfo,

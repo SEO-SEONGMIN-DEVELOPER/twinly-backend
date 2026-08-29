@@ -5,6 +5,7 @@ import com.nidus.twinly.simulation.dto.command.SimulationsCommand;
 import com.nidus.twinly.simulation.dto.request.SimulationsRequest;
 import com.nidus.twinly.simulation.dto.response.SimulationPersonaResponse;
 import com.nidus.twinly.simulation.service.SimulationService;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -23,12 +24,14 @@ public class SimulationController {
 
     private final SimulationService simulationService;
 
+    @Operation(summary = "유저 시뮬레이션 결과 저장")
     @PostMapping("/internal/v1/users/{userId}/simulations")
     public void simulations(@PathVariable Long userId,
                             @Valid @RequestBody SimulationsRequest request) {
         simulationService.simulations(userId, SimulationsCommand.from(request));
     }
 
+    @Operation(summary = "유저 페르소나 조회")
     @ApiResponses({
             @ApiResponse(responseCode = "403", description = "SIMULATION_ACCESS_REQUIRED"),
             @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND")
