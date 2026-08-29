@@ -38,6 +38,7 @@ import com.nidus.twinly.user.domain.DisclosureField;
 import com.nidus.twinly.user.entity.DisclosureAgreement;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.DisclosureAgreementRepository;
+import com.nidus.twinly.user.repository.PersonaElementRepository;
 import com.nidus.twinly.user.repository.PhotoRepository;
 import com.nidus.twinly.user.repository.UserRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -101,6 +102,9 @@ class ChatServiceUnitTest {
 
     @Mock
     DisclosureAgreementRepository disclosureAgreementRepository;
+
+    @Mock
+    PersonaElementRepository personaElementRepository;
 
     @Mock
     BlockRepository blockRepository;

@@ -6,6 +6,8 @@ import com.nidus.twinly.common.photo.ProfilePhotoInfo;
 import io.swagger.v3.oas.annotations.media.Schema;
 import com.nidus.twinly.relationship.domain.RelationshipSpecificType;
 
+import java.util.List;
+
 public record ChatRoomDetailPartnerResponse(
         @JsonFormat(shape = JsonFormat.Shape.STRING)
         Long userId,
@@ -14,7 +16,8 @@ public record ChatRoomDetailPartnerResponse(
         ProfilePhotoInfo profilePhoto,
         Integer intimacy,
         RelationshipSpecificType relationshipSpecificType,
-        ChatRoomDetailDisclosedFieldsResponse disclosedFields
+        ChatRoomDetailDisclosedFieldsResponse disclosedFields,
+        List<String> interests
 ) {
 
     public static ChatRoomDetailPartnerResponse from(ChatRoomDetailPartnerResult result) {
@@ -24,7 +27,8 @@ public record ChatRoomDetailPartnerResponse(
                 result.profilePhoto(),
                 result.intimacy(),
                 result.relationshipSpecificType(),
-                ChatRoomDetailDisclosedFieldsResponse.from(result.disclosedFields())
+                ChatRoomDetailDisclosedFieldsResponse.from(result.disclosedFields()),
+                result.interests()
         );
     }
 }
