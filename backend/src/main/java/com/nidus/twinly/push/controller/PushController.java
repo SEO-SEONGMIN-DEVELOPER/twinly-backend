@@ -1,5 +1,6 @@
 package com.nidus.twinly.push.controller;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import com.nidus.twinly.push.dto.command.PushTokenRegisterCommand;
 import com.nidus.twinly.push.dto.request.PushTokenRegisterRequest;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
 
+@Tag(name = "푸시")
 @RestController
 @RequiredArgsConstructor
 public class PushController {

@@ -126,6 +126,36 @@ jobs:
             echo "${id} healthy 확인 — 다음 인스턴스로 진행"
           done
 
+      - name: Sync API Docs to Apidog
+        continue-on-error: true
+        env:
+          APIDOG_TOKEN: ${{ secrets.APIDOG_TOKEN }}
+          APIDOG_PROJECT_ID: ${{ vars.APIDOG_STAGE_PROJECT_ID }}
+          OPENAPI_URL: https://stage-api.trytwinly.com/docs/openapi
+        run: |
+          payload=$(jq -n --arg url "$OPENAPI_URL" '{
+            input: { url: $url },
+            options: {
+              endpointOverwriteBehavior: "OVERWRITE_EXISTING",
+              schemaOverwriteBehavior: "OVERWRITE_EXISTING",
+              updateFolderOfChangedEndpoint: true,
+              deleteUnmatchedResources: true
+            }
+          }')
+
+          response=$(curl -sS -X POST "https://api.apidog.com/v1/projects/${APIDOG_PROJECT_ID}/import-openapi" \
+            -H "Authorization: Bearer ${APIDOG_TOKEN}" \
+            -H "X-Apidog-Api-Version: 2024-03-28" \
+            -H "Content-Type: application/json" \
+            -d "$payload")
+
+          if ! jq -e '.data.counters' >/dev/null 2>&1 <<< "$response"; then
+            echo "::warning::Apidog 문서 동기화에 실패했습니다 — $(jq -rc '.errorMessage // .' <<< "$response")"
+            exit 1
+          fi
+
+          jq -r '.data.counters | "동기화 완료 — endpoint 생성 \(.endpointCreated) / 수정 \(.endpointUpdated) / 실패 \(.endpointFailed), schema 생성 \(.schemaCreated) / 수정 \(.schemaUpdated)"' <<< "$response"
+
       - name: Deploy Monitoring Stack
         run: |
           MONITORING_B64=$(tar czf - monitoring docker-compose.stage.monitoring.yaml | base64 -w0)
@@ -174,6 +204,7 @@ jobs:
     permissions:
       id-token: write
       contents: read
+      actions: read
 
     concurrency:
       group: deploy-prod
@@ -281,6 +312,46 @@ jobs:
 
             echo "${id} healthy 확인 — 다음 인스턴스로 진행"
           done
+
+      - name: Sync API Docs to Apidog
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APIDOG_TOKEN: ${{ secrets.APIDOG_TOKEN }}
+          APIDOG_PROJECT_ID: ${{ vars.APIDOG_PROD_PROJECT_ID }}
+        run: |
+          run_id=$(gh run list --workflow ci.yml --commit "$IMAGE_TAG" --event push --status success \
+            --json databaseId --jq '.[0].databaseId')
+
+          if [ -z "$run_id" ]; then
+            echo "::warning::커밋 ${IMAGE_TAG} 의 성공한 CI 실행을 찾지 못해 문서 동기화를 건너뜁니다."
+            exit 1
+          fi
+
+          gh run download "$run_id" --name openapi-spec --dir /tmp/openapi
+
+          payload=$(jq -n --slurpfile spec /tmp/openapi/openapi.json '{
+            input: ($spec[0] | tojson),
+            options: {
+              endpointOverwriteBehavior: "OVERWRITE_EXISTING",
+              schemaOverwriteBehavior: "OVERWRITE_EXISTING",
+              updateFolderOfChangedEndpoint: true,
+              deleteUnmatchedResources: true
+            }
+          }')
+
+          response=$(curl -sS -X POST "https://api.apidog.com/v1/projects/${APIDOG_PROJECT_ID}/import-openapi" \
+            -H "Authorization: Bearer ${APIDOG_TOKEN}" \
+            -H "X-Apidog-Api-Version: 2024-03-28" \
+            -H "Content-Type: application/json" \
+            -d "$payload")
+
+          if ! jq -e '.data.counters' >/dev/null 2>&1 <<< "$response"; then
+            echo "::warning::Apidog 문서 동기화에 실패했습니다 — $(jq -rc '.errorMessage // .' <<< "$response")"
+            exit 1
+          fi
+
+          jq -r '.data.counters | "동기화 완료 — endpoint 생성 \(.endpointCreated) / 수정 \(.endpointUpdated) / 실패 \(.endpointFailed), schema 생성 \(.schemaCreated) / 수정 \(.schemaUpdated)"' <<< "$response"
 
       - name: Deploy Monitoring Stack
         run: |

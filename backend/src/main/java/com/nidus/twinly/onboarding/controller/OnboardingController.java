@@ -15,6 +15,7 @@ import com.nidus.twinly.onboarding.dto.response.OnboardingSurveyQuestionResponse
 import com.nidus.twinly.onboarding.service.OnboardingService;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+@Tag(name = "온보딩")
 @RestController
 @RequiredArgsConstructor
 public class OnboardingController {

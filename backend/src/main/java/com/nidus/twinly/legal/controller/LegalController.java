@@ -3,11 +3,13 @@ package com.nidus.twinly.legal.controller;
 import com.nidus.twinly.legal.dto.response.LegalPoliciesResponse;
 import com.nidus.twinly.legal.domain.PolicyKind;
 import com.nidus.twinly.legal.service.LegalService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+@Tag(name = "약관")
 @RestController
 @RequiredArgsConstructor
 public class LegalController {
