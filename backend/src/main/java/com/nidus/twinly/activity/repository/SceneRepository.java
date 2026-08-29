@@ -10,6 +10,8 @@ import java.util.List;
 
 public interface SceneRepository extends JpaRepository<Scene, Long> {
 
+    boolean existsByUserIdAndDate(Long userId, LocalDate date);
+
     List<Scene> findAllByUserIdAndDate(Long userId, LocalDate date);
 
     List<Scene> findAllByUserIdAndDateOrderByStartsAtAsc(Long userId, LocalDate date);
