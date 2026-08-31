@@ -1,5 +1,6 @@
 package com.nidus.twinly.common.time;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -18,5 +19,9 @@ public final class KstTimes {
 
     public static LocalDate today() {
         return LocalDate.now(ZONE);
+    }
+
+    public static Instant toInstant(LocalDateTime kstLocalDateTime) {
+        return kstLocalDateTime.atZone(ZONE).toInstant();
     }
 }

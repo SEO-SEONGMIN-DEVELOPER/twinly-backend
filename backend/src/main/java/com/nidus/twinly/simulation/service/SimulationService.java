@@ -9,6 +9,8 @@ import com.nidus.twinly.activity.repository.QuestionRepository;
 import com.nidus.twinly.activity.repository.ScenePartnerRepository;
 import com.nidus.twinly.activity.repository.SceneRepository;
 import com.nidus.twinly.chat.opener.ChatRoomOpener;
+import com.nidus.twinly.common.time.KstTimes;
+import com.nidus.twinly.chat.repository.ChatRoomOpeningRepository;
 import com.nidus.twinly.common.scene.StoredSceneBubbleLine;
 import com.nidus.twinly.common.scene.StoredSceneLine;
 import com.nidus.twinly.common.scene.StoredSceneNarrationLine;
@@ -34,7 +36,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -57,6 +61,7 @@ public class SimulationService {
     private final RelationshipRepository relationshipRepository;
     private final EncounterRepository encounterRepository;
     private final ChatRoomOpener chatRoomOpener;
+    private final ChatRoomOpeningRepository chatRoomOpeningRepository;
     private final AppNotificationFeedWriter appNotificationFeedWriter;
     private final UserRepository userRepository;
     private final PersonaElementRepository personaElementRepository;
@@ -214,7 +219,7 @@ public class SimulationService {
 
         becameFriendPartnerUserIds.forEach(partnerUserId -> appNotificationFeedWriter.writeFriend(userId, partnerUserId, date));
 
-        commands.forEach(command -> openChatRoom(userId, command.partnerId(), command.rapport()));
+        commands.forEach(command -> openChatRoom(userId, command.partnerId(), command.rapport(), command.updateTime()));
     }
 
     private List<Long> becameFriendPartnerUserIds(Long userId, LocalDate date, List<SimulationsRelationshipCommand> commands) {
@@ -235,9 +240,21 @@ public class SimulationService {
                 && RelationshipType.fromIntimacy(command.rapport()) != RelationshipType.ACQUAINTANCE;
     }
 
-    private void openChatRoom(Long userId, Long partnerUserId, Integer intimacy) {
+    private void openChatRoom(Long userId, Long partnerUserId, Integer intimacy, LocalDateTime updateTime) {
+        if (RelationshipType.fromIntimacy(intimacy) != RelationshipType.BEST_FRIEND) {
+            return;
+        }
+
+        Instant scheduledAt = KstTimes.toInstant(updateTime);
+
+        if (scheduledAt.isAfter(Instant.now())) {
+            chatRoomOpeningRepository.upsert(Math.min(userId, partnerUserId), Math.max(userId, partnerUserId),
+                    scheduledAt);
+            return;
+        }
+
         try {
-            chatRoomOpener.openIfEligible(userId, partnerUserId, intimacy);
+            chatRoomOpener.open(userId, partnerUserId);
         } catch (DataIntegrityViolationException e) {
             log.info("상대 쪽에서 채팅방을 먼저 열어 개설을 건너뜁니다. userId={}, partnerUserId={}", userId, partnerUserId);
         }

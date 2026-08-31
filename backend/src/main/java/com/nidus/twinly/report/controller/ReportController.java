@@ -1,5 +1,6 @@
 package com.nidus.twinly.report.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import com.nidus.twinly.report.dto.command.ReportAiUtteranceCommand;
@@ -24,6 +25,7 @@ public class ReportController {
 
     private final ReportService reportService;
 
+    @Operation(summary = "유저 신고")
     @ApiResponse(responseCode = "422", description = "CANNOT_REPORT_SELF")
     @PostMapping("/api/v1/reports/users")
     public ReportUserResponse reportUser(@AuthenticationPrincipal UserInfo userInfo,
@@ -31,6 +33,7 @@ public class ReportController {
         return ReportUserResponse.from(reportService.reportUser(userInfo.id(), ReportUserCommand.from(request)));
     }
 
+    @Operation(summary = "AI 발화 신고")
     @ApiResponses({
             @ApiResponse(responseCode = "403", description = "NOT_SCENE_OWNER"),
             @ApiResponse(responseCode = "404", description = "SCENE_NOT_FOUND"),

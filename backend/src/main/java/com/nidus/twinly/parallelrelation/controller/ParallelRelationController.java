@@ -9,6 +9,7 @@ import com.nidus.twinly.parallelrelation.dto.response.ParallelRelationListRespon
 import com.nidus.twinly.parallelrelation.dto.result.ParallelRelationSubmitCodeResult;
 import com.nidus.twinly.parallelrelation.service.ParallelRelationService;
 import com.nidus.twinly.user.dto.header.UserInfo;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -30,11 +31,13 @@ public class ParallelRelationController {
 
     private final ParallelRelationService parallelRelationService;
 
+    @Operation(summary = "평행우주 관계 코드 발급")
     @PostMapping("/api/v1/parallel-relation-codes")
     public ParallelRelationIssueCodeResponse issueCode(@AuthenticationPrincipal UserInfo userInfo) {
         return ParallelRelationIssueCodeResponse.from(parallelRelationService.issueCode(userInfo.id()));
     }
 
+    @Operation(summary = "평행우주 관계 코드 등록")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "CREATED"),
             @ApiResponse(responseCode = "200", description = "OK"),
@@ -50,11 +53,13 @@ public class ParallelRelationController {
                 .body(ParallelRelationDetailResponse.from(result.relation()));
     }
 
+    @Operation(summary = "평행우주 관계 목록 조회")
     @GetMapping("/api/v1/parallel-relations")
     public ParallelRelationListResponse relationList(@AuthenticationPrincipal UserInfo userInfo) {
         return ParallelRelationListResponse.from(parallelRelationService.relationList(userInfo.id()));
     }
 
+    @Operation(summary = "평행우주 관계 상세 조회")
     @ApiResponse(responseCode = "404", description = "PARALLEL_RELATION_NOT_FOUND")
     @GetMapping("/api/v1/parallel-relations/{parallelRelationId}")
     public ParallelRelationDetailResponse relationDetail(@AuthenticationPrincipal UserInfo userInfo,

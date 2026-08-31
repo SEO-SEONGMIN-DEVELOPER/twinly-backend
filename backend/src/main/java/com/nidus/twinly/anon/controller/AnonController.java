@@ -2,6 +2,7 @@ package com.nidus.twinly.anon.controller;
 
 import com.nidus.twinly.anon.dto.response.AnonStartResponse;
 import com.nidus.twinly.anon.service.AnonService;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -16,6 +17,7 @@ public class AnonController {
 
     private final AnonService anonService;
 
+    @Operation(summary = "익명 세션 시작")
     @ResponseStatus(HttpStatus.CREATED)
     @PostMapping("/api/v1/anon/start")
     public AnonStartResponse start() {
