@@ -57,6 +57,7 @@ public enum ErrorCode {
     // 동의(정책)
     POLICY_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 정책 또는 버전입니다."),
     REQUIRED_POLICY_REVOKE_DENIED(HttpStatus.FORBIDDEN, "필수 정책은 철회할 수 없습니다."),
+    REQUIRED_POLICY_NOT_AGREED(HttpStatus.UNPROCESSABLE_CONTENT, "가입에 필요한 필수 약관에 동의하지 않았습니다."),
 
     // 알림
     APP_NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 알림입니다."),

@@ -4,6 +4,7 @@ import com.nidus.twinly.aichat.repository.AiChatRepository;
 import com.nidus.twinly.aichat.repository.AnonSessionAiChatRepository;
 import com.nidus.twinly.anon.dto.snapshot.AnonSessionSnapshot;
 import com.nidus.twinly.anon.entity.AnonSession;
+import com.nidus.twinly.anon.entity.AnonSessionAgreement;
 import com.nidus.twinly.anon.repository.AnonSessionAgreementRepository;
 import com.nidus.twinly.anon.repository.AnonSessionPersonaElementRepository;
 import com.nidus.twinly.anon.repository.AnonSessionPhotoRepository;
@@ -41,6 +42,8 @@ import com.nidus.twinly.common.jwt.JwtService;
 import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
+import com.nidus.twinly.legal.domain.PolicyKind;
+import com.nidus.twinly.legal.service.PolicyCatalog;
 import com.nidus.twinly.legal.repository.AgreementRepository;
 import com.nidus.twinly.organization.entity.Organization;
 import com.nidus.twinly.onboarding.repository.SurveyAnswerRepository;
@@ -66,6 +69,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -85,6 +89,8 @@ class AuthServiceUnitTest {
 
     private static final Long ANON_SESSION_ID = 7L;
     private static final Long USER_ID = 100L;
+    private static final Long REQUIRED_POLICY_ID = 11L;
+    private static final Long OPTIONAL_POLICY_ID = 22L;
     private static final String PHONE = "01012345678";
     private static final String EMAIL = "user@test.com";
     private static final String CODE = "123456";
@@ -141,6 +147,9 @@ class AuthServiceUnitTest {
 
     @Mock
     AnonSessionAgreementRepository anonSessionAgreementRepository;
+
+    @Mock
+    PolicyCatalog policyCatalog;
 
     @Mock
     AnonSessionPersonaElementRepository anonSessionPersonaElementRepository;
@@ -874,6 +883,63 @@ class AuthServiceUnitTest {
     }
 
     @Test
+    @DisplayName("회원가입: 필수 약관에 동의하지 않았으면 REQUIRED_POLICY_NOT_AGREED 예외가 발생하고 유저를 만들지 않는다")
+    void signup_without_required_policy_agreement_throws() {
+        // given: 인증·프로필은 모두 끝났지만 동의 이력이 하나도 없는 익명 세션
+        givenVerifiedIdentityAndEmail();
+        given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(onboardedAnonSession()));
+        given(policyCatalog.loadRequiredPolicyIds(PolicyKind.ONBOARDING)).willReturn(Set.of(REQUIRED_POLICY_ID));
+        given(anonSessionAgreementRepository.findAllByAnonSessionId(ANON_SESSION_ID)).willReturn(List.of());
+
+        // when & then: 필수 약관 미동의로 가입이 막힌다
+        assertThatThrownBy(() -> authService.signup(SNAPSHOT))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.REQUIRED_POLICY_NOT_AGREED);
+
+        then(blindIndexHasher).should(never()).hash(any());
+        then(userRepository).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("회원가입: 필수 약관 동의가 철회된 상태면 REQUIRED_POLICY_NOT_AGREED 예외가 발생한다")
+    void signup_with_revoked_required_policy_agreement_throws() {
+        // given: 필수 약관에 동의했다가 철회한 이력만 남은 익명 세션
+        givenVerifiedIdentityAndEmail();
+        given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(onboardedAnonSession()));
+        given(policyCatalog.loadRequiredPolicyIds(PolicyKind.ONBOARDING)).willReturn(Set.of(REQUIRED_POLICY_ID));
+        given(anonSessionAgreementRepository.findAllByAnonSessionId(ANON_SESSION_ID))
+                .willReturn(List.of(revokedAgreement(REQUIRED_POLICY_ID)));
+
+        // when & then: 철회된 동의는 동의로 세지 않는다
+        assertThatThrownBy(() -> authService.signup(SNAPSHOT))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.REQUIRED_POLICY_NOT_AGREED);
+
+        then(userRepository).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("회원가입: 선택 약관에만 동의하고 필수 약관을 빠뜨리면 REQUIRED_POLICY_NOT_AGREED 예외가 발생한다")
+    void signup_with_only_optional_policy_agreement_throws() {
+        // given: 필수가 아닌 약관에만 동의한 익명 세션
+        givenVerifiedIdentityAndEmail();
+        given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(onboardedAnonSession()));
+        given(policyCatalog.loadRequiredPolicyIds(PolicyKind.ONBOARDING)).willReturn(Set.of(REQUIRED_POLICY_ID));
+        given(anonSessionAgreementRepository.findAllByAnonSessionId(ANON_SESSION_ID))
+                .willReturn(List.of(agreement(OPTIONAL_POLICY_ID)));
+
+        // when & then: 동의 건수가 아니라 필수 약관 집합을 모두 덮었는지로 판정한다
+        assertThatThrownBy(() -> authService.signup(SNAPSHOT))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.REQUIRED_POLICY_NOT_AGREED);
+
+        then(userRepository).should(never()).save(any());
+    }
+
+    @Test
     @DisplayName("회원가입: 이미 가입된 전화번호면 PHONE_ALREADY_REGISTERED 예외가 발생하고 유저를 만들지 않는다")
     void signup_with_already_registered_phone_throws() {
         // given: 인증이 모두 완료됐지만 본인인증으로 확인된 전화번호가 이미 가입되어 있음
@@ -918,6 +984,9 @@ class AuthServiceUnitTest {
         givenVerifiedIdentityAndEmail();
         AnonSession anonSession = onboardedAnonSession();
         given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(anonSession));
+        given(policyCatalog.loadRequiredPolicyIds(PolicyKind.ONBOARDING)).willReturn(Set.of(REQUIRED_POLICY_ID));
+        given(anonSessionAgreementRepository.findAllByAnonSessionId(ANON_SESSION_ID))
+                .willReturn(List.of(agreement(REQUIRED_POLICY_ID)));
         given(blindIndexHasher.hash(anyString())).willAnswer(invocation -> "hash:" + invocation.getArgument(0));
         given(userRepository.save(any(User.class))).willAnswer(invocation -> {
             User user = invocation.getArgument(0);
@@ -1193,6 +1262,16 @@ class AuthServiceUnitTest {
 
     private String adultBirthDate() {
         return KstTimes.today().minusYears(25).toString();
+    }
+
+    private AnonSessionAgreement agreement(Long policyId) {
+        return AnonSessionAgreement.create(ANON_SESSION_ID, policyId, Instant.parse("2026-01-01T00:00:00Z"));
+    }
+
+    private AnonSessionAgreement revokedAgreement(Long policyId) {
+        AnonSessionAgreement agreement = agreement(policyId);
+        ReflectionTestUtils.setField(agreement, "revokedAt", Instant.parse("2026-02-01T00:00:00Z"));
+        return agreement;
     }
 
     private AnonSession onboardedAnonSession() {

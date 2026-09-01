@@ -1,5 +1,6 @@
 package com.nidus.twinly.legal.service;
 
+import com.nidus.twinly.legal.domain.PolicyKind;
 import com.nidus.twinly.legal.entity.PolicyName;
 import com.nidus.twinly.legal.repository.PolicyNameRepository;
 import com.nidus.twinly.legal.repository.PolicyRepository;
@@ -11,6 +12,7 @@ import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.BinaryOperator;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -37,6 +39,17 @@ public class PolicyCatalog {
                         PolicySummary::getPolicyNameId,
                         Function.identity(),
                         BinaryOperator.maxBy(BY_EFFECTIVE_AT_THEN_ID)));
+    }
+
+    public Set<Long> loadRequiredPolicyIds(PolicyKind kind) {
+        List<Long> policyNameIds = policyNameRepository.findAllByKindAndIsDeprecatedFalseOrderByIdAsc(kind).stream()
+                .map(PolicyName::getId)
+                .toList();
+
+        return loadLatestByPolicyNameId(policyNameIds).values().stream()
+                .filter(policy -> Boolean.TRUE.equals(policy.getIsRequired()))
+                .map(PolicySummary::getId)
+                .collect(Collectors.toSet());
     }
 
     public Map<PolicyKey, PolicySummary> loadByKey(List<String> policyNameIdentifiers) {

@@ -135,7 +135,7 @@ public class AuthController {
     @ApiResponses({
             @ApiResponse(responseCode = "404", description = "SIGNUP_SESSION_NOT_FOUND"),
             @ApiResponse(responseCode = "409", description = "PHONE_ALREADY_REGISTERED, EMAIL_ALREADY_REGISTERED, IDENTITY_ALREADY_REGISTERED"),
-            @ApiResponse(responseCode = "422", description = "IDENTITY_VERIFICATION_NOT_COMPLETED, EMAIL_VERIFICATION_NOT_COMPLETED, PROFILE_NOT_COMPLETED")
+            @ApiResponse(responseCode = "422", description = "IDENTITY_VERIFICATION_NOT_COMPLETED, EMAIL_VERIFICATION_NOT_COMPLETED, PROFILE_NOT_COMPLETED, REQUIRED_POLICY_NOT_AGREED")
     })
     @ResponseStatus(HttpStatus.CREATED)
     @PostMapping("/api/v1/auth/signup")
