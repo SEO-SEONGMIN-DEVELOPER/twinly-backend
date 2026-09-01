@@ -3,7 +3,11 @@ package com.nidus.twinly.purchase.integration;
 import com.nidus.twinly.purchase.client.RevenueCatClient;
 import com.nidus.twinly.purchase.client.RevenueCatEntitlement;
 import com.nidus.twinly.purchase.entity.UserEntitlement;
+import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.purchase.repository.UserEntitlementRepository;
+import com.nidus.twinly.season.entity.Season;
+import com.nidus.twinly.season.repository.SeasonParticipationRepository;
+import com.nidus.twinly.season.repository.SeasonRepository;
 import com.nidus.twinly.support.AbstractIntegrationTest;
 import com.nidus.twinly.user.entity.User;
 import org.junit.jupiter.api.DisplayName;
@@ -30,6 +34,12 @@ class PurchaseIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     UserEntitlementRepository userEntitlementRepository;
+
+    @Autowired
+    SeasonRepository seasonRepository;
+
+    @Autowired
+    SeasonParticipationRepository seasonParticipationRepository;
 
     // RevenueCat REST 호출 차단. 웹훅은 트리거일 뿐이고 진짜 상태는 이 응답이 결정한다.
     @MockitoBean
@@ -82,6 +92,29 @@ class PurchaseIntegrationTest extends AbstractIntegrationTest {
         assertThat(userEntitlementRepository.findAllByUserId(user.getId()))
                 .extracting(UserEntitlement::getEntitlement)
                 .containsExactly("premium");
+    }
+
+    @Test
+    @DisplayName("결제 반영: simulation_access 가 저장되면 현재 시즌 참가 행이 함께 생성된다")
+    void webhook_with_simulation_access_participates_in_current_season() throws Exception {
+        // given: 진행 중인 시즌과 실제 유저 + RevenueCat 이 simulation_access 를 돌려줌
+        Instant now = Instant.now();
+        Season season = seasonRepository.save(
+                Season.create(now.minus(Duration.ofDays(30)), now.plus(Duration.ofDays(30))));
+        User user = saveUser();
+        given(revenueCatClient.entitlements(user.getRevenueCatUserId().toString()))
+                .willReturn(List.of(new RevenueCatEntitlement(
+                        EntitlementReader.SIMULATION_ACCESS, now.plus(Duration.ofDays(30)))));
+
+        // when: 구매 이벤트로 웹훅 호출
+        mockMvc.perform(post("/webhook/v1/revenue-cat")
+                        .header("Authorization", WEBHOOK_SECRET)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload("INITIAL_PURCHASE", user)))
+                .andExpect(status().isOk());
+
+        // then: 별도 참가 API 호출 없이 현재 시즌 참가 행이 생긴다 (결제 = 평행우주 입장)
+        assertThat(seasonParticipationRepository.findByUserIdAndSeasonId(user.getId(), season.getId())).isPresent();
     }
 
     @Test

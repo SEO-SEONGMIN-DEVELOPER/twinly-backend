@@ -6,7 +6,9 @@ import com.nidus.twinly.purchase.RevenueCatProperties;
 import com.nidus.twinly.purchase.client.RevenueCatClient;
 import com.nidus.twinly.purchase.client.RevenueCatEntitlement;
 import com.nidus.twinly.purchase.dto.command.RevenueCatWebhookCommand;
+import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.purchase.writer.PurchaseWriter;
+import com.nidus.twinly.season.writer.SeasonParticipationWriter;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +33,8 @@ public class PurchaseService {
     private final RevenueCatClient revenueCatClient;
     private final UserRepository userRepository;
     private final PurchaseWriter purchaseWriter;
+    private final EntitlementReader entitlementReader;
+    private final SeasonParticipationWriter seasonParticipationWriter;
 
     public void receiveWebhook(RevenueCatWebhookCommand command) {
         log.info("RevenueCat webhook: type={}, environment={}, eventId={}", command.type(), command.environment(), command.eventId());
@@ -65,6 +69,10 @@ public class PurchaseService {
         List<RevenueCatEntitlement> entitlements = revenueCatClient.entitlements(user.getRevenueCatUserId().toString());
 
         purchaseWriter.replaceEntitlements(user.getId(), entitlements, syncedAt);
+
+        if (entitlementReader.hasSimulationAccess(user.getId())) {
+            seasonParticipationWriter.participateInCurrentSeason(user.getId());
+        }
     }
 
     private boolean matchesEnvironment(String environment) {

@@ -1,6 +1,5 @@
 package com.nidus.twinly.season.integration;
 
-import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.season.entity.SeasonParticipation;
 import com.nidus.twinly.season.repository.SeasonParticipationRepository;
 import com.nidus.twinly.support.AbstractIntegrationTest;
@@ -15,12 +14,9 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Optional;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -34,51 +30,6 @@ class SeasonIntegrationTest extends AbstractIntegrationTest {
 
     @PersistenceContext
     EntityManager entityManager;
-
-    @Test
-    @DisplayName("시즌 참가 성공: 실제 유저·JWT 인증·MockMvc·DB까지 관통하여 season_participations 행이 생성된다")
-    void participateIn_success_end_to_end() throws Exception {
-        // given: 참가 기간 중인 현재 시즌과 실제 유저를 DB에 저장 (season_participations의 FK 대상)
-        Instant now = Instant.now();
-        saveCurrentSeason(now.minus(Duration.ofDays(30)), now.plus(Duration.ofDays(30)));
-        User user = saveUser();
-
-        // when: 해당 유저의 실제 액세스 토큰으로 시즌 참가 API 호출
-        mockMvc.perform(put("/api/v1/season/participation")
-                        .header("Authorization", bearer(user.getId())))
-                .andExpect(status().isOk());
-
-        // then: DB에 실제로 참가 행이 생성되고 참가 시각이 기록됨
-        Optional<SeasonParticipation> saved =
-                seasonParticipationRepository.findByUserIdAndSeasonId(user.getId(), CURRENT_SEASON_ID);
-        assertThat(saved).isPresent();
-        assertThat(saved.get().getParticipatedInAt()).isNotNull();
-
-        // when: 같은 시즌에 다시 참가 (버튼 연타)
-        mockMvc.perform(put("/api/v1/season/participation")
-                        .header("Authorization", bearer(user.getId())))
-                .andExpect(status().isOk());
-
-        // then: upsert라 유니크 제약 위반 없이 행이 하나로 유지된다
-        assertThat(seasonParticipationRepository.findAll()).hasSize(1);
-    }
-
-    @Test
-    @DisplayName("시즌 참가 실패: 참가 기간이 끝난 시즌이면 422와 SEASON_NOT_JOINABLE 코드를 반환한다")
-    void participateIn_when_season_already_ended_returns_422() throws Exception {
-        // given: 이미 종료된 현재 시즌과 실제 유저를 DB에 저장
-        Instant now = Instant.now();
-        saveCurrentSeason(now.minus(Duration.ofDays(60)), now.minus(Duration.ofDays(30)));
-        User user = saveUser();
-
-        // when: 해당 유저의 실제 액세스 토큰으로 시즌 참가 API 호출
-        var result = mockMvc.perform(put("/api/v1/season/participation")
-                .header("Authorization", bearer(user.getId())));
-
-        // then: 도메인 예외가 422 + SEASON_NOT_JOINABLE 코드로 매핑됨
-        result.andExpect(status().is(422))
-                .andExpect(jsonPath("$.code").value(ErrorCode.SEASON_NOT_JOINABLE.name()));
-    }
 
     @Test
     @DisplayName("시즌 참가 조회 성공: 참가 이력이 있으면 현재 시즌 id와 참가 시각을 응답한다")

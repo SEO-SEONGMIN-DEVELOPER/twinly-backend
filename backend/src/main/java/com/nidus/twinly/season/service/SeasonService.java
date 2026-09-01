@@ -12,6 +12,7 @@ import com.nidus.twinly.purchase.service.PurchaseService;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.season.repository.SeasonParticipationRepository;
 import com.nidus.twinly.season.repository.SeasonRepository;
+import com.nidus.twinly.season.writer.SeasonParticipationWriter;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -28,6 +29,7 @@ public class SeasonService {
     private final CurrentSeasonReader currentSeasonReader;
     private final SeasonParticipationRepository seasonParticipationRepository;
     private final SeasonRepository seasonRepository;
+    private final SeasonParticipationWriter seasonParticipationWriter;
     private final ApplicationEventPublisher eventPublisher;
     private final PurchaseService purchaseService;
     private final UserRepository userRepository;
@@ -42,22 +44,11 @@ public class SeasonService {
 
         Season season = seasonRepository.save(Season.create(command.startedAt(), command.endedAt()));
 
+        seasonParticipationWriter.participateAllWithSimulationAccess(season.getId());
+
         eventPublisher.publishEvent(new SeasonChangedEvent(season.getId()));
 
         return new SeasonChangeResult(season.getId(), season.getStartedAt(), season.getEndedAt());
-    }
-
-    @Transactional
-    public void participateIn(Long userId) {
-        Season season = currentSeasonReader.read();
-
-        Instant now = Instant.now();
-
-        if (now.isBefore(season.getStartedAt()) || now.isAfter(season.getEndedAt())) {
-            throw new BusinessException(ErrorCode.SEASON_NOT_JOINABLE);
-        }
-
-        seasonParticipationRepository.upsert(userId, season.getId());
     }
 
     public SeasonParticipationResult participation(Long userId) {

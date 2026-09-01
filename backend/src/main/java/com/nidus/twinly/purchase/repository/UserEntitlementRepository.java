@@ -21,4 +21,12 @@ public interface UserEntitlementRepository extends JpaRepository<UserEntitlement
     boolean existsActive(@Param("userId") Long userId,
                          @Param("entitlement") String entitlement,
                          @Param("now") Instant now);
+
+    @Query("""
+            SELECT e.userId FROM UserEntitlement e
+            WHERE e.entitlement = :entitlement
+              AND (e.expiresAt IS NULL OR e.expiresAt > :now)
+            """)
+    List<Long> findUserIdsActive(@Param("entitlement") String entitlement,
+                                 @Param("now") Instant now);
 }
