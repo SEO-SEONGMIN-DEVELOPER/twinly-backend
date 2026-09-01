@@ -12,6 +12,9 @@
         "treatMissingData": "missing",
         "alarmActions": [
             "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ],
+        "okActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
         ]
     },
     {
@@ -26,6 +29,9 @@
         "threshold": 85.0,
         "treatMissingData": "missing",
         "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ],
+        "okActions": [
             "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
         ]
     },
@@ -42,6 +48,9 @@
         "treatMissingData": "missing",
         "alarmActions": [
             "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ],
+        "okActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
         ]
     },
     {
@@ -56,6 +65,9 @@
         "threshold": 80.0,
         "treatMissingData": "missing",
         "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ],
+        "okActions": [
             "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
         ]
     },
@@ -72,6 +84,9 @@
         "treatMissingData": "missing",
         "alarmActions": [
             "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ],
+        "okActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
         ]
     },
     {
@@ -86,6 +101,9 @@
         "threshold": 1.0,
         "treatMissingData": "missing",
         "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ],
+        "okActions": [
             "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
         ]
     },
@@ -132,6 +150,9 @@
         "treatMissingData": "missing",
         "alarmActions": [
             "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ],
+        "okActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
         ]
     },
     {
@@ -146,6 +167,9 @@
         "threshold": 80.0,
         "treatMissingData": "missing",
         "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ],
+        "okActions": [
             "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
         ]
     },
@@ -162,6 +186,9 @@
         "treatMissingData": "notBreaching",
         "alarmActions": [
             "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ],
+        "okActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
         ]
     },
     {
@@ -177,6 +204,9 @@
         "treatMissingData": "missing",
         "alarmActions": [
             "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ],
+        "okActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
         ]
     },
     {
@@ -191,6 +221,9 @@
         "threshold": 52428800.0,
         "treatMissingData": "missing",
         "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ],
+        "okActions": [
             "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
         ]
     },
@@ -252,6 +285,9 @@
         "treatMissingData": "missing",
         "alarmActions": [
             "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ],
+        "okActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
         ]
     },
     {
@@ -297,6 +333,9 @@
         "treatMissingData": "missing",
         "alarmActions": [
             "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ],
+        "okActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
         ]
     },
     {
@@ -311,6 +350,9 @@
         "threshold": 1.0,
         "treatMissingData": "notBreaching",
         "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ],
+        "okActions": [
             "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
         ]
     },
@@ -327,6 +369,9 @@
         "treatMissingData": "notBreaching",
         "alarmActions": [
             "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ],
+        "okActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
         ]
     },
     {
@@ -341,6 +386,9 @@
         "threshold": 80.0,
         "treatMissingData": "missing",
         "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ],
+        "okActions": [
             "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
         ]
     },
@@ -357,6 +405,9 @@
         "treatMissingData": "missing",
         "alarmActions": [
             "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ],
+        "okActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
         ]
     },
     {
@@ -372,6 +423,9 @@
         "treatMissingData": "missing",
         "alarmActions": [
             "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ],
+        "okActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
         ]
     },
     {
@@ -386,6 +440,9 @@
         "threshold": 80.0,
         "treatMissingData": "missing",
         "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ],
+        "okActions": [
             "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
         ]
     }
