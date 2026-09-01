@@ -35,6 +35,11 @@ public class ChatRoomOpener {
             return;
         }
 
+        open(userId, partnerUserId);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void open(Long userId, Long partnerUserId) {
         Match match = matchRepository
                 .findByUserAIdAndUserBId(Math.min(userId, partnerUserId), Math.max(userId, partnerUserId))
                 .orElseGet(() -> matchRepository.save(Match.create(userId, partnerUserId, currentSeasonReader.read().getId())));

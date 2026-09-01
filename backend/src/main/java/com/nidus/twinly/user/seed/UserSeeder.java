@@ -7,6 +7,13 @@ import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.common.survey.SurveyLoader;
 import com.nidus.twinly.common.survey.SurveyOptionName;
 import com.nidus.twinly.common.survey.SurveyQuestion;
+import com.nidus.twinly.season.reader.CurrentSeasonReader;
+import com.nidus.twinly.season.repository.SeasonParticipationRepository;
+import com.nidus.twinly.activity.repository.SceneRepository;
+import com.nidus.twinly.common.time.KstTimes;
+import com.nidus.twinly.simulation.dto.command.SimulationsCommand;
+import com.nidus.twinly.simulation.dto.request.SimulationsRequest;
+import com.nidus.twinly.simulation.service.SimulationService;
 import com.nidus.twinly.user.entity.PersonaElement;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.PersonaElementRepository;
@@ -16,10 +23,21 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Profile;
+import org.springframework.core.annotation.Order;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.Map;
+import java.util.regex.Pattern;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -27,9 +45,10 @@ import java.util.Random;
 
 @Slf4j
 @Component
+@Order(2)
 @Profile({"stage", "local"})
 @RequiredArgsConstructor
-public class PersonaSeeder implements ApplicationRunner {
+public class UserSeeder implements ApplicationRunner {
 
     private static final int DETAIL_ELEMENTS_PER_USER = 5;
     private static final int INTERESTS_PER_USER = 5;
@@ -37,6 +56,11 @@ public class PersonaSeeder implements ApplicationRunner {
     private static final String PHONE_PREFIX = "0100000";
     private static final int PHONE_START = 9001;
     private static final String EMAIL_LOCAL_PREFIX = "test-seed";
+    private static final String SCENARIO_RESOURCE = "seed/showcase-scenarios.json";
+    static final String ANCHOR_DATE = "anchorDate";
+    private static final String DAYS = "days";
+    static final Pattern DATE = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
+    static final Pattern DATE_TIME = Pattern.compile("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}");
 
     private static final List<String> INTEREST_POOL = List.of(
             "영화", "애니메이션", "드라마", "음악", "K-POP", "힙합", "인디음악", "콘서트",
@@ -52,6 +76,11 @@ public class PersonaSeeder implements ApplicationRunner {
     private final BlindIndexHasher blindIndexHasher;
     private final SurveyLoader surveyLoader;
     private final InterestLoader interestLoader;
+    private final CurrentSeasonReader currentSeasonReader;
+    private final SeasonParticipationRepository seasonParticipationRepository;
+    private final SceneRepository sceneRepository;
+    private final SimulationService simulationService;
+    private final ObjectMapper objectMapper;
 
     private enum SeedOrganization {
         SKKU("성균관대학교", "skku.edu"),
@@ -101,8 +130,7 @@ public class PersonaSeeder implements ApplicationRunner {
 
 
     @Override
-    @Transactional
-    public void run(ApplicationArguments args) {
+    public void run(ApplicationArguments args) throws IOException {
         requireEnoughElements();
 
         Instant now = Instant.now();
@@ -111,6 +139,9 @@ public class PersonaSeeder implements ApplicationRunner {
         for (int index = 0; index < SEED_USERS.size(); index++) {
             users.add(findOrCreateUser(SEED_USERS.get(index), index));
         }
+
+        Long currentSeasonId = currentSeasonReader.read().getId();
+        users.forEach(user -> seasonParticipationRepository.upsert(user.getId(), currentSeasonId));
 
         List<PersonaElement> elements = new ArrayList<>();
         for (int index = 0; index < users.size(); index++) {
@@ -123,13 +154,78 @@ public class PersonaSeeder implements ApplicationRunner {
             }
         }
 
-        if (elements.isEmpty()) {
+        if (!elements.isEmpty()) {
+            personaElementRepository.saveAll(elements);
+        }
+
+        seedScenarios();
+
+        log.info("시드 유저를 채웠습니다. userCount={}, elementCount={}", users.size(), elements.size());
+    }
+
+    private void seedScenarios() throws IOException {
+        JsonNode root;
+        try (InputStream in = new ClassPathResource(SCENARIO_RESOURCE).getInputStream()) {
+            root = objectMapper.readTree(in);
+        }
+
+        long shift = ChronoUnit.DAYS.between(LocalDate.parse(root.get(ANCHOR_DATE).asString()), KstTimes.today());
+        int seeded = 0;
+
+        for (JsonNode day : root.get(DAYS)) {
+            shiftDates(day, shift);
+            SimulationsRequest request = objectMapper.treeToValue(day, SimulationsRequest.class);
+
+            if (sceneRepository.existsByUserIdAndDate(request.userId(), request.date())) {
+                continue;
+            }
+
+            simulationService.simulations(request.userId(), SimulationsCommand.from(request));
+            seeded++;
+        }
+
+        if (seeded > 0) {
+            log.info("쇼케이스 시나리오를 채웠습니다. dayCount={}, shiftDays={}", seeded, shift);
+        }
+    }
+
+    /**
+     * 값이 날짜 형태면 무조건 민다. 필드 이름 목록을 두면 새 시각 필드가 생길 때마다
+     * 사람이 목록을 갱신해야 하고, 빠뜨려도 아무 데서도 안 걸린다.
+     */
+    static void shiftDates(JsonNode node, long shift) {
+        if (node.isArray()) {
+            node.forEach(child -> shiftDates(child, shift));
+            return;
+        }
+        if (!node.isObject()) {
             return;
         }
 
-        personaElementRepository.saveAll(elements);
+        ObjectNode object = (ObjectNode) node;
+        for (Map.Entry<String, JsonNode> field : object.properties()) {
+            JsonNode value = field.getValue();
 
-        log.info("페르소나 시드 요소를 채웠습니다. userCount={}, elementCount={}", users.size(), elements.size());
+            if (!value.isString()) {
+                shiftDates(value, shift);
+                continue;
+            }
+
+            String shifted = shiftTemporal(value.asString(), shift);
+            if (shifted != null) {
+                object.put(field.getKey(), shifted);
+            }
+        }
+    }
+
+    private static String shiftTemporal(String value, long shift) {
+        if (DATE.matcher(value).matches()) {
+            return LocalDate.parse(value).plusDays(shift).toString();
+        }
+        if (DATE_TIME.matcher(value).matches()) {
+            return LocalDateTime.parse(value).plusDays(shift).toString();
+        }
+        return null;
     }
 
     private User findOrCreateUser(SeedUser seed, int index) {

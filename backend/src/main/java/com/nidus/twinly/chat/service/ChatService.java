@@ -18,6 +18,7 @@ import com.nidus.twinly.common.photo.PhotoType;
 import com.nidus.twinly.common.photo.ProfilePhotoInfo;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
+import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.chat.event.ChatMessageCreatedEvent;
 import com.nidus.twinly.chat.event.ChatReadAdvancedEvent;
 import com.nidus.twinly.match.entity.Match;
@@ -29,9 +30,11 @@ import com.nidus.twinly.relationship.repository.RelationshipRepository;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.user.domain.DisclosureField;
 import com.nidus.twinly.user.entity.DisclosureAgreement;
+import com.nidus.twinly.user.entity.PersonaElement;
 import com.nidus.twinly.user.entity.Photo;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.DisclosureAgreementRepository;
+import com.nidus.twinly.user.repository.PersonaElementRepository;
 import com.nidus.twinly.user.repository.PhotoRepository;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -67,6 +70,7 @@ public class ChatService {
     private final RelationshipRepository relationshipRepository;
     private final PhotoRepository photoRepository;
     private final DisclosureAgreementRepository disclosureAgreementRepository;
+    private final PersonaElementRepository personaElementRepository;
     private final BlockRepository blockRepository;
     private final CurrentSeasonReader currentSeasonReader;
     private final AppNotificationFeedWriter appNotificationFeedWriter;
@@ -321,6 +325,11 @@ public class ChatService {
                         .map(DisclosureAgreement::getField)
                         .collect(Collectors.toSet());
 
+        List<String> interests = partner.isWithdrawn() ? List.of()
+                : personaElementRepository.findAllByUserIdAndDimensionOrderByIdAsc(partnerId, PersonaDimension.INTEREST).stream()
+                        .map(PersonaElement::getExplanation)
+                        .toList();
+
         Long currentSeasonId = currentSeasonReader.read().getId();
 
         return new ChatRoomDetailResult(
@@ -339,7 +348,8 @@ public class ChatService {
                         new ChatRoomDetailDisclosedFieldsResult(
                                 agreedFields.contains(DisclosureField.AFFILIATION) ? partner.getAffiliation() : null,
                                 agreedFields.contains(DisclosureField.AFFILIATION_NUMBER) ? partner.getAffiliationNumber() : null
-                        )
+                        ),
+                        interests
                 ),
                 room.getClosedAt(),
                 room.getCloseReason(),

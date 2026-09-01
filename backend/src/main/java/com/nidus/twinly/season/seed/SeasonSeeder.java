@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Profile;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -14,6 +15,7 @@ import java.time.temporal.ChronoUnit;
 
 @Slf4j
 @Component
+@Order(1)
 @Profile({"stage", "local"})
 @RequiredArgsConstructor
 public class SeasonSeeder implements ApplicationRunner {

@@ -359,7 +359,8 @@ class ChatControllerUnitTest {
                         null,
                         45,
                         RelationshipSpecificType.CLOSE,
-                        new ChatRoomDetailDisclosedFieldsResult("aff", null)
+                        new ChatRoomDetailDisclosedFieldsResult("aff", null),
+                        List.of("등산", "재즈")
                 ),
                 null,
                 null,

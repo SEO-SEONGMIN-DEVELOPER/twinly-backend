@@ -9,6 +9,7 @@ import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.chat.opener.ChatRoomOpener;
+import com.nidus.twinly.chat.repository.ChatRoomOpeningRepository;
 import com.nidus.twinly.notification.writer.AppNotificationFeedWriter;
 import com.nidus.twinly.people.repository.EncounterRepository;
 import com.nidus.twinly.relationship.entity.Relationship;
@@ -73,6 +74,9 @@ class SimulationServiceUnitTest {
     ChatRoomOpener chatRoomOpener;
 
     @Mock
+    ChatRoomOpeningRepository chatRoomOpeningRepository;
+
+    @Mock
     AppNotificationFeedWriter appNotificationFeedWriter;
 
     @Mock
@@ -90,7 +94,8 @@ class SimulationServiceUnitTest {
     void setUp() {
         simulationService = new SimulationService(
                 sceneRepository, scenePartnerRepository, questionRepository, questionPartnerRepository,
-                relationshipRepository, encounterRepository, chatRoomOpener, appNotificationFeedWriter, userRepository,
+                relationshipRepository, encounterRepository, chatRoomOpener, chatRoomOpeningRepository,
+                appNotificationFeedWriter, userRepository,
                 personaElementRepository, entitlementReader, new ObjectMapper());
     }
 

@@ -1,5 +1,6 @@
 package com.nidus.twinly.chat.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import com.nidus.twinly.chat.dto.command.ChatReadMessagesCommand;
@@ -34,6 +35,7 @@ public class ChatController {
 
     private final ChatService chatService;
 
+    @Operation(summary = "메시지 전송")
     @ApiResponses({
             @ApiResponse(responseCode = "403", description = "NOT_MATCH_PARTICIPANT, NOT_ACTIVE_ROOM_PARTICIPANT"),
             @ApiResponse(responseCode = "404", description = "ROOM_NOT_FOUND, MATCH_NOT_FOUND, CHAT_PARTICIPATION_NOT_FOUND"),
@@ -47,12 +49,14 @@ public class ChatController {
         return ChatSendMessageResponse.from(chatService.sendMessage(userInfo.id(), RequestId.toLong(roomId, "roomId"), ChatSendMessageCommand.from(request)));
     }
 
+    @Operation(summary = "채팅방 목록 조회")
     @ApiResponse(responseCode = "403", description = "NOT_MATCH_PARTICIPANT")
     @GetMapping("/api/v1/chat/rooms")
     public ChatRoomsResponse rooms(@AuthenticationPrincipal UserInfo userInfo) {
         return ChatRoomsResponse.from(chatService.rooms(userInfo.id()));
     }
 
+    @Operation(summary = "채팅방 상세 조회")
     @ApiResponses({
             @ApiResponse(responseCode = "403", description = "NOT_MATCH_PARTICIPANT, NOT_ACTIVE_ROOM_PARTICIPANT"),
             @ApiResponse(responseCode = "404", description = "ROOM_NOT_FOUND, MATCH_NOT_FOUND, USER_NOT_FOUND")
@@ -63,6 +67,7 @@ public class ChatController {
         return ChatRoomDetailResponse.from(chatService.roomDetail(userInfo.id(), RequestId.toLong(roomId, "roomId")));
     }
 
+    @Operation(summary = "채팅방 입장")
     @ApiResponses({
             @ApiResponse(responseCode = "403", description = "NOT_MATCH_PARTICIPANT, NOT_ACTIVE_ROOM_PARTICIPANT"),
             @ApiResponse(responseCode = "404", description = "ROOM_NOT_FOUND, MATCH_NOT_FOUND, USER_NOT_FOUND")
@@ -73,6 +78,7 @@ public class ChatController {
         return ChatRoomDetailResponse.from(chatService.enterRoom(userInfo.id(), RequestId.toLong(roomId, "roomId")));
     }
 
+    @Operation(summary = "채팅방 숨기기")
     @ApiResponses({
             @ApiResponse(responseCode = "403", description = "NOT_MATCH_PARTICIPANT"),
             @ApiResponse(responseCode = "404", description = "ROOM_NOT_FOUND, MATCH_NOT_FOUND, CHAT_PARTICIPATION_NOT_FOUND")
@@ -83,6 +89,7 @@ public class ChatController {
         chatService.hideRoom(userInfo.id(), RequestId.toLong(roomId, "roomId"));
     }
 
+    @Operation(summary = "메시지 목록 조회")
     @ApiResponses({
             @ApiResponse(responseCode = "403", description = "NOT_MATCH_PARTICIPANT"),
             @ApiResponse(responseCode = "404", description = "ROOM_NOT_FOUND, MATCH_NOT_FOUND")
@@ -95,6 +102,7 @@ public class ChatController {
         return ChatMessagesResponse.from(chatService.messages(userInfo.id(), RequestId.toLong(roomId, "roomId"), RequestId.toLongOrNull(cursor, "cursor"), limit));
     }
 
+    @Operation(summary = "메시지 읽음 처리")
     @ApiResponses({
             @ApiResponse(responseCode = "403", description = "NOT_MATCH_PARTICIPANT, NOT_ACTIVE_ROOM_PARTICIPANT"),
             @ApiResponse(responseCode = "404", description = "ROOM_NOT_FOUND, MATCH_NOT_FOUND, CHAT_PARTICIPATION_NOT_FOUND"),
@@ -108,6 +116,7 @@ public class ChatController {
                 chatService.readMessages(userInfo.id(), RequestId.toLong(roomId, "roomId"), ChatReadMessagesCommand.from(request)));
     }
 
+    @Operation(summary = "채팅방 나가기")
     @ApiResponses({
             @ApiResponse(responseCode = "403", description = "NOT_MATCH_PARTICIPANT"),
             @ApiResponse(responseCode = "404", description = "ROOM_NOT_FOUND, MATCH_NOT_FOUND, CHAT_PARTICIPATION_NOT_FOUND")

@@ -10,6 +10,8 @@ public interface PersonaElementRepository extends JpaRepository<PersonaElement, 
 
     List<PersonaElement> findAllByUserIdOrderByIdAsc(Long userId);
 
+    List<PersonaElement> findAllByUserIdAndDimensionOrderByIdAsc(Long userId, PersonaDimension dimension);
+
     boolean existsByUserId(Long userId);
 
     boolean existsByUserIdAndDimension(Long userId, PersonaDimension dimension);
