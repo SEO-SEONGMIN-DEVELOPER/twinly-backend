@@ -47,6 +47,7 @@ public class OnboardingController {
     }
 
     @Operation(summary = "학번 입력")
+    @ApiResponse(responseCode = "422", description = "INVALID_AFFILIATION_NUMBER")
     @PutMapping("/api/v1/onboarding/affiliation-number")
     public void affiliationNumber(@AuthenticationPrincipal AnonSessionSnapshot anonSessionSnapshot,
                                   @Valid @RequestBody OnboardingAffiliationNumberRequest request) {

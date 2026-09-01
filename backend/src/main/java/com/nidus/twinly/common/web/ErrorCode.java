@@ -52,6 +52,7 @@ public enum ErrorCode {
     // 온보딩/닉네임/설문
     NICKNAME_ALREADY_USED(HttpStatus.CONFLICT, "이미 사용 중인 닉네임입니다."),
     INVALID_NICKNAME(HttpStatus.UNPROCESSABLE_CONTENT, "사용할 수 없는 닉네임입니다."),
+    INVALID_AFFILIATION_NUMBER(HttpStatus.UNPROCESSABLE_CONTENT, "사용할 수 없는 학번입니다."),
     SURVEY_QUESTION_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 질문입니다."),
 
     // 동의(정책)

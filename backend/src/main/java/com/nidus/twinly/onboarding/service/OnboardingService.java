@@ -67,6 +67,7 @@ public class OnboardingService {
     );
 
     private static final Pattern NICKNAME_PATTERN = Pattern.compile("^[가-힣a-zA-Z0-9_-]{2,20}$");
+    private static final Pattern AFFILIATION_NUMBER_PATTERN = Pattern.compile("^(?=.{1,50}$)[0-9]+(?:[-_][0-9]+)?$");
     private static final Pattern WHITESPACE_PATTERN = Pattern.compile("\\s+");
 
     private final PresignService presignService;
@@ -119,10 +120,22 @@ public class OnboardingService {
 
     @Transactional
     public void affiliationNumber(AnonSessionSnapshot anonSessionSnapshot, OnboardingAffiliationNumberCommand command) {
+        String affiliationNumber = validateAffiliationNumber(command.affiliationNumber());
+
         AnonSession anonSession = anonSessionRepository.findById(anonSessionSnapshot.id())
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_ANON_SESSION));
 
-        anonSession.changeAffiliationNumber(command.affiliationNumber().trim());
+        anonSession.changeAffiliationNumber(affiliationNumber);
+    }
+
+    private String validateAffiliationNumber(String affiliationNumber) {
+        String trimmed = affiliationNumber.trim();
+
+        if (!AFFILIATION_NUMBER_PATTERN.matcher(trimmed).matches()) {
+            throw new BusinessException(ErrorCode.INVALID_AFFILIATION_NUMBER, "학번은 숫자 또는 숫자-숫자, 숫자_숫자 형식만 사용할 수 있습니다: " + trimmed);
+        }
+
+        return trimmed;
     }
 
     public List<SurveyQuestion> surveyQuestions() {

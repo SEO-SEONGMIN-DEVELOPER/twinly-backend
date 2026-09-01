@@ -191,6 +191,31 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("학번 입력: 허용 형식을 벗어난 학번은 422 INVALID_AFFILIATION_NUMBER로 거절되고 세션에 저장되지 않는다")
+    void affiliationNumber_with_invalid_format_end_to_end() throws Exception {
+        // given: 실제 익명 세션을 DB에 저장
+        AnonSession session = saveAnonSession();
+
+        // when: 구분자가 둘인 학번으로 API 호출
+        mockMvc.perform(put("/api/v1/onboarding/affiliation-number")
+                        .header("Authorization", anonBearer(session))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content("""
+                                {
+                                  "affiliationNumber": "2024-0-01"
+                                }
+                                """))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value(ErrorCode.INVALID_AFFILIATION_NUMBER.name()));
+
+        // then: DB의 세션 학번은 비어 있는 그대로
+        flushAndClear();
+        AnonSession reloaded = anonSessionRepository.findById(session.getId()).orElseThrow();
+        assertThat(reloaded.getAffiliationNumber()).isNull();
+    }
+
+    @Test
     @DisplayName("학교 목록: 인증 헤더 없이도 DB에 등록된 학교가 이름순으로 내려온다")
     void organizations_end_to_end() throws Exception {
         // given: 가입 가능한 학교 2곳을 이름 역순으로 저장 (시드로 들어온 실제 학교들과 섞인다)

@@ -272,6 +272,41 @@ class OnboardingServiceUnitTest {
     }
 
     @Test
+    @DisplayName("숫자만 있거나 구분자(-, _)로 이어진 학번은 앞뒤 공백을 제거하고 저장한다")
+    void affiliationNumber_accepts_allowed_formats() {
+        // given: 허용되는 세 가지 형태와 앞뒤 공백이 섞인 값
+        List<String> valid = List.of("2024001", "2024-001", "2024_001", "  2024001  ");
+
+        // when & then: 모두 통과하고 공백은 제거된 채로 저장됨
+        for (String affiliationNumber : valid) {
+            AnonSession anonSession = AnonSession.create(UUID.randomUUID(), Instant.now().plusSeconds(3600));
+            given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(anonSession));
+
+            onboardingService.affiliationNumber(ANON_SESSION, new OnboardingAffiliationNumberCommand(affiliationNumber));
+
+            assertThat(anonSession.getAffiliationNumber()).isEqualTo(affiliationNumber.trim());
+        }
+    }
+
+    @Test
+    @DisplayName("학번이 허용 형식을 벗어나면 INVALID_AFFILIATION_NUMBER 예외가 발생한다")
+    void affiliationNumber_when_violates_format_throws() {
+        // given: 허용 문자가 아니거나, 구분자가 양 끝에 있거나, 구분자가 둘 이상인 값들
+        List<String> invalid = List.of("2024a", "2024 001", "-2024", "2024-", "2024-0-01", "2024--001", "-", "0".repeat(51));
+
+        // when & then: 모두 INVALID_AFFILIATION_NUMBER로 거절되고 세션 조회까지 가지 않는다
+        for (String affiliationNumber : invalid) {
+            assertThatThrownBy(() -> onboardingService.affiliationNumber(
+                    ANON_SESSION, new OnboardingAffiliationNumberCommand(affiliationNumber)))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting(e -> ((BusinessException) e).getErrorCode())
+                    .isEqualTo(ErrorCode.INVALID_AFFILIATION_NUMBER);
+        }
+
+        then(anonSessionRepository).should(never()).findById(anyLong());
+    }
+
+    @Test
     @DisplayName("학번 입력 시 익명 세션이 없으면 INVALID_ANON_SESSION 예외가 발생한다")
     void affiliationNumber_when_session_not_found_throws() {
         // given: 세션 조회 결과 없음
