@@ -15,7 +15,8 @@ import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.onboarding.dto.command.OnboardingAffiliationCommand;
 import com.nidus.twinly.onboarding.dto.command.OnboardingAiChatMessageCommand;
-import com.nidus.twinly.onboarding.dto.command.OnboardingBasicInfoCommand;
+import com.nidus.twinly.onboarding.dto.command.OnboardingAffiliationNumberCommand;
+import com.nidus.twinly.onboarding.dto.command.OnboardingNameCommand;
 import com.nidus.twinly.onboarding.dto.command.OnboardingGrantConsentsCommand;
 import com.nidus.twinly.onboarding.dto.command.OnboardingGrantConsentsItemCommand;
 import com.nidus.twinly.onboarding.dto.command.OnboardingInterestsCommand;
@@ -78,10 +79,8 @@ class OnboardingControllerUnitTest {
             "닉네임",
             "홍",
             "길동",
-            Gender.MALE,
             "트윈리대학교",
             "2024001",
-            "2000-01-01",
             "01012345678",
             "phoneHash",
             "test@test.com",
@@ -183,74 +182,101 @@ class OnboardingControllerUnitTest {
     }
 
     @Test
-    @DisplayName("기본 정보 입력 성공 시 200을 반환하고 익명 세션과 요청 값으로 만든 커맨드로 서비스를 호출한다")
-    void basicInfo_success() throws Exception {
-        // when: 익명 세션 인증 상태로 기본 정보 입력 API 호출
-        var result = mockMvc.perform(put("/api/v1/onboarding/basic-info")
+    @DisplayName("이름 입력 성공 시 200을 반환하고 익명 세션과 요청 값으로 만든 커맨드로 서비스를 호출한다")
+    void name_success() throws Exception {
+        // when: 익명 세션 인증 상태로 이름 입력 API 호출
+        var result = mockMvc.perform(put("/api/v1/onboarding/name")
                 .header("Authorization", ANON_BEARER)
                 .contentType(MediaType.APPLICATION_JSON)
                 .characterEncoding("UTF-8")
                 .content("""
                         {
                           "familyName": "홍",
-                          "givenName": "길동",
-                          "gender": "male",
-                          "affiliationNumber": "2024001",
-                          "birthDate": "2000-01-01"
+                          "givenName": "길동"
                         }
                         """));
 
         // then: 200 반환 + 익명 세션 스냅샷과 변환된 커맨드로 서비스에 위임
         result.andExpect(status().isOk());
-        then(onboardingService).should().basicInfo(ANON_SESSION, new OnboardingBasicInfoCommand(
-                "홍", "길동", Gender.MALE, "2024001", LocalDate.of(2000, 1, 1)));
+        then(onboardingService).should().name(ANON_SESSION, new OnboardingNameCommand("홍", "길동"));
     }
 
     @Test
-    @DisplayName("기본 정보 입력에 필수 필드가 빠지면 400을 반환하고 서비스를 호출하지 않는다")
-    void basicInfo_with_missing_field_returns_400() throws Exception {
-        // when: familyName이 빠진 요청으로 기본 정보 입력 API 호출
-        var result = mockMvc.perform(put("/api/v1/onboarding/basic-info")
+    @DisplayName("이름 입력에 필수 필드가 빠지면 400을 반환하고 서비스를 호출하지 않는다")
+    void name_with_missing_field_returns_400() throws Exception {
+        // when: familyName이 빠진 요청으로 이름 입력 API 호출
+        var result = mockMvc.perform(put("/api/v1/onboarding/name")
                 .header("Authorization", ANON_BEARER)
                 .contentType(MediaType.APPLICATION_JSON)
                 .characterEncoding("UTF-8")
                 .content("""
                         {
-                          "givenName": "길동",
-                          "gender": "male",
-                          "affiliation": "트윈리대학교",
-                          "affiliationNumber": "2024001",
-                          "birthDate": "2000-01-01"
+                          "givenName": "길동"
                         }
                         """));
 
         // then: 400 반환 + 서비스는 호출되지 않음
         result.andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value(ErrorCode.INVALID_REQUEST.name()));
-        then(onboardingService).should(never()).basicInfo(any(), any());
+        then(onboardingService).should(never()).name(any(), any());
     }
 
     @Test
-    @DisplayName("익명 세션 인증 헤더가 없으면 401을 반환하고 서비스를 호출하지 않는다")
-    void basicInfo_without_auth_returns_401() throws Exception {
-        // when: 인증 헤더 없이 기본 정보 입력 API 호출
-        var result = mockMvc.perform(put("/api/v1/onboarding/basic-info")
+    @DisplayName("이름 입력에 익명 세션 인증 헤더가 없으면 401을 반환하고 서비스를 호출하지 않는다")
+    void name_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 이름 입력 API 호출
+        var result = mockMvc.perform(put("/api/v1/onboarding/name")
                 .contentType(MediaType.APPLICATION_JSON)
                 .characterEncoding("UTF-8")
                 .content("""
                         {
                           "familyName": "홍",
-                          "givenName": "길동",
-                          "gender": "male",
-                          "affiliation": "트윈리대학교",
-                          "affiliationNumber": "2024001",
-                          "birthDate": "2000-01-01"
+                          "givenName": "길동"
                         }
                         """));
 
         // then: 401 반환 + 서비스는 호출되지 않음
         result.andExpect(status().isUnauthorized());
-        then(onboardingService).should(never()).basicInfo(any(), any());
+        then(onboardingService).should(never()).name(any(), any());
+    }
+
+    @Test
+    @DisplayName("학번 입력 성공 시 200을 반환하고 익명 세션과 요청 값으로 만든 커맨드로 서비스를 호출한다")
+    void affiliationNumber_success() throws Exception {
+        // when: 익명 세션 인증 상태로 학번 입력 API 호출
+        var result = mockMvc.perform(put("/api/v1/onboarding/affiliation-number")
+                .header("Authorization", ANON_BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .characterEncoding("UTF-8")
+                .content("""
+                        {
+                          "affiliationNumber": "2024001"
+                        }
+                        """));
+
+        // then: 200 반환 + 익명 세션 스냅샷과 변환된 커맨드로 서비스에 위임
+        result.andExpect(status().isOk());
+        then(onboardingService).should().affiliationNumber(ANON_SESSION, new OnboardingAffiliationNumberCommand("2024001"));
+    }
+
+    @Test
+    @DisplayName("학번 입력에 빈 값이 오면 400을 반환하고 서비스를 호출하지 않는다")
+    void affiliationNumber_with_blank_returns_400() throws Exception {
+        // when: 빈 학번으로 입력 API 호출
+        var result = mockMvc.perform(put("/api/v1/onboarding/affiliation-number")
+                .header("Authorization", ANON_BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .characterEncoding("UTF-8")
+                .content("""
+                        {
+                          "affiliationNumber": " "
+                        }
+                        """));
+
+        // then: 400 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(ErrorCode.INVALID_REQUEST.name()));
+        then(onboardingService).should(never()).affiliationNumber(any(), any());
     }
 
     @Test
@@ -662,28 +688,4 @@ class OnboardingControllerUnitTest {
         then(onboardingService).should(never()).interests(any(), any());
     }
 
-    @Test
-    @DisplayName("기본 정보 입력 시 생년월일이 미래면 400을 반환하고 서비스를 호출하지 않는다")
-    void basicInfo_with_future_birth_date_returns_400() throws Exception {
-        // when: 미래 생년월일로 기본 정보 입력 API 호출
-        var result = mockMvc.perform(put("/api/v1/onboarding/basic-info")
-                .header("Authorization", ANON_BEARER)
-                .contentType(MediaType.APPLICATION_JSON)
-                .characterEncoding("UTF-8")
-                .content("""
-                        {
-                          "familyName": "홍",
-                          "givenName": "길동",
-                          "gender": "male",
-                          "affiliation": "트윈리대학교",
-                          "affiliationNumber": "2024001",
-                          "birthDate": "2999-01-01"
-                        }
-                        """));
-
-        // then: 400 INVALID_REQUEST 반환 + 서비스는 호출되지 않음
-        result.andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
-        then(onboardingService).should(never()).basicInfo(any(), any());
-    }
 }

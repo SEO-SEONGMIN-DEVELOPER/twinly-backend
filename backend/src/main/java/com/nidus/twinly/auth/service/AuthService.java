@@ -519,11 +519,9 @@ public class AuthService {
         if (anonSession.getNickname() == null
                 || anonSession.getFamilyName() == null
                 || anonSession.getGivenName() == null
-                || anonSession.getGender() == null
                 || anonSession.getOrganization() == null
                 || anonSession.getAffiliation() == null
-                || anonSession.getAffiliationNumber() == null
-                || anonSession.getBirthDate() == null) {
+                || anonSession.getAffiliationNumber() == null) {
             throw new BusinessException(ErrorCode.PROFILE_NOT_COMPLETED);
         }
     }

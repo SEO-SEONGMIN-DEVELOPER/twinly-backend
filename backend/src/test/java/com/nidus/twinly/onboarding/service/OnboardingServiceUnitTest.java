@@ -9,7 +9,9 @@ import com.nidus.twinly.anon.repository.AnonSessionAgreementRepository;
 import com.nidus.twinly.anon.repository.AnonSessionPersonaElementRepository;
 import com.nidus.twinly.anon.repository.AnonSessionPhotoRepository;
 import com.nidus.twinly.anon.repository.AnonSessionRepository;
+import com.nidus.twinly.auth.entity.AnonSessionIdentityVerification;
 import com.nidus.twinly.auth.entity.AnonSessionVerificationSession;
+import com.nidus.twinly.auth.repository.AnonSessionIdentityVerificationRepository;
 import com.nidus.twinly.auth.repository.AnonSessionVerificationSessionRepository;
 import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.domain.VerificationType;
@@ -32,7 +34,8 @@ import com.nidus.twinly.legal.repository.PolicyRepository.PolicySummary;
 import com.nidus.twinly.legal.service.PolicyCatalog;
 import com.nidus.twinly.legal.service.PolicyCatalog.PolicyKey;
 import com.nidus.twinly.onboarding.dto.command.OnboardingAffiliationCommand;
-import com.nidus.twinly.onboarding.dto.command.OnboardingBasicInfoCommand;
+import com.nidus.twinly.onboarding.dto.command.OnboardingAffiliationNumberCommand;
+import com.nidus.twinly.onboarding.dto.command.OnboardingNameCommand;
 import com.nidus.twinly.onboarding.dto.command.OnboardingGrantConsentsCommand;
 import com.nidus.twinly.onboarding.dto.command.OnboardingGrantConsentsItemCommand;
 import com.nidus.twinly.onboarding.dto.command.OnboardingInterestsCommand;
@@ -100,10 +103,8 @@ class OnboardingServiceUnitTest {
             "닉네임",
             "홍",
             "길동",
-            Gender.MALE,
             "트윈리대학교",
             "2024001",
-            "2000-01-01",
             "01012345678",
             "phoneHash",
             "test@test.com",
@@ -119,6 +120,9 @@ class OnboardingServiceUnitTest {
 
     @Mock
     AnonSessionRepository anonSessionRepository;
+
+    @Mock
+    AnonSessionIdentityVerificationRepository anonSessionIdentityVerificationRepository;
 
     @Mock
     AnonSessionPhotoRepository anonSessionPhotoRepository;
@@ -159,54 +163,132 @@ class OnboardingServiceUnitTest {
     @InjectMocks
     OnboardingService onboardingService;
 
-    // ---------- basic-info ----------
+    // ---------- 이름 / 학번 ----------
 
     @Test
-    @DisplayName("기본 정보 입력 시 익명 세션의 이름·성별·학번·생년월일이 갱신된다")
-    void basicInfo_updates_anon_session() {
+    @DisplayName("이름 입력 시 본인인증 이름과 일치하면 익명 세션의 성·이름이 갱신된다")
+    void name_updates_anon_session() {
+        // given: "홍길동"으로 본인인증이 완료된, 아직 이름이 비어 있는 익명 세션
+        AnonSession anonSession = AnonSession.create(UUID.randomUUID(), Instant.now().plusSeconds(3600));
+        given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
+                .willReturn(Optional.of(verifiedIdentity("홍길동")));
+        given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(anonSession));
+
+        // when: 이름 입력
+        onboardingService.name(ANON_SESSION, new OnboardingNameCommand("홍", "길동"));
+
+        // then: 세션 엔티티의 성·이름이 갱신됨
+        assertThat(anonSession.getFamilyName()).isEqualTo("홍");
+        assertThat(anonSession.getGivenName()).isEqualTo("길동");
+    }
+
+    @Test
+    @DisplayName("이름 입력은 공백을 무시하고 본인인증 이름과 비교한다")
+    void name_ignores_whitespace_when_matching() {
+        // given: 공백이 포함된 이름으로 본인인증이 완료된 익명 세션
+        AnonSession anonSession = AnonSession.create(UUID.randomUUID(), Instant.now().plusSeconds(3600));
+        given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
+                .willReturn(Optional.of(verifiedIdentity("홍 길동")));
+        given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(anonSession));
+
+        // when: 공백 없이 나눠 입력
+        onboardingService.name(ANON_SESSION, new OnboardingNameCommand("홍", "길동"));
+
+        // then: 일치로 판정되어 갱신됨
+        assertThat(anonSession.getFamilyName()).isEqualTo("홍");
+        assertThat(anonSession.getGivenName()).isEqualTo("길동");
+    }
+
+    @Test
+    @DisplayName("이름 입력이 본인인증 이름과 다르면 IDENTITY_NAME_MISMATCH 예외가 발생한다")
+    void name_mismatch_throws() {
+        // given: "홍길동"으로 본인인증이 완료된 익명 세션
+        given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
+                .willReturn(Optional.of(verifiedIdentity("홍길동")));
+
+        // when & then: 다른 이름을 넣으면 IDENTITY_NAME_MISMATCH 예외 발생
+        assertThatThrownBy(() -> onboardingService.name(ANON_SESSION, new OnboardingNameCommand("김", "철수")))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.IDENTITY_NAME_MISMATCH);
+    }
+
+    @Test
+    @DisplayName("본인인증을 거치지 않고 이름을 입력하면 IDENTITY_VERIFICATION_NOT_COMPLETED 예외가 발생한다")
+    void name_without_identity_verification_throws() {
+        // given: 본인인증 행이 없음
+        given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID)).willReturn(Optional.empty());
+
+        // when & then: IDENTITY_VERIFICATION_NOT_COMPLETED 예외 발생
+        assertThatThrownBy(() -> onboardingService.name(ANON_SESSION, new OnboardingNameCommand("홍", "길동")))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.IDENTITY_VERIFICATION_NOT_COMPLETED);
+    }
+
+    @Test
+    @DisplayName("본인인증 발급만 하고 완료하지 않은 상태로 이름을 입력하면 IDENTITY_VERIFICATION_NOT_COMPLETED 예외가 발생한다")
+    void name_when_identity_not_verified_throws() {
+        // given: 발급만 되고 verify가 끝나지 않은 본인인증 행
+        AnonSessionIdentityVerification issued = AnonSessionIdentityVerification.create(
+                ANON_SESSION_ID, "identity-1", Instant.now().plusSeconds(600));
+        given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID)).willReturn(Optional.of(issued));
+
+        // when & then: IDENTITY_VERIFICATION_NOT_COMPLETED 예외 발생
+        assertThatThrownBy(() -> onboardingService.name(ANON_SESSION, new OnboardingNameCommand("홍", "길동")))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.IDENTITY_VERIFICATION_NOT_COMPLETED);
+    }
+
+    @Test
+    @DisplayName("이름 입력 시 익명 세션이 없으면 INVALID_ANON_SESSION 예외가 발생한다")
+    void name_when_session_not_found_throws() {
+        // given: 본인인증은 통과했지만 세션 조회 결과 없음
+        given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
+                .willReturn(Optional.of(verifiedIdentity("홍길동")));
+        given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.empty());
+
+        // when & then: INVALID_ANON_SESSION 예외 발생
+        assertThatThrownBy(() -> onboardingService.name(ANON_SESSION, new OnboardingNameCommand("홍", "길동")))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_ANON_SESSION);
+    }
+
+    @Test
+    @DisplayName("학번 입력 시 익명 세션의 학번만 갱신되고 학과는 건드리지 않는다")
+    void affiliationNumber_updates_anon_session() {
         // given: 아직 아무 정보도 없는 익명 세션
         AnonSession anonSession = AnonSession.create(UUID.randomUUID(), Instant.now().plusSeconds(3600));
         given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(anonSession));
 
-        // when: 기본 정보 입력
-        onboardingService.basicInfo(ANON_SESSION, new OnboardingBasicInfoCommand(
-                "홍", "길동", Gender.MALE, "2024001", LocalDate.of(2000, 1, 1)));
+        // when: 학번 입력
+        onboardingService.affiliationNumber(ANON_SESSION, new OnboardingAffiliationNumberCommand("2024001"));
 
-        // then: 세션 엔티티의 각 필드가 갱신되고 생년월일은 문자열로 저장됨
-        assertThat(anonSession.getFamilyName()).isEqualTo("홍");
-        assertThat(anonSession.getGivenName()).isEqualTo("길동");
-        assertThat(anonSession.getGender()).isEqualTo(Gender.MALE);
+        // then: 학번만 갱신되고 학과는 별도 단계이므로 여전히 비어 있음
         assertThat(anonSession.getAffiliationNumber()).isEqualTo("2024001");
-        assertThat(anonSession.getBirthDate()).isEqualTo("2000-01-01");
-    }
-
-    @Test
-    @DisplayName("기본 정보 입력은 학과를 건드리지 않는다")
-    void basicInfo_does_not_touch_affiliation() {
-        // given: 학과가 아직 비어 있는 익명 세션
-        AnonSession anonSession = AnonSession.create(UUID.randomUUID(), Instant.now().plusSeconds(3600));
-        given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(anonSession));
-
-        // when: 기본 정보 입력
-        onboardingService.basicInfo(ANON_SESSION, new OnboardingBasicInfoCommand(
-                "홍", "길동", Gender.MALE, "2024001", LocalDate.of(2000, 1, 1)));
-
-        // then: 학과는 별도 단계에서 채워지므로 여전히 비어 있음
         assertThat(anonSession.getAffiliation()).isNull();
     }
 
     @Test
-    @DisplayName("기본 정보 입력 시 익명 세션이 없으면 INVALID_ANON_SESSION 예외가 발생한다")
-    void basicInfo_when_session_not_found_throws() {
+    @DisplayName("학번 입력 시 익명 세션이 없으면 INVALID_ANON_SESSION 예외가 발생한다")
+    void affiliationNumber_when_session_not_found_throws() {
         // given: 세션 조회 결과 없음
         given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.empty());
 
         // when & then: INVALID_ANON_SESSION 예외 발생
-        assertThatThrownBy(() -> onboardingService.basicInfo(ANON_SESSION, new OnboardingBasicInfoCommand(
-                "홍", "길동", Gender.MALE, "2024001", LocalDate.of(2000, 1, 1))))
+        assertThatThrownBy(() -> onboardingService.affiliationNumber(ANON_SESSION, new OnboardingAffiliationNumberCommand("2024001")))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.INVALID_ANON_SESSION);
+    }
+
+    private AnonSessionIdentityVerification verifiedIdentity(String name) {
+        AnonSessionIdentityVerification verification = AnonSessionIdentityVerification.create(
+                ANON_SESSION_ID, "identity-1", Instant.now().plusSeconds(600));
+        verification.verify(name, "2000-01-01", Gender.MALE, "01012345678", "ci", "ciHash");
+        return verification;
     }
 
     // ---------- 학교/학과 ----------

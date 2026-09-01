@@ -100,9 +100,7 @@ class AuthServiceUnitTest {
             Instant.parse("2030-01-01T00:00:00Z"),
             "nick",
             "홍", "길동",
-            Gender.MALE,
             "트윈리대학교", "20250001",
-            "2000-01-01",
             PHONE, "phoneHash",
             EMAIL, "emailHash",
             Instant.parse("2026-01-01T00:00:00Z")
@@ -1203,11 +1201,9 @@ class AuthServiceUnitTest {
         anonSession.changeNickname("nick");
         anonSession.changeFamilyName("홍");
         anonSession.changeGivenName("길동");
-        anonSession.changeGender(Gender.MALE);
         anonSession.changeOrganization("트윈리대학교");
         anonSession.changeAffiliation("트윈리대학교");
         anonSession.changeAffiliationNumber("20250001");
-        anonSession.changeBirthDate("2000-01-01");
         return anonSession;
     }
 

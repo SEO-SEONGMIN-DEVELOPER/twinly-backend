@@ -9,7 +9,9 @@ import com.nidus.twinly.anon.repository.AnonSessionAgreementRepository;
 import com.nidus.twinly.anon.repository.AnonSessionPersonaElementRepository;
 import com.nidus.twinly.anon.repository.AnonSessionPhotoRepository;
 import com.nidus.twinly.anon.repository.AnonSessionRepository;
+import com.nidus.twinly.auth.entity.AnonSessionIdentityVerification;
 import com.nidus.twinly.auth.entity.AnonSessionVerificationSession;
+import com.nidus.twinly.auth.repository.AnonSessionIdentityVerificationRepository;
 import com.nidus.twinly.auth.repository.AnonSessionVerificationSessionRepository;
 import com.nidus.twinly.common.domain.VerificationType;
 import com.nidus.twinly.common.persona.PersonaDimension;
@@ -65,6 +67,7 @@ public class OnboardingService {
     );
 
     private static final Pattern NICKNAME_PATTERN = Pattern.compile("^[가-힣a-zA-Z0-9_-]{2,20}$");
+    private static final Pattern WHITESPACE_PATTERN = Pattern.compile("\\s+");
 
     private final PresignService presignService;
     private final PhotoCommitService photoCommitService;
@@ -72,6 +75,7 @@ public class OnboardingService {
 
     private final AnonSessionRepository anonSessionRepository;
     private final AnonSessionVerificationSessionRepository anonSessionVerificationSessionRepository;
+    private final AnonSessionIdentityVerificationRepository anonSessionIdentityVerificationRepository;
     private final OrganizationRepository organizationRepository;
     private final OrganizationDomainRepository organizationDomainRepository;
     private final OrganizationAffiliationRepository organizationAffiliationRepository;
@@ -85,16 +89,40 @@ public class OnboardingService {
     private final SurveyLoader surveyLoader;
 
     @Transactional
-    public void basicInfo(AnonSessionSnapshot anonSessionSnapshot, OnboardingBasicInfoCommand command) {
+    public void name(AnonSessionSnapshot anonSessionSnapshot, OnboardingNameCommand command) {
         Long anonSessionId = anonSessionSnapshot.id();
+        String familyName = command.familyName().trim();
+        String givenName = command.givenName().trim();
+
+        requireMatchesVerifiedName(anonSessionId, familyName, givenName);
+
         AnonSession anonSession = anonSessionRepository.findById(anonSessionId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_ANON_SESSION));
 
-        anonSession.changeFamilyName(command.familyName());
-        anonSession.changeGivenName(command.givenName());
-        anonSession.changeGender(command.gender());
-        anonSession.changeAffiliationNumber(command.affiliationNumber());
-        anonSession.changeBirthDate(command.birthDate().toString());
+        anonSession.changeFamilyName(familyName);
+        anonSession.changeGivenName(givenName);
+    }
+
+    private void requireMatchesVerifiedName(Long anonSessionId, String familyName, String givenName) {
+        AnonSessionIdentityVerification verification = anonSessionIdentityVerificationRepository.findByAnonSessionId(anonSessionId)
+                .filter(AnonSessionIdentityVerification::isVerified)
+                .orElseThrow(() -> new BusinessException(ErrorCode.IDENTITY_VERIFICATION_NOT_COMPLETED));
+
+        if (!normalizeName(familyName + givenName).equals(normalizeName(verification.getName()))) {
+            throw new BusinessException(ErrorCode.IDENTITY_NAME_MISMATCH);
+        }
+    }
+
+    private String normalizeName(String name) {
+        return WHITESPACE_PATTERN.matcher(name).replaceAll("");
+    }
+
+    @Transactional
+    public void affiliationNumber(AnonSessionSnapshot anonSessionSnapshot, OnboardingAffiliationNumberCommand command) {
+        AnonSession anonSession = anonSessionRepository.findById(anonSessionSnapshot.id())
+                .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_ANON_SESSION));
+
+        anonSession.changeAffiliationNumber(command.affiliationNumber().trim());
     }
 
     public List<SurveyQuestion> surveyQuestions() {

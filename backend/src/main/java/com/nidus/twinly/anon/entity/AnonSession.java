@@ -2,7 +2,6 @@ package com.nidus.twinly.anon.entity;
 
 import org.hibernate.annotations.DynamicUpdate;
 import com.nidus.twinly.common.crypto.EncryptedStringConverter;
-import com.nidus.twinly.common.domain.Gender;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -37,9 +36,6 @@ public class AnonSession {
     @Column(columnDefinition = "TEXT")
     private String givenName;
 
-    @Enumerated(EnumType.STRING)
-    private Gender gender;
-
     @Convert(converter = EncryptedStringConverter.class)
     @Column(columnDefinition = "TEXT")
     private String organization;
@@ -51,10 +47,6 @@ public class AnonSession {
     @Convert(converter = EncryptedStringConverter.class)
     @Column(columnDefinition = "TEXT")
     private String affiliationNumber;
-
-    @Convert(converter = EncryptedStringConverter.class)
-    @Column(columnDefinition = "TEXT")
-    private String birthDate;
 
     @Convert(converter = EncryptedStringConverter.class)
     @Column(columnDefinition = "TEXT")
@@ -83,11 +75,9 @@ public class AnonSession {
     public void changeNickname(String nickname) { this.nickname = nickname; }
     public void changeFamilyName(String familyName) { this.familyName = familyName; }
     public void changeGivenName(String givenName) { this.givenName = givenName; }
-    public void changeGender(Gender gender) { this.gender = gender; }
     public void changeOrganization(String organization) { this.organization = organization; }
     public void changeAffiliation(String affiliation) { this.affiliation = affiliation; }
     public void changeAffiliationNumber(String affiliationNumber) { this.affiliationNumber = affiliationNumber; }
-    public void changeBirthDate(String birthDate) { this.birthDate = birthDate; }
     public void changePhoneNumber(String phoneNumber) { this.phoneNumber = phoneNumber; }
     public void changePhoneNumberHash(String phoneNumberHash) { this.phoneNumberHash = phoneNumberHash; }
     public void changeEmail(String email) { this.email = email; }

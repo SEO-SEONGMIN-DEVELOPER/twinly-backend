@@ -42,6 +42,7 @@ public enum ErrorCode {
     IDENTITY_RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "본인인증 요청이 너무 잦습니다."),
     IDENTITY_NOT_VERIFIED(HttpStatus.UNPROCESSABLE_CONTENT, "본인인증이 완료되지 않았습니다."),
     IDENTITY_AGE_NOT_ALLOWED(HttpStatus.UNPROCESSABLE_CONTENT, "가입할 수 없는 나이입니다."),
+    IDENTITY_NAME_MISMATCH(HttpStatus.UNPROCESSABLE_CONTENT, "본인인증 정보의 이름과 일치하지 않습니다."),
     IDENTITY_VERIFICATION_NOT_COMPLETED(HttpStatus.UNPROCESSABLE_CONTENT, "가입에 필요한 본인인증이 완료되지 않았습니다."),
 
     // 유저/회원

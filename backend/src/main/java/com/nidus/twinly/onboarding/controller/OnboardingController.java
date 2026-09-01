@@ -36,11 +36,21 @@ public class OnboardingController {
     private final OnboardingService onboardingService;
     private final AiChatService aiChatService;
 
-    @Operation(summary = "기본 정보 입력")
-    @PutMapping("/api/v1/onboarding/basic-info")
-    public void basicInfo(@AuthenticationPrincipal AnonSessionSnapshot anonSessionSnapshot,
-                          @Valid @RequestBody OnboardingBasicInfoRequest request) {
-        onboardingService.basicInfo(anonSessionSnapshot, OnboardingBasicInfoCommand.from(request));
+    @Operation(summary = "이름 입력")
+    @ApiResponses({
+            @ApiResponse(responseCode = "422", description = "IDENTITY_VERIFICATION_NOT_COMPLETED, IDENTITY_NAME_MISMATCH")
+    })
+    @PutMapping("/api/v1/onboarding/name")
+    public void name(@AuthenticationPrincipal AnonSessionSnapshot anonSessionSnapshot,
+                     @Valid @RequestBody OnboardingNameRequest request) {
+        onboardingService.name(anonSessionSnapshot, OnboardingNameCommand.from(request));
+    }
+
+    @Operation(summary = "학번 입력")
+    @PutMapping("/api/v1/onboarding/affiliation-number")
+    public void affiliationNumber(@AuthenticationPrincipal AnonSessionSnapshot anonSessionSnapshot,
+                                  @Valid @RequestBody OnboardingAffiliationNumberRequest request) {
+        onboardingService.affiliationNumber(anonSessionSnapshot, OnboardingAffiliationNumberCommand.from(request));
     }
 
     @Operation(summary = "설문 문항 목록 조회")

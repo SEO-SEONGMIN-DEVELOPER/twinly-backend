@@ -294,11 +294,9 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
         anonSession.changeNickname("signup-nick");
         anonSession.changeFamilyName("홍");
         anonSession.changeGivenName("길동");
-        anonSession.changeGender(Gender.MALE);
         anonSession.changeOrganization("트윈리대학교");
         anonSession.changeAffiliation("트윈리대학교");
         anonSession.changeAffiliationNumber("20250001");
-        anonSession.changeBirthDate("2000-01-01");
         anonSessionRepository.save(anonSession);
 
         String phone = "01099998888";
@@ -397,11 +395,9 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
         anonSession.changeNickname("cleanup-nick");
         anonSession.changeFamilyName("정");
         anonSession.changeGivenName("수민");
-        anonSession.changeGender(Gender.FEMALE);
         anonSession.changeOrganization("트윈리대학교");
         anonSession.changeAffiliation("트윈리대학교");
         anonSession.changeAffiliationNumber("20250004");
-        anonSession.changeBirthDate("2000-04-04");
         anonSessionRepository.save(anonSession);
 
         String phone = "01033332222";
