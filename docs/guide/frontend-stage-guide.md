@@ -183,7 +183,7 @@ POST /internal/v1/users/{userId}/simulations
 | 경로 | 대상 | 적용 환경 |
 | --- | --- | --- |
 | Flyway `R__` SQL | 학교, 소속, 정책 | local, stage, **prod** |
-| 앱 기동 시 코드 | 시즌 | local, stage (**prod 제외**) |
+| 앱 기동 시 코드 | 시즌, 테스트 유저 20명 | local, stage (**prod 제외**) |
 
 ### 8-1. 학교 / 소속
 
@@ -209,3 +209,7 @@ POST /internal/v1/users/{userId}/simulations
 
 - 시즌을 일부러 비활성화한 뒤 재배포하면 **새 시즌이 자동으로 생성**됩니다. 시즌 종료 시나리오를 테스트했다면 배포 후 상태를 다시 확인하세요.
 - 이 자동 생성은 **prod 에서는 동작하지 않습니다.** 운영 시즌은 `POST /admin/season` 으로 직접 만들어야 합니다.
+
+### 8-3. 테스트 유저 20명
+
+전화번호 `01000009001` ~ `01000009020` 으로 바로 로그인할 수 있는 시드 유저가 20명 들어있습니다. 성별·학교·소속·학번 등 전체 목록은 [frontend-seed-users.md](./frontend-seed-users.md) 를 보세요.
