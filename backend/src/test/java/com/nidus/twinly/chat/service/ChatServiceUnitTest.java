@@ -1017,7 +1017,7 @@ class ChatServiceUnitTest {
                 "affNo", "affNoHash",
                 "2000-01-01", "birthHash",
                 "phone", "phoneHash",
-                "email", "emailHash"
+                "email", "emailHash", null, null
         );
         ReflectionTestUtils.setField(user, "id", id);
         return user;

@@ -17,16 +17,24 @@ import com.nidus.twinly.auth.entity.RefreshToken;
 import com.nidus.twinly.auth.repository.RefreshTokenRepository;
 import com.nidus.twinly.legal.entity.Agreement;
 import com.nidus.twinly.legal.repository.AgreementRepository;
+import com.nidus.twinly.auth.client.PortOneIdentityClient;
+import com.nidus.twinly.auth.client.PortOneIdentityVerificationBody;
+import com.nidus.twinly.auth.client.PortOneIdentityVerificationStatus;
+import com.nidus.twinly.auth.config.PortOneProperties;
 import com.nidus.twinly.auth.dto.command.*;
 import com.nidus.twinly.auth.dto.result.*;
+import com.nidus.twinly.auth.entity.AnonSessionIdentityVerification;
 import com.nidus.twinly.auth.entity.AnonSessionVerificationSession;
 import com.nidus.twinly.auth.entity.VerificationSession;
+import com.nidus.twinly.auth.repository.AnonSessionIdentityVerificationRepository;
 import com.nidus.twinly.auth.repository.AnonSessionVerificationSessionRepository;
 import com.nidus.twinly.auth.repository.VerificationSessionRepository;
 import com.nidus.twinly.common.crypto.BlindIndexHasher;
+import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.domain.VerificationType;
 import com.nidus.twinly.common.jwt.JwtService;
 import com.nidus.twinly.common.photo.ProfileThumbnailService;
+import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.onboarding.repository.SurveyAnswerRepository;
@@ -42,24 +50,41 @@ import com.nidus.twinly.user.repository.UserRepository;
 import com.nidus.twinly.user.repository.VerificationRepository;
 import io.jsonwebtoken.JwtException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.Period;
+import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
+
+    private static final String IDENTITY_VERIFICATION_ID_PREFIX = "identity-";
+    private static final int IDENTITY_EXPIRES_MINUTES = 30;
+    private static final Duration IDENTITY_ISSUE_WINDOW = Duration.ofHours(1);
+    private static final int IDENTITY_ISSUE_LIMIT = 5;
+    private static final int IDENTITY_MIN_AGE = 18;
+    private static final int IDENTITY_MAX_AGE = 29;
 
     private final VerificationCodeIssuer verificationCodeIssuer;
     private final JwtService jwtService;
     private final VerificationService verificationService;
     private final OrganizationCatalog organizationCatalog;
+    private final PortOneIdentityClient portOneIdentityClient;
+    private final PortOneProperties portOneProperties;
 
     private final VerificationSessionRepository verificationSessionRepository;
     private final AnonSessionVerificationSessionRepository anonSessionVerificationSessionRepository;
+    private final AnonSessionIdentityVerificationRepository anonSessionIdentityVerificationRepository;
     private final AnonSessionRepository anonSessionRepository;
     private final UserRepository userRepository;
     private final AnonSessionPhotoRepository anonSessionPhotoRepository;
@@ -121,6 +146,139 @@ public class AuthService {
     @Transactional
     public void onboardingSmsVerify(AnonSessionSnapshot anonSessionSnapshot, AuthSmsVerifyCommand command) {
         verifyAnonSession(anonSessionSnapshot.id(), command, VerificationType.SMS);
+    }
+
+    @Transactional
+    public AuthIdentityPrepareResult onboardingIdentityPrepare(AnonSessionSnapshot anonSessionSnapshot) {
+        Instant now = Instant.now();
+        String identityVerificationId = IDENTITY_VERIFICATION_ID_PREFIX + UUID.randomUUID();
+        Instant expiresAt = now.plus(IDENTITY_EXPIRES_MINUTES, ChronoUnit.MINUTES);
+
+        AnonSessionIdentityVerification verification = anonSessionIdentityVerificationRepository
+                .findByAnonSessionId(anonSessionSnapshot.id())
+                .orElse(null);
+
+        if (verification == null) {
+            anonSessionIdentityVerificationRepository.save(
+                    AnonSessionIdentityVerification.create(anonSessionSnapshot.id(), identityVerificationId, expiresAt));
+
+            return new AuthIdentityPrepareResult(identityVerificationId, expiresAt);
+        }
+
+        if (verification.isVerified()) {
+            throw new BusinessException(ErrorCode.IDENTITY_ALREADY_VERIFIED);
+        }
+
+        if (verification.isRateLimited(now, IDENTITY_ISSUE_WINDOW, IDENTITY_ISSUE_LIMIT)) {
+            throw new BusinessException(ErrorCode.IDENTITY_RATE_LIMITED);
+        }
+
+        verification.countIssue(now, IDENTITY_ISSUE_WINDOW);
+        verification.refresh(identityVerificationId, expiresAt);
+
+        return new AuthIdentityPrepareResult(identityVerificationId, expiresAt);
+    }
+
+    @Transactional
+    public void onboardingIdentityVerify(AnonSessionSnapshot anonSessionSnapshot) {
+        Long anonSessionId = anonSessionSnapshot.id();
+
+        AnonSessionIdentityVerification verification = anonSessionIdentityVerificationRepository
+                .findByAnonSessionId(anonSessionId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.IDENTITY_NOT_VERIFIED));
+
+        if (verification.isVerified()) {
+            return;
+        }
+
+        if (verification.isExpired(Instant.now())) {
+            throw new BusinessException(ErrorCode.IDENTITY_NOT_VERIFIED);
+        }
+
+        PortOneIdentityVerificationBody body = portOneIdentityClient
+                .identityVerification(verification.getIdentityVerificationId())
+                .orElse(null);
+
+        if (body == null) {
+            log.info("본인인증 건을 PortOne에서 찾을 수 없습니다. anonSessionId={}, status=NOT_FOUND", anonSessionId);
+            throw new BusinessException(ErrorCode.IDENTITY_NOT_VERIFIED);
+        }
+
+        if (body.status() != PortOneIdentityVerificationStatus.VERIFIED) {
+            log.info("본인인증이 완료되지 않은 건입니다. anonSessionId={}, status={}", anonSessionId, body.status());
+            throw new BusinessException(ErrorCode.IDENTITY_NOT_VERIFIED);
+        }
+
+        if (body.channel() == null || body.verifiedCustomer() == null) {
+            throw new BusinessException(ErrorCode.IDENTITY_VERIFICATION_FAILED);
+        }
+
+        if (!portOneProperties.allows(body.channel().type())) {
+            log.warn("허용되지 않은 채널의 본인인증 건입니다. anonSessionId={}, channelType={}", anonSessionId, body.channel().type());
+            throw new BusinessException(ErrorCode.IDENTITY_NOT_VERIFIED);
+        }
+
+        PortOneIdentityVerificationBody.VerifiedCustomer customer = body.verifiedCustomer();
+        Gender gender = toGender(customer.gender());
+
+        if (isBlank(customer.name()) || gender == null || isBlank(customer.phoneNumber()) || isBlank(customer.ci())) {
+            throw new BusinessException(ErrorCode.IDENTITY_VERIFICATION_FAILED);
+        }
+
+        LocalDate birthDate = parseBirthDate(customer.birthDate());
+
+        if (!isAllowedAge(birthDate)) {
+            throw new BusinessException(ErrorCode.IDENTITY_AGE_NOT_ALLOWED);
+        }
+
+        String ciHash = blindIndexHasher.hash(customer.ci());
+
+        if (userRepository.existsByCiHash(ciHash)) {
+            throw new BusinessException(ErrorCode.IDENTITY_ALREADY_REGISTERED);
+        }
+
+        verification.verify(
+                customer.name(),
+                birthDate.toString(),
+                gender,
+                customer.phoneNumber(),
+                customer.ci(),
+                ciHash
+        );
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    private LocalDate parseBirthDate(String birthDate) {
+        if (birthDate == null) {
+            throw new BusinessException(ErrorCode.IDENTITY_VERIFICATION_FAILED);
+        }
+
+        try {
+            return LocalDate.parse(birthDate);
+        } catch (DateTimeParseException e) {
+            throw new BusinessException(ErrorCode.IDENTITY_VERIFICATION_FAILED, e);
+        }
+    }
+
+    private boolean isAllowedAge(LocalDate birthDate) {
+        int age = Period.between(birthDate, KstTimes.today()).getYears();
+
+        return age >= IDENTITY_MIN_AGE && age < IDENTITY_MAX_AGE;
+    }
+
+    private Gender toGender(String gender) {
+        if (Gender.MALE.name().equals(gender)) {
+            return Gender.MALE;
+        }
+
+        if (Gender.FEMALE.name().equals(gender)) {
+            return Gender.FEMALE;
+        }
+
+        return null;
     }
 
     @Transactional
@@ -210,18 +368,19 @@ public class AuthService {
     @Transactional
     public AuthTokenResult signup(AnonSessionSnapshot anonSessionSnapshot) {
         Long anonSessionId = anonSessionSnapshot.id();
-        AnonSessionVerificationSession smsSession = requireVerified(anonSessionId, VerificationType.SMS);
-        AnonSessionVerificationSession emailSession = requireVerified(anonSessionId, VerificationType.EMAIL);
+        AnonSessionIdentityVerification identityVerification = requireIdentityVerified(anonSessionId);
+        AnonSessionVerificationSession emailSession = requireEmailVerified(anonSessionId);
 
         AnonSession anonSession = anonSessionRepository.findById(anonSessionId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SIGNUP_SESSION_NOT_FOUND));
 
         requireProfileCompleted(anonSession);
 
-        String phoneNumber = smsSession.getContact();
+        String phoneNumber = identityVerification.getPhoneNumber();
         String phoneNumberHash = blindIndexHasher.hash(phoneNumber);
         String email = emailSession.getContact();
         String emailHash = blindIndexHasher.hash(email);
+        String ciHash = identityVerification.getCiHash();
 
         if (userRepository.existsByPhoneNumberHash(phoneNumberHash)) {
             throw new BusinessException(ErrorCode.PHONE_ALREADY_REGISTERED);
@@ -231,29 +390,35 @@ public class AuthService {
             throw new BusinessException(ErrorCode.EMAIL_ALREADY_REGISTERED);
         }
 
+        if (userRepository.existsByCiHash(ciHash)) {
+            throw new BusinessException(ErrorCode.IDENTITY_ALREADY_REGISTERED);
+        }
+
         String familyNameHash = blindIndexHasher.hash(anonSession.getFamilyName());
         String givenNameHash = blindIndexHasher.hash(anonSession.getGivenName());
         String organizationHash = blindIndexHasher.hash(anonSession.getOrganization());
         String affiliationHash = blindIndexHasher.hash(anonSession.getAffiliation());
         String affiliationNumberHash = blindIndexHasher.hash(anonSession.getAffiliationNumber());
-        String birthDateHash = blindIndexHasher.hash(anonSession.getBirthDate());
+        String birthDateHash = blindIndexHasher.hash(identityVerification.getBirthDate());
 
         User user = userRepository.save(
                 User.create(
                         anonSession.getNickname(),
                         anonSession.getFamilyName(), familyNameHash,
                         anonSession.getGivenName(), givenNameHash,
-                        anonSession.getGender(),
+                        identityVerification.getGender(),
                         anonSession.getOrganization(), organizationHash,
                         anonSession.getAffiliation(), affiliationHash,
                         anonSession.getAffiliationNumber(), affiliationNumberHash,
-                        anonSession.getBirthDate(), birthDateHash,
+                        identityVerification.getBirthDate(), birthDateHash,
                         phoneNumber, phoneNumberHash,
-                        email, emailHash
+                        email, emailHash,
+                        identityVerification.getCi(), ciHash
                 )
         );
 
         anonSessionVerificationSessionRepository.deleteByAnonSessionId(anonSessionId);
+        anonSessionIdentityVerificationRepository.deleteByAnonSessionId(anonSessionId);
 
         List<AnonSessionPhoto> anonSessionPhotos = anonSessionPhotoRepository.findAllByAnonSessionId(anonSessionId);
 
@@ -321,7 +486,7 @@ public class AuthService {
 
         anonSessionRepository.delete(anonSession);
 
-        verificationRepository.save(Verification.create(user.getId(), VerificationType.SMS, smsSession.getVerifiedAt()));
+        verificationRepository.save(Verification.create(user.getId(), VerificationType.IDENTITY, identityVerification.getVerifiedAt()));
         verificationRepository.save(Verification.create(user.getId(), VerificationType.EMAIL, emailSession.getVerifiedAt()));
 
         return issueAuthToken(user.getId());
@@ -338,16 +503,16 @@ public class AuthService {
         return session;
     }
 
-    private AnonSessionVerificationSession requireVerified(Long anonSessionId, VerificationType type) {
-        return anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(anonSessionId, type)
-                .filter(session -> session.getVerifiedAt() != null)
-                .orElseThrow(() -> new BusinessException(verificationNotCompletedCode(type)));
+    private AnonSessionIdentityVerification requireIdentityVerified(Long anonSessionId) {
+        return anonSessionIdentityVerificationRepository.findByAnonSessionId(anonSessionId)
+                .filter(AnonSessionIdentityVerification::isVerified)
+                .orElseThrow(() -> new BusinessException(ErrorCode.IDENTITY_VERIFICATION_NOT_COMPLETED));
     }
 
-    private ErrorCode verificationNotCompletedCode(VerificationType type) {
-        return type == VerificationType.SMS
-                ? ErrorCode.SMS_VERIFICATION_NOT_COMPLETED
-                : ErrorCode.EMAIL_VERIFICATION_NOT_COMPLETED;
+    private AnonSessionVerificationSession requireEmailVerified(Long anonSessionId) {
+        return anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(anonSessionId, VerificationType.EMAIL)
+                .filter(session -> session.getVerifiedAt() != null)
+                .orElseThrow(() -> new BusinessException(ErrorCode.EMAIL_VERIFICATION_NOT_COMPLETED));
     }
 
     private void requireProfileCompleted(AnonSession anonSession) {

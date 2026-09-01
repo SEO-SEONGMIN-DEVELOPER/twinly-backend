@@ -10,12 +10,15 @@ import com.nidus.twinly.auth.dto.command.AuthRefreshCommand;
 import com.nidus.twinly.auth.dto.command.AuthSmsSendCommand;
 import com.nidus.twinly.auth.dto.command.AuthSmsVerifyCommand;
 import com.nidus.twinly.auth.dto.result.AuthEmailSendResult;
+import com.nidus.twinly.auth.dto.result.AuthIdentityPrepareResult;
 import com.nidus.twinly.auth.dto.result.AuthEmailVerifyResult;
 import com.nidus.twinly.auth.dto.result.AuthSmsSendResult;
 import com.nidus.twinly.auth.dto.result.AuthSmsVerifyResult;
 import com.nidus.twinly.auth.dto.result.AuthTokenResult;
 import com.nidus.twinly.auth.service.AuthService;
 import com.nidus.twinly.common.domain.Gender;
+import com.nidus.twinly.common.web.BusinessException;
+import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.user.dto.header.UserInfo;
 import com.nidus.twinly.user.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,9 +39,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -50,6 +55,7 @@ class AuthControllerUnitTest {
     private static final UUID VERIFICATION_TOKEN = UUID.fromString("22222222-2222-2222-2222-222222222222");
     private static final UUID VERIFIED_TOKEN = UUID.fromString("33333333-3333-3333-3333-333333333333");
     private static final Instant EXPIRES_AT = Instant.parse("2030-01-01T00:00:00Z");
+    private static final String IDENTITY_VERIFICATION_ID = "identity-11111111-2222-3333-4444-555555555555";
 
     private static final AnonSessionSnapshot ANON_SESSION = new AnonSessionSnapshot(
             7L,
@@ -318,6 +324,91 @@ class AuthControllerUnitTest {
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.smsVerifiedToken").value(VERIFIED_TOKEN.toString()));
         then(authService).should().smsVerify(new AuthSmsVerifyCommand(VERIFICATION_TOKEN, "654321"));
+    }
+
+    @Test
+    @DisplayName("본인인증 발급 성공 시 200과 발급된 id·만료 시각을 반환하고 익명 세션 스냅샷으로 서비스를 호출한다")
+    void onboardingIdentityPrepare_success() throws Exception {
+        // given: 서비스가 발급된 본인인증 id와 만료 시각을 반환
+        given(authService.onboardingIdentityPrepare(any()))
+                .willReturn(new AuthIdentityPrepareResult(IDENTITY_VERIFICATION_ID, EXPIRES_AT));
+
+        // when: 익명 세션 토큰을 붙여 본인인증 발급 API 호출
+        var result = mockMvc.perform(post("/api/v1/auth/onboarding/identity/prepare")
+                .header("Authorization", "Bearer " + ANON_TOKEN));
+
+        // then: 200 + 앞뒤 공백 없는 id JSON 반환 + 익명 세션 스냅샷으로 서비스에 위임
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.identityVerificationId").value(IDENTITY_VERIFICATION_ID))
+                .andExpect(jsonPath("$.expiresAt").exists());
+        then(authService).should().onboardingIdentityPrepare(ANON_SESSION);
+    }
+
+    @Test
+    @DisplayName("본인인증 발급 시 인증 헤더가 없으면 401을 반환하고 서비스를 호출하지 않는다")
+    void onboardingIdentityPrepare_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 본인인증 발급 API 호출
+        var result = mockMvc.perform(post("/api/v1/auth/onboarding/identity/prepare"));
+
+        // then: 401 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isUnauthorized());
+        verifyNoInteractions(authService);
+    }
+
+    @Test
+    @DisplayName("본인인증 발급 시 발급 제한을 넘기면 429와 IDENTITY_RATE_LIMITED를 반환한다")
+    void onboardingIdentityPrepare_when_rate_limited_returns_429() throws Exception {
+        // given: 서비스가 발급 제한 초과로 실패
+        willThrow(new BusinessException(ErrorCode.IDENTITY_RATE_LIMITED))
+                .given(authService).onboardingIdentityPrepare(any());
+
+        // when: 익명 세션 토큰을 붙여 본인인증 발급 API 호출
+        var result = mockMvc.perform(post("/api/v1/auth/onboarding/identity/prepare")
+                .header("Authorization", "Bearer " + ANON_TOKEN));
+
+        // then: 도메인 예외가 429 상태와 에러 코드로 매핑됨
+        result.andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.code").value("IDENTITY_RATE_LIMITED"));
+    }
+
+    @Test
+    @DisplayName("본인인증 검증 성공 시 본문 없는 200을 반환하고 익명 세션 스냅샷으로 서비스를 호출한다")
+    void onboardingIdentityVerify_success() throws Exception {
+        // when: 익명 세션 토큰을 붙여 본인인증 검증 API 호출
+        var result = mockMvc.perform(post("/api/v1/auth/onboarding/identity/verify")
+                .header("Authorization", "Bearer " + ANON_TOKEN));
+
+        // then: 인증 결과 원문이 응답에 실리지 않도록 본문 없는 200 + 익명 세션 스냅샷으로 서비스에 위임
+        result.andExpect(status().isOk())
+                .andExpect(content().string(""));
+        then(authService).should().onboardingIdentityVerify(ANON_SESSION);
+    }
+
+    @Test
+    @DisplayName("본인인증 검증 시 인증 헤더가 없으면 401을 반환하고 서비스를 호출하지 않는다")
+    void onboardingIdentityVerify_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 본인인증 검증 API 호출
+        var result = mockMvc.perform(post("/api/v1/auth/onboarding/identity/verify"));
+
+        // then: 401 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isUnauthorized());
+        verifyNoInteractions(authService);
+    }
+
+    @Test
+    @DisplayName("본인인증 검증 시 연령 범위 밖이면 422와 IDENTITY_AGE_NOT_ALLOWED를 반환한다")
+    void onboardingIdentityVerify_when_age_not_allowed_returns_422() throws Exception {
+        // given: 서비스가 연령 제한으로 실패
+        willThrow(new BusinessException(ErrorCode.IDENTITY_AGE_NOT_ALLOWED))
+                .given(authService).onboardingIdentityVerify(any());
+
+        // when: 익명 세션 토큰을 붙여 본인인증 검증 API 호출
+        var result = mockMvc.perform(post("/api/v1/auth/onboarding/identity/verify")
+                .header("Authorization", "Bearer " + ANON_TOKEN));
+
+        // then: 도메인 예외가 422 상태와 에러 코드로 매핑됨
+        result.andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("IDENTITY_AGE_NOT_ALLOWED"));
     }
 
     @Test

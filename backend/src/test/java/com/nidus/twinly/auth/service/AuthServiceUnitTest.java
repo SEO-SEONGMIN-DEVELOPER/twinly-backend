@@ -8,6 +8,11 @@ import com.nidus.twinly.anon.repository.AnonSessionAgreementRepository;
 import com.nidus.twinly.anon.repository.AnonSessionPersonaElementRepository;
 import com.nidus.twinly.anon.repository.AnonSessionPhotoRepository;
 import com.nidus.twinly.anon.repository.AnonSessionRepository;
+import com.nidus.twinly.auth.client.PortOneChannelType;
+import com.nidus.twinly.auth.client.PortOneIdentityClient;
+import com.nidus.twinly.auth.client.PortOneIdentityVerificationBody;
+import com.nidus.twinly.auth.client.PortOneIdentityVerificationStatus;
+import com.nidus.twinly.auth.config.PortOneProperties;
 import com.nidus.twinly.auth.dto.command.AuthEmailSendCommand;
 import com.nidus.twinly.auth.dto.command.AuthEmailVerifyCommand;
 import com.nidus.twinly.auth.dto.command.AuthLoginCommand;
@@ -16,13 +21,16 @@ import com.nidus.twinly.auth.dto.command.AuthRefreshCommand;
 import com.nidus.twinly.auth.dto.command.AuthSmsSendCommand;
 import com.nidus.twinly.auth.dto.command.AuthSmsVerifyCommand;
 import com.nidus.twinly.auth.dto.result.AuthEmailSendResult;
+import com.nidus.twinly.auth.dto.result.AuthIdentityPrepareResult;
 import com.nidus.twinly.auth.dto.result.AuthEmailVerifyResult;
 import com.nidus.twinly.auth.dto.result.AuthSmsSendResult;
 import com.nidus.twinly.auth.dto.result.AuthSmsVerifyResult;
 import com.nidus.twinly.auth.dto.result.AuthTokenResult;
+import com.nidus.twinly.auth.entity.AnonSessionIdentityVerification;
 import com.nidus.twinly.auth.entity.AnonSessionVerificationSession;
 import com.nidus.twinly.auth.entity.RefreshToken;
 import com.nidus.twinly.auth.entity.VerificationSession;
+import com.nidus.twinly.auth.repository.AnonSessionIdentityVerificationRepository;
 import com.nidus.twinly.auth.repository.AnonSessionVerificationSessionRepository;
 import com.nidus.twinly.auth.repository.RefreshTokenRepository;
 import com.nidus.twinly.auth.repository.VerificationSessionRepository;
@@ -30,6 +38,7 @@ import com.nidus.twinly.common.crypto.BlindIndexHasher;
 import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.domain.VerificationType;
 import com.nidus.twinly.common.jwt.JwtService;
+import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.legal.repository.AgreementRepository;
@@ -48,13 +57,17 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.BeanUtils;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -75,6 +88,11 @@ class AuthServiceUnitTest {
     private static final String PHONE = "01012345678";
     private static final String EMAIL = "user@test.com";
     private static final String CODE = "123456";
+    private static final String IDENTITY_VERIFICATION_ID = "identity-11111111-2222-3333-4444-555555555555";
+    private static final String IDENTITY_NAME = "홍길동";
+    private static final String IDENTITY_BIRTH_DATE = "1999-03-14";
+    private static final String IDENTITY_PHONE = "01087654321";
+    private static final String CI = "ci-value";
 
     private static final AnonSessionSnapshot SNAPSHOT = new AnonSessionSnapshot(
             ANON_SESSION_ID,
@@ -104,6 +122,15 @@ class AuthServiceUnitTest {
 
     @Mock
     AnonSessionVerificationSessionRepository anonSessionVerificationSessionRepository;
+
+    @Mock
+    AnonSessionIdentityVerificationRepository anonSessionIdentityVerificationRepository;
+
+    @Mock
+    PortOneIdentityClient portOneIdentityClient;
+
+    @Spy
+    PortOneProperties portOneProperties = new PortOneProperties("api-secret", Set.of(PortOneChannelType.LIVE));
 
     @Mock
     AnonSessionRepository anonSessionRepository;
@@ -462,38 +489,365 @@ class AuthServiceUnitTest {
         assertThat(result.expiresAt()).isEqualTo(session.getVerifiedTokenExpiresAt());
     }
 
+    // ---------- 온보딩 본인인증 ----------
+
+    @Test
+    @DisplayName("본인인증 발급: 발급 이력이 없으면 새 인증 건을 저장하고 발급한 id와 만료 시각을 반환한다")
+    void identityPrepare_creates_new_verification() {
+        // given: 이 익명 세션의 본인인증 행이 아직 없음
+        given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
+                .willReturn(Optional.empty());
+
+        // when: 본인인증 발급
+        AuthIdentityPrepareResult result = authService.onboardingIdentityPrepare(SNAPSHOT);
+
+        // then: 예측 불가능한 id가 세션에 묶여 저장되고, 발급 횟수는 1로 시작한다
+        ArgumentCaptor<AnonSessionIdentityVerification> captor =
+                ArgumentCaptor.forClass(AnonSessionIdentityVerification.class);
+        then(anonSessionIdentityVerificationRepository).should().save(captor.capture());
+
+        AnonSessionIdentityVerification saved = captor.getValue();
+        assertThat(saved.getAnonSessionId()).isEqualTo(ANON_SESSION_ID);
+        assertThat(saved.getIdentityVerificationId()).startsWith("identity-").isEqualTo(result.identityVerificationId());
+        assertThat(saved.getIssueCount()).isEqualTo(1);
+        assertThat(saved.isVerified()).isFalse();
+
+        // then: 만료는 30분 뒤이고 응답의 만료 시각과 같다
+        assertThat(result.expiresAt()).isEqualTo(saved.getExpiresAt());
+        assertThat(result.expiresAt()).isBetween(Instant.now().plus(29, ChronoUnit.MINUTES), Instant.now().plus(30, ChronoUnit.MINUTES));
+    }
+
+    @Test
+    @DisplayName("본인인증 발급: 이미 발급 이력이 있으면 새로 저장하지 않고 id를 교체하며 발급 횟수를 올린다")
+    void identityPrepare_replaces_previous_id() {
+        // given: 아직 인증되지 않은 발급 이력이 1회 존재
+        AnonSessionIdentityVerification existing = issuedIdentity();
+        String previousId = existing.getIdentityVerificationId();
+        given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
+                .willReturn(Optional.of(existing));
+
+        // when: 본인인증 재발급
+        AuthIdentityPrepareResult result = authService.onboardingIdentityPrepare(SNAPSHOT);
+
+        // then: 새 행을 만들지 않고 기존 행의 id가 교체되어 이전 id는 무효가 된다
+        then(anonSessionIdentityVerificationRepository).should(never()).save(any());
+        assertThat(existing.getIdentityVerificationId()).isNotEqualTo(previousId).isEqualTo(result.identityVerificationId());
+
+        // then: 발급 횟수가 누적된다 (재발급으로 초기화되지 않는다)
+        assertThat(existing.getIssueCount()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("본인인증 발급: 이미 인증이 끝난 세션이면 IDENTITY_ALREADY_VERIFIED 예외가 발생한다")
+    void identityPrepare_when_already_verified_throws() {
+        // given: 이미 본인인증을 마친 세션
+        given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
+                .willReturn(Optional.of(verifiedIdentity()));
+
+        // when & then: 중복 인증(과금) 방지를 위해 409로 끊는다
+        assertThatThrownBy(() -> authService.onboardingIdentityPrepare(SNAPSHOT))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.IDENTITY_ALREADY_VERIFIED);
+    }
+
+    @Test
+    @DisplayName("본인인증 발급: 같은 시간 창에서 5회를 채웠으면 IDENTITY_RATE_LIMITED 예외가 발생하고 id를 바꾸지 않는다")
+    void identityPrepare_when_rate_limited_throws() {
+        // given: 1시간 창 안에서 이미 5회 발급한 세션
+        AnonSessionIdentityVerification existing = issuedIdentity();
+        ReflectionTestUtils.setField(existing, "issueCount", 5);
+        String previousId = existing.getIdentityVerificationId();
+        given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
+                .willReturn(Optional.of(existing));
+
+        // when & then: 429로 막고, 발급 상태는 그대로 유지된다
+        assertThatThrownBy(() -> authService.onboardingIdentityPrepare(SNAPSHOT))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.IDENTITY_RATE_LIMITED);
+
+        assertThat(existing.getIdentityVerificationId()).isEqualTo(previousId);
+        assertThat(existing.getIssueCount()).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("본인인증 발급: 시간 창이 지났으면 발급 횟수를 1로 초기화하고 다시 발급한다")
+    void identityPrepare_resets_expired_issue_window() {
+        // given: 5회를 채웠지만 발급 창이 1시간을 넘긴 세션
+        AnonSessionIdentityVerification existing = issuedIdentity();
+        ReflectionTestUtils.setField(existing, "issueCount", 5);
+        ReflectionTestUtils.setField(existing, "issueWindowStartedAt", Instant.now().minus(Duration.ofHours(2)));
+        given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
+                .willReturn(Optional.of(existing));
+
+        // when: 본인인증 발급
+        AuthIdentityPrepareResult result = authService.onboardingIdentityPrepare(SNAPSHOT);
+
+        // then: 새 창이 시작되어 발급이 허용된다
+        assertThat(result.identityVerificationId()).isEqualTo(existing.getIdentityVerificationId());
+        assertThat(existing.getIssueCount()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("본인인증 검증: PortOne이 인증 완료로 응답하면 이름·생년월일·성별·연락처·CI를 세션에 기록한다")
+    void identityVerify_success_records_customer() {
+        // given: 발급된 id가 있고, PortOne이 LIVE 채널의 인증 완료 건을 반환
+        AnonSessionIdentityVerification issued = issuedIdentity();
+        givenIssuedIdentity(issued);
+        givenPortOneReturns(verifiedBody(adultBirthDate()));
+        given(blindIndexHasher.hash(CI)).willReturn("hash:" + CI);
+        given(userRepository.existsByCiHash("hash:" + CI)).willReturn(false);
+
+        // when: 본인인증 검증
+        authService.onboardingIdentityVerify(SNAPSHOT);
+
+        // then: 검증된 개인정보가 세션에 기록되고 id가 소비 처리된다
+        assertThat(issued.isVerified()).isTrue();
+        assertThat(issued.getName()).isEqualTo(IDENTITY_NAME);
+        assertThat(issued.getBirthDate()).isEqualTo(adultBirthDate());
+        assertThat(issued.getGender()).isEqualTo(Gender.MALE);
+        assertThat(issued.getPhoneNumber()).isEqualTo(IDENTITY_PHONE);
+        assertThat(issued.getCi()).isEqualTo(CI);
+        assertThat(issued.getCiHash()).isEqualTo("hash:" + CI);
+    }
+
+    @Test
+    @DisplayName("본인인증 검증: 발급 이력이 없으면 IDENTITY_NOT_VERIFIED 예외가 발생하고 PortOne을 조회하지 않는다")
+    void identityVerify_without_issued_id_throws() {
+        // given: 이 세션에 발급된 본인인증 건이 없음
+        given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
+                .willReturn(Optional.empty());
+
+        // when & then: 422로 막고 외부 조회는 하지 않는다
+        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.IDENTITY_NOT_VERIFIED);
+
+        then(portOneIdentityClient).should(never()).identityVerification(anyString());
+    }
+
+    @Test
+    @DisplayName("본인인증 검증: 이미 인증된 세션의 재호출은 PortOne 조회 없이 성공으로 끝난다 (멱등)")
+    void identityVerify_when_already_verified_is_idempotent() {
+        // given: 이미 인증이 끝난 세션
+        given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
+                .willReturn(Optional.of(verifiedIdentity()));
+
+        // when: 본인인증 검증 재호출
+        authService.onboardingIdentityVerify(SNAPSHOT);
+
+        // then: 외부 조회(과금 유발 지점)를 반복하지 않는다
+        then(portOneIdentityClient).should(never()).identityVerification(anyString());
+    }
+
+    @Test
+    @DisplayName("본인인증 검증: 발급한 id가 만료되었으면 IDENTITY_NOT_VERIFIED 예외가 발생하고 PortOne을 조회하지 않는다")
+    void identityVerify_with_expired_id_throws() {
+        // given: 만료 시각이 지난 발급 건
+        AnonSessionIdentityVerification expired = issuedIdentity();
+        ReflectionTestUtils.setField(expired, "expiresAt", Instant.now().minusSeconds(1));
+        given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
+                .willReturn(Optional.of(expired));
+
+        // when & then: 422로 막고 외부 조회는 하지 않는다
+        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.IDENTITY_NOT_VERIFIED);
+
+        then(portOneIdentityClient).should(never()).identityVerification(anyString());
+    }
+
+    @Test
+    @DisplayName("본인인증 검증: PortOne에 인증 건이 없으면 IDENTITY_NOT_VERIFIED 예외가 발생한다")
+    void identityVerify_when_portone_not_found_throws() {
+        // given: PortOne 조회 결과 없음(404)
+        givenIssuedIdentity(issuedIdentity());
+        given(portOneIdentityClient.identityVerification(IDENTITY_VERIFICATION_ID)).willReturn(Optional.empty());
+
+        // when & then: 인증되지 않은 것과 같게 취급한다
+        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.IDENTITY_NOT_VERIFIED);
+    }
+
+    @Test
+    @DisplayName("본인인증 검증: PortOne 상태가 READY면 IDENTITY_NOT_VERIFIED 예외가 발생한다")
+    void identityVerify_when_status_is_not_verified_throws() {
+        // given: 인증창을 열었지만 아직 끝나지 않은 상태
+        givenIssuedIdentity(issuedIdentity());
+        givenPortOneReturns(new PortOneIdentityVerificationBody(
+                PortOneIdentityVerificationStatus.READY,
+                new PortOneIdentityVerificationBody.Channel(PortOneChannelType.LIVE),
+                customer(adultBirthDate(), IDENTITY_NAME, "MALE", IDENTITY_PHONE, CI)));
+
+        // when & then: VERIFIED가 아니면 통과시키지 않는다
+        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.IDENTITY_NOT_VERIFIED);
+    }
+
+    @Test
+    @DisplayName("본인인증 검증: 허용되지 않은 TEST 채널 인증 건이면 IDENTITY_NOT_VERIFIED 예외가 발생한다")
+    void identityVerify_with_not_allowed_channel_throws() {
+        // given: LIVE만 허용하는 환경에서 TEST 채널로 인증된 건
+        givenIssuedIdentity(issuedIdentity());
+        givenPortOneReturns(new PortOneIdentityVerificationBody(
+                PortOneIdentityVerificationStatus.VERIFIED,
+                new PortOneIdentityVerificationBody.Channel(PortOneChannelType.TEST),
+                customer(adultBirthDate(), IDENTITY_NAME, "MALE", IDENTITY_PHONE, CI)));
+
+        // when & then: 테스트 채널 키로 운영 가입이 뚫리지 않도록 막는다
+        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.IDENTITY_NOT_VERIFIED);
+    }
+
+    @Test
+    @DisplayName("본인인증 검증: 만 18세 생일 당일은 통과한다 (하한 경계)")
+    void identityVerify_at_min_age_boundary_passes() {
+        // given: 오늘이 만 18세 생일인 사람
+        AnonSessionIdentityVerification issued = issuedIdentity();
+        givenIssuedIdentity(issued);
+        givenPortOneReturns(verifiedBody(KstTimes.today().minusYears(18).toString()));
+        given(blindIndexHasher.hash(CI)).willReturn("hash:" + CI);
+        given(userRepository.existsByCiHash("hash:" + CI)).willReturn(false);
+
+        // when: 본인인증 검증
+        authService.onboardingIdentityVerify(SNAPSHOT);
+
+        // then: 경계값은 통과한다
+        assertThat(issued.isVerified()).isTrue();
+    }
+
+    @Test
+    @DisplayName("본인인증 검증: 만 18세 생일 하루 전이면 IDENTITY_AGE_NOT_ALLOWED 예외가 발생한다")
+    void identityVerify_below_min_age_throws() {
+        // given: 만 18세가 되기 하루 전인 사람
+        givenIssuedIdentity(issuedIdentity());
+        givenPortOneReturns(verifiedBody(KstTimes.today().minusYears(18).plusDays(1).toString()));
+
+        // when & then: 연령 미달로 막는다
+        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.IDENTITY_AGE_NOT_ALLOWED);
+    }
+
+    @Test
+    @DisplayName("본인인증 검증: 만 29세 생일 당일이면 IDENTITY_AGE_NOT_ALLOWED 예외가 발생한다 (상한 경계)")
+    void identityVerify_at_max_age_boundary_throws() {
+        // given: 오늘이 만 29세 생일인 사람
+        givenIssuedIdentity(issuedIdentity());
+        givenPortOneReturns(verifiedBody(KstTimes.today().minusYears(29).toString()));
+
+        // when & then: 상한 경계는 거절한다
+        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.IDENTITY_AGE_NOT_ALLOWED);
+    }
+
+    @Test
+    @DisplayName("본인인증 검증: 인증은 끝났는데 CI가 없으면 IDENTITY_VERIFICATION_FAILED 예외가 발생한다")
+    void identityVerify_without_ci_throws() {
+        // given: 인증 완료 응답이지만 CI가 비어 있음
+        givenIssuedIdentity(issuedIdentity());
+        givenPortOneReturns(new PortOneIdentityVerificationBody(
+                PortOneIdentityVerificationStatus.VERIFIED,
+                new PortOneIdentityVerificationBody.Channel(PortOneChannelType.LIVE),
+                customer(adultBirthDate(), IDENTITY_NAME, "MALE", IDENTITY_PHONE, null)));
+
+        // when & then: 유저 사유가 아니라 연동 이상이므로 5xx로 보고한다
+        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.IDENTITY_VERIFICATION_FAILED);
+    }
+
+    @Test
+    @DisplayName("본인인증 검증: 우리 성별 값으로 매핑되지 않는 응답이면 IDENTITY_VERIFICATION_FAILED 예외가 발생한다")
+    void identityVerify_with_unmappable_gender_throws() {
+        // given: 인증 완료 응답이지만 성별이 OTHER
+        givenIssuedIdentity(issuedIdentity());
+        givenPortOneReturns(new PortOneIdentityVerificationBody(
+                PortOneIdentityVerificationStatus.VERIFIED,
+                new PortOneIdentityVerificationBody.Channel(PortOneChannelType.LIVE),
+                customer(adultBirthDate(), IDENTITY_NAME, "OTHER", IDENTITY_PHONE, CI)));
+
+        // when & then: 저장할 수 없는 값이므로 통과시키지 않는다
+        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.IDENTITY_VERIFICATION_FAILED);
+    }
+
+    @Test
+    @DisplayName("본인인증 검증: 생년월일 형식이 깨져 있으면 IDENTITY_VERIFICATION_FAILED 예외가 발생한다")
+    void identityVerify_with_broken_birth_date_throws() {
+        // given: 인증 완료 응답이지만 생년월일이 yyyy-MM-dd 형식이 아님
+        givenIssuedIdentity(issuedIdentity());
+        givenPortOneReturns(verifiedBody("19990314"));
+
+        // when & then: 연령을 계산할 수 없으므로 5xx로 보고한다
+        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.IDENTITY_VERIFICATION_FAILED);
+    }
+
+    @Test
+    @DisplayName("본인인증 검증: 같은 CI로 이미 가입한 계정이 있으면 IDENTITY_ALREADY_REGISTERED 예외가 발생하고 세션에 기록하지 않는다")
+    void identityVerify_with_duplicated_ci_throws() {
+        // given: 인증은 통과했지만 같은 CI의 활성 계정이 이미 존재
+        AnonSessionIdentityVerification issued = issuedIdentity();
+        givenIssuedIdentity(issued);
+        givenPortOneReturns(verifiedBody(adultBirthDate()));
+        given(blindIndexHasher.hash(CI)).willReturn("hash:" + CI);
+        given(userRepository.existsByCiHash("hash:" + CI)).willReturn(true);
+
+        // when & then: 409로 막고 인증 완료로 기록하지 않는다
+        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.IDENTITY_ALREADY_REGISTERED);
+
+        assertThat(issued.isVerified()).isFalse();
+    }
+
     // ---------- 회원가입 ----------
 
     @Test
-    @DisplayName("회원가입: SMS 인증이 완료되지 않았으면 SMS_VERIFICATION_NOT_COMPLETED 예외가 발생하고 유저를 만들지 않는다")
-    void signup_without_verified_sms_throws() {
-        // given: SMS 인증 세션 자체가 없음
-        given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.SMS))
+    @DisplayName("회원가입: 본인인증이 완료되지 않았으면 IDENTITY_VERIFICATION_NOT_COMPLETED 예외가 발생하고 유저를 만들지 않는다")
+    void signup_without_verified_identity_throws() {
+        // given: 본인인증 행 자체가 없음
+        given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
                 .willReturn(Optional.empty());
 
         // when & then: 어느 인증이 남았는지 구분되는 코드로 실패하고 유저 저장은 없음
         assertThatThrownBy(() -> authService.signup(SNAPSHOT))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(ErrorCode.SMS_VERIFICATION_NOT_COMPLETED);
+                .isEqualTo(ErrorCode.IDENTITY_VERIFICATION_NOT_COMPLETED);
 
         then(userRepository).should(never()).save(any());
     }
 
     @Test
-    @DisplayName("회원가입: SMS는 됐는데 이메일 인증이 없으면 EMAIL_VERIFICATION_NOT_COMPLETED 예외가 발생한다")
+    @DisplayName("회원가입: 본인인증은 됐는데 이메일 인증이 없으면 EMAIL_VERIFICATION_NOT_COMPLETED 예외가 발생한다")
     void signup_without_verified_email_throws() {
-        // given: SMS 인증은 끝났지만 이메일 인증 세션이 없음
-        AnonSessionVerificationSession smsSession = AnonSessionVerificationSession.create(
-                VerificationType.SMS, ANON_SESSION_ID, PHONE, "123456", Instant.now().plusSeconds(60));
-        smsSession.verify();
-
-        given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.SMS))
-                .willReturn(Optional.of(smsSession));
+        // given: 본인인증은 끝났지만 이메일 인증 세션이 없음
+        given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
+                .willReturn(Optional.of(verifiedIdentity()));
         given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.EMAIL))
                 .willReturn(Optional.empty());
 
-        // when & then: SMS와 구분되는 코드로 실패한다
+        // when & then: 본인인증과 구분되는 코드로 실패한다
         assertThatThrownBy(() -> authService.signup(SNAPSHOT))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
@@ -505,8 +859,8 @@ class AuthServiceUnitTest {
     @Test
     @DisplayName("회원가입: 온보딩 프로필이 비어 있으면 PROFILE_NOT_COMPLETED 예외가 발생하고 해싱·유저 생성으로 넘어가지 않는다")
     void signup_without_completed_profile_throws() {
-        // given: SMS/EMAIL 인증은 끝났지만 이름을 아직 입력하지 않은 익명 세션 (anon_sessions의 프로필 컬럼은 nullable)
-        givenVerifiedSessions();
+        // given: 인증은 끝났지만 이름을 아직 입력하지 않은 익명 세션 (anon_sessions의 프로필 컬럼은 nullable)
+        givenVerifiedIdentityAndEmail();
         AnonSession anonSession = onboardedAnonSession();
         ReflectionTestUtils.setField(anonSession, "familyName", null);
         given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(anonSession));
@@ -524,11 +878,11 @@ class AuthServiceUnitTest {
     @Test
     @DisplayName("회원가입: 이미 가입된 전화번호면 PHONE_ALREADY_REGISTERED 예외가 발생하고 유저를 만들지 않는다")
     void signup_with_already_registered_phone_throws() {
-        // given: SMS/EMAIL 인증이 모두 완료된 익명 세션이지만, 전화번호가 이미 가입되어 있음
-        givenVerifiedSessions();
+        // given: 인증이 모두 완료됐지만 본인인증으로 확인된 전화번호가 이미 가입되어 있음
+        givenVerifiedIdentityAndEmail();
         given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(onboardedAnonSession()));
         given(blindIndexHasher.hash(anyString())).willAnswer(invocation -> "hash:" + invocation.getArgument(0));
-        given(userRepository.existsByPhoneNumberHash("hash:" + PHONE)).willReturn(true);
+        given(userRepository.existsByPhoneNumberHash("hash:" + IDENTITY_PHONE)).willReturn(true);
 
         // when & then: PHONE_ALREADY_REGISTERED 예외 발생 + 유저 저장 없음
         assertThatThrownBy(() -> authService.signup(SNAPSHOT))
@@ -540,10 +894,30 @@ class AuthServiceUnitTest {
     }
 
     @Test
-    @DisplayName("회원가입: 인증이 모두 끝나면 익명 세션 정보로 유저를 만들고 익명 데이터를 정리한 뒤 토큰을 발급한다")
+    @DisplayName("회원가입: 검증 시점 이후에 같은 CI가 가입됐으면 IDENTITY_ALREADY_REGISTERED 예외가 발생하고 유저를 만들지 않는다")
+    void signup_with_already_registered_ci_throws() {
+        // given: 인증은 모두 끝났지만 그 사이 같은 CI로 다른 계정이 생성됨
+        givenVerifiedIdentityAndEmail();
+        given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(onboardedAnonSession()));
+        given(blindIndexHasher.hash(anyString())).willAnswer(invocation -> "hash:" + invocation.getArgument(0));
+        given(userRepository.existsByPhoneNumberHash("hash:" + IDENTITY_PHONE)).willReturn(false);
+        given(userRepository.existsByEmailHash("hash:" + EMAIL)).willReturn(false);
+        given(userRepository.existsByCiHash("hash:" + CI)).willReturn(true);
+
+        // when & then: verify와 signup 사이의 경합을 가입 직전에 다시 막는다
+        assertThatThrownBy(() -> authService.signup(SNAPSHOT))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.IDENTITY_ALREADY_REGISTERED);
+
+        then(userRepository).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("회원가입: 인증이 모두 끝나면 본인인증 값과 익명 세션 프로필로 유저를 만들고 익명 데이터를 정리한 뒤 토큰을 발급한다")
     void signup_success() {
-        // given: SMS/EMAIL 인증이 완료되고 온보딩 정보가 채워진 익명 세션
-        givenVerifiedSessions();
+        // given: 본인인증·이메일 인증이 완료되고 온보딩 정보가 채워진 익명 세션
+        givenVerifiedIdentityAndEmail();
         AnonSession anonSession = onboardedAnonSession();
         given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(anonSession));
         given(blindIndexHasher.hash(anyString())).willAnswer(invocation -> "hash:" + invocation.getArgument(0));
@@ -560,20 +934,27 @@ class AuthServiceUnitTest {
         // when: 회원가입
         AuthTokenResult result = authService.signup(SNAPSHOT);
 
-        // then: 인증 세션의 연락처와 익명 세션의 프로필로 유저가 생성됨
+        // then: 전화번호·생년월일·성별·CI는 본인인증 값이 정본으로 쓰인다 (익명 세션 입력값을 덮어씀)
         ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
         then(userRepository).should().save(userCaptor.capture());
         User created = userCaptor.getValue();
-        assertThat(created.getNickname()).isEqualTo("nick");
-        assertThat(created.getPhoneNumber()).isEqualTo(PHONE);
-        assertThat(created.getPhoneNumberHash()).isEqualTo("hash:" + PHONE);
-        assertThat(created.getEmail()).isEqualTo(EMAIL);
-        assertThat(created.getEmailHash()).isEqualTo("hash:" + EMAIL);
-        assertThat(created.getGender()).isEqualTo(Gender.MALE);
+        assertThat(created.getPhoneNumber()).isEqualTo(IDENTITY_PHONE);
+        assertThat(created.getPhoneNumberHash()).isEqualTo("hash:" + IDENTITY_PHONE);
+        assertThat(created.getBirthDate()).isEqualTo(IDENTITY_BIRTH_DATE);
+        assertThat(created.getGender()).isEqualTo(Gender.FEMALE);
+        assertThat(created.getCi()).isEqualTo(CI);
+        assertThat(created.getCiHash()).isEqualTo("hash:" + CI);
 
-        // then: 익명 세션과 인증 세션이 정리되고 인증 이력 2건(SMS/EMAIL)이 남음
+        // then: 이름은 본인인증 값이 아니라 온보딩 입력값을 그대로 쓴다
+        assertThat(created.getFamilyName()).isEqualTo("홍");
+        assertThat(created.getGivenName()).isEqualTo("길동");
+        assertThat(created.getNickname()).isEqualTo("nick");
+        assertThat(created.getEmail()).isEqualTo(EMAIL);
+
+        // then: 익명 세션과 두 인증 저장소가 모두 정리되고 인증 이력 2건(IDENTITY/EMAIL)이 남음
         then(anonSessionRepository).should().delete(anonSession);
         then(anonSessionVerificationSessionRepository).should().deleteByAnonSessionId(ANON_SESSION_ID);
+        then(anonSessionIdentityVerificationRepository).should().deleteByAnonSessionId(ANON_SESSION_ID);
         then(verificationRepository).should(times(2)).save(any());
 
         // then: 발급된 토큰이 그대로 반환되고 리프레시 토큰 해시가 저장됨
@@ -766,18 +1147,54 @@ class AuthServiceUnitTest {
 
     // ---------- 헬퍼 ----------
 
-    private void givenVerifiedSessions() {
-        AnonSessionVerificationSession smsSession = AnonSessionVerificationSession.create(
-                VerificationType.SMS, ANON_SESSION_ID, PHONE, "123456", Instant.now().plusSeconds(60));
-        smsSession.verify();
+    private void givenVerifiedIdentityAndEmail() {
         AnonSessionVerificationSession emailSession = AnonSessionVerificationSession.create(
                 VerificationType.EMAIL, ANON_SESSION_ID, EMAIL, "654321", Instant.now().plusSeconds(60));
         emailSession.verify();
 
-        given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.SMS))
-                .willReturn(Optional.of(smsSession));
+        given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
+                .willReturn(Optional.of(verifiedIdentity()));
         given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.EMAIL))
                 .willReturn(Optional.of(emailSession));
+    }
+
+    private void givenIssuedIdentity(AnonSessionIdentityVerification issued) {
+        given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
+                .willReturn(Optional.of(issued));
+    }
+
+    private void givenPortOneReturns(PortOneIdentityVerificationBody body) {
+        given(portOneIdentityClient.identityVerification(IDENTITY_VERIFICATION_ID)).willReturn(Optional.of(body));
+    }
+
+    private AnonSessionIdentityVerification issuedIdentity() {
+        return AnonSessionIdentityVerification.create(
+                ANON_SESSION_ID, IDENTITY_VERIFICATION_ID, Instant.now().plus(30, ChronoUnit.MINUTES));
+    }
+
+    private AnonSessionIdentityVerification verifiedIdentity() {
+        AnonSessionIdentityVerification verification = issuedIdentity();
+        verification.verify(IDENTITY_NAME, IDENTITY_BIRTH_DATE, Gender.FEMALE, IDENTITY_PHONE, CI, "hash:" + CI);
+        return verification;
+    }
+
+    private PortOneIdentityVerificationBody verifiedBody(String birthDate) {
+        return new PortOneIdentityVerificationBody(
+                PortOneIdentityVerificationStatus.VERIFIED,
+                new PortOneIdentityVerificationBody.Channel(PortOneChannelType.LIVE),
+                customer(birthDate, IDENTITY_NAME, "MALE", IDENTITY_PHONE, CI));
+    }
+
+    private PortOneIdentityVerificationBody.VerifiedCustomer customer(String birthDate,
+                                                                     String name,
+                                                                     String gender,
+                                                                     String phoneNumber,
+                                                                     String ci) {
+        return new PortOneIdentityVerificationBody.VerifiedCustomer(name, birthDate, gender, phoneNumber, ci);
+    }
+
+    private String adultBirthDate() {
+        return KstTimes.today().minusYears(25).toString();
     }
 
     private AnonSession onboardedAnonSession() {
@@ -811,7 +1228,7 @@ class AuthServiceUnitTest {
                 "20250001", "hash:20250001",
                 "2000-01-01", "hash:2000-01-01",
                 PHONE, "hash:" + PHONE,
-                EMAIL, "hash:" + EMAIL);
+                EMAIL, "hash:" + EMAIL, null, null);
         ReflectionTestUtils.setField(user, "id", USER_ID);
         return user;
     }

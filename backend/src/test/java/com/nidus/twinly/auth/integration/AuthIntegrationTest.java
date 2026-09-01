@@ -8,9 +8,15 @@ import com.nidus.twinly.aichat.repository.AiChatRepository;
 import com.nidus.twinly.aichat.repository.AnonSessionAiChatRepository;
 import com.nidus.twinly.anon.entity.AnonSession;
 import com.nidus.twinly.anon.repository.AnonSessionRepository;
+import com.nidus.twinly.auth.client.PortOneChannelType;
+import com.nidus.twinly.auth.client.PortOneIdentityClient;
+import com.nidus.twinly.auth.client.PortOneIdentityVerificationBody;
+import com.nidus.twinly.auth.client.PortOneIdentityVerificationStatus;
+import com.nidus.twinly.auth.entity.AnonSessionIdentityVerification;
 import com.nidus.twinly.auth.entity.AnonSessionVerificationSession;
 import com.nidus.twinly.auth.entity.RefreshToken;
 import com.nidus.twinly.auth.entity.VerificationSession;
+import com.nidus.twinly.auth.repository.AnonSessionIdentityVerificationRepository;
 import com.nidus.twinly.auth.repository.AnonSessionVerificationSessionRepository;
 import com.nidus.twinly.auth.repository.RefreshTokenRepository;
 import com.nidus.twinly.auth.dto.result.AuthTokenResult;
@@ -21,6 +27,7 @@ import com.nidus.twinly.common.domain.VerificationType;
 import com.nidus.twinly.common.survey.SurveyOptionName;
 import com.nidus.twinly.onboarding.entity.SurveyAnswer;
 import com.nidus.twinly.onboarding.repository.SurveyAnswerRepository;
+import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.support.AbstractIntegrationTest;
 import com.nidus.twinly.user.entity.User;
@@ -29,9 +36,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -39,6 +48,7 @@ import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willDoNothing;
 import static org.mockito.Mockito.never;
@@ -53,6 +63,12 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     AnonSessionVerificationSessionRepository anonSessionVerificationSessionRepository;
+
+    @Autowired
+    AnonSessionIdentityVerificationRepository anonSessionIdentityVerificationRepository;
+
+    @MockitoBean
+    PortOneIdentityClient portOneIdentityClient;
 
     @Autowired
     VerificationSessionRepository verificationSessionRepository;
@@ -136,9 +152,143 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("회원가입: SMS·이메일 인증이 끝난 익명 세션으로 실제 유저가 생성되고 리프레시 토큰이 저장된다")
+    @DisplayName("본인인증 발급: 실제 익명 세션 인증을 통과해 본인인증 행이 DB에 생성되고 재호출하면 같은 행의 id가 교체된다")
+    void identityPrepare_end_to_end() throws Exception {
+        // given: 실제 익명 세션을 DB에 저장
+        UUID anonToken = UUID.randomUUID();
+        AnonSession anonSession = savedAnonSession(anonToken);
+
+        // when: 익명 세션 토큰을 Bearer로 붙여 본인인증 발급 API 호출
+        var result = mockMvc.perform(post("/api/v1/auth/onboarding/identity/prepare")
+                .header("Authorization", "Bearer " + anonToken));
+
+        // then: 200 + 발급된 id가 응답으로 나가고 같은 값이 DB에 저장된다
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.identityVerificationId").exists())
+                .andExpect(jsonPath("$.expiresAt").exists());
+
+        AnonSessionIdentityVerification saved = anonSessionIdentityVerificationRepository
+                .findByAnonSessionId(anonSession.getId()).orElseThrow();
+        assertThat(saved.getIdentityVerificationId()).startsWith("identity-");
+        assertThat(saved.getIssueCount()).isEqualTo(1);
+        String firstId = saved.getIdentityVerificationId();
+
+        // when: 같은 세션으로 재발급
+        mockMvc.perform(post("/api/v1/auth/onboarding/identity/prepare")
+                        .header("Authorization", "Bearer " + anonToken))
+                .andExpect(status().isOk());
+
+        // then: 세션당 UNIQUE 제약을 지키며 행이 늘지 않고 id만 교체된다 (이전 id 무효)
+        assertThat(anonSessionIdentityVerificationRepository.findAll()).hasSize(1);
+        AnonSessionIdentityVerification reissued = anonSessionIdentityVerificationRepository
+                .findByAnonSessionId(anonSession.getId()).orElseThrow();
+        assertThat(reissued.getIdentityVerificationId()).isNotEqualTo(firstId);
+        assertThat(reissued.getIssueCount()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("본인인증 발급 실패: 익명 세션 인증 헤더가 없으면 401을 반환하고 행을 만들지 않는다")
+    void identityPrepare_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 본인인증 발급 API 호출
+        var result = mockMvc.perform(post("/api/v1/auth/onboarding/identity/prepare"));
+
+        // then: 401 반환 + DB에 아무 행도 생기지 않음
+        result.andExpect(status().isUnauthorized());
+        assertThat(anonSessionIdentityVerificationRepository.findAll()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("본인인증 검증: PortOne 인증 완료 응답이면 검증된 개인정보가 암호화되어 DB에 기록되고 본문 없는 200을 반환한다")
+    void identityVerify_end_to_end() throws Exception {
+        // given: 발급된 본인인증 건과, 그 id를 인증 완료로 응답하는 PortOne
+        UUID anonToken = UUID.randomUUID();
+        AnonSession anonSession = savedAnonSession(anonToken);
+        String identityVerificationId = "identity-" + UUID.randomUUID();
+        anonSessionIdentityVerificationRepository.save(issuedIdentity(anonSession.getId(), identityVerificationId));
+        given(portOneIdentityClient.identityVerification(identityVerificationId))
+                .willReturn(Optional.of(verifiedBody("김영희", "01044443333", "ci-verify")));
+
+        // when: 익명 세션 토큰을 Bearer로 붙여 본인인증 검증 API 호출
+        mockMvc.perform(post("/api/v1/auth/onboarding/identity/verify")
+                        .header("Authorization", "Bearer " + anonToken))
+                .andExpect(status().isOk());
+
+        // then: 검증된 값이 실제 DB 행에 기록되고 id가 소비 처리된다
+        AnonSessionIdentityVerification verified = anonSessionIdentityVerificationRepository
+                .findByAnonSessionId(anonSession.getId()).orElseThrow();
+        assertThat(verified.isVerified()).isTrue();
+        assertThat(verified.getName()).isEqualTo("김영희");
+        assertThat(verified.getGender()).isEqualTo(Gender.FEMALE);
+        assertThat(verified.getPhoneNumber()).isEqualTo("01044443333");
+        assertThat(verified.getCiHash()).isEqualTo(blindIndexHasher.hash("ci-verify"));
+
+        // then: 개인정보 컬럼은 암호화되어 저장된다 (평문이 그대로 남지 않는다)
+        String storedPhone = jdbcTemplate.queryForObject(
+                "SELECT phone_number FROM anon_session_identity_verifications WHERE id = ?",
+                String.class, verified.getId());
+        assertThat(storedPhone).isNotEqualTo("01044443333");
+    }
+
+    @Test
+    @DisplayName("본인인증 검증 실패: 같은 CI로 이미 가입된 계정이 있으면 409 IDENTITY_ALREADY_REGISTERED를 반환하고 기록하지 않는다")
+    void identityVerify_with_duplicated_ci_returns_409() throws Exception {
+        // given: 같은 CI로 가입된 유저와, 그 CI를 반환하는 PortOne 응답
+        String ci = "ci-duplicated";
+        userRepository.save(User.create(
+                "dup-nick",
+                "최", blindIndexHasher.hash("최"),
+                "지훈", blindIndexHasher.hash("지훈"),
+                Gender.MALE,
+                "트윈리대학교", blindIndexHasher.hash("트윈리대학교"),
+                "트윈리대학교", blindIndexHasher.hash("트윈리대학교"),
+                "20250005", blindIndexHasher.hash("20250005"),
+                "2000-05-05", blindIndexHasher.hash("2000-05-05"),
+                "01011112222", blindIndexHasher.hash("01011112222"),
+                "dup@test.com", blindIndexHasher.hash("dup@test.com"),
+                ci, blindIndexHasher.hash(ci)));
+
+        UUID anonToken = UUID.randomUUID();
+        AnonSession anonSession = savedAnonSession(anonToken);
+        String identityVerificationId = "identity-" + UUID.randomUUID();
+        anonSessionIdentityVerificationRepository.save(issuedIdentity(anonSession.getId(), identityVerificationId));
+        given(portOneIdentityClient.identityVerification(identityVerificationId))
+                .willReturn(Optional.of(verifiedBody("최지훈", "01099991111", ci)));
+
+        // when: 본인인증 검증 API 호출
+        var result = mockMvc.perform(post("/api/v1/auth/onboarding/identity/verify")
+                .header("Authorization", "Bearer " + anonToken));
+
+        // then: 409로 막히고 세션은 인증 완료로 기록되지 않는다
+        result.andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("IDENTITY_ALREADY_REGISTERED"));
+        assertThat(anonSessionIdentityVerificationRepository
+                .findByAnonSessionId(anonSession.getId()).orElseThrow().isVerified()).isFalse();
+    }
+
+    @Test
+    @DisplayName("회원가입 실패: 본인인증을 마치지 않았으면 422 IDENTITY_VERIFICATION_NOT_COMPLETED를 반환하고 유저를 만들지 않는다")
+    void signup_without_verified_identity_returns_422() throws Exception {
+        // given: 이메일 인증만 끝나고 본인인증은 발급만 된(미검증) 익명 세션
+        UUID anonToken = UUID.randomUUID();
+        AnonSession anonSession = savedAnonSession(anonToken);
+        anonSessionIdentityVerificationRepository.save(issuedIdentity(anonSession.getId(), "identity-" + UUID.randomUUID()));
+        anonSessionVerificationSessionRepository.save(
+                verifiedAnonSession(anonSession.getId(), VerificationType.EMAIL, "no-identity@test.com"));
+
+        // when: 회원가입 API 호출
+        var result = mockMvc.perform(post("/api/v1/auth/signup")
+                .header("Authorization", "Bearer " + anonToken));
+
+        // then: 본인인증 미완료 코드로 실패하고 유저는 생기지 않는다
+        result.andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("IDENTITY_VERIFICATION_NOT_COMPLETED"));
+        assertThat(userRepository.findByEmailHash(blindIndexHasher.hash("no-identity@test.com"))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("회원가입: 본인인증·이메일 인증이 끝난 익명 세션으로 실제 유저가 생성되고 리프레시 토큰이 저장된다")
     void signup_end_to_end() throws Exception {
-        // given: 온보딩 정보가 채워진 익명 세션 + SMS/EMAIL 인증이 완료된 인증 세션을 실제 DB에 저장
+        // given: 온보딩 정보가 채워진 익명 세션 + 본인인증/이메일 인증이 완료된 인증 행을 실제 DB에 저장
         UUID anonToken = UUID.randomUUID();
         AnonSession anonSession = AnonSession.create(anonToken, Instant.now().plus(Duration.ofDays(1)));
         anonSession.changeNickname("signup-nick");
@@ -153,7 +303,7 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
 
         String phone = "01099998888";
         String email = "signup@test.com";
-        anonSessionVerificationSessionRepository.save(verifiedAnonSession(anonSession.getId(), VerificationType.SMS, phone));
+        anonSessionIdentityVerificationRepository.save(verifiedIdentity(anonSession.getId(), phone, "ci-signup"));
         anonSessionVerificationSessionRepository.save(verifiedAnonSession(anonSession.getId(), VerificationType.EMAIL, email));
 
         // when: 익명 세션 토큰을 Bearer로 붙여 회원가입 API 호출
@@ -181,13 +331,13 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("회원가입 실패: 온보딩 프로필이 비어 있으면 422 PROFILE_NOT_COMPLETED를 반환하고 유저를 만들지 않는다")
     void signup_without_completed_profile_returns_422() throws Exception {
-        // given: SMS·EMAIL 인증은 끝났지만 프로필을 입력하지 않은 익명 세션 (users는 해당 컬럼이 전부 NOT NULL이다)
+        // given: 본인인증·이메일 인증은 끝났지만 프로필을 입력하지 않은 익명 세션 (users는 해당 컬럼이 전부 NOT NULL이다)
         UUID anonToken = UUID.randomUUID();
         AnonSession anonSession = anonSessionRepository.save(
                 AnonSession.create(anonToken, Instant.now().plus(Duration.ofDays(1))));
 
         String phone = "01055554444";
-        anonSessionVerificationSessionRepository.save(verifiedAnonSession(anonSession.getId(), VerificationType.SMS, phone));
+        anonSessionIdentityVerificationRepository.save(verifiedIdentity(anonSession.getId(), phone, "ci-incomplete"));
         anonSessionVerificationSessionRepository.save(verifiedAnonSession(anonSession.getId(), VerificationType.EMAIL, "incomplete@test.com"));
 
         // when: 익명 세션 토큰을 Bearer로 붙여 회원가입 API 호출
@@ -215,7 +365,7 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
                 "20250002", blindIndexHasher.hash("20250002"),
                 "2000-02-02", blindIndexHasher.hash("2000-02-02"),
                 phone, blindIndexHasher.hash(phone),
-                "login@test.com", blindIndexHasher.hash("login@test.com")));
+                "login@test.com", blindIndexHasher.hash("login@test.com"), null, null));
 
         VerificationSession session = VerificationSession.create(
                 VerificationType.SMS, phone, "123456", Instant.now().plus(Duration.ofMinutes(5)));
@@ -256,7 +406,7 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
 
         String phone = "01033332222";
         String email = "cleanup@test.com";
-        anonSessionVerificationSessionRepository.save(verifiedAnonSession(anonSession.getId(), VerificationType.SMS, phone));
+        anonSessionIdentityVerificationRepository.save(verifiedIdentity(anonSession.getId(), phone, "ci-cleanup"));
         anonSessionVerificationSessionRepository.save(verifiedAnonSession(anonSession.getId(), VerificationType.EMAIL, email));
         anonSessionAiChatRepository.save(AnonSessionAiChat.create(anonSession.getId(), AiChatSender.AI, "취미가 무엇인가요?", 0));
         anonSessionAiChatRepository.save(AnonSessionAiChat.create(anonSession.getId(), AiChatSender.USER, "등산을 좋아합니다.", 0));
@@ -270,8 +420,7 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
         // then: 익명 세션과 자식 인증 세션이 모두 삭제된다
         // (이 조회가 anon_sessions 쿼리 스페이스를 건드려 auto-flush를 유발하므로, 삭제 순서가 잘못되면 여기서 FK 위반이 드러난다)
         assertThat(anonSessionRepository.findById(anonSession.getId())).isEmpty();
-        assertThat(anonSessionVerificationSessionRepository
-                .findByAnonSessionIdAndType(anonSession.getId(), VerificationType.SMS)).isEmpty();
+        assertThat(anonSessionIdentityVerificationRepository.findByAnonSessionId(anonSession.getId())).isEmpty();
         assertThat(anonSessionVerificationSessionRepository
                 .findByAnonSessionIdAndType(anonSession.getId(), VerificationType.EMAIL)).isEmpty();
         assertThat(anonSessionAiChatRepository.existsByAnonSessionId(anonSession.getId())).isFalse();
@@ -301,7 +450,7 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
                 "20250003", blindIndexHasher.hash("20250003"),
                 "2000-03-03", blindIndexHasher.hash("2000-03-03"),
                 phone, blindIndexHasher.hash(phone),
-                "double@test.com", blindIndexHasher.hash("double@test.com")));
+                "double@test.com", blindIndexHasher.hash("double@test.com"), null, null));
 
         VerificationSession session = VerificationSession.create(
                 VerificationType.SMS, phone, "123456", Instant.now().plus(Duration.ofMinutes(5)));
@@ -674,7 +823,30 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
                 "20250003", blindIndexHasher.hash("20250003"),
                 "2000-03-03", blindIndexHasher.hash("2000-03-03"),
                 phone, blindIndexHasher.hash(phone),
-                email, blindIndexHasher.hash(email)));
+                email, blindIndexHasher.hash(email), null, null));
+    }
+
+    private AnonSessionIdentityVerification issuedIdentity(Long anonSessionId, String identityVerificationId) {
+        return AnonSessionIdentityVerification.create(
+                anonSessionId, identityVerificationId, Instant.now().plus(Duration.ofMinutes(30)));
+    }
+
+    private AnonSessionIdentityVerification verifiedIdentity(Long anonSessionId, String phoneNumber, String ci) {
+        AnonSessionIdentityVerification verification = issuedIdentity(anonSessionId, "identity-" + UUID.randomUUID());
+        verification.verify("홍길동", "2000-01-01", Gender.MALE, phoneNumber, ci, blindIndexHasher.hash(ci));
+        return verification;
+    }
+
+    private PortOneIdentityVerificationBody verifiedBody(String name, String phoneNumber, String ci) {
+        return new PortOneIdentityVerificationBody(
+                PortOneIdentityVerificationStatus.VERIFIED,
+                new PortOneIdentityVerificationBody.Channel(PortOneChannelType.LIVE),
+                new PortOneIdentityVerificationBody.VerifiedCustomer(
+                        name, KstTimes.today().minusYears(25).toString(), "FEMALE", phoneNumber, ci));
+    }
+
+    private AnonSession savedAnonSession(UUID anonToken) {
+        return anonSessionRepository.save(AnonSession.create(anonToken, Instant.now().plus(Duration.ofDays(1))));
     }
 
     private AnonSessionVerificationSession verifiedAnonSession(Long anonSessionId, VerificationType type, String contact) {

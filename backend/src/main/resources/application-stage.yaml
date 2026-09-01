@@ -30,5 +30,8 @@ verification:
     phone-prefix: "0100000"
     email-prefix: "test"
 
+portone:
+  allowed-channel-types: LIVE,TEST
+
 revenue-cat:
   environment: SANDBOX

@@ -68,6 +68,27 @@ public class AuthController {
         authService.onboardingSmsVerify(anonSessionSnapshot, AuthSmsVerifyCommand.from(request));
     }
 
+    @Operation(summary = "가입용 본인인증 발급")
+    @ApiResponses({
+            @ApiResponse(responseCode = "409", description = "IDENTITY_ALREADY_VERIFIED"),
+            @ApiResponse(responseCode = "429", description = "IDENTITY_RATE_LIMITED")
+    })
+    @PostMapping("/api/v1/auth/onboarding/identity/prepare")
+    public AuthIdentityPrepareResponse onboardingIdentityPrepare(@AuthenticationPrincipal AnonSessionSnapshot anonSessionSnapshot) {
+        return AuthIdentityPrepareResponse.from(authService.onboardingIdentityPrepare(anonSessionSnapshot));
+    }
+
+    @Operation(summary = "가입용 본인인증 검증")
+    @ApiResponses({
+            @ApiResponse(responseCode = "409", description = "IDENTITY_ALREADY_REGISTERED"),
+            @ApiResponse(responseCode = "422", description = "IDENTITY_NOT_VERIFIED, IDENTITY_AGE_NOT_ALLOWED"),
+            @ApiResponse(responseCode = "502", description = "IDENTITY_VERIFICATION_FAILED")
+    })
+    @PostMapping("/api/v1/auth/onboarding/identity/verify")
+    public void onboardingIdentityVerify(@AuthenticationPrincipal AnonSessionSnapshot anonSessionSnapshot) {
+        authService.onboardingIdentityVerify(anonSessionSnapshot);
+    }
+
     @Operation(summary = "이메일 인증번호 발송")
     @ApiResponses({
             @ApiResponse(responseCode = "404", description = "EMAIL_NOT_REGISTERED"),
@@ -113,8 +134,8 @@ public class AuthController {
     @Operation(summary = "회원가입")
     @ApiResponses({
             @ApiResponse(responseCode = "404", description = "SIGNUP_SESSION_NOT_FOUND"),
-            @ApiResponse(responseCode = "409", description = "PHONE_ALREADY_REGISTERED, EMAIL_ALREADY_REGISTERED"),
-            @ApiResponse(responseCode = "422", description = "SMS_VERIFICATION_NOT_COMPLETED, EMAIL_VERIFICATION_NOT_COMPLETED, PROFILE_NOT_COMPLETED")
+            @ApiResponse(responseCode = "409", description = "PHONE_ALREADY_REGISTERED, EMAIL_ALREADY_REGISTERED, IDENTITY_ALREADY_REGISTERED"),
+            @ApiResponse(responseCode = "422", description = "IDENTITY_VERIFICATION_NOT_COMPLETED, EMAIL_VERIFICATION_NOT_COMPLETED, PROFILE_NOT_COMPLETED")
     })
     @ResponseStatus(HttpStatus.CREATED)
     @PostMapping("/api/v1/auth/signup")

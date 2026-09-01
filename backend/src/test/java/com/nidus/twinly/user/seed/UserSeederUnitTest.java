@@ -359,7 +359,7 @@ class UserSeederUnitTest {
                 "기존유저", "김", "hash", "도윤", "hash", Gender.MALE,
                 "성균관대학교", "hash", "미디어커뮤니케이션학과", "hash",
                 "20210001", "hash", "2000-01-01", "hash",
-                "01000009001", "hash", "test-seed01@skku.edu", "hash");
+                "01000009001", "hash", "test-seed01@skku.edu", "hash", null, null);
         ReflectionTestUtils.setField(user, "id", sequence.incrementAndGet());
 
         return user;

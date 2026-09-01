@@ -22,5 +22,8 @@ springdoc:
 springwolf:
   enabled: true
 
+portone:
+  allowed-channel-types: LIVE,TEST
+
 revenue-cat:
   environment: SANDBOX

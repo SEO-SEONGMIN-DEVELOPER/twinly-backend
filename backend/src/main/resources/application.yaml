@@ -102,6 +102,10 @@ revenue-cat:
   webhook-secret: ${REVENUECAT_WEBHOOK_SECRET}
   secret-api-key: ${REVENUECAT_SECRET_API_KEY}
 
+portone:
+  api-secret: ${PORTONE_API_SECRET}
+  allowed-channel-types: LIVE
+
 fcm:
   service-account-base64: ${FCM_SERVICE_ACCOUNT_BASE64}
 

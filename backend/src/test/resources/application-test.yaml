@@ -27,6 +27,10 @@ revenue-cat:
   secret-api-key: test-revenue-cat-secret-api-key
   environment: SANDBOX
 
+portone:
+  api-secret: test-portone-api-secret
+  allowed-channel-types: LIVE
+
 aws:
   s3:
     access-key-id: test

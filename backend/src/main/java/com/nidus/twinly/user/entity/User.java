@@ -91,6 +91,13 @@ public class User {
     @Column(columnDefinition = "TEXT")
     private String emailHash;
 
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(columnDefinition = "TEXT")
+    private String ci;
+
+    @Column(columnDefinition = "TEXT")
+    private String ciHash;
+
     private UUID revenueCatUserId;
 
     private Instant purchasesSyncedAt;
@@ -112,7 +119,8 @@ public class User {
                               String affiliationNumber, String affiliationNumberHash,
                               String birthDate, String birthDateHash,
                               String phoneNumber, String phoneNumberHash,
-                              String email, String emailHash) {
+                              String email, String emailHash,
+                              String ci, String ciHash) {
         User user = new User();
 
         user.nickname = nickname;
@@ -133,6 +141,8 @@ public class User {
         user.phoneNumberHash = phoneNumberHash;
         user.email = email;
         user.emailHash = emailHash;
+        user.ci = ci;
+        user.ciHash = ciHash;
         user.revenueCatUserId = UUID.randomUUID();
         user.createdAt = Instant.now();
 
@@ -187,6 +197,8 @@ public class User {
         this.phoneNumberHash = null;
         this.email = null;
         this.emailHash = null;
+        this.ci = null;
+        this.ciHash = null;
         this.birthDate = generalizeBirthDate(this.birthDate);
         this.birthDateHash = null;
         this.deletedAt = Instant.now();

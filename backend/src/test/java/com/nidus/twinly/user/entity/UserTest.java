@@ -37,7 +37,7 @@ class UserTest {
         User user = User.create(
                 "nick", "홍", "familyHash", "길동", "givenHash",
                 Gender.MALE, "organization", "organizationHash", "aff", "affHash", "affNo", "affNoHash",
-                "2000-01-01", "birthHash", "phone", "phoneHash", "email", "emailHash");
+                "2000-01-01", "birthHash", "phone", "phoneHash", "email", "emailHash", null, null);
         ReflectionTestUtils.setField(user, "deletedAt", deletedAt);
         return user;
     }
