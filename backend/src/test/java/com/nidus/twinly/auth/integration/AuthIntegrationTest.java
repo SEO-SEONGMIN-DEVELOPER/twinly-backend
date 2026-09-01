@@ -7,6 +7,8 @@ import com.nidus.twinly.aichat.entity.AnonSessionAiChat;
 import com.nidus.twinly.aichat.repository.AiChatRepository;
 import com.nidus.twinly.aichat.repository.AnonSessionAiChatRepository;
 import com.nidus.twinly.anon.entity.AnonSession;
+import com.nidus.twinly.anon.entity.AnonSessionAgreement;
+import com.nidus.twinly.anon.repository.AnonSessionAgreementRepository;
 import com.nidus.twinly.anon.repository.AnonSessionRepository;
 import com.nidus.twinly.auth.client.PortOneChannelType;
 import com.nidus.twinly.auth.client.PortOneIdentityClient;
@@ -22,6 +24,8 @@ import com.nidus.twinly.auth.repository.RefreshTokenRepository;
 import com.nidus.twinly.auth.dto.result.AuthTokenResult;
 import com.nidus.twinly.auth.repository.VerificationSessionRepository;
 import com.nidus.twinly.common.crypto.BlindIndexHasher;
+import com.nidus.twinly.legal.domain.PolicyKind;
+import com.nidus.twinly.legal.service.PolicyCatalog;
 import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.domain.VerificationType;
 import com.nidus.twinly.common.survey.SurveyOptionName;
@@ -37,6 +41,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -84,6 +89,12 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     SurveyAnswerRepository surveyAnswerRepository;
+
+    @Autowired
+    AnonSessionAgreementRepository anonSessionAgreementRepository;
+
+    @Autowired
+    PolicyCatalog policyCatalog;
 
     @Autowired
     BlindIndexHasher blindIndexHasher;
@@ -294,17 +305,16 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
         anonSession.changeNickname("signup-nick");
         anonSession.changeFamilyName("홍");
         anonSession.changeGivenName("길동");
-        anonSession.changeGender(Gender.MALE);
         anonSession.changeOrganization("트윈리대학교");
         anonSession.changeAffiliation("트윈리대학교");
         anonSession.changeAffiliationNumber("20250001");
-        anonSession.changeBirthDate("2000-01-01");
         anonSessionRepository.save(anonSession);
 
         String phone = "01099998888";
         String email = "signup@test.com";
         anonSessionIdentityVerificationRepository.save(verifiedIdentity(anonSession.getId(), phone, "ci-signup"));
         anonSessionVerificationSessionRepository.save(verifiedAnonSession(anonSession.getId(), VerificationType.EMAIL, email));
+        agreeRequiredPolicies(anonSession.getId());
 
         // when: 익명 세션 토큰을 Bearer로 붙여 회원가입 API 호출
         mockMvc.perform(post("/api/v1/auth/signup")
@@ -326,6 +336,67 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
         assertThat(refreshTokenRepository.findAll())
                 .extracting(RefreshToken::getUserId)
                 .contains(created.getId());
+    }
+
+    @Test
+    @DisplayName("회원가입 실패: 필수 약관에 동의하지 않으면 422 REQUIRED_POLICY_NOT_AGREED를 반환하고 유저를 만들지 않는다")
+    void signup_without_required_policy_agreement_returns_422() throws Exception {
+        // given: 인증·프로필은 모두 끝났지만 약관 동의만 하지 않은 익명 세션
+        UUID anonToken = UUID.randomUUID();
+        AnonSession anonSession = AnonSession.create(anonToken, Instant.now().plus(Duration.ofDays(1)));
+        anonSession.changeNickname("no-consent-nick");
+        anonSession.changeFamilyName("최");
+        anonSession.changeGivenName("지훈");
+        anonSession.changeOrganization("트윈리대학교");
+        anonSession.changeAffiliation("트윈리대학교");
+        anonSession.changeAffiliationNumber("20250005");
+        anonSessionRepository.save(anonSession);
+
+        String phone = "01077776666";
+        String email = "no-consent@test.com";
+        anonSessionIdentityVerificationRepository.save(verifiedIdentity(anonSession.getId(), phone, "ci-no-consent"));
+        anonSessionVerificationSessionRepository.save(verifiedAnonSession(anonSession.getId(), VerificationType.EMAIL, email));
+
+        // when: 회원가입 API 호출
+        var result = mockMvc.perform(post("/api/v1/auth/signup")
+                .header("Authorization", "Bearer " + anonToken));
+
+        // then: 시드로 들어간 온보딩 필수 약관을 덮지 못해 422로 막히고 유저는 생기지 않는다
+        result.andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value(ErrorCode.REQUIRED_POLICY_NOT_AGREED.name()));
+        assertThat(userRepository.findByPhoneNumberHash(blindIndexHasher.hash(phone))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("회원가입 실패: 필수 약관 동의를 철회한 상태면 422 REQUIRED_POLICY_NOT_AGREED를 반환한다")
+    void signup_with_revoked_required_policy_agreement_returns_422() throws Exception {
+        // given: 필수 약관에 동의했다가 모두 철회한 익명 세션
+        UUID anonToken = UUID.randomUUID();
+        AnonSession anonSession = AnonSession.create(anonToken, Instant.now().plus(Duration.ofDays(1)));
+        anonSession.changeNickname("revoked-nick");
+        anonSession.changeFamilyName("장");
+        anonSession.changeGivenName("미래");
+        anonSession.changeOrganization("트윈리대학교");
+        anonSession.changeAffiliation("트윈리대학교");
+        anonSession.changeAffiliationNumber("20250006");
+        anonSessionRepository.save(anonSession);
+
+        String phone = "01088887777";
+        String email = "revoked@test.com";
+        anonSessionIdentityVerificationRepository.save(verifiedIdentity(anonSession.getId(), phone, "ci-revoked"));
+        anonSessionVerificationSessionRepository.save(verifiedAnonSession(anonSession.getId(), VerificationType.EMAIL, email));
+        agreeRequiredPolicies(anonSession.getId());
+        anonSessionAgreementRepository.findAllByAnonSessionId(anonSession.getId())
+                .forEach(agreement -> ReflectionTestUtils.setField(agreement, "revokedAt", Instant.now()));
+
+        // when: 회원가입 API 호출
+        var result = mockMvc.perform(post("/api/v1/auth/signup")
+                .header("Authorization", "Bearer " + anonToken));
+
+        // then: 철회된 동의는 동의로 세지 않는다
+        result.andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value(ErrorCode.REQUIRED_POLICY_NOT_AGREED.name()));
+        assertThat(userRepository.findByPhoneNumberHash(blindIndexHasher.hash(phone))).isEmpty();
     }
 
     @Test
@@ -397,17 +468,16 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
         anonSession.changeNickname("cleanup-nick");
         anonSession.changeFamilyName("정");
         anonSession.changeGivenName("수민");
-        anonSession.changeGender(Gender.FEMALE);
         anonSession.changeOrganization("트윈리대학교");
         anonSession.changeAffiliation("트윈리대학교");
         anonSession.changeAffiliationNumber("20250004");
-        anonSession.changeBirthDate("2000-04-04");
         anonSessionRepository.save(anonSession);
 
         String phone = "01033332222";
         String email = "cleanup@test.com";
         anonSessionIdentityVerificationRepository.save(verifiedIdentity(anonSession.getId(), phone, "ci-cleanup"));
         anonSessionVerificationSessionRepository.save(verifiedAnonSession(anonSession.getId(), VerificationType.EMAIL, email));
+        agreeRequiredPolicies(anonSession.getId());
         anonSessionAiChatRepository.save(AnonSessionAiChat.create(anonSession.getId(), AiChatSender.AI, "취미가 무엇인가요?", 0));
         anonSessionAiChatRepository.save(AnonSessionAiChat.create(anonSession.getId(), AiChatSender.USER, "등산을 좋아합니다.", 0));
         surveyAnswerRepository.save(SurveyAnswer.create(anonSession.getId(), 1, SurveyOptionName.A));
@@ -824,6 +894,12 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
                 "2000-03-03", blindIndexHasher.hash("2000-03-03"),
                 phone, blindIndexHasher.hash(phone),
                 email, blindIndexHasher.hash(email), null, null));
+    }
+
+    /** 시드로 들어간 온보딩 필수 약관 전부에 동의한 상태로 만든다. */
+    private void agreeRequiredPolicies(Long anonSessionId) {
+        policyCatalog.loadRequiredPolicyIds(PolicyKind.ONBOARDING).forEach(policyId ->
+                anonSessionAgreementRepository.save(AnonSessionAgreement.create(anonSessionId, policyId, Instant.now())));
     }
 
     private AnonSessionIdentityVerification issuedIdentity(Long anonSessionId, String identityVerificationId) {

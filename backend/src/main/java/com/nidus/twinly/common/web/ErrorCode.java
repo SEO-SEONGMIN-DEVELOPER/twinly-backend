@@ -42,6 +42,7 @@ public enum ErrorCode {
     IDENTITY_RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "본인인증 요청이 너무 잦습니다."),
     IDENTITY_NOT_VERIFIED(HttpStatus.UNPROCESSABLE_CONTENT, "본인인증이 완료되지 않았습니다."),
     IDENTITY_AGE_NOT_ALLOWED(HttpStatus.UNPROCESSABLE_CONTENT, "가입할 수 없는 나이입니다."),
+    IDENTITY_NAME_MISMATCH(HttpStatus.UNPROCESSABLE_CONTENT, "본인인증 정보의 이름과 일치하지 않습니다."),
     IDENTITY_VERIFICATION_NOT_COMPLETED(HttpStatus.UNPROCESSABLE_CONTENT, "가입에 필요한 본인인증이 완료되지 않았습니다."),
 
     // 유저/회원
@@ -56,6 +57,7 @@ public enum ErrorCode {
     // 동의(정책)
     POLICY_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 정책 또는 버전입니다."),
     REQUIRED_POLICY_REVOKE_DENIED(HttpStatus.FORBIDDEN, "필수 정책은 철회할 수 없습니다."),
+    REQUIRED_POLICY_NOT_AGREED(HttpStatus.UNPROCESSABLE_CONTENT, "가입에 필요한 필수 약관에 동의하지 않았습니다."),
 
     // 알림
     APP_NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 알림입니다."),

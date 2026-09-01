@@ -63,9 +63,7 @@ class AuthControllerUnitTest {
             EXPIRES_AT,
             "nick",
             "홍", "길동",
-            Gender.MALE,
             "트윈리대학교", "20250001",
-            "2000-01-01",
             "01012345678", "phoneHash",
             "user@test.com", "emailHash",
             Instant.parse("2026-01-01T00:00:00Z")

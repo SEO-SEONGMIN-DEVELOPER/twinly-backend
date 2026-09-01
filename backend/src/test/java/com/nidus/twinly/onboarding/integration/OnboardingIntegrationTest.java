@@ -12,7 +12,9 @@ import com.nidus.twinly.anon.repository.AnonSessionAgreementRepository;
 import com.nidus.twinly.anon.repository.AnonSessionPersonaElementRepository;
 import com.nidus.twinly.anon.repository.AnonSessionPhotoRepository;
 import com.nidus.twinly.anon.repository.AnonSessionRepository;
+import com.nidus.twinly.auth.entity.AnonSessionIdentityVerification;
 import com.nidus.twinly.auth.entity.AnonSessionVerificationSession;
+import com.nidus.twinly.auth.repository.AnonSessionIdentityVerificationRepository;
 import com.nidus.twinly.auth.repository.AnonSessionVerificationSessionRepository;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
 import com.nidus.twinly.common.domain.Gender;
@@ -80,29 +82,30 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
     CloudFrontService cloudFrontService;
 
     @Autowired
+    AnonSessionIdentityVerificationRepository anonSessionIdentityVerificationRepository;
+
+    @Autowired
     JdbcTemplate jdbcTemplate;
 
     @Autowired
     EntityManager entityManager;
 
     @Test
-    @DisplayName("기본 정보 입력: 실제 익명 세션 토큰 인증·MockMvc·DB까지 관통하여 세션의 개인정보가 갱신된다")
-    void basicInfo_end_to_end() throws Exception {
-        // given: 실제 익명 세션을 DB에 저장 (인증 리졸버가 이 토큰으로 세션을 찾는다)
+    @DisplayName("이름 입력: 본인인증 이름과 일치하면 실제 DB의 익명 세션에 성·이름이 갱신된다")
+    void name_end_to_end() throws Exception {
+        // given: 실제 익명 세션과 "홍길동"으로 완료된 본인인증 행을 DB에 저장
         AnonSession session = saveAnonSession();
+        saveVerifiedIdentity(session.getId(), "홍길동");
 
-        // when: 익명 세션 토큰으로 기본 정보 입력 API 호출
-        mockMvc.perform(put("/api/v1/onboarding/basic-info")
+        // when: 익명 세션 토큰으로 이름 입력 API 호출
+        mockMvc.perform(put("/api/v1/onboarding/name")
                         .header("Authorization", anonBearer(session))
                         .contentType(MediaType.APPLICATION_JSON)
                         .characterEncoding("UTF-8")
                         .content("""
                                 {
                                   "familyName": "홍",
-                                  "givenName": "길동",
-                                  "gender": "male",
-                                  "affiliationNumber": "2024001",
-                                  "birthDate": "2000-01-01"
+                                  "givenName": "길동"
                                 }
                                 """))
                 .andExpect(status().isOk());
@@ -112,9 +115,79 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
         AnonSession reloaded = anonSessionRepository.findById(session.getId()).orElseThrow();
         assertThat(reloaded.getFamilyName()).isEqualTo("홍");
         assertThat(reloaded.getGivenName()).isEqualTo("길동");
-        assertThat(reloaded.getGender()).isEqualTo(Gender.MALE);
+    }
+
+    @Test
+    @DisplayName("이름 입력: 본인인증 이름과 다르면 IDENTITY_NAME_MISMATCH로 거절되고 세션은 그대로다")
+    void name_mismatch_rejected() throws Exception {
+        // given: 본인인증은 "홍길동"으로 완료된 익명 세션
+        AnonSession session = saveAnonSession();
+        saveVerifiedIdentity(session.getId(), "홍길동");
+
+        // when: 본인인증과 다른 이름으로 입력 API 호출
+        mockMvc.perform(put("/api/v1/onboarding/name")
+                        .header("Authorization", anonBearer(session))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content("""
+                                {
+                                  "familyName": "김",
+                                  "givenName": "철수"
+                                }
+                                """))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value(ErrorCode.IDENTITY_NAME_MISMATCH.name()));
+
+        // then: 세션의 이름은 비어 있는 상태 그대로 유지됨
+        flushAndClear();
+        AnonSession reloaded = anonSessionRepository.findById(session.getId()).orElseThrow();
+        assertThat(reloaded.getFamilyName()).isNull();
+        assertThat(reloaded.getGivenName()).isNull();
+    }
+
+    @Test
+    @DisplayName("이름 입력: 본인인증을 거치지 않았으면 IDENTITY_VERIFICATION_NOT_COMPLETED로 거절된다")
+    void name_without_identity_verification_rejected() throws Exception {
+        // given: 본인인증 행이 없는 익명 세션
+        AnonSession session = saveAnonSession();
+
+        // when: 이름 입력 API 호출
+        mockMvc.perform(put("/api/v1/onboarding/name")
+                        .header("Authorization", anonBearer(session))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content("""
+                                {
+                                  "familyName": "홍",
+                                  "givenName": "길동"
+                                }
+                                """))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value(ErrorCode.IDENTITY_VERIFICATION_NOT_COMPLETED.name()));
+    }
+
+    @Test
+    @DisplayName("학번 입력: 실제 익명 세션 토큰 인증·MockMvc·DB까지 관통하여 세션의 학번이 갱신된다")
+    void affiliationNumber_end_to_end() throws Exception {
+        // given: 실제 익명 세션을 DB에 저장
+        AnonSession session = saveAnonSession();
+
+        // when: 익명 세션 토큰으로 학번 입력 API 호출
+        mockMvc.perform(put("/api/v1/onboarding/affiliation-number")
+                        .header("Authorization", anonBearer(session))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content("""
+                                {
+                                  "affiliationNumber": "2024001"
+                                }
+                                """))
+                .andExpect(status().isOk());
+
+        // then: DB에서 다시 읽은 세션에 암호화 컬럼까지 실제로 반영됨
+        flushAndClear();
+        AnonSession reloaded = anonSessionRepository.findById(session.getId()).orElseThrow();
         assertThat(reloaded.getAffiliationNumber()).isEqualTo("2024001");
-        assertThat(reloaded.getBirthDate()).isEqualTo("2000-01-01");
     }
 
     @Test
@@ -659,6 +732,14 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
     /** 실제 익명 세션을 DB에 저장한다. (인증 리졸버가 토큰으로 조회한다) */
     private AnonSession saveAnonSession() {
         return anonSessionRepository.save(AnonSession.create(UUID.randomUUID(), Instant.now().plus(Duration.ofDays(1))));
+    }
+
+    /** 본인인증이 완료된 상태의 행을 실제 DB에 저장한다. */
+    private void saveVerifiedIdentity(Long anonSessionId, String name) {
+        AnonSessionIdentityVerification verification = AnonSessionIdentityVerification.create(
+                anonSessionId, "identity-" + UUID.randomUUID(), Instant.now().plus(Duration.ofMinutes(30)));
+        verification.verify(name, "2000-01-01", Gender.MALE, "01012345678", "ci-" + anonSessionId, "ciHash-" + anonSessionId);
+        anonSessionIdentityVerificationRepository.save(verification);
     }
 
     /** 익명 세션 토큰(UUID)으로 Authorization 헤더 값을 만든다. */

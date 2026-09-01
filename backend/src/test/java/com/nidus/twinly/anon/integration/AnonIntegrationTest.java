@@ -45,7 +45,7 @@ class AnonIntegrationTest extends AbstractIntegrationTest {
         assertThat(saved.getExpiresAt())
                 .isBetween(before.plus(TTL).minusSeconds(1), Instant.now().plus(TTL).plusSeconds(1));
         assertThat(saved.getNickname()).isNull();
-        assertThat(saved.getGender()).isNull();
+        assertThat(saved.getFamilyName()).isNull();
     }
 
     @Test

@@ -5,7 +5,6 @@ import com.nidus.twinly.anon.dto.result.AnonStartResult;
 import com.nidus.twinly.anon.dto.snapshot.AnonSessionSnapshot;
 import com.nidus.twinly.anon.entity.AnonSession;
 import com.nidus.twinly.anon.repository.AnonSessionRepository;
-import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import org.junit.jupiter.api.BeforeEach;
@@ -75,7 +74,7 @@ class AnonServiceUnitTest {
 
         assertThat(saved.getCreatedAt()).isNotNull();
         assertThat(saved.getNickname()).isNull();
-        assertThat(saved.getGender()).isNull();
+        assertThat(saved.getFamilyName()).isNull();
         assertThat(saved.getPhoneNumberHash()).isNull();
         assertThat(saved.getEmailHash()).isNull();
     }
@@ -112,13 +111,13 @@ class AnonServiceUnitTest {
     @Test
     @DisplayName("만료 전 세션을 조회하면 엔티티 필드를 담은 스냅샷을 반환한다")
     void resolveByToken_valid_returns_snapshot() {
-        // given: 만료 전이며 온보딩으로 닉네임·성별이 채워진 익명 세션
+        // given: 만료 전이며 온보딩으로 닉네임·이름이 채워진 익명 세션
         UUID token = UUID.randomUUID();
         Instant expiresAt = Instant.now().plus(TTL);
         AnonSession session = AnonSession.create(token, expiresAt);
         ReflectionTestUtils.setField(session, "id", 7L);
         session.changeNickname("익명이");
-        session.changeGender(Gender.FEMALE);
+        session.changeFamilyName("홍");
         given(anonSessionRepository.findByToken(token)).willReturn(Optional.of(session));
 
         // when: 토큰으로 익명 세션 조회
@@ -129,6 +128,6 @@ class AnonServiceUnitTest {
         assertThat(snapshot.token()).isEqualTo(token);
         assertThat(snapshot.expiresAt()).isEqualTo(expiresAt);
         assertThat(snapshot.nickname()).isEqualTo("익명이");
-        assertThat(snapshot.gender()).isEqualTo(Gender.FEMALE);
+        assertThat(snapshot.familyName()).isEqualTo("홍");
     }
 }

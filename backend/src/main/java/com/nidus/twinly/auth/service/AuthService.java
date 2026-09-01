@@ -15,8 +15,10 @@ import com.nidus.twinly.anon.repository.AnonSessionPhotoRepository;
 import com.nidus.twinly.anon.repository.AnonSessionRepository;
 import com.nidus.twinly.auth.entity.RefreshToken;
 import com.nidus.twinly.auth.repository.RefreshTokenRepository;
+import com.nidus.twinly.legal.domain.PolicyKind;
 import com.nidus.twinly.legal.entity.Agreement;
 import com.nidus.twinly.legal.repository.AgreementRepository;
+import com.nidus.twinly.legal.service.PolicyCatalog;
 import com.nidus.twinly.auth.client.PortOneIdentityClient;
 import com.nidus.twinly.auth.client.PortOneIdentityVerificationBody;
 import com.nidus.twinly.auth.client.PortOneIdentityVerificationStatus;
@@ -61,7 +63,9 @@ import java.time.Period;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -79,6 +83,7 @@ public class AuthService {
     private final JwtService jwtService;
     private final VerificationService verificationService;
     private final OrganizationCatalog organizationCatalog;
+    private final PolicyCatalog policyCatalog;
     private final PortOneIdentityClient portOneIdentityClient;
     private final PortOneProperties portOneProperties;
 
@@ -376,6 +381,10 @@ public class AuthService {
 
         requireProfileCompleted(anonSession);
 
+        List<AnonSessionAgreement> anonSessionAgreements = anonSessionAgreementRepository.findAllByAnonSessionId(anonSessionId);
+
+        requireRequiredPoliciesAgreed(anonSessionAgreements);
+
         String phoneNumber = identityVerification.getPhoneNumber();
         String phoneNumberHash = blindIndexHasher.hash(phoneNumber);
         String email = emailSession.getContact();
@@ -440,8 +449,6 @@ public class AuthService {
         });
 
         anonSessionPhotoRepository.deleteAll(anonSessionPhotos);
-
-        List<AnonSessionAgreement> anonSessionAgreements = anonSessionAgreementRepository.findAllByAnonSessionId(anonSessionId);
 
         anonSessionAgreements.stream()
                 .filter(anonSessionAgreement -> anonSessionAgreement.getRevokedAt() == null)
@@ -515,15 +522,24 @@ public class AuthService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.EMAIL_VERIFICATION_NOT_COMPLETED));
     }
 
+    private void requireRequiredPoliciesAgreed(List<AnonSessionAgreement> anonSessionAgreements) {
+        Set<Long> agreedPolicyIds = anonSessionAgreements.stream()
+                .filter(anonSessionAgreement -> anonSessionAgreement.getRevokedAt() == null)
+                .map(AnonSessionAgreement::getPolicyId)
+                .collect(Collectors.toSet());
+
+        if (!agreedPolicyIds.containsAll(policyCatalog.loadRequiredPolicyIds(PolicyKind.ONBOARDING))) {
+            throw new BusinessException(ErrorCode.REQUIRED_POLICY_NOT_AGREED);
+        }
+    }
+
     private void requireProfileCompleted(AnonSession anonSession) {
         if (anonSession.getNickname() == null
                 || anonSession.getFamilyName() == null
                 || anonSession.getGivenName() == null
-                || anonSession.getGender() == null
                 || anonSession.getOrganization() == null
                 || anonSession.getAffiliation() == null
-                || anonSession.getAffiliationNumber() == null
-                || anonSession.getBirthDate() == null) {
+                || anonSession.getAffiliationNumber() == null) {
             throw new BusinessException(ErrorCode.PROFILE_NOT_COMPLETED);
         }
     }
