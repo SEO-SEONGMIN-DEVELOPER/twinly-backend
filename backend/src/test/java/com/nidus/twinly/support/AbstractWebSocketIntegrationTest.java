@@ -116,7 +116,7 @@ public abstract class AbstractWebSocketIntegrationTest {
                 "affNo" + n, "affNoHash" + n,
                 "2000-01-01", "birthHash" + n,
                 "phone" + n, "phoneHash" + n,
-                "email" + n + "@test.com", "emailHash" + n
+                "email" + n + "@test.com", "emailHash" + n, null, null
         ));
     }
 

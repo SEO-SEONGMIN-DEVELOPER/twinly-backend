@@ -278,7 +278,8 @@ public class UserSeeder implements ApplicationRunner {
                 affiliationNumber, blindIndexHasher.hash(affiliationNumber),
                 birthDate, blindIndexHasher.hash(birthDate),
                 phoneNumber, blindIndexHasher.hash(phoneNumber),
-                email, blindIndexHasher.hash(email)
+                email, blindIndexHasher.hash(email),
+                null, null
         );
     }
 

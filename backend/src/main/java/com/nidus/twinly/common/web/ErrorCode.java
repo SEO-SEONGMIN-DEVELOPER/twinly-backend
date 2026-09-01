@@ -36,6 +36,14 @@ public enum ErrorCode {
     EMAIL_VERIFICATION_NOT_COMPLETED(HttpStatus.UNPROCESSABLE_CONTENT, "이메일 인증이 완료되지 않았습니다."),
     PROFILE_NOT_COMPLETED(HttpStatus.UNPROCESSABLE_CONTENT, "가입에 필요한 프로필 정보가 완성되지 않았습니다."),
 
+    // 인증(본인인증)
+    IDENTITY_ALREADY_VERIFIED(HttpStatus.CONFLICT, "이미 본인인증이 완료되었습니다."),
+    IDENTITY_ALREADY_REGISTERED(HttpStatus.CONFLICT, "이미 가입된 회원입니다."),
+    IDENTITY_RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "본인인증 요청이 너무 잦습니다."),
+    IDENTITY_NOT_VERIFIED(HttpStatus.UNPROCESSABLE_CONTENT, "본인인증이 완료되지 않았습니다."),
+    IDENTITY_AGE_NOT_ALLOWED(HttpStatus.UNPROCESSABLE_CONTENT, "가입할 수 없는 나이입니다."),
+    IDENTITY_VERIFICATION_NOT_COMPLETED(HttpStatus.UNPROCESSABLE_CONTENT, "가입에 필요한 본인인증이 완료되지 않았습니다."),
+
     // 유저/회원
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 유저입니다."),
     WITHDRAWAL_RECOVERY_EXPIRED(HttpStatus.UNPROCESSABLE_CONTENT, "복구 가능 기간이 지났습니다."),
@@ -109,7 +117,8 @@ public enum ErrorCode {
     EMAIL_SEND_FAILED(HttpStatus.BAD_GATEWAY, "이메일 발송에 실패했습니다."),
     SMS_SEND_FAILED(HttpStatus.BAD_GATEWAY, "SMS 발송에 실패했습니다."),
     AI_RESPONSE_FAILED(HttpStatus.BAD_GATEWAY, "AI 응답 생성에 실패했습니다."),
-    REVENUE_CAT_SYNC_FAILED(HttpStatus.BAD_GATEWAY, "구매 상태 동기화에 실패했습니다.");
+    REVENUE_CAT_SYNC_FAILED(HttpStatus.BAD_GATEWAY, "구매 상태 동기화에 실패했습니다."),
+    IDENTITY_VERIFICATION_FAILED(HttpStatus.BAD_GATEWAY, "본인인증 조회에 실패했습니다.");
 
     private final HttpStatus status;
     private final String defaultMessage;

@@ -166,7 +166,7 @@ class ChatPushNotifierUnitTest {
                 "affNo", "affNoHash",
                 "2000-01-01", "birthHash",
                 "phone", "phoneHash",
-                "email", "emailHash"
+                "email", "emailHash", null, null
         );
     }
 

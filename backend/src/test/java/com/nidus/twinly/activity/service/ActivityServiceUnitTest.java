@@ -417,7 +417,7 @@ class ActivityServiceUnitTest {
         User user = User.create(
                 "nick", familyName, "familyHash", givenName, "givenHash",
                 Gender.MALE, "organization", "organizationHash", "aff", "affHash", "affNo", "affNoHash",
-                "2000-01-01", "birthHash", "phone", "phoneHash", "email", "emailHash");
+                "2000-01-01", "birthHash", "phone", "phoneHash", "email", "emailHash", null, null);
         ReflectionTestUtils.setField(user, "id", id);
         return user;
     }

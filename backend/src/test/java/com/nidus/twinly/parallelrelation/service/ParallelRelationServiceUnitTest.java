@@ -374,7 +374,7 @@ class ParallelRelationServiceUnitTest {
                 "20", "affNoHash",
                 "2000-01-01", "birthHash",
                 "phone" + id, "phoneHash",
-                "email" + id + "@test.com", "emailHash"
+                "email" + id + "@test.com", "emailHash", null, null
         );
         ReflectionTestUtils.setField(user, "id", id);
 

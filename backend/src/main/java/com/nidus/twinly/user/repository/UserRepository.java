@@ -20,6 +20,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     boolean existsByEmailHash(String emailHash);
 
+    boolean existsByCiHash(String ciHash);
+
     Optional<User> findByPhoneNumberHash(String phoneNumberHash);
 
     Optional<User> findByEmailHash(String emailHash);

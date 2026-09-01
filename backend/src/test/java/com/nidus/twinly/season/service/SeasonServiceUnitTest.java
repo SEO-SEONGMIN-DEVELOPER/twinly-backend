@@ -221,7 +221,7 @@ class SeasonServiceUnitTest {
         User user = User.create(
                 "nick", "홍", "familyHash", "길동", "givenHash",
                 Gender.MALE, "organization", "organizationHash", "니두스", "affHash", "2020123", "affNoHash",
-                "2000-01-01", "birthHash", "01000000000", "phoneHash", "me@test.com", "emailHash");
+                "2000-01-01", "birthHash", "01000000000", "phoneHash", "me@test.com", "emailHash", null, null);
         ReflectionTestUtils.setField(user, "id", USER_ID);
         return user;
     }
