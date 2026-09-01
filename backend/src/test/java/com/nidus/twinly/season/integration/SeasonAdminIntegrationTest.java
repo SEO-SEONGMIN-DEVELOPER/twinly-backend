@@ -1,15 +1,22 @@
 package com.nidus.twinly.season.integration;
 
 import com.nidus.twinly.common.web.ErrorCode;
+import com.nidus.twinly.purchase.entity.UserEntitlement;
+import com.nidus.twinly.purchase.reader.EntitlementReader;
+import com.nidus.twinly.purchase.repository.UserEntitlementRepository;
 import com.nidus.twinly.season.entity.Season;
+import com.nidus.twinly.season.entity.SeasonParticipation;
+import com.nidus.twinly.season.repository.SeasonParticipationRepository;
 import com.nidus.twinly.season.repository.SeasonRepository;
 import com.nidus.twinly.support.AbstractIntegrationTest;
+import com.nidus.twinly.user.entity.User;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
@@ -28,6 +35,12 @@ class SeasonAdminIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     SeasonRepository seasonRepository;
+
+    @Autowired
+    SeasonParticipationRepository seasonParticipationRepository;
+
+    @Autowired
+    UserEntitlementRepository userEntitlementRepository;
 
     @Test
     @DisplayName("시즌 전환: 관리자 토큰으로 호출하면 기존 활성 시즌이 꺼지고 새 시즌 행이 활성으로 생성된다")
@@ -74,6 +87,35 @@ class SeasonAdminIntegrationTest extends AbstractIntegrationTest {
                         .header("Authorization", bearer(saveUser().getId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.currentSeasonId").value(String.valueOf(newSeasonId)));
+    }
+
+    @Test
+    @DisplayName("시즌 전환: simulation_access 가 살아 있는 유저는 새 시즌에 자동 참가되고, 없는 유저는 참가되지 않는다")
+    void changeSeason_participatesPaidUsers_endToEnd() throws Exception {
+        // given: 결제 상태 유저와 무료 유저
+        User paid = saveUser();
+        User free = saveUser();
+        userEntitlementRepository.save(UserEntitlement.create(
+                paid.getId(), EntitlementReader.SIMULATION_ACCESS, Instant.now().plus(Duration.ofDays(30)), Instant.now()));
+
+        // when: 시즌 전환
+        mockMvc.perform(post(ADMIN_SEASON_PATH)
+                        .header("X-Admin-Token", ADMIN_TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"startedAt":"2026-09-01T00:00:00Z","endedAt":"2026-12-01T00:00:00Z"}
+                                """))
+                .andExpect(status().isOk());
+
+        // then: 결제 유저만 새 시즌 참가 행을 갖는다 (재참가 요청 없이 다음 시즌으로 이어진다)
+        Long newSeasonId = seasonRepository.findAllByIsActiveTrue().getFirst().getId();
+
+        assertThat(seasonParticipationRepository.findByUserIdAndSeasonId(paid.getId(), newSeasonId))
+                .isPresent()
+                .get()
+                .extracting(SeasonParticipation::getParticipatedInAt)
+                .isNotNull();
+        assertThat(seasonParticipationRepository.findByUserIdAndSeasonId(free.getId(), newSeasonId)).isEmpty();
     }
 
     @Test

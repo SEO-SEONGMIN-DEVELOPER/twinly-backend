@@ -10,6 +10,7 @@ import com.nidus.twinly.season.entity.SeasonParticipation;
 import com.nidus.twinly.season.event.SeasonChangedEvent;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.season.repository.SeasonParticipationRepository;
+import com.nidus.twinly.season.writer.SeasonParticipationWriter;
 import com.nidus.twinly.purchase.service.PurchaseService;
 import com.nidus.twinly.season.repository.SeasonRepository;
 import com.nidus.twinly.common.domain.Gender;
@@ -54,6 +55,9 @@ class SeasonServiceUnitTest {
     SeasonRepository seasonRepository;
 
     @Mock
+    SeasonParticipationWriter seasonParticipationWriter;
+
+    @Mock
     ApplicationEventPublisher eventPublisher;
 
     @Mock
@@ -64,68 +68,6 @@ class SeasonServiceUnitTest {
 
     @InjectMocks
     SeasonService seasonService;
-
-    @Test
-    @DisplayName("활성 시즌이 없으면 IllegalStateException이 발생하고 참가를 저장하지 않는다")
-    void participateIn_when_current_season_missing_throws() {
-        // given: 현재 시즌 조회가 실패하는 상황 (예외 발생 자체는 CurrentSeasonReaderUnitTest에서 검증)
-        given(currentSeasonReader.read()).willThrow(new IllegalStateException("활성화된 시즌이 존재하지 않습니다."));
-
-        // when & then: IllegalStateException 발생 + 참가 저장 안 함
-        assertThatThrownBy(() -> seasonService.participateIn(USER_ID))
-                .isInstanceOf(IllegalStateException.class);
-
-        then(seasonParticipationRepository).should(never()).save(any());
-    }
-
-    @Test
-    @DisplayName("시즌 시작 전이면 SEASON_NOT_JOINABLE 예외가 발생하고 참가를 저장하지 않는다")
-    void participateIn_before_season_start_throws() {
-        // given: 아직 시작하지 않은 시즌
-        Instant now = Instant.now();
-        given(currentSeasonReader.read())
-                .willReturn(season(now.plus(Duration.ofDays(1)), now.plus(Duration.ofDays(2))));
-
-        // when & then: SEASON_NOT_JOINABLE 예외 발생 + 참가 저장 안 함
-        assertThatThrownBy(() -> seasonService.participateIn(USER_ID))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(ErrorCode.SEASON_NOT_JOINABLE);
-
-        then(seasonParticipationRepository).should(never()).save(any());
-    }
-
-    @Test
-    @DisplayName("시즌 종료 후면 SEASON_NOT_JOINABLE 예외가 발생하고 참가를 저장하지 않는다")
-    void participateIn_after_season_end_throws() {
-        // given: 이미 종료된 시즌
-        Instant now = Instant.now();
-        given(currentSeasonReader.read())
-                .willReturn(season(now.minus(Duration.ofDays(2)), now.minus(Duration.ofDays(1))));
-
-        // when & then: SEASON_NOT_JOINABLE 예외 발생 + 참가 저장 안 함
-        assertThatThrownBy(() -> seasonService.participateIn(USER_ID))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(ErrorCode.SEASON_NOT_JOINABLE);
-
-        then(seasonParticipationRepository).should(never()).save(any());
-    }
-
-    @Test
-    @DisplayName("시즌 참가는 조회 없이 upsert 한 번으로 위임한다")
-    void participateIn_delegates_to_upsert() {
-        // given: 참가 가능한 기간
-        given(currentSeasonReader.read()).willReturn(joinableSeason());
-
-        // when: 참가
-        seasonService.participateIn(USER_ID);
-
-        // then: 조회-후-저장이 아니라 원자적 upsert 한 번 (참가 버튼 연타가 유니크 제약을 위반하지 않는다)
-        then(seasonParticipationRepository).should().upsert(USER_ID, CURRENT_SEASON_ID);
-        then(seasonParticipationRepository).should(never()).existsByUserIdAndSeasonId(any(), any());
-        then(seasonParticipationRepository).should(never()).save(any());
-    }
 
     @Test
     @DisplayName("참가 조회 시 구매 상태 동기화를 위임한다")
@@ -226,6 +168,25 @@ class SeasonServiceUnitTest {
     }
 
     @Test
+    @DisplayName("시즌 전환 시 결제 상태인 유저를 새 시즌에 자동 참가시킨다")
+    void changeSeason_participatesPaidUsersInNewSeason() {
+        // given: 전환될 새 시즌
+        given(seasonRepository.findAllByIsActiveTrue()).willReturn(List.of());
+        given(seasonRepository.save(any(Season.class))).willAnswer(invocation -> {
+            Season season = invocation.getArgument(0);
+            ReflectionTestUtils.setField(season, "id", 77L);
+            return season;
+        });
+
+        // when
+        seasonService.changeSeason(new SeasonChangeCommand(
+                Instant.parse("2026-09-01T00:00:00Z"), Instant.parse("2026-12-01T00:00:00Z")));
+
+        // then: 결제 유저는 다시 참가 요청을 하지 않아도 새 시즌 참가가 이어진다
+        then(seasonParticipationWriter).should().participateAllWithSimulationAccess(77L);
+    }
+
+    @Test
     @DisplayName("시작 시각이 종료 시각보다 앞서지 않으면 INVALID_SEASON_PERIOD 예외가 발생하고 아무것도 저장하지 않는다")
     void changeSeason_rejectsInvalidPeriod() {
         // given: 시작과 종료가 같은 구간
@@ -237,6 +198,7 @@ class SeasonServiceUnitTest {
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_SEASON_PERIOD);
 
         then(seasonRepository).should(never()).save(any());
+        then(seasonParticipationWriter).should(never()).participateAllWithSimulationAccess(any());
         then(eventPublisher).should(never()).publishEvent(any(SeasonChangedEvent.class));
     }
 

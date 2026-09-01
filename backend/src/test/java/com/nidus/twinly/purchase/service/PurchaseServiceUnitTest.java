@@ -8,7 +8,9 @@ import com.nidus.twinly.purchase.client.RevenueCatClient;
 import com.nidus.twinly.purchase.client.RevenueCatEntitlement;
 import com.nidus.twinly.purchase.domain.RevenueCatEnvironment;
 import com.nidus.twinly.purchase.dto.command.RevenueCatWebhookCommand;
+import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.purchase.writer.PurchaseWriter;
+import com.nidus.twinly.season.writer.SeasonParticipationWriter;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -50,12 +52,19 @@ class PurchaseServiceUnitTest {
     @Mock
     PurchaseWriter purchaseWriter;
 
+    @Mock
+    EntitlementReader entitlementReader;
+
+    @Mock
+    SeasonParticipationWriter seasonParticipationWriter;
+
     PurchaseService purchaseService;
 
     @BeforeEach
     void setUp() {
         RevenueCatProperties properties = new RevenueCatProperties("secret", "sk_test", RevenueCatEnvironment.SANDBOX);
-        purchaseService = new PurchaseService(properties, revenueCatClient, userRepository, purchaseWriter);
+        purchaseService = new PurchaseService(
+                properties, revenueCatClient, userRepository, purchaseWriter, entitlementReader, seasonParticipationWriter);
     }
 
     @Test
@@ -185,6 +194,37 @@ class PurchaseServiceUnitTest {
         // when & then: 조회 API 가 동기화 실패로 같이 죽지 않아야 하므로 예외가 전파되지 않는다
         assertThatCode(() -> purchaseService.syncIfStale(user)).doesNotThrowAnyException();
         then(purchaseWriter).should(never()).replaceEntitlements(anyLong(), anyList(), any());
+    }
+
+    @Test
+    @DisplayName("동기화 결과 simulation_access 가 살아 있으면 현재 시즌에 자동 참가시킨다")
+    void sync_participates_in_current_season_when_access_granted() {
+        // given: 결제로 simulation_access 를 갖게 된 유저
+        User user = user();
+        given(revenueCatClient.entitlements(APP_USER_ID))
+                .willReturn(List.of(new RevenueCatEntitlement("simulation_access", Instant.parse("2026-09-30T00:00:00Z"))));
+        given(entitlementReader.hasSimulationAccess(USER_ID)).willReturn(true);
+
+        // when: 동기화
+        purchaseService.sync(user);
+
+        // then: 별도 참가 요청 없이 평행우주(시즌) 참가가 이어진다
+        then(seasonParticipationWriter).should().participateInCurrentSeason(USER_ID);
+    }
+
+    @Test
+    @DisplayName("simulation_access 가 없으면 시즌 참가를 만들지 않는다")
+    void sync_does_not_participate_without_access() {
+        // given: 결제 권한이 없는 유저
+        User user = user();
+        given(revenueCatClient.entitlements(APP_USER_ID)).willReturn(List.of());
+        given(entitlementReader.hasSimulationAccess(USER_ID)).willReturn(false);
+
+        // when: 동기화
+        purchaseService.sync(user);
+
+        // then: 참가 행을 만들지 않는다
+        then(seasonParticipationWriter).should(never()).participateInCurrentSeason(anyLong());
     }
 
     private RevenueCatWebhookCommand command(String type, String environment, List<String> appUserIds) {

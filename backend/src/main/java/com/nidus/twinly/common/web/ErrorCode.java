@@ -88,7 +88,6 @@ public enum ErrorCode {
     CANNOT_BLOCK_SELF(HttpStatus.UNPROCESSABLE_CONTENT, "자기 자신을 차단할 수 없습니다."),
 
     // 시즌
-    SEASON_NOT_JOINABLE(HttpStatus.UNPROCESSABLE_CONTENT, "지금은 시즌 참가 기간이 아닙니다."),
     INVALID_SEASON_PERIOD(HttpStatus.UNPROCESSABLE_CONTENT, "시즌 시작 시각은 종료 시각보다 앞서야 합니다."),
 
     // 사진/업로드

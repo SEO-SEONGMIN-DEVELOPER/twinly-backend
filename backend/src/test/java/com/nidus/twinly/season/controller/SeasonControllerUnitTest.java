@@ -1,7 +1,6 @@
 package com.nidus.twinly.season.controller;
 
 import com.nidus.twinly.anon.service.AnonService;
-import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.season.dto.result.SeasonParticipationResult;
 import com.nidus.twinly.season.service.SeasonService;
@@ -24,10 +23,8 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
-import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -52,46 +49,6 @@ class SeasonControllerUnitTest {
     void setUp() {
         given(userService.resolveByAccessToken(anyString()))
                 .willReturn(new UserInfo(1L));
-    }
-
-    @Test
-    @DisplayName("시즌 참가 성공 시 200을 반환하고 인증 유저 id로 서비스를 호출한다")
-    void participateIn_success() throws Exception {
-        // when: 인증 상태로 시즌 참가 API 호출
-        var result = mockMvc.perform(put("/api/v1/season/participation")
-                .header("Authorization", "Bearer access-token"));
-
-        // then: 200 반환 + 인증 유저 id로 서비스에 위임
-        result.andExpect(status().isOk());
-        then(seasonService).should().participateIn(1L);
-    }
-
-    @Test
-    @DisplayName("시즌 참가 시 인증 헤더가 없으면 401을 반환하고 서비스를 호출하지 않는다")
-    void participateIn_without_auth_returns_401() throws Exception {
-        // when: 인증 헤더 없이 시즌 참가 API 호출
-        var result = mockMvc.perform(put("/api/v1/season/participation"));
-
-        // then: 401 반환 + 서비스는 호출되지 않음
-        result.andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value(ErrorCode.UNAUTHORIZED.name()));
-        then(seasonService).should(never()).participateIn(anyLong());
-    }
-
-    @Test
-    @DisplayName("참가 기간이 아니어서 서비스가 SEASON_NOT_JOINABLE을 던지면 422와 에러 코드를 반환한다")
-    void participateIn_when_season_not_joinable_returns_422() throws Exception {
-        // given: 서비스가 참가 불가 도메인 예외를 던짐
-        willThrow(new BusinessException(ErrorCode.SEASON_NOT_JOINABLE))
-                .given(seasonService).participateIn(1L);
-
-        // when: 인증 상태로 시즌 참가 API 호출
-        var result = mockMvc.perform(put("/api/v1/season/participation")
-                .header("Authorization", "Bearer access-token"));
-
-        // then: 도메인 예외가 422 + SEASON_NOT_JOINABLE 코드로 매핑됨
-        result.andExpect(status().is(422))
-                .andExpect(jsonPath("$.code").value(ErrorCode.SEASON_NOT_JOINABLE.name()));
     }
 
     @Test
