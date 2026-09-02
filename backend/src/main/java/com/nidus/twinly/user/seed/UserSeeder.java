@@ -45,6 +45,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Component
@@ -170,11 +172,23 @@ public class UserSeeder implements ApplicationRunner {
     }
 
     private void grantSimulationAccess(List<User> users, Instant now) {
-        List<UserEntitlement> granted = users.stream()
-                .map(User::getId)
-                .filter(userId -> !userEntitlementRepository.existsByUserIdAndEntitlement(userId, EntitlementReader.SIMULATION_ACCESS))
-                .map(userId -> UserEntitlement.create(userId, EntitlementReader.SIMULATION_ACCESS, null, now))
-                .toList();
+        List<Long> userIds = users.stream().map(User::getId).toList();
+        Map<Long, UserEntitlement> existing = userEntitlementRepository
+                .findAllByUserIdInAndEntitlement(userIds, EntitlementReader.SIMULATION_ACCESS)
+                .stream()
+                .collect(Collectors.toMap(UserEntitlement::getUserId, Function.identity()));
+
+        List<UserEntitlement> granted = new ArrayList<>();
+        for (Long userId : userIds) {
+            UserEntitlement entitlement = existing.get(userId);
+
+            if (entitlement == null) {
+                granted.add(UserEntitlement.create(userId, EntitlementReader.SIMULATION_ACCESS, null, now));
+            } else if (entitlement.getExpiresAt() != null) {
+                entitlement.sync(null, now);
+                granted.add(entitlement);
+            }
+        }
 
         if (!granted.isEmpty()) {
             userEntitlementRepository.saveAll(granted);

@@ -60,6 +60,7 @@ class UserSeederUnitTest {
     private static final int DETAIL_ELEMENTS_PER_USER = 5;
     private static final int SUMMARY_ELEMENTS_PER_USER = 1;
     private static final int SCENARIO_DAY_COUNT = 390;
+    private static final long EXPIRED_USER_ID = 6L;
 
     @Mock
     UserRepository userRepository;
@@ -407,8 +408,8 @@ class UserSeederUnitTest {
     void run_grants_simulation_access_to_every_seed_user() throws IOException {
         // given: 아직 시드 유저가 없는 상태
         given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
-        given(userEntitlementRepository.existsByUserIdAndEntitlement(any(), eq(EntitlementReader.SIMULATION_ACCESS)))
-                .willReturn(false);
+        given(userEntitlementRepository.findAllByUserIdInAndEntitlement(any(), eq(EntitlementReader.SIMULATION_ACCESS)))
+                .willReturn(List.of());
 
         // when: 시더 실행
         userSeeder.run(null);
@@ -433,14 +434,45 @@ class UserSeederUnitTest {
         given(userRepository.findByEmailHash(any())).willAnswer(invocation -> Optional.of(existingUser()));
         given(personaElementRepository.existsByUserId(any())).willReturn(true);
         given(personaElementRepository.existsByUserIdAndDimension(any(), eq(PersonaDimension.SUMMARY))).willReturn(true);
-        given(userEntitlementRepository.existsByUserIdAndEntitlement(any(), eq(EntitlementReader.SIMULATION_ACCESS)))
-                .willReturn(true);
+        given(userEntitlementRepository.findAllByUserIdInAndEntitlement(any(), eq(EntitlementReader.SIMULATION_ACCESS)))
+                .willAnswer(invocation -> seedEntitlements(null));
 
         // when: 시더 실행
         userSeeder.run(null);
 
         // then: 엔타이틀먼트 저장은 한 번도 일어나지 않는다
         then(userEntitlementRepository).should(never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("만료된 권한을 가진 시드 유저는 만료를 풀어 다시 이용할 수 있게 한다")
+    void run_clears_expiry_when_simulation_access_expired() throws IOException {
+        // given: 유저는 남아 있고 6번만 이미 만료된 권한을 가진 상태
+        given(userRepository.findByEmailHash(any())).willAnswer(invocation -> Optional.of(existingUser()));
+        given(personaElementRepository.existsByUserId(any())).willReturn(true);
+        given(personaElementRepository.existsByUserIdAndDimension(any(), eq(PersonaDimension.SUMMARY))).willReturn(true);
+        given(userEntitlementRepository.findAllByUserIdInAndEntitlement(any(), eq(EntitlementReader.SIMULATION_ACCESS)))
+                .willAnswer(invocation -> seedEntitlements(EXPIRED_USER_ID));
+
+        // when: 시더 실행
+        userSeeder.run(null);
+
+        // then: 만료됐던 한 명만 만료 없는 상태로 갱신된다
+        List<UserEntitlement> granted = savedEntitlements();
+
+        assertThat(granted).hasSize(1);
+        assertThat(granted.getFirst().getUserId()).isEqualTo(EXPIRED_USER_ID);
+        assertThat(granted.getFirst().getExpiresAt()).isNull();
+    }
+
+    private List<UserEntitlement> seedEntitlements(Long expiredUserId) {
+        return LongStream.rangeClosed(1, SEED_USER_COUNT)
+                .mapToObj(userId -> UserEntitlement.create(
+                        userId,
+                        EntitlementReader.SIMULATION_ACCESS,
+                        Long.valueOf(userId).equals(expiredUserId) ? Instant.now().minusSeconds(60) : null,
+                        Instant.now()))
+                .toList();
     }
 
     @SuppressWarnings("unchecked")
