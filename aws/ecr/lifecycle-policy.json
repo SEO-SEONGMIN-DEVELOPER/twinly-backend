@@ -1,0 +1,16 @@
+{
+  "rules": [
+    {
+      "rulePriority": 1,
+      "description": "최근 30개만 유지",
+      "selection": {
+        "tagStatus": "any",
+        "countType": "imageCountMoreThan",
+        "countNumber": 30
+      },
+      "action": {
+        "type": "expire"
+      }
+    }
+  ]
+}
