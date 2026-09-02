@@ -80,6 +80,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.BDDMockito.willReturn;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -792,6 +793,28 @@ class AuthServiceUnitTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.IDENTITY_VERIFICATION_FAILED);
+    }
+
+    @Test
+    @DisplayName("본인인증 검증: TEST 채널이 허용된 환경에서 성별이 비어 있으면 MALE로 채워 통과한다")
+    void identityVerify_with_missing_gender_on_test_channel_falls_back_to_male() {
+        // given: TEST 채널을 허용하는 환경이고, 테스트 채널이 성별을 내려주지 않은 응답
+        AnonSessionIdentityVerification issued = issuedIdentity();
+        givenIssuedIdentity(issued);
+        willReturn(true).given(portOneProperties).allows(PortOneChannelType.TEST);
+        givenPortOneReturns(new PortOneIdentityVerificationBody(
+                PortOneIdentityVerificationStatus.VERIFIED,
+                new PortOneIdentityVerificationBody.Channel(PortOneChannelType.TEST),
+                customer(adultBirthDate(), IDENTITY_NAME, null, IDENTITY_PHONE, CI)));
+        given(blindIndexHasher.hash(CI)).willReturn("hash:" + CI);
+        given(userRepository.existsByCiHash("hash:" + CI)).willReturn(false);
+
+        // when: 본인인증 검증
+        authService.onboardingIdentityVerify(SNAPSHOT);
+
+        // then: 검증을 막지 않고 MALE로 채워 진행한다
+        assertThat(issued.isVerified()).isTrue();
+        assertThat(issued.getGender()).isEqualTo(Gender.MALE);
     }
 
     @Test

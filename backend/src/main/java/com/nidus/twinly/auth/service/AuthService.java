@@ -19,6 +19,7 @@ import com.nidus.twinly.legal.domain.PolicyKind;
 import com.nidus.twinly.legal.entity.Agreement;
 import com.nidus.twinly.legal.repository.AgreementRepository;
 import com.nidus.twinly.legal.service.PolicyCatalog;
+import com.nidus.twinly.auth.client.PortOneChannelType;
 import com.nidus.twinly.auth.client.PortOneIdentityClient;
 import com.nidus.twinly.auth.client.PortOneIdentityVerificationBody;
 import com.nidus.twinly.auth.client.PortOneIdentityVerificationStatus;
@@ -78,6 +79,7 @@ public class AuthService {
     private static final int IDENTITY_ISSUE_LIMIT = 5;
     private static final int IDENTITY_MIN_AGE = 18;
     private static final int IDENTITY_MAX_AGE = 29;
+    private static final Gender IDENTITY_TEST_CHANNEL_FALLBACK_GENDER = Gender.MALE;
 
     private final VerificationCodeIssuer verificationCodeIssuer;
     private final JwtService jwtService;
@@ -224,11 +226,12 @@ public class AuthService {
         }
 
         PortOneIdentityVerificationBody.VerifiedCustomer customer = body.verifiedCustomer();
-        Gender gender = toGender(customer.gender());
 
-        if (isBlank(customer.name()) || gender == null || isBlank(customer.phoneNumber()) || isBlank(customer.ci())) {
+        if (isBlank(customer.name()) || isBlank(customer.phoneNumber()) || isBlank(customer.ci())) {
             throw new BusinessException(ErrorCode.IDENTITY_VERIFICATION_FAILED);
         }
+
+        Gender gender = resolveGender(customer.gender(), body.channel().type());
 
         LocalDate birthDate = parseBirthDate(customer.birthDate());
 
@@ -272,6 +275,20 @@ public class AuthService {
         int age = Period.between(birthDate, KstTimes.today()).getYears();
 
         return age >= IDENTITY_MIN_AGE && age < IDENTITY_MAX_AGE;
+    }
+
+    private Gender resolveGender(String gender, PortOneChannelType channelType) {
+        Gender resolved = toGender(gender);
+
+        if (resolved != null) {
+            return resolved;
+        }
+
+        if (channelType == PortOneChannelType.TEST) {
+            return IDENTITY_TEST_CHANNEL_FALLBACK_GENDER;
+        }
+
+        throw new BusinessException(ErrorCode.IDENTITY_VERIFICATION_FAILED);
     }
 
     private Gender toGender(String gender) {
