@@ -7,6 +7,9 @@ import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.common.survey.SurveyLoader;
 import com.nidus.twinly.common.survey.SurveyOptionName;
 import com.nidus.twinly.common.survey.SurveyQuestion;
+import com.nidus.twinly.purchase.entity.UserEntitlement;
+import com.nidus.twinly.purchase.reader.EntitlementReader;
+import com.nidus.twinly.purchase.repository.UserEntitlementRepository;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.season.repository.SeasonParticipationRepository;
 import com.nidus.twinly.activity.repository.SceneRepository;
@@ -78,6 +81,7 @@ public class UserSeeder implements ApplicationRunner {
     private final InterestLoader interestLoader;
     private final CurrentSeasonReader currentSeasonReader;
     private final SeasonParticipationRepository seasonParticipationRepository;
+    private final UserEntitlementRepository userEntitlementRepository;
     private final SceneRepository sceneRepository;
     private final SimulationService simulationService;
     private final ObjectMapper objectMapper;
@@ -143,6 +147,8 @@ public class UserSeeder implements ApplicationRunner {
         Long currentSeasonId = currentSeasonReader.read().getId();
         users.forEach(user -> seasonParticipationRepository.upsert(user.getId(), currentSeasonId));
 
+        grantSimulationAccess(users, now);
+
         List<PersonaElement> elements = new ArrayList<>();
         for (int index = 0; index < users.size(); index++) {
             Long userId = users.get(index).getId();
@@ -161,6 +167,18 @@ public class UserSeeder implements ApplicationRunner {
         seedScenarios();
 
         log.info("시드 유저를 채웠습니다. userCount={}, elementCount={}", users.size(), elements.size());
+    }
+
+    private void grantSimulationAccess(List<User> users, Instant now) {
+        List<UserEntitlement> granted = users.stream()
+                .map(User::getId)
+                .filter(userId -> !userEntitlementRepository.existsByUserIdAndEntitlement(userId, EntitlementReader.SIMULATION_ACCESS))
+                .map(userId -> UserEntitlement.create(userId, EntitlementReader.SIMULATION_ACCESS, null, now))
+                .toList();
+
+        if (!granted.isEmpty()) {
+            userEntitlementRepository.saveAll(granted);
+        }
     }
 
     private void seedScenarios() throws IOException {

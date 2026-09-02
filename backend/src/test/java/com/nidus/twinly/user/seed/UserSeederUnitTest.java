@@ -7,6 +7,9 @@ import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.common.survey.SurveyLoader;
 import com.nidus.twinly.common.survey.SurveyOptionName;
 import com.nidus.twinly.common.survey.SurveyQuestion;
+import com.nidus.twinly.purchase.entity.UserEntitlement;
+import com.nidus.twinly.purchase.reader.EntitlementReader;
+import com.nidus.twinly.purchase.repository.UserEntitlementRepository;
 import com.nidus.twinly.season.entity.Season;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.season.repository.SeasonParticipationRepository;
@@ -37,6 +40,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.LongStream;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -73,6 +77,9 @@ class UserSeederUnitTest {
     SeasonParticipationRepository seasonParticipationRepository;
 
     @Mock
+    UserEntitlementRepository userEntitlementRepository;
+
+    @Mock
     SceneRepository sceneRepository;
 
     @Mock
@@ -104,8 +111,8 @@ class UserSeederUnitTest {
         given(sceneRepository.existsByUserIdAndDate(any(), any())).willReturn(true);
 
         userSeeder = new UserSeeder(userRepository, personaElementRepository, blindIndexHasher, surveyLoader,
-                interestLoader, currentSeasonReader, seasonParticipationRepository, sceneRepository,
-                simulationService, new ObjectMapper());
+                interestLoader, currentSeasonReader, seasonParticipationRepository, userEntitlementRepository,
+                sceneRepository, simulationService, new ObjectMapper());
 
         given(userRepository.save(any(User.class))).willAnswer(invocation -> {
             User user = invocation.getArgument(0);
@@ -393,6 +400,55 @@ class UserSeederUnitTest {
         for (long userId = 1; userId <= SEED_USER_COUNT; userId++) {
             then(seasonParticipationRepository).should().upsert(userId, 7L);
         }
+    }
+
+    @Test
+    @DisplayName("시드 유저 전원에게 만료 없는 시뮬레이션 이용 권한을 부여한다")
+    void run_grants_simulation_access_to_every_seed_user() throws IOException {
+        // given: 아직 시드 유저가 없는 상태
+        given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
+        given(userEntitlementRepository.existsByUserIdAndEntitlement(any(), eq(EntitlementReader.SIMULATION_ACCESS)))
+                .willReturn(false);
+
+        // when: 시더 실행
+        userSeeder.run(null);
+
+        // then: 20명 모두 만료 없는 simulation_access 를 받는다
+        List<UserEntitlement> granted = savedEntitlements();
+
+        assertThat(granted).hasSize(SEED_USER_COUNT);
+        assertThat(granted).allSatisfy(entitlement -> {
+            assertThat(entitlement.getEntitlement()).isEqualTo(EntitlementReader.SIMULATION_ACCESS);
+            assertThat(entitlement.getExpiresAt()).isNull();
+        });
+        assertThat(granted.stream().map(UserEntitlement::getUserId).toList())
+                .containsExactlyInAnyOrderElementsOf(
+                        LongStream.rangeClosed(1, SEED_USER_COUNT).boxed().toList());
+    }
+
+    @Test
+    @DisplayName("이미 권한이 있는 시드 유저에게는 다시 부여하지 않는다")
+    void run_skips_simulation_access_when_already_granted() throws IOException {
+        // given: 유저는 남아 있고 전원이 이미 권한을 가진 상태
+        given(userRepository.findByEmailHash(any())).willAnswer(invocation -> Optional.of(existingUser()));
+        given(personaElementRepository.existsByUserId(any())).willReturn(true);
+        given(personaElementRepository.existsByUserIdAndDimension(any(), eq(PersonaDimension.SUMMARY))).willReturn(true);
+        given(userEntitlementRepository.existsByUserIdAndEntitlement(any(), eq(EntitlementReader.SIMULATION_ACCESS)))
+                .willReturn(true);
+
+        // when: 시더 실행
+        userSeeder.run(null);
+
+        // then: 엔타이틀먼트 저장은 한 번도 일어나지 않는다
+        then(userEntitlementRepository).should(never()).saveAll(any());
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<UserEntitlement> savedEntitlements() {
+        ArgumentCaptor<List<UserEntitlement>> captor = ArgumentCaptor.forClass(List.class);
+        then(userEntitlementRepository).should().saveAll(captor.capture());
+
+        return captor.getValue();
     }
 
     @Test
