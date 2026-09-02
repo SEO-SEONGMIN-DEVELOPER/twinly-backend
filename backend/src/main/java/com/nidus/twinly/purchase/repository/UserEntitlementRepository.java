@@ -12,6 +12,8 @@ public interface UserEntitlementRepository extends JpaRepository<UserEntitlement
 
     List<UserEntitlement> findAllByUserId(Long userId);
 
+    boolean existsByUserIdAndEntitlement(Long userId, String entitlement);
+
     @Query("""
             SELECT COUNT(e) > 0 FROM UserEntitlement e
             WHERE e.userId = :userId
