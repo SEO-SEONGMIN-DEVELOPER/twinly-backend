@@ -72,7 +72,8 @@ jobs:
               "docker compose -f docker-compose.stage.yaml pull",
               "docker compose -f docker-compose.stage.yaml up -d",
               "timeout 180 bash -c 'until curl -fsS localhost:8081/actuator/health/readiness >/dev/null; do sleep 5; done'",
-              "/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:/home/ubuntu/twinly/monitoring/cloudwatch-agent/config.json"
+              "/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:/home/ubuntu/twinly/monitoring/cloudwatch-agent/config.json",
+              "docker images --filter 'reference=*/twinly:*' --format '{{.CreatedAt}}|{{.Repository}}:{{.Tag}}' | sort -r | tail -n +4 | cut -d'|' -f2 | xargs -r docker rmi || true"
             ]
           }
           EOF
@@ -259,7 +260,8 @@ jobs:
               "docker compose -f docker-compose.prod.yaml pull",
               "docker compose -f docker-compose.prod.yaml up -d",
               "timeout 180 bash -c 'until curl -fsS localhost:8081/actuator/health/readiness >/dev/null; do sleep 5; done'",
-              "/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:/home/ubuntu/twinly/monitoring/cloudwatch-agent/config.json"
+              "/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:/home/ubuntu/twinly/monitoring/cloudwatch-agent/config.json",
+              "docker images --filter 'reference=*/twinly:*' --format '{{.CreatedAt}}|{{.Repository}}:{{.Tag}}' | sort -r | tail -n +4 | cut -d'|' -f2 | xargs -r docker rmi || true"
             ]
           }
           EOF
