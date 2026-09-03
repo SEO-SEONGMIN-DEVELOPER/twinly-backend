@@ -45,6 +45,8 @@ import java.util.stream.Stream;
 @Transactional(readOnly = true)
 public class ShowcaseService {
 
+    private static final String WOMENS_UNIVERSITY_SUFFIX = "여자대학교";
+    private static final String WOMENS_UNIVERSITY_ABBREVIATION = "여대";
     private static final String UNIVERSITY_SUFFIX = "대학교";
     private static final String SCHOOL_SUFFIX = "학교";
     private static final long TARGET_USER_REF = 1L;
@@ -248,7 +250,16 @@ public class ShowcaseService {
     }
 
     private String toDisplayOrganization(String organization) {
-        if (organization == null || !organization.endsWith(UNIVERSITY_SUFFIX)) {
+        if (organization == null) {
+            return null;
+        }
+
+        if (organization.endsWith(WOMENS_UNIVERSITY_SUFFIX)) {
+            return organization.substring(0, organization.length() - WOMENS_UNIVERSITY_SUFFIX.length())
+                    + WOMENS_UNIVERSITY_ABBREVIATION;
+        }
+
+        if (!organization.endsWith(UNIVERSITY_SUFFIX)) {
             return organization;
         }
 

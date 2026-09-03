@@ -12,7 +12,6 @@ import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.purchase.repository.UserEntitlementRepository;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.season.repository.SeasonParticipationRepository;
-import com.nidus.twinly.activity.repository.SceneRepository;
 import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.simulation.dto.command.SimulationsCommand;
 import com.nidus.twinly.simulation.dto.request.SimulationsRequest;
@@ -47,6 +46,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Slf4j
 @Component
@@ -84,8 +84,8 @@ public class UserSeeder implements ApplicationRunner {
     private final CurrentSeasonReader currentSeasonReader;
     private final SeasonParticipationRepository seasonParticipationRepository;
     private final UserEntitlementRepository userEntitlementRepository;
-    private final SceneRepository sceneRepository;
     private final SimulationService simulationService;
+    private final ScenarioCleaner scenarioCleaner;
     private final ObjectMapper objectMapper;
 
     private enum SeedOrganization {
@@ -111,7 +111,7 @@ public class UserSeeder implements ApplicationRunner {
     ) {
     }
 
-    private static final List<SeedUser> SEED_USERS = List.of(
+    private static final List<SeedUser> SHOWCASE_USERS = List.of(
             new SeedUser("김", "도윤", Gender.MALE, SeedOrganization.SKKU, "미디어커뮤니케이션학과"),
             new SeedUser("이", "시우", Gender.MALE, SeedOrganization.SKKU, "경영학과"),
             new SeedUser("박", "하준", Gender.MALE, SeedOrganization.SKKU, "심리학과"),
@@ -134,6 +134,32 @@ public class UserSeeder implements ApplicationRunner {
             new SeedUser("전", "지아", Gender.FEMALE, SeedOrganization.SUNGSHIN, "프랑스어문·문화학과")
     );
 
+    private static final List<SeedUser> AI_TEST_USERS = List.of(
+            new SeedUser("배", "건우", Gender.MALE, SeedOrganization.SKKU, "소프트웨어학과"),
+            new SeedUser("백", "태윤", Gender.MALE, SeedOrganization.SKKU, "행정학과"),
+            new SeedUser("허", "승현", Gender.MALE, SeedOrganization.SKKU, "정치외교학과"),
+            new SeedUser("남", "우진", Gender.MALE, SeedOrganization.SKKU, "사회복지학과"),
+            new SeedUser("심", "로운", Gender.MALE, SeedOrganization.SKKU, "문헌정보학과"),
+            new SeedUser("노", "소율", Gender.FEMALE, SeedOrganization.SKKU, "소비자학과"),
+            new SeedUser("하", "나연", Gender.FEMALE, SeedOrganization.SKKU, "아동청소년학과"),
+            new SeedUser("곽", "지환", Gender.MALE, SeedOrganization.KOREA, "정치외교학과"),
+            new SeedUser("성", "현우", Gender.MALE, SeedOrganization.KOREA, "미디어학부"),
+            new SeedUser("차", "도경", Gender.MALE, SeedOrganization.KOREA, "심리학부"),
+            new SeedUser("주", "하람", Gender.MALE, SeedOrganization.KOREA, "통계학과"),
+            new SeedUser("우", "시온", Gender.MALE, SeedOrganization.KOREA, "행정학과"),
+            new SeedUser("구", "예서", Gender.FEMALE, SeedOrganization.KOREA, "불어불문학과"),
+            new SeedUser("민", "하은", Gender.FEMALE, SeedOrganization.KOREA, "중어중문학과"),
+            new SeedUser("문", "채은", Gender.FEMALE, SeedOrganization.SUNGSHIN, "사학과"),
+            new SeedUser("양", "서아", Gender.FEMALE, SeedOrganization.SUNGSHIN, "정치외교학과"),
+            new SeedUser("손", "다온", Gender.FEMALE, SeedOrganization.SUNGSHIN, "심리학과"),
+            new SeedUser("진", "은채", Gender.FEMALE, SeedOrganization.SUNGSHIN, "지리학과"),
+            new SeedUser("방", "윤아", Gender.FEMALE, SeedOrganization.SUNGSHIN, "경제학과"),
+            new SeedUser("유", "지민", Gender.FEMALE, SeedOrganization.SUNGSHIN, "사회복지학과")
+    );
+
+    private static final List<SeedUser> SEED_USERS =
+            Stream.concat(SHOWCASE_USERS.stream(), AI_TEST_USERS.stream()).toList();
+
 
     @Override
     public void run(ApplicationArguments args) throws IOException {
@@ -149,7 +175,8 @@ public class UserSeeder implements ApplicationRunner {
         Long currentSeasonId = currentSeasonReader.read().getId();
         users.forEach(user -> seasonParticipationRepository.upsert(user.getId(), currentSeasonId));
 
-        grantSimulationAccess(users, now);
+        revokeSimulationAccess(users.subList(0, SHOWCASE_USERS.size()));
+        grantSimulationAccess(users.subList(SHOWCASE_USERS.size(), users.size()), now);
 
         List<PersonaElement> elements = new ArrayList<>();
         for (int index = 0; index < users.size(); index++) {
@@ -169,6 +196,15 @@ public class UserSeeder implements ApplicationRunner {
         seedScenarios();
 
         log.info("시드 유저를 채웠습니다. userCount={}, elementCount={}", users.size(), elements.size());
+    }
+
+    private void revokeSimulationAccess(List<User> users) {
+        List<UserEntitlement> granted = userEntitlementRepository.findAllByUserIdInAndEntitlement(
+                users.stream().map(User::getId).toList(), EntitlementReader.SIMULATION_ACCESS);
+
+        if (!granted.isEmpty()) {
+            userEntitlementRepository.deleteAll(granted);
+        }
     }
 
     private void grantSimulationAccess(List<User> users, Instant now) {
@@ -202,23 +238,18 @@ public class UserSeeder implements ApplicationRunner {
         }
 
         long shift = ChronoUnit.DAYS.between(LocalDate.parse(root.get(ANCHOR_DATE).asString()), KstTimes.today());
-        int seeded = 0;
 
+        List<SimulationsRequest> requests = new ArrayList<>();
         for (JsonNode day : root.get(DAYS)) {
             shiftDates(day, shift);
-            SimulationsRequest request = objectMapper.treeToValue(day, SimulationsRequest.class);
-
-            if (sceneRepository.existsByUserIdAndDate(request.userId(), request.date())) {
-                continue;
-            }
-
-            simulationService.simulations(request.userId(), SimulationsCommand.from(request));
-            seeded++;
+            requests.add(objectMapper.treeToValue(day, SimulationsRequest.class));
         }
 
-        if (seeded > 0) {
-            log.info("쇼케이스 시나리오를 채웠습니다. dayCount={}, shiftDays={}", seeded, shift);
-        }
+        scenarioCleaner.clear(requests.stream().map(SimulationsRequest::userId).distinct().toList());
+
+        requests.forEach(request -> simulationService.simulations(request.userId(), SimulationsCommand.from(request)));
+
+        log.info("쇼케이스 시나리오를 채웠습니다. dayCount={}, shiftDays={}", requests.size(), shift);
     }
 
     /**

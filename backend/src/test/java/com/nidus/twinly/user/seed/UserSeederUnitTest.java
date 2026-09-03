@@ -13,7 +13,6 @@ import com.nidus.twinly.purchase.repository.UserEntitlementRepository;
 import com.nidus.twinly.season.entity.Season;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.season.repository.SeasonParticipationRepository;
-import com.nidus.twinly.activity.repository.SceneRepository;
 import com.nidus.twinly.simulation.service.SimulationService;
 import com.nidus.twinly.user.entity.PersonaElement;
 import com.nidus.twinly.user.entity.User;
@@ -24,6 +23,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -48,6 +48,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 
@@ -55,12 +56,14 @@ import static org.mockito.Mockito.times;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class UserSeederUnitTest {
 
-    private static final int SEED_USER_COUNT = 20;
+    private static final int SEED_USER_COUNT = 40;
+    private static final int SHOWCASE_USER_COUNT = 20;
+    private static final int AI_TEST_USER_COUNT = 20;
     private static final int INTERESTS_PER_USER = 5;
     private static final int DETAIL_ELEMENTS_PER_USER = 5;
     private static final int SUMMARY_ELEMENTS_PER_USER = 1;
     private static final int SCENARIO_DAY_COUNT = 390;
-    private static final long EXPIRED_USER_ID = 6L;
+    private static final long EXPIRED_USER_ID = 26L;
 
     @Mock
     UserRepository userRepository;
@@ -81,10 +84,10 @@ class UserSeederUnitTest {
     UserEntitlementRepository userEntitlementRepository;
 
     @Mock
-    SceneRepository sceneRepository;
+    SimulationService simulationService;
 
     @Mock
-    SimulationService simulationService;
+    ScenarioCleaner scenarioCleaner;
 
     UserSeeder userSeeder;
 
@@ -108,12 +111,9 @@ class UserSeederUnitTest {
         ReflectionTestUtils.setField(season, "id", 7L);
         given(currentSeasonReader.read()).willReturn(season);
 
-        // 시나리오 시딩은 유저 시딩과 별개라 이 테스트에서는 이미 채워진 것으로 두고 건너뛴다
-        given(sceneRepository.existsByUserIdAndDate(any(), any())).willReturn(true);
-
         userSeeder = new UserSeeder(userRepository, personaElementRepository, blindIndexHasher, surveyLoader,
                 interestLoader, currentSeasonReader, seasonParticipationRepository, userEntitlementRepository,
-                sceneRepository, simulationService, new ObjectMapper());
+                simulationService, scenarioCleaner, new ObjectMapper());
 
         given(userRepository.save(any(User.class))).willAnswer(invocation -> {
             User user = invocation.getArgument(0);
@@ -124,7 +124,7 @@ class UserSeederUnitTest {
     }
 
     @Test
-    @DisplayName("시드된 적이 없으면 유저 20명과 설문 문항 수만큼의 성향을 저장한다")
+    @DisplayName("시드된 적이 없으면 유저 40명과 설문 문항 수만큼의 성향을 저장한다")
     void run_seeds_users_and_elements() throws IOException {
         // given: 아직 시드 유저가 없는 상태
         given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
@@ -132,7 +132,7 @@ class UserSeederUnitTest {
         // when: 시더 실행
         userSeeder.run(null);
 
-        // then: 유저 20명 저장 + 유저별로 설문 23문항 + 관심사 5개 + 대화 5개 + 요약 1개
+        // then: 유저 40명 저장 + 유저별로 설문 23문항 + 관심사 5개 + 대화 5개 + 요약 1개
         then(userRepository).should(org.mockito.Mockito.times(SEED_USER_COUNT)).save(any(User.class));
 
         List<PersonaElement> elements = savedElements();
@@ -248,9 +248,9 @@ class UserSeederUnitTest {
         List<User> users = savedUsers();
 
         assertThat(users.getFirst().getPhoneNumber()).isEqualTo("01000009001");
-        assertThat(users.getLast().getPhoneNumber()).isEqualTo("01000009020");
+        assertThat(users.getLast().getPhoneNumber()).isEqualTo("01000009040");
         assertThat(users.getFirst().getEmail()).isEqualTo("test-seed01@skku.edu");
-        assertThat(users.getLast().getEmail()).isEqualTo("test-seed20@sungshin.ac.kr");
+        assertThat(users.getLast().getEmail()).isEqualTo("test-seed40@sungshin.ac.kr");
 
         assertThat(users).extracting(User::getPhoneNumber).doesNotHaveDuplicates();
         assertThat(users).extracting(User::getEmail).doesNotHaveDuplicates();
@@ -258,7 +258,7 @@ class UserSeederUnitTest {
     }
 
     @Test
-    @DisplayName("성별은 남녀 10명씩이고 학교는 세 곳이 섞여 있다")
+    @DisplayName("성별은 남녀 20명씩이고 학교는 세 곳이 섞여 있다")
     void run_keeps_gender_and_organization_mix() throws IOException {
         // given: 아직 시드 유저가 없는 상태
         given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
@@ -272,8 +272,8 @@ class UserSeederUnitTest {
         Map<Gender, Long> countByGender = users.stream()
                 .collect(Collectors.groupingBy(User::getGender, Collectors.counting()));
         assertThat(countByGender).containsOnly(
-                Map.entry(Gender.MALE, 10L),
-                Map.entry(Gender.FEMALE, 10L));
+                Map.entry(Gender.MALE, 20L),
+                Map.entry(Gender.FEMALE, 20L));
 
         assertThat(users).extracting(User::getOrganization)
                 .containsOnly("성균관대학교", "고려대학교", "성신여자대학교");
@@ -397,15 +397,15 @@ class UserSeederUnitTest {
         // when: 시더 실행
         userSeeder.run(null);
 
-        // then: 20명 모두 현재 시즌으로 upsert 된다
+        // then: 40명 모두 현재 시즌으로 upsert 된다
         for (long userId = 1; userId <= SEED_USER_COUNT; userId++) {
             then(seasonParticipationRepository).should().upsert(userId, 7L);
         }
     }
 
     @Test
-    @DisplayName("시드 유저 전원에게 만료 없는 시뮬레이션 이용 권한을 부여한다")
-    void run_grants_simulation_access_to_every_seed_user() throws IOException {
+    @DisplayName("AI 테스트용 시드 유저에게만 만료 없는 시뮬레이션 이용 권한을 부여한다")
+    void run_grants_simulation_access_to_ai_test_users_only() throws IOException {
         // given: 아직 시드 유저가 없는 상태
         given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
         given(userEntitlementRepository.findAllByUserIdInAndEntitlement(any(), eq(EntitlementReader.SIMULATION_ACCESS)))
@@ -414,28 +414,50 @@ class UserSeederUnitTest {
         // when: 시더 실행
         userSeeder.run(null);
 
-        // then: 20명 모두 만료 없는 simulation_access 를 받는다
+        // then: 뒤쪽 20명만 만료 없는 simulation_access 를 받는다
         List<UserEntitlement> granted = savedEntitlements();
 
-        assertThat(granted).hasSize(SEED_USER_COUNT);
+        assertThat(granted).hasSize(AI_TEST_USER_COUNT);
         assertThat(granted).allSatisfy(entitlement -> {
             assertThat(entitlement.getEntitlement()).isEqualTo(EntitlementReader.SIMULATION_ACCESS);
             assertThat(entitlement.getExpiresAt()).isNull();
         });
         assertThat(granted.stream().map(UserEntitlement::getUserId).toList())
                 .containsExactlyInAnyOrderElementsOf(
-                        LongStream.rangeClosed(1, SEED_USER_COUNT).boxed().toList());
+                        LongStream.rangeClosed(SHOWCASE_USER_COUNT + 1L, SEED_USER_COUNT).boxed().toList());
+    }
+
+    @Test
+    @DisplayName("쇼케이스 시드 유저의 시뮬레이션 이용 권한은 지운다")
+    void run_revokes_simulation_access_from_showcase_users() throws IOException {
+        // given: 유저는 남아 있고 전원이 권한을 가진 상태
+        given(userRepository.findByEmailHash(any())).willAnswer(invocation -> Optional.of(existingUser()));
+        given(personaElementRepository.existsByUserId(any())).willReturn(true);
+        given(personaElementRepository.existsByUserIdAndDimension(any(), eq(PersonaDimension.SUMMARY))).willReturn(true);
+        given(userEntitlementRepository.findAllByUserIdInAndEntitlement(any(), eq(EntitlementReader.SIMULATION_ACCESS)))
+                .willAnswer(invocation -> entitlementsOf(invocation.getArgument(0), null));
+
+        // when: 시더 실행
+        userSeeder.run(null);
+
+        // then: 앞쪽 20명의 권한만 삭제된다
+        ArgumentCaptor<List<UserEntitlement>> captor = ArgumentCaptor.forClass(List.class);
+        then(userEntitlementRepository).should().deleteAll(captor.capture());
+
+        assertThat(captor.getValue()).extracting(UserEntitlement::getUserId)
+                .containsExactlyInAnyOrderElementsOf(
+                        LongStream.rangeClosed(1, SHOWCASE_USER_COUNT).boxed().toList());
     }
 
     @Test
     @DisplayName("이미 권한이 있는 시드 유저에게는 다시 부여하지 않는다")
     void run_skips_simulation_access_when_already_granted() throws IOException {
-        // given: 유저는 남아 있고 전원이 이미 권한을 가진 상태
+        // given: 유저는 남아 있고 AI 테스트용 유저가 이미 권한을 가진 상태
         given(userRepository.findByEmailHash(any())).willAnswer(invocation -> Optional.of(existingUser()));
         given(personaElementRepository.existsByUserId(any())).willReturn(true);
         given(personaElementRepository.existsByUserIdAndDimension(any(), eq(PersonaDimension.SUMMARY))).willReturn(true);
         given(userEntitlementRepository.findAllByUserIdInAndEntitlement(any(), eq(EntitlementReader.SIMULATION_ACCESS)))
-                .willAnswer(invocation -> seedEntitlements(null));
+                .willAnswer(invocation -> entitlementsOf(invocation.getArgument(0), null));
 
         // when: 시더 실행
         userSeeder.run(null);
@@ -447,12 +469,12 @@ class UserSeederUnitTest {
     @Test
     @DisplayName("만료된 권한을 가진 시드 유저는 만료를 풀어 다시 이용할 수 있게 한다")
     void run_clears_expiry_when_simulation_access_expired() throws IOException {
-        // given: 유저는 남아 있고 6번만 이미 만료된 권한을 가진 상태
+        // given: 유저는 남아 있고 26번만 이미 만료된 권한을 가진 상태
         given(userRepository.findByEmailHash(any())).willAnswer(invocation -> Optional.of(existingUser()));
         given(personaElementRepository.existsByUserId(any())).willReturn(true);
         given(personaElementRepository.existsByUserIdAndDimension(any(), eq(PersonaDimension.SUMMARY))).willReturn(true);
         given(userEntitlementRepository.findAllByUserIdInAndEntitlement(any(), eq(EntitlementReader.SIMULATION_ACCESS)))
-                .willAnswer(invocation -> seedEntitlements(EXPIRED_USER_ID));
+                .willAnswer(invocation -> entitlementsOf(invocation.getArgument(0), EXPIRED_USER_ID));
 
         // when: 시더 실행
         userSeeder.run(null);
@@ -465,12 +487,12 @@ class UserSeederUnitTest {
         assertThat(granted.getFirst().getExpiresAt()).isNull();
     }
 
-    private List<UserEntitlement> seedEntitlements(Long expiredUserId) {
-        return LongStream.rangeClosed(1, SEED_USER_COUNT)
-                .mapToObj(userId -> UserEntitlement.create(
+    private List<UserEntitlement> entitlementsOf(List<Long> userIds, Long expiredUserId) {
+        return userIds.stream()
+                .map(userId -> UserEntitlement.create(
                         userId,
                         EntitlementReader.SIMULATION_ACCESS,
-                        Long.valueOf(userId).equals(expiredUserId) ? Instant.now().minusSeconds(60) : null,
+                        userId.equals(expiredUserId) ? Instant.now().minusSeconds(60) : null,
                         Instant.now()))
                 .toList();
     }
@@ -484,11 +506,10 @@ class UserSeederUnitTest {
     }
 
     @Test
-    @DisplayName("채워진 하루가 없으면 시드 시나리오를 하루씩 모두 적재한다")
-    void run_seeds_scenarios_when_absent() throws IOException {
-        // given: 아직 씬이 하나도 없는 상태
+    @DisplayName("시드 시나리오를 하루씩 모두 적재한다")
+    void run_seeds_all_scenario_days() throws IOException {
+        // given: 아직 시드 유저가 없는 상태
         given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
-        given(sceneRepository.existsByUserIdAndDate(any(), any())).willReturn(false);
 
         // when: 시더 실행
         userSeeder.run(null);
@@ -498,32 +519,25 @@ class UserSeederUnitTest {
     }
 
     @Test
-    @DisplayName("이미 채워진 하루는 다시 적재하지 않는다")
-    void run_skips_scenarios_when_already_seeded() throws IOException {
-        // given: 모든 하루가 이미 채워진 상태
+    @DisplayName("적재 전에 시나리오에 등장하는 유저의 기존 시뮬레이션 데이터를 지운다")
+    void run_clears_previous_scenarios_before_seeding() throws IOException {
+        // given: 아직 시드 유저가 없는 상태
         given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
-        given(sceneRepository.existsByUserIdAndDate(any(), any())).willReturn(true);
 
         // when: 시더 실행
         userSeeder.run(null);
 
-        // then: 시뮬레이션 저장은 한 번도 일어나지 않는다
-        then(simulationService).should(never()).simulations(any(), any());
+        // then: 시나리오에 등장하는 유저 전원을 한 번에 지운 뒤 적재한다
+        ArgumentCaptor<List<Long>> captor = ArgumentCaptor.forClass(List.class);
+        InOrder inOrder = inOrder(scenarioCleaner, simulationService);
+        inOrder.verify(scenarioCleaner).clear(captor.capture());
+        inOrder.verify(simulationService, times(SCENARIO_DAY_COUNT)).simulations(any(), any());
+
+        assertThat(captor.getValue())
+                .hasSize(SHOWCASE_USER_COUNT)
+                .doesNotHaveDuplicates()
+                .containsExactlyInAnyOrderElementsOf(
+                        LongStream.rangeClosed(1, SHOWCASE_USER_COUNT).boxed().toList());
     }
 
-    @Test
-    @DisplayName("일부만 채워져 있으면 빠진 하루만 이어서 적재한다")
-    void run_resumes_only_missing_days() throws IOException {
-        // given: 절반은 이미 채워지고 절반은 비어 있는 상태
-        given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
-        AtomicLong calls = new AtomicLong();
-        given(sceneRepository.existsByUserIdAndDate(any(), any()))
-                .willAnswer(invocation -> calls.incrementAndGet() % 2 == 0);
-
-        // when: 시더 실행
-        userSeeder.run(null);
-
-        // then: 비어 있던 하루 수만큼만 적재된다
-        then(simulationService).should(times(SCENARIO_DAY_COUNT / 2)).simulations(any(), any());
-    }
 }
