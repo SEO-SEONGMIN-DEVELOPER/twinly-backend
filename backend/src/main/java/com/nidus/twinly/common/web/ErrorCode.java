@@ -13,6 +13,10 @@ public enum ErrorCode {
     UNSUPPORTED_MEDIA_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "지원하지 않는 요청 형식입니다."),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "일시적인 서버 오류가 발생했습니다."),
 
+    // 앱 차단
+    MAINTENANCE(HttpStatus.SERVICE_UNAVAILABLE, "더 나은 서비스를 위해 점검하고 있어요."),
+    APP_UPDATE_REQUIRED(HttpStatus.UPGRADE_REQUIRED, "새로운 버전으로 업데이트해 주세요."),
+
     // 인증/토큰
     INVALID_TOKEN(HttpStatus.UNAUTHORIZED, "유효하지 않은 토큰입니다."),
     TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED, "만료된 토큰입니다."),
