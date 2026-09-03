@@ -39,7 +39,7 @@ public class ParallelRelationController {
 
     @Operation(summary = "평행우주 관계 코드 등록")
     @ApiResponses({
-            @ApiResponse(responseCode = "201", description = "CREATED"),
+            @ApiResponse(responseCode = "201", description = "Created"),
             @ApiResponse(responseCode = "200", description = "OK"),
             @ApiResponse(responseCode = "404", description = "PARALLEL_RELATION_CODE_NOT_FOUND, USER_NOT_FOUND"),
             @ApiResponse(responseCode = "422", description = "OWN_PARALLEL_RELATION_CODE, PERSONA_NOT_FOUND")
