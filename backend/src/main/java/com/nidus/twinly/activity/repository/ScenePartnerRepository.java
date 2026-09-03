@@ -2,6 +2,7 @@ package com.nidus.twinly.activity.repository;
 
 import com.nidus.twinly.activity.entity.ScenePartner;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -12,6 +13,10 @@ public interface ScenePartnerRepository extends JpaRepository<ScenePartner, Long
     List<ScenePartner> findAllBySceneIdIn(List<Long> sceneIds);
 
     void deleteAllBySceneIdIn(List<Long> sceneIds);
+
+    @Modifying
+    @Query("DELETE FROM ScenePartner sp WHERE sp.sceneId IN (SELECT s.id FROM Scene s WHERE s.userId IN :userIds)")
+    void deleteAllBySceneUserIdIn(@Param("userIds") List<Long> userIds);
 
     boolean existsBySceneIdAndUserId(Long sceneId, Long userId);
 

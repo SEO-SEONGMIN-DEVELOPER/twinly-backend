@@ -2,6 +2,7 @@ package com.nidus.twinly.relationship.repository;
 
 import com.nidus.twinly.relationship.entity.Relationship;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -64,6 +65,10 @@ public interface RelationshipRepository extends JpaRepository<Relationship, Long
                                           @Param("limit") Integer limit);
 
     List<Relationship> findAllByUserIdAndPartnerUserIdOrderByDateAsc(Long userId, Long partnerUserId);
+
+    @Modifying
+    @Query("DELETE FROM Relationship r WHERE r.userId IN :userIds")
+    void deleteAllByUserIdIn(@Param("userIds") List<Long> userIds);
 
     void deleteAllByUserIdAndDate(Long userId, LocalDate date);
 

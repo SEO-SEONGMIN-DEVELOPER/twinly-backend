@@ -12,7 +12,6 @@ import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.purchase.repository.UserEntitlementRepository;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.season.repository.SeasonParticipationRepository;
-import com.nidus.twinly.activity.repository.SceneRepository;
 import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.simulation.dto.command.SimulationsCommand;
 import com.nidus.twinly.simulation.dto.request.SimulationsRequest;
@@ -84,8 +83,8 @@ public class UserSeeder implements ApplicationRunner {
     private final CurrentSeasonReader currentSeasonReader;
     private final SeasonParticipationRepository seasonParticipationRepository;
     private final UserEntitlementRepository userEntitlementRepository;
-    private final SceneRepository sceneRepository;
     private final SimulationService simulationService;
+    private final ScenarioCleaner scenarioCleaner;
     private final ObjectMapper objectMapper;
 
     private enum SeedOrganization {
@@ -202,23 +201,18 @@ public class UserSeeder implements ApplicationRunner {
         }
 
         long shift = ChronoUnit.DAYS.between(LocalDate.parse(root.get(ANCHOR_DATE).asString()), KstTimes.today());
-        int seeded = 0;
 
+        List<SimulationsRequest> requests = new ArrayList<>();
         for (JsonNode day : root.get(DAYS)) {
             shiftDates(day, shift);
-            SimulationsRequest request = objectMapper.treeToValue(day, SimulationsRequest.class);
-
-            if (sceneRepository.existsByUserIdAndDate(request.userId(), request.date())) {
-                continue;
-            }
-
-            simulationService.simulations(request.userId(), SimulationsCommand.from(request));
-            seeded++;
+            requests.add(objectMapper.treeToValue(day, SimulationsRequest.class));
         }
 
-        if (seeded > 0) {
-            log.info("쇼케이스 시나리오를 채웠습니다. dayCount={}, shiftDays={}", seeded, shift);
-        }
+        scenarioCleaner.clear(requests.stream().map(SimulationsRequest::userId).distinct().toList());
+
+        requests.forEach(request -> simulationService.simulations(request.userId(), SimulationsCommand.from(request)));
+
+        log.info("쇼케이스 시나리오를 채웠습니다. dayCount={}, shiftDays={}", requests.size(), shift);
     }
 
     /**
