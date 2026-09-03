@@ -201,6 +201,27 @@ class ShowcaseServiceUnitTest {
                 .containsExactly("고려대", "한국고등학교");
     }
 
+    @Test
+    @DisplayName("소속이 여자대학교로 끝나면 여대로 줄여서 내려간다")
+    void today_shortens_womens_university_organization() {
+        // given: 대상과 동행자 모두 여자대학교 소속이다
+        given(showcaseRepository.findByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(showcase()));
+        given(sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(anyLong(), any()))
+                .willReturn(List.of(actionScene(88101L, "등교했다.", null)));
+        given(scenePartnerRepository.findAllBySceneIdIn(anyList()))
+                .willReturn(List.of(ScenePartner.create(88101L, PARTNER_ID)));
+        given(userRepository.findAllById(any()))
+                .willReturn(List.of(user(TARGET_ID, "김", "민수", "성신여자대학교"), user(PARTNER_ID, "박", "지훈", "이화여자대학교")));
+        givenViewerCounts();
+
+        // when: 오늘 관람 조회
+        ShowcaseTodayResult result = showcaseService.today(VIEWER_ID);
+
+        // then: 성신여자대학교 → 성신여대, 이화여자대학교 → 이화여대
+        assertThat(result.userInfos()).extracting(ShowcaseUserInfoResult::organization)
+                .containsExactly("성신여대", "이화여대");
+    }
+
     private void givenEmptyDay() {
         given(sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(anyLong(), any())).willReturn(List.of());
         given(scenePartnerRepository.findAllBySceneIdIn(anyList())).willReturn(List.of());
