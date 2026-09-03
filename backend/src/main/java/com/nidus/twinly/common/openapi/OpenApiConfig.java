@@ -16,6 +16,7 @@ import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 import org.springdoc.core.customizers.OpenApiCustomizer;
 import org.springdoc.core.customizers.OperationCustomizer;
+import org.springdoc.core.properties.SpringDocConfigProperties;
 import org.springdoc.core.utils.SpringDocUtils;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -110,7 +111,9 @@ public class OpenApiConfig {
     }
 
     @Bean
-    public OperationCustomizer defaultSuccessResponseCustomizer() {
+    public OperationCustomizer defaultSuccessResponseCustomizer(SpringDocConfigProperties springDocConfigProperties) {
+        ModelConverters converters = ModelConverters.getInstance(springDocConfigProperties.isOpenapi31());
+
         return (operation, handlerMethod) -> {
             ApiResponses responses = operation.getResponses();
             if (responses == null) {
@@ -123,7 +126,7 @@ public class OpenApiConfig {
                 return operation;
             }
 
-            responses.addApiResponse(successStatus(handlerMethod), successResponse(handlerMethod));
+            responses.addApiResponse(successStatus(handlerMethod), successResponse(converters, handlerMethod));
 
             return operation;
         };
@@ -135,7 +138,7 @@ public class OpenApiConfig {
         return String.valueOf(responseStatus != null ? responseStatus.code().value() : HttpStatus.OK.value());
     }
 
-    private ApiResponse successResponse(HandlerMethod handlerMethod) {
+    private ApiResponse successResponse(ModelConverters converters, HandlerMethod handlerMethod) {
         ApiResponse response = new ApiResponse().description("OK");
 
         Type returnType = handlerMethod.getMethod().getGenericReturnType();
@@ -143,8 +146,7 @@ public class OpenApiConfig {
             return response;
         }
 
-        ResolvedSchema resolved = ModelConverters.getInstance()
-                .resolveAsResolvedSchema(new AnnotatedType(returnType).resolveAsRef(true));
+        ResolvedSchema resolved = converters.resolveAsResolvedSchema(new AnnotatedType(returnType).resolveAsRef(true));
         if (resolved == null || resolved.schema == null) {
             return response;
         }
