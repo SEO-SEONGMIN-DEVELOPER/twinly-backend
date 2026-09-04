@@ -60,11 +60,11 @@ class UserSeederUnitTest {
 
     private static final int SEED_USER_COUNT = 520;
     private static final int SHOWCASE_USER_COUNT = 20;
-    private static final int AI_TEST_USER_COUNT = 500;
     private static final int BUILT_IN_USER_COUNT = 40;
     private static final int INTERESTS_PER_USER = 5;
     private static final int DETAIL_ELEMENTS_PER_USER = 5;
     private static final int PERSONA_DETAILS_PER_USER = 8;
+    private static final int SIMULATION_ACCESS_USER_COUNT = 200;
     private static final int SUMMARY_ELEMENTS_PER_USER = 1;
     private static final int SCENARIO_DAY_COUNT = 390;
     private static final long EXPIRED_USER_ID = 26L;
@@ -427,7 +427,7 @@ class UserSeederUnitTest {
     }
 
     @Test
-    @DisplayName("AI 테스트용 시드 유저에게만 만료 없는 시뮬레이션 이용 권한을 부여한다")
+    @DisplayName("AI 테스트용 시드 유저 앞쪽 200명에게만 만료 없는 시뮬레이션 이용 권한을 부여한다")
     void run_grants_simulation_access_to_ai_test_users_only() throws IOException {
         // given: 아직 시드 유저가 없는 상태
         given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
@@ -437,22 +437,23 @@ class UserSeederUnitTest {
         // when: 시더 실행
         userSeeder.run(null);
 
-        // then: 뒤쪽 20명만 만료 없는 simulation_access 를 받는다
+        // then: 쇼케이스 20명 바로 뒤 200명만 만료 없는 simulation_access 를 받는다
         List<UserEntitlement> granted = savedEntitlements();
 
-        assertThat(granted).hasSize(AI_TEST_USER_COUNT);
+        assertThat(granted).hasSize(SIMULATION_ACCESS_USER_COUNT);
         assertThat(granted).allSatisfy(entitlement -> {
             assertThat(entitlement.getEntitlement()).isEqualTo(EntitlementReader.SIMULATION_ACCESS);
             assertThat(entitlement.getExpiresAt()).isNull();
         });
         assertThat(granted.stream().map(UserEntitlement::getUserId).toList())
                 .containsExactlyInAnyOrderElementsOf(
-                        LongStream.rangeClosed(SHOWCASE_USER_COUNT + 1L, SEED_USER_COUNT).boxed().toList());
+                        LongStream.rangeClosed(SHOWCASE_USER_COUNT + 1L, SHOWCASE_USER_COUNT + SIMULATION_ACCESS_USER_COUNT)
+                                .boxed().toList());
     }
 
     @Test
-    @DisplayName("쇼케이스 시드 유저의 시뮬레이션 이용 권한은 지운다")
-    void run_revokes_simulation_access_from_showcase_users() throws IOException {
+    @DisplayName("쇼케이스 유저와 권한 대상 밖 유저의 시뮬레이션 이용 권한은 지운다")
+    void run_revokes_simulation_access_outside_grant_range() throws IOException {
         // given: 유저는 남아 있고 전원이 권한을 가진 상태
         given(userRepository.findByEmailHash(any())).willAnswer(invocation -> Optional.of(existingUser()));
         given(personaElementRepository.existsByUserId(any())).willReturn(true);
@@ -463,13 +464,17 @@ class UserSeederUnitTest {
         // when: 시더 실행
         userSeeder.run(null);
 
-        // then: 앞쪽 20명의 권한만 삭제된다
+        // then: 앞쪽 20명과 권한 대상 200명을 지난 나머지의 권한이 삭제된다
         ArgumentCaptor<List<UserEntitlement>> captor = ArgumentCaptor.forClass(List.class);
-        then(userEntitlementRepository).should().deleteAll(captor.capture());
+        then(userEntitlementRepository).should(times(2)).deleteAll(captor.capture());
 
-        assertThat(captor.getValue()).extracting(UserEntitlement::getUserId)
+        assertThat(captor.getAllValues().getFirst()).extracting(UserEntitlement::getUserId)
                 .containsExactlyInAnyOrderElementsOf(
                         LongStream.rangeClosed(1, SHOWCASE_USER_COUNT).boxed().toList());
+        assertThat(captor.getAllValues().getLast()).extracting(UserEntitlement::getUserId)
+                .containsExactlyInAnyOrderElementsOf(
+                        LongStream.rangeClosed(SHOWCASE_USER_COUNT + SIMULATION_ACCESS_USER_COUNT + 1L, SEED_USER_COUNT)
+                                .boxed().toList());
     }
 
     @Test

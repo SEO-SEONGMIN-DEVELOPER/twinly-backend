@@ -64,6 +64,7 @@ public class UserSeeder implements ApplicationRunner {
     private static final String SCENARIO_RESOURCE = "seed/showcase-scenarios.json";
     private static final String PERSONA_RESOURCE = "seed/ai-test-personas.json";
     private static final int PERSONA_DETAILS_PER_USER = 8;
+    private static final int SIMULATION_ACCESS_USER_COUNT = 200;
     static final String ANCHOR_DATE = "anchorDate";
     private static final String DAYS = "days";
     static final Pattern DATE = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
@@ -200,8 +201,11 @@ public class UserSeeder implements ApplicationRunner {
         Long currentSeasonId = currentSeasonReader.read().getId();
         users.forEach(user -> seasonParticipationRepository.upsert(user.getId(), currentSeasonId));
 
+        int accessEnd = Math.min(SHOWCASE_USERS.size() + SIMULATION_ACCESS_USER_COUNT, users.size());
+
         revokeSimulationAccess(users.subList(0, SHOWCASE_USERS.size()));
-        grantSimulationAccess(users.subList(SHOWCASE_USERS.size(), users.size()), now);
+        grantSimulationAccess(users.subList(SHOWCASE_USERS.size(), accessEnd), now);
+        revokeSimulationAccess(users.subList(accessEnd, users.size()));
 
         List<PersonaElement> elements = new ArrayList<>();
         for (int index = 0; index < users.size(); index++) {
