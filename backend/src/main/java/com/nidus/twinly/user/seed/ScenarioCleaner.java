@@ -5,6 +5,7 @@ import com.nidus.twinly.activity.repository.QuestionRepository;
 import com.nidus.twinly.activity.repository.ScenePartnerRepository;
 import com.nidus.twinly.activity.repository.SceneRepository;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
+import com.nidus.twinly.showcase.repository.ShowcaseRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
@@ -22,6 +23,7 @@ public class ScenarioCleaner {
     private final QuestionPartnerRepository questionPartnerRepository;
     private final QuestionRepository questionRepository;
     private final RelationshipRepository relationshipRepository;
+    private final ShowcaseRepository showcaseRepository;
 
     @Transactional
     public void clear(List<Long> userIds) {
@@ -34,5 +36,6 @@ public class ScenarioCleaner {
         questionPartnerRepository.deleteAllByQuestionUserIdIn(userIds);
         questionRepository.deleteAllByUserIdIn(userIds);
         relationshipRepository.deleteAllByUserIdIn(userIds);
+        showcaseRepository.deleteAllByTargetUserIdIn(userIds);
     }
 }
