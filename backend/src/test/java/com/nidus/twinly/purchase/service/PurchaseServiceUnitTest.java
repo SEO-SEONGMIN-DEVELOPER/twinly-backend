@@ -8,6 +8,7 @@ import com.nidus.twinly.purchase.client.RevenueCatClient;
 import com.nidus.twinly.purchase.client.RevenueCatEntitlement;
 import com.nidus.twinly.purchase.domain.RevenueCatEnvironment;
 import com.nidus.twinly.purchase.dto.command.RevenueCatWebhookCommand;
+import com.nidus.twinly.purchase.event.SimulationAccessGrantedEvent;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.purchase.writer.PurchaseWriter;
 import com.nidus.twinly.season.writer.SeasonParticipationWriter;
@@ -17,8 +18,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
@@ -26,6 +29,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -58,13 +62,16 @@ class PurchaseServiceUnitTest {
     @Mock
     SeasonParticipationWriter seasonParticipationWriter;
 
+    @Mock
+    ApplicationEventPublisher eventPublisher;
+
     PurchaseService purchaseService;
 
     @BeforeEach
     void setUp() {
         RevenueCatProperties properties = new RevenueCatProperties("secret", "sk_test", RevenueCatEnvironment.SANDBOX);
         purchaseService = new PurchaseService(
-                properties, revenueCatClient, userRepository, purchaseWriter, entitlementReader, seasonParticipationWriter);
+                properties, revenueCatClient, userRepository, purchaseWriter, entitlementReader, seasonParticipationWriter, eventPublisher);
     }
 
     @Test
@@ -225,6 +232,42 @@ class PurchaseServiceUnitTest {
 
         // then: 참가 행을 만들지 않는다
         then(seasonParticipationWriter).should(never()).participateInCurrentSeason(anyLong());
+    }
+
+    @Test
+    @DisplayName("동기화로 simulation_access 가 없다가 생기면 권한 획득 이벤트를 발행한다")
+    void sync_publishes_event_when_access_newly_granted() {
+        // given: 동기화 전에는 권한이 없고, 교체 후에 생김
+        User user = user();
+        given(revenueCatClient.entitlements(APP_USER_ID))
+                .willReturn(List.of(new RevenueCatEntitlement("simulation_access", Instant.parse("2026-09-30T00:00:00Z"))));
+        given(entitlementReader.hasSimulationAccess(USER_ID)).willReturn(false, true);
+
+        // when: 동기화
+        purchaseService.sync(user);
+
+        // then: 이 유저의 권한 획득 이벤트가 반영 시각과 함께 한 번 나간다
+        ArgumentCaptor<SimulationAccessGrantedEvent> captor = ArgumentCaptor.forClass(SimulationAccessGrantedEvent.class);
+        then(eventPublisher).should().publishEvent(captor.capture());
+        assertThat(captor.getValue().userId()).isEqualTo(USER_ID);
+        assertThat(captor.getValue().grantedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("이미 simulation_access 가 있던 유저의 갱신 동기화에는 이벤트를 발행하지 않는다")
+    void sync_does_not_publish_event_when_access_already_held() {
+        // given: 동기화 전후 모두 권한 보유 (구독 갱신)
+        User user = user();
+        given(revenueCatClient.entitlements(APP_USER_ID))
+                .willReturn(List.of(new RevenueCatEntitlement("simulation_access", Instant.parse("2026-10-30T00:00:00Z"))));
+        given(entitlementReader.hasSimulationAccess(USER_ID)).willReturn(true, true);
+
+        // when: 동기화
+        purchaseService.sync(user);
+
+        // then: 시즌 참가는 이어지지만 이벤트는 없다
+        then(seasonParticipationWriter).should().participateInCurrentSeason(USER_ID);
+        then(eventPublisher).should(never()).publishEvent(any(SimulationAccessGrantedEvent.class));
     }
 
     private RevenueCatWebhookCommand command(String type, String environment, List<String> appUserIds) {

@@ -106,6 +106,9 @@ portone:
   api-secret: ${PORTONE_API_SECRET}
   allowed-channel-types: LIVE
 
+ai-server:
+  base-url: ${AI_SERVER_BASE_URL}
+
 fcm:
   service-account-base64: ${FCM_SERVICE_ACCOUNT_BASE64}
 
