@@ -65,4 +65,18 @@ public class AsyncConfig implements AsyncConfigurer {
 
         return executor;
     }
+
+    @Bean(defaultCandidate = false)
+    public TaskExecutor simulationPreloadTaskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+
+        executor.setCorePoolSize(1);
+        executor.setMaxPoolSize(2);
+        executor.setQueueCapacity(500);
+        executor.setThreadNamePrefix("simulation-preload-");
+        executor.setRejectedExecutionHandler((rejected, threadPoolExecutor) ->
+                log.warn("시뮬레이션 선생성 요청 큐가 가득 차 요청을 건너뜁니다. queued={}", threadPoolExecutor.getQueue().size()));
+
+        return executor;
+    }
 }

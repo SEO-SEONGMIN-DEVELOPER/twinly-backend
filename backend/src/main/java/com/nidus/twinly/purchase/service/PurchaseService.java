@@ -6,6 +6,7 @@ import com.nidus.twinly.purchase.RevenueCatProperties;
 import com.nidus.twinly.purchase.client.RevenueCatClient;
 import com.nidus.twinly.purchase.client.RevenueCatEntitlement;
 import com.nidus.twinly.purchase.dto.command.RevenueCatWebhookCommand;
+import com.nidus.twinly.purchase.event.SimulationAccessGrantedEvent;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.purchase.writer.PurchaseWriter;
 import com.nidus.twinly.season.writer.SeasonParticipationWriter;
@@ -13,6 +14,7 @@ import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -35,6 +37,7 @@ public class PurchaseService {
     private final PurchaseWriter purchaseWriter;
     private final EntitlementReader entitlementReader;
     private final SeasonParticipationWriter seasonParticipationWriter;
+    private final ApplicationEventPublisher eventPublisher;
 
     public void receiveWebhook(RevenueCatWebhookCommand command) {
         log.info("RevenueCat webhook: type={}, environment={}, eventId={}", command.type(), command.environment(), command.eventId());
@@ -68,10 +71,16 @@ public class PurchaseService {
         Instant syncedAt = Instant.now();
         List<RevenueCatEntitlement> entitlements = revenueCatClient.entitlements(user.getRevenueCatUserId().toString());
 
+        boolean hadAccess = entitlementReader.hasSimulationAccess(user.getId());
         purchaseWriter.replaceEntitlements(user.getId(), entitlements, syncedAt);
+        boolean hasAccess = entitlementReader.hasSimulationAccess(user.getId());
 
-        if (entitlementReader.hasSimulationAccess(user.getId())) {
+        if (hasAccess) {
             seasonParticipationWriter.participateInCurrentSeason(user.getId());
+        }
+
+        if (!hadAccess && hasAccess) {
+            eventPublisher.publishEvent(new SimulationAccessGrantedEvent(user.getId(), syncedAt));
         }
     }
 

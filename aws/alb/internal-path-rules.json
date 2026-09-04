@@ -3,21 +3,12 @@
         "listener": "twinly-stage-alb HTTPS:443",
         "rules": [
             {
-                "priority": 10,
-                "conditions": {
-                    "pathPattern": ["/internal/*"],
-                    "sourceIp": ["43.200.93.8/32"]
-                },
-                "action": "forward -> twinly-stage-api-tg",
-                "description": "stage NAT EIP 에서 온 /internal/* 만 통과. AI 서버를 포함한 stage 사설 서브넷의 아웃바운드가 이 IP 로 나온다."
-            },
-            {
                 "priority": 20,
                 "conditions": {
                     "pathPattern": ["/internal/*"]
                 },
                 "action": "fixed-response 403 (text/plain, \"Forbidden\")",
-                "description": "그 외 출처의 /internal/* 는 앱까지 가지 않고 ALB 에서 차단. 로컬 PC 에서의 직접 호출도 여기 걸린다."
+                "description": "퍼블릭 ALB 로 들어온 /internal/* 는 출처와 무관하게 앱까지 가지 않고 ALB 에서 차단. AI 서버는 2026-09-03 부터 twinly-stage-internal-alb HTTP:8080 (기본 액션 forward -> twinly-stage-internal-api-tg) 을 경유하므로, 이전에 있던 NAT EIP 허용 규칙(priority 10)은 제거됐다."
             }
         ]
     },
@@ -25,21 +16,12 @@
         "listener": "twinly-prod-alb HTTPS:443",
         "rules": [
             {
-                "priority": 10,
-                "conditions": {
-                    "pathPattern": ["/internal/*"],
-                    "sourceIp": ["52.78.136.250/32", "43.200.73.21/32"]
-                },
-                "action": "forward -> twinly-prod-api-tg",
-                "description": "prod NAT EIP(AZ-a, AZ-c) 에서 온 /internal/* 만 통과."
-            },
-            {
                 "priority": 20,
                 "conditions": {
                     "pathPattern": ["/internal/*"]
                 },
                 "action": "fixed-response 403 (text/plain, \"Forbidden\")",
-                "description": "그 외 출처의 /internal/* 차단."
+                "description": "퍼블릭 ALB 로 들어온 /internal/* 는 출처와 무관하게 차단. AI 서버는 2026-09-03 부터 twinly-prod-internal-alb HTTP:8080 (기본 액션 forward -> twinly-prod-internal-api-tg) 을 경유하므로, 이전에 있던 NAT EIP 허용 규칙(priority 10)은 제거됐다."
             }
         ]
     }

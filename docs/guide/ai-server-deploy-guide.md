@@ -218,6 +218,10 @@ AWS_REGION=ap-northeast-2
 
 ## 3. 백엔드 호출 경로
 
+> **이 절은 2026-09-03 부로 바뀌었습니다.** AI ↔ 백엔드 트래픽은 internal ALB 로 VPC 안에서
+> 오가며, 퍼블릭 ALB 의 `/internal/*` 은 닫혔습니다. 현행 경로와 베이스 URL 은
+> [internal-alb-guide.md](internal-alb-guide.md) 를 보세요. 아래 내용은 이전 구성입니다.
+
 AI 서버가 부르는 백엔드 API 계약은 [docs/api-spec/internal-api-for-ai.md](../api-spec/internal-api-for-ai_v1.md) 를 보세요. 여기서는 **네트워크 경로만** 다룹니다.
 
 현재 백엔드는 AI 서버를 호출하지 않습니다. 트래픽은 **AI → 백엔드 단방향**뿐이므로 백엔드 쪽 보안그룹에 열어줄 것도 없습니다.

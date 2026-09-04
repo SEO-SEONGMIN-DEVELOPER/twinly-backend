@@ -2,6 +2,7 @@ package com.nidus.twinly.showcase.repository;
 
 import com.nidus.twinly.showcase.entity.Showcase;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -29,4 +30,8 @@ public interface ShowcaseRepository extends JpaRepository<Showcase, Long> {
     List<Long> findAllTargetCandidateUserIds(@Param("viewerUserId") Long viewerUserId,
                                              @Param("seasonId") Long seasonId,
                                              @Param("date") LocalDate date);
+
+    @Modifying
+    @Query("DELETE FROM Showcase s WHERE s.targetUserId IN :userIds")
+    void deleteAllByTargetUserIdIn(@Param("userIds") List<Long> userIds);
 }

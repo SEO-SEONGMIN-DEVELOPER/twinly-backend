@@ -1,6 +1,7 @@
 package com.nidus.twinly.purchase.integration;
 
 import com.nidus.twinly.purchase.client.RevenueCatClient;
+import com.nidus.twinly.simulation.client.SimulationPreloadClient;
 import com.nidus.twinly.purchase.client.RevenueCatEntitlement;
 import com.nidus.twinly.purchase.entity.UserEntitlement;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
@@ -44,6 +45,9 @@ class PurchaseIntegrationTest extends AbstractIntegrationTest {
     // RevenueCat REST 호출 차단. 웹훅은 트리거일 뿐이고 진짜 상태는 이 응답이 결정한다.
     @MockitoBean
     RevenueCatClient revenueCatClient;
+
+    @MockitoBean
+    SimulationPreloadClient simulationPreloadClient;
 
     @Test
     @DisplayName("웹훅 수신: 실제 시크릿 인증을 통과해 RevenueCat 조회 결과가 user_entitlements 로 저장된다")
