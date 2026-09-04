@@ -28,10 +28,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -56,11 +58,13 @@ import static org.mockito.Mockito.times;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class UserSeederUnitTest {
 
-    private static final int SEED_USER_COUNT = 40;
+    private static final int SEED_USER_COUNT = 520;
     private static final int SHOWCASE_USER_COUNT = 20;
-    private static final int AI_TEST_USER_COUNT = 20;
+    private static final int AI_TEST_USER_COUNT = 500;
+    private static final int BUILT_IN_USER_COUNT = 40;
     private static final int INTERESTS_PER_USER = 5;
     private static final int DETAIL_ELEMENTS_PER_USER = 5;
+    private static final int PERSONA_DETAILS_PER_USER = 8;
     private static final int SUMMARY_ELEMENTS_PER_USER = 1;
     private static final int SCENARIO_DAY_COUNT = 390;
     private static final long EXPIRED_USER_ID = 26L;
@@ -124,7 +128,7 @@ class UserSeederUnitTest {
     }
 
     @Test
-    @DisplayName("시드된 적이 없으면 유저 40명과 설문 문항 수만큼의 성향을 저장한다")
+    @DisplayName("시드된 적이 없으면 유저 520명과 설문 문항 수만큼의 성향을 저장한다")
     void run_seeds_users_and_elements() throws IOException {
         // given: 아직 시드 유저가 없는 상태
         given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
@@ -132,20 +136,20 @@ class UserSeederUnitTest {
         // when: 시더 실행
         userSeeder.run(null);
 
-        // then: 유저 40명 저장 + 유저별로 설문 23문항 + 관심사 5개 + 대화 5개 + 요약 1개
+        // then: 유저 520명 저장 + 유저별로 설문 23문항 + 관심사 5개 + 대화(기존 40명 5개, 나머지 8개) + 요약 1개
         then(userRepository).should(org.mockito.Mockito.times(SEED_USER_COUNT)).save(any(User.class));
 
         List<PersonaElement> elements = savedElements();
-        assertThat(elements).hasSize(SEED_USER_COUNT * (elementsPerUser()));
+        assertThat(elements).hasSize(totalElements());
 
         Map<Long, Map<PersonaDimension, Long>> countByUserAndDimension = elements.stream()
                 .collect(Collectors.groupingBy(PersonaElement::getUserId,
                         Collectors.groupingBy(PersonaElement::getDimension, Collectors.counting())));
 
         assertThat(countByUserAndDimension).hasSize(SEED_USER_COUNT);
-        assertThat(countByUserAndDimension.values()).allSatisfy(byDimension -> {
+        assertThat(countByUserAndDimension).allSatisfy((userId, byDimension) -> {
             assertThat(byDimension.get(PersonaDimension.INTEREST)).isEqualTo(INTERESTS_PER_USER);
-            assertThat(byDimension.get(PersonaDimension.DETAIL)).isEqualTo(DETAIL_ELEMENTS_PER_USER);
+            assertThat(byDimension.get(PersonaDimension.DETAIL)).isEqualTo(detailsFor(userId));
             assertThat(byDimension.get(PersonaDimension.SUMMARY)).isEqualTo(1L);
 
             surveyLoader.getAllQuestions().stream()
@@ -248,9 +252,9 @@ class UserSeederUnitTest {
         List<User> users = savedUsers();
 
         assertThat(users.getFirst().getPhoneNumber()).isEqualTo("01000009001");
-        assertThat(users.getLast().getPhoneNumber()).isEqualTo("01000009040");
+        assertThat(users.getLast().getPhoneNumber()).isEqualTo("01000009520");
         assertThat(users.getFirst().getEmail()).isEqualTo("test-seed01@skku.edu");
-        assertThat(users.getLast().getEmail()).isEqualTo("test-seed40@sungshin.ac.kr");
+        assertThat(users.getLast().getEmail()).isEqualTo("test-seed520@sungshin.ac.kr");
 
         assertThat(users).extracting(User::getPhoneNumber).doesNotHaveDuplicates();
         assertThat(users).extracting(User::getEmail).doesNotHaveDuplicates();
@@ -258,7 +262,7 @@ class UserSeederUnitTest {
     }
 
     @Test
-    @DisplayName("성별은 남녀 20명씩이고 학교는 세 곳이 섞여 있다")
+    @DisplayName("성별은 남녀 260명씩이고 학교는 세 곳이 섞여 있다")
     void run_keeps_gender_and_organization_mix() throws IOException {
         // given: 아직 시드 유저가 없는 상태
         given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
@@ -272,8 +276,8 @@ class UserSeederUnitTest {
         Map<Gender, Long> countByGender = users.stream()
                 .collect(Collectors.groupingBy(User::getGender, Collectors.counting()));
         assertThat(countByGender).containsOnly(
-                Map.entry(Gender.MALE, 20L),
-                Map.entry(Gender.FEMALE, 20L));
+                Map.entry(Gender.MALE, 260L),
+                Map.entry(Gender.FEMALE, 260L));
 
         assertThat(users).extracting(User::getOrganization)
                 .containsOnly("성균관대학교", "고려대학교", "성신여자대학교");
@@ -314,7 +318,10 @@ class UserSeederUnitTest {
         assertThat(elements).extracting(PersonaElement::getDimension).containsOnly(PersonaDimension.SUMMARY);
         assertThat(elements).extracting(PersonaElement::getUserId).doesNotHaveDuplicates();
         assertThat(elements.getFirst().getExplanation()).isEqualTo(PersonaSeedElements.SUMMARY.getFirst());
-        assertThat(elements.getLast().getExplanation()).isEqualTo(PersonaSeedElements.SUMMARY.getLast());
+        assertThat(elements.get(BUILT_IN_USER_COUNT - 1).getExplanation())
+                .isEqualTo(PersonaSeedElements.SUMMARY.get(BUILT_IN_USER_COUNT - 1));
+        assertThat(elements.get(BUILT_IN_USER_COUNT).getExplanation()).isEqualTo(personaSummaries().getFirst());
+        assertThat(elements.getLast().getExplanation()).isEqualTo(personaSummaries().getLast());
     }
 
     @Test
@@ -350,7 +357,7 @@ class UserSeederUnitTest {
         then(userRepository).should(never()).save(any(User.class));
 
         List<PersonaElement> elements = savedElements();
-        assertThat(elements).hasSize(SEED_USER_COUNT * elementsPerUser());
+        assertThat(elements).hasSize(totalElements());
 
         Set<Long> userIds = elements.stream()
                 .map(PersonaElement::getUserId)
@@ -358,8 +365,24 @@ class UserSeederUnitTest {
         assertThat(userIds).hasSize(SEED_USER_COUNT);
     }
 
-    private int elementsPerUser() {
-        return surveyLoader.getAllQuestions().size() + INTERESTS_PER_USER + DETAIL_ELEMENTS_PER_USER + SUMMARY_ELEMENTS_PER_USER;
+    private int totalElements() {
+        int common = surveyLoader.getAllQuestions().size() + INTERESTS_PER_USER + SUMMARY_ELEMENTS_PER_USER;
+
+        return SEED_USER_COUNT * common
+                + BUILT_IN_USER_COUNT * DETAIL_ELEMENTS_PER_USER
+                + (SEED_USER_COUNT - BUILT_IN_USER_COUNT) * PERSONA_DETAILS_PER_USER;
+    }
+
+    private long detailsFor(Long userId) {
+        return userId <= BUILT_IN_USER_COUNT ? DETAIL_ELEMENTS_PER_USER : PERSONA_DETAILS_PER_USER;
+    }
+
+    private List<String> personaSummaries() throws IOException {
+        try (InputStream in = new ClassPathResource("seed/ai-test-personas.json").getInputStream()) {
+            return new ObjectMapper().readTree(in).valueStream()
+                    .map(node -> node.get("summary").asString())
+                    .toList();
+        }
     }
 
     private User existingUser() {

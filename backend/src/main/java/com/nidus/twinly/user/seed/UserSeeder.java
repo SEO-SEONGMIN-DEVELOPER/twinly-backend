@@ -62,6 +62,8 @@ public class UserSeeder implements ApplicationRunner {
     private static final int PHONE_START = 9001;
     private static final String EMAIL_LOCAL_PREFIX = "test-seed";
     private static final String SCENARIO_RESOURCE = "seed/showcase-scenarios.json";
+    private static final String PERSONA_RESOURCE = "seed/ai-test-personas.json";
+    private static final int PERSONA_DETAILS_PER_USER = 8;
     static final String ANCHOR_DATE = "anchorDate";
     private static final String DAYS = "days";
     static final Pattern DATE = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
@@ -88,7 +90,7 @@ public class UserSeeder implements ApplicationRunner {
     private final ScenarioCleaner scenarioCleaner;
     private final ObjectMapper objectMapper;
 
-    private enum SeedOrganization {
+    enum SeedOrganization {
         SKKU("성균관대학교", "skku.edu"),
         KOREA("고려대학교", "korea.ac.kr"),
         SUNGSHIN("성신여자대학교", "sungshin.ac.kr");
@@ -107,8 +109,31 @@ public class UserSeeder implements ApplicationRunner {
             String givenName,
             Gender gender,
             SeedOrganization organization,
-            String affiliation
+            String affiliation,
+            List<String> details,
+            String summary
     ) {
+        SeedUser(String familyName, String givenName, Gender gender, SeedOrganization organization, String affiliation) {
+            this(familyName, givenName, gender, organization, affiliation, List.of(), null);
+        }
+
+        SeedUser withPersona(List<String> details, String summary) {
+            return new SeedUser(familyName, givenName, gender, organization, affiliation, details, summary);
+        }
+    }
+
+    record AiTestPersona(
+            String familyName,
+            String givenName,
+            Gender gender,
+            SeedOrganization organization,
+            String affiliation,
+            List<String> details,
+            String summary
+    ) {
+        SeedUser toSeedUser() {
+            return new SeedUser(familyName, givenName, gender, organization, affiliation, details, summary);
+        }
     }
 
     private static final List<SeedUser> SHOWCASE_USERS = List.of(
@@ -157,19 +182,19 @@ public class UserSeeder implements ApplicationRunner {
             new SeedUser("유", "지민", Gender.FEMALE, SeedOrganization.SUNGSHIN, "사회복지학과")
     );
 
-    private static final List<SeedUser> SEED_USERS =
+    private static final List<SeedUser> BUILT_IN_USERS =
             Stream.concat(SHOWCASE_USERS.stream(), AI_TEST_USERS.stream()).toList();
-
 
     @Override
     public void run(ApplicationArguments args) throws IOException {
         requireEnoughElements();
 
+        List<SeedUser> seedUsers = loadSeedUsers();
         Instant now = Instant.now();
 
         List<User> users = new ArrayList<>();
-        for (int index = 0; index < SEED_USERS.size(); index++) {
-            users.add(findOrCreateUser(SEED_USERS.get(index), index));
+        for (int index = 0; index < seedUsers.size(); index++) {
+            users.add(findOrCreateUser(seedUsers.get(index), index));
         }
 
         Long currentSeasonId = currentSeasonReader.read().getId();
@@ -181,11 +206,12 @@ public class UserSeeder implements ApplicationRunner {
         List<PersonaElement> elements = new ArrayList<>();
         for (int index = 0; index < users.size(); index++) {
             Long userId = users.get(index).getId();
+            SeedUser seed = seedUsers.get(index);
 
             if (!personaElementRepository.existsByUserId(userId)) {
-                elements.addAll(toPersonaElements(userId, index, now));
+                elements.addAll(toPersonaElements(userId, seed, index, now));
             } else if (!personaElementRepository.existsByUserIdAndDimension(userId, PersonaDimension.SUMMARY)) {
-                elements.add(summaryElement(userId, index, now));
+                elements.add(summaryElement(userId, seed, now));
             }
         }
 
@@ -296,17 +322,43 @@ public class UserSeeder implements ApplicationRunner {
                 .orElseGet(() -> userRepository.save(toUser(seed, index)));
     }
 
+    private List<SeedUser> loadSeedUsers() throws IOException {
+        List<SeedUser> seedUsers = new ArrayList<>();
+        for (int index = 0; index < BUILT_IN_USERS.size(); index++) {
+            seedUsers.add(BUILT_IN_USERS.get(index).withPersona(details(index), PersonaSeedElements.SUMMARY.get(index)));
+        }
+
+        List<AiTestPersona> personas;
+        try (InputStream in = new ClassPathResource(PERSONA_RESOURCE).getInputStream()) {
+            personas = objectMapper.readValue(in, objectMapper.getTypeFactory().constructCollectionType(List.class, AiTestPersona.class));
+        }
+
+        for (AiTestPersona persona : personas) {
+            if (persona.details() == null || persona.details().size() != PERSONA_DETAILS_PER_USER) {
+                throw new IllegalStateException("AI 테스트 페르소나의 detail 수가 맞지 않습니다. name=%s%s, required=%d"
+                        .formatted(persona.familyName(), persona.givenName(), PERSONA_DETAILS_PER_USER));
+            }
+            if (persona.summary() == null || persona.summary().isBlank()) {
+                throw new IllegalStateException("AI 테스트 페르소나의 summary 가 비어 있습니다. name=%s%s"
+                        .formatted(persona.familyName(), persona.givenName()));
+            }
+            seedUsers.add(persona.toSeedUser());
+        }
+
+        return List.copyOf(seedUsers);
+    }
+
     private void requireEnoughElements() {
-        int required = SEED_USERS.size() * DETAIL_ELEMENTS_PER_USER;
+        int required = BUILT_IN_USERS.size() * DETAIL_ELEMENTS_PER_USER;
 
         if (PersonaSeedElements.DETAIL.size() < required) {
             throw new IllegalStateException("페르소나 시드 문장이 부족합니다. dimension=%s, required=%d, actual=%d"
                     .formatted(PersonaDimension.DETAIL, required, PersonaSeedElements.DETAIL.size()));
         }
 
-        if (PersonaSeedElements.SUMMARY.size() < SEED_USERS.size()) {
+        if (PersonaSeedElements.SUMMARY.size() < BUILT_IN_USERS.size()) {
             throw new IllegalStateException("페르소나 시드 문장이 부족합니다. dimension=%s, required=%d, actual=%d"
-                    .formatted(PersonaDimension.SUMMARY, SEED_USERS.size(), PersonaSeedElements.SUMMARY.size()));
+                    .formatted(PersonaDimension.SUMMARY, BUILT_IN_USERS.size(), PersonaSeedElements.SUMMARY.size()));
         }
 
         if (INTEREST_POOL.size() < INTERESTS_PER_USER) {
@@ -346,7 +398,7 @@ public class UserSeeder implements ApplicationRunner {
         );
     }
 
-    private List<PersonaElement> toPersonaElements(Long userId, int index, Instant createdAt) {
+    private List<PersonaElement> toPersonaElements(Long userId, SeedUser seed, int index, Instant createdAt) {
         Random random = new Random(ANSWER_SEED + index);
         List<PersonaElement> elements = new ArrayList<>();
 
@@ -360,17 +412,17 @@ public class UserSeeder implements ApplicationRunner {
             elements.add(PersonaElement.create(userId, PersonaDimension.INTEREST, interest, createdAt));
         }
 
-        for (String detail : details(index)) {
+        for (String detail : seed.details()) {
             elements.add(PersonaElement.create(userId, PersonaDimension.DETAIL, detail, createdAt));
         }
 
-        elements.add(summaryElement(userId, index, createdAt));
+        elements.add(summaryElement(userId, seed, createdAt));
 
         return List.copyOf(elements);
     }
 
-    private PersonaElement summaryElement(Long userId, int index, Instant createdAt) {
-        return PersonaElement.create(userId, PersonaDimension.SUMMARY, PersonaSeedElements.SUMMARY.get(index), createdAt);
+    private PersonaElement summaryElement(Long userId, SeedUser seed, Instant createdAt) {
+        return PersonaElement.create(userId, PersonaDimension.SUMMARY, seed.summary(), createdAt);
     }
 
     private List<String> interests(Random random) {
