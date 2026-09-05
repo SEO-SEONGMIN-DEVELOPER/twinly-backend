@@ -93,13 +93,11 @@ public class PurchaseService {
     }
 
     private Optional<User> findUser(String appUserId) {
-        UUID revenueCatUserId;
         try {
-            revenueCatUserId = UUID.fromString(appUserId);
+            UUID revenueCatUserId = UUID.fromString(appUserId);
+            return userRepository.findByRevenueCatUserId(revenueCatUserId);
         } catch (IllegalArgumentException e) {
             return Optional.empty();
         }
-
-        return userRepository.findByRevenueCatUserId(revenueCatUserId);
     }
 }

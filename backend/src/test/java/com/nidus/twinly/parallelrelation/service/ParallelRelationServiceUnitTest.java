@@ -5,6 +5,8 @@ import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.parallel.ParallelRelationResolver;
 import com.nidus.twinly.common.parallel.ParallelRelationResult;
 import com.nidus.twinly.common.parallel.ParallelRelationType;
+import com.nidus.twinly.common.parallel.ParallelSimilarityScoreConverter;
+import com.nidus.twinly.common.parallel.ParallelScoreBand;
 import com.nidus.twinly.common.persona.PersonaSimilarity;
 import com.nidus.twinly.common.persona.PersonaSimilarityCalculator;
 import com.nidus.twinly.common.web.BusinessException;
@@ -64,6 +66,9 @@ class ParallelRelationServiceUnitTest {
 
     @Mock
     ParallelRelationResolver parallelRelationResolver;
+
+    @Mock
+    ParallelSimilarityScoreConverter parallelSimilarityScoreConverter;
 
     @Mock
     PersonaSimilarityCalculator personaSimilarityCalculator;
@@ -223,16 +228,17 @@ class ParallelRelationServiceUnitTest {
     }
 
     @Test
-    @DisplayName("결과가 없으면 유사도를 백분율로 환산하고 코드 주인을 A로 고정해 저장한다")
+    @DisplayName("결과가 없으면 표시 점수와 원점수를 함께 저장하고 코드 주인을 A로 고정한다")
     void submit_code_creates_relation() {
-        // given: 결과가 없고 두 사람 모두 페르소나가 있으며 유사도가 0.78이다
+        // given: 결과가 없고 두 사람 모두 페르소나가 있으며 원점수가 0.784, 표시 점수가 94다
         givenCodeOwner();
         given(parallelRelationRepository.findByUserAIdAndUserBId(CODE_OWNER_ID, SUBMITTER_ID)).willReturn(Optional.empty());
         given(userRepository.findById(CODE_OWNER_ID)).willReturn(Optional.of(user(CODE_OWNER_ID, "김", "지훈")));
         given(personaElementRepository.existsByUserId(anyLong())).willReturn(true);
         given(personaElementRepository.findAllByUserIdOrderByIdAsc(anyLong())).willReturn(List.of());
         given(personaSimilarityCalculator.similarity(any(), any())).willReturn(new PersonaSimilarity(0.784, Map.of()));
-        given(parallelRelationResolver.relationOf(0.784)).willReturn(ParallelRelationType.BEST_FRIEND);
+        given(parallelSimilarityScoreConverter.convert(0.784)).willReturn(94);
+        given(parallelRelationResolver.relationOf(94)).willReturn(ParallelRelationType.BEST_FRIEND);
         given(parallelRelationResolver.pickStoryIndex(ParallelRelationType.BEST_FRIEND)).willReturn(7);
         given(parallelRelationRepository.save(any())).willAnswer(invocation -> invocation.getArgument(0));
         givenUsersAndStory();
@@ -241,13 +247,14 @@ class ParallelRelationServiceUnitTest {
         ParallelRelationSubmitCodeResult result =
                 parallelRelationService.submitCode(SUBMITTER_ID, new ParallelRelationSubmitCodeCommand(CODE));
 
-        // then: created=true + 코드 주인이 A(codeOwnerId) + 유사도 78 + 이야기 번호 7로 저장
+        // then: created=true + 코드 주인이 A(codeOwnerId) + 표시 94 + 원점수 0.784 + 이야기 번호 7로 저장
         ArgumentCaptor<ParallelRelation> captor = ArgumentCaptor.forClass(ParallelRelation.class);
         then(parallelRelationRepository).should().save(captor.capture());
         assertThat(captor.getValue().getCodeOwnerId()).isEqualTo(CODE_OWNER_ID);
         assertThat(captor.getValue().getUserAId()).isEqualTo(CODE_OWNER_ID);
         assertThat(captor.getValue().getUserBId()).isEqualTo(SUBMITTER_ID);
-        assertThat(captor.getValue().getSimilarity()).isEqualTo(78);
+        assertThat(captor.getValue().getSimilarity()).isEqualTo(94);
+        assertThat(captor.getValue().getRawSimilarity()).isEqualTo(0.784);
         assertThat(captor.getValue().getStoryIndex()).isEqualTo(7);
         assertThat(result.created()).isTrue();
     }
@@ -338,6 +345,49 @@ class ParallelRelationServiceUnitTest {
         then(parallelRelationResolver).should().render(ParallelRelationType.BEST_FRIEND, 7, "지훈", "서연");
     }
 
+    @Test
+    @DisplayName("목록 조회 시 저장된 표시 점수로 컨버터에 물어 상위 비율을 채운다")
+    void relation_list_fills_top_percent_from_saved_score() {
+        // given: 표시 점수 94로 저장된 결과 한 건이 있고, 컨버터가 상위 비율을 돌려준다
+        given(parallelRelationRepository.findAllByUserAIdOrUserBIdOrderByIdDesc(SUBMITTER_ID, SUBMITTER_ID))
+                .willReturn(List.of(savedRelation(1041L)));
+        given(userRepository.findAllById(anyList()))
+                .willReturn(List.of(user(CODE_OWNER_ID, "김", "지훈")));
+        given(photoRepository.findAllByUserIdInAndType(anyList(), any())).willReturn(List.of());
+        given(parallelRelationResolver.title(any(), anyInt())).willReturn("아무때나 전화해도 좋아하는 사이");
+        given(parallelSimilarityScoreConverter.topPercent(94)).willReturn(3.5);
+
+        // when: 목록 조회
+        ParallelRelationListResult result = parallelRelationService.relationList(SUBMITTER_ID);
+
+        // then: 원점수가 아니라 저장된 표시 점수로 위임하고 그 결과가 그대로 담긴다
+        assertThat(result.relations().get(0).similarity()).isEqualTo(94);
+        assertThat(result.relations().get(0).topPercent()).isEqualTo(3.5);
+        then(parallelSimilarityScoreConverter).should().topPercent(94);
+    }
+
+    @Test
+    @DisplayName("단건 조회 시 상위 비율과 구간 분포를 함께 담아 돌려준다")
+    void relation_detail_fills_top_percent_and_distribution() {
+        // given: 당사자가 조회하고, 컨버터가 상위 비율과 구간 분포를 돌려준다
+        List<ParallelScoreBand> bands = List.of(
+                new ParallelScoreBand(70, 74, 11.6),
+                new ParallelScoreBand(75, 79, 17.3));
+        given(parallelRelationRepository.findById(1041L)).willReturn(Optional.of(savedRelation(1041L)));
+        given(userRepository.findById(CODE_OWNER_ID)).willReturn(Optional.of(user(CODE_OWNER_ID, "김", "지훈")));
+        givenUsersAndStory();
+        given(parallelSimilarityScoreConverter.topPercent(94)).willReturn(3.5);
+        given(parallelSimilarityScoreConverter.distribution()).willReturn(bands);
+
+        // when: 제출자가 단건 조회
+        var result = parallelRelationService.relationDetail(SUBMITTER_ID, 1041L);
+
+        // then: 두 값이 가공 없이 그대로 실린다
+        assertThat(result.topPercent()).isEqualTo(3.5);
+        assertThat(result.scoreDistribution()).isEqualTo(bands);
+        then(parallelSimilarityScoreConverter).should().topPercent(94);
+    }
+
     private void givenCodeOwner() {
         given(parallelRelationCodeRepository.findByCode(CODE))
                 .willReturn(Optional.of(ParallelRelationCode.create(CODE_OWNER_ID, CODE)));
@@ -356,7 +406,7 @@ class ParallelRelationServiceUnitTest {
     }
 
     private ParallelRelation relation(Long codeOwnerId, Long submitterId, Long id) {
-        ParallelRelation relation = ParallelRelation.create(codeOwnerId, submitterId, 78, ParallelRelationType.BEST_FRIEND, 7);
+        ParallelRelation relation = ParallelRelation.create(codeOwnerId, submitterId, 94, 0.784, ParallelRelationType.BEST_FRIEND, 7);
         ReflectionTestUtils.setField(relation, "id", id);
         ReflectionTestUtils.setField(relation, "createdAt", Instant.parse("2026-08-18T03:11:22Z"));
 

@@ -10,6 +10,7 @@ public record ParallelRelationListItemResult(
         ParallelRelationType relation,
         String title,
         Integer similarity,
+        Double topPercent,
         Instant createdAt
 ) {
 }

@@ -3,6 +3,7 @@ package com.nidus.twinly.parallelrelation.service;
 import com.nidus.twinly.common.parallel.ParallelRelationType;
 import com.nidus.twinly.common.parallel.ParallelRelationResolver;
 import com.nidus.twinly.common.parallel.ParallelRelationResult;
+import com.nidus.twinly.common.parallel.ParallelSimilarityScoreConverter;
 import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.common.persona.PersonaSimilarity;
 import com.nidus.twinly.common.persona.PersonaSimilarityCalculator;
@@ -45,12 +46,12 @@ import java.util.stream.Collectors;
 public class ParallelRelationService {
 
     private static final String SHARE_MESSAGE_FORMAT = "[트윈리] 나랑 평행우주에서 무슨 사이인지 확인해보자! 코드: %s";
-    private static final int SIMILARITY_PERCENT = 100;
 
     private final ParallelRelationCodeRepository parallelRelationCodeRepository;
     private final ParallelRelationRepository parallelRelationRepository;
     private final ParallelRelationCodeIssuer parallelRelationCodeIssuer;
     private final ParallelRelationResolver parallelRelationResolver;
+    private final ParallelSimilarityScoreConverter parallelSimilarityScoreConverter;
     private final PersonaSimilarityCalculator personaSimilarityCalculator;
     private final PersonaElementRepository personaElementRepository;
     private final UserRepository userRepository;
@@ -89,12 +90,14 @@ public class ParallelRelationService {
         checkPersonaExists(userId);
 
         PersonaSimilarity similarity = personaSimilarityCalculator.similarity(personaElements(codeOwnerId), personaElements(userId));
-        ParallelRelationType relation = parallelRelationResolver.relationOf(similarity.score());
+        int score = parallelSimilarityScoreConverter.convert(similarity.score());
+        ParallelRelationType relation = parallelRelationResolver.relationOf(score);
 
         ParallelRelation pair = parallelRelationRepository.save(ParallelRelation.create(
                 codeOwnerId,
                 userId,
-                (int) Math.round(similarity.score() * SIMILARITY_PERCENT),
+                score,
+                similarity.score(),
                 relation,
                 parallelRelationResolver.pickStoryIndex(relation)
         ));
@@ -150,6 +153,7 @@ public class ParallelRelationService {
                 relation.getRelation(),
                 parallelRelationResolver.title(relation.getRelation(), relation.getStoryIndex()),
                 relation.getSimilarity(),
+                parallelSimilarityScoreConverter.topPercent(relation.getSimilarity()),
                 relation.getCreatedAt()
         );
     }
@@ -198,9 +202,11 @@ public class ParallelRelationService {
                 toUserResult(userById.get(userId), photoByUserId.get(userId)),
                 toUserResult(userById.get(partnerId), photoByUserId.get(partnerId)),
                 pair.getSimilarity(),
+                parallelSimilarityScoreConverter.topPercent(pair.getSimilarity()),
                 pair.getRelation(),
                 rendered.title(),
                 rendered.story(),
+                parallelSimilarityScoreConverter.distribution(),
                 pair.getCreatedAt()
         );
     }

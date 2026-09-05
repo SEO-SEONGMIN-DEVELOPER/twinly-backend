@@ -27,9 +27,18 @@ class ParallelRelationPropertiesBindingUnitTest {
                 .bind("parallel", ParallelRelationProperties.class)
                 .orElseThrow(() -> new IllegalStateException("parallel 설정을 바인딩하지 못했습니다"));
 
-        // then: yaml의 케밥 표기가 enum과 하나도 어긋나지 않는다
+        // then: yaml의 케밥 표기가 enum·필드명과 하나도 어긋나지 않는다
         assertThat(properties.relationThresholds()).containsOnlyKeys(ParallelRelationType.values());
-        assertThat(properties.relationThresholds().get(ParallelRelationType.ENEMY)).isEqualTo(0.0);
-        assertThat(properties.relationThresholds().get(ParallelRelationType.BEST_FRIEND)).isEqualTo(0.72);
+        assertThat(properties.relationThresholds().get(ParallelRelationType.ENEMY)).isEqualTo(0);
+        assertThat(properties.relationThresholds().get(ParallelRelationType.BEST_FRIEND)).isEqualTo(85);
+        assertThat(properties.similarityScore().rawMean()).isEqualTo(0.457);
+        assertThat(properties.similarityScore().rawStdDev()).isEqualTo(0.084);
+        assertThat(properties.similarityScore().min()).isEqualTo(10);
+        assertThat(properties.similarityScore().max()).isEqualTo(99);
+        assertThat(properties.similarityScore().quantiles()).hasSize(4);
+        assertThat(properties.similarityScore().quantiles().getFirst().percentile()).isEqualTo(0.10);
+        assertThat(properties.similarityScore().quantiles().getFirst().score()).isEqualTo(30);
+        assertThat(properties.similarityScore().quantiles().getLast().percentile()).isEqualTo(0.90);
+        assertThat(properties.similarityScore().quantiles().getLast().score()).isEqualTo(85);
     }
 }

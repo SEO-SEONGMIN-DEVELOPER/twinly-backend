@@ -30,6 +30,8 @@ public class ParallelRelation {
 
     private Integer similarity;
 
+    private Double rawSimilarity;
+
     @Enumerated(EnumType.STRING)
     private ParallelRelationType relation;
 
@@ -37,13 +39,14 @@ public class ParallelRelation {
 
     private Instant createdAt;
 
-    public static ParallelRelation create(Long codeOwnerId, Long submitterId, Integer similarity, ParallelRelationType relation, Integer storyIndex) {
+    public static ParallelRelation create(Long codeOwnerId, Long submitterId, Integer similarity, Double rawSimilarity, ParallelRelationType relation, Integer storyIndex) {
         ParallelRelation pair = new ParallelRelation();
 
         pair.userAId = Math.min(codeOwnerId, submitterId);
         pair.userBId = Math.max(codeOwnerId, submitterId);
         pair.codeOwnerId = codeOwnerId;
         pair.similarity = similarity;
+        pair.rawSimilarity = rawSimilarity;
         pair.relation = relation;
         pair.storyIndex = storyIndex;
         pair.createdAt = Instant.now();

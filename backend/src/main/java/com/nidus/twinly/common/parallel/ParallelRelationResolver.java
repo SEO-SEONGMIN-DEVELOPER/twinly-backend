@@ -25,7 +25,7 @@ public class ParallelRelationResolver {
         }
     }
 
-    public ParallelRelationType relationOf(double score) {
+    public ParallelRelationType relationOf(int score) {
         return parallelRelationProperties.relationThresholds().entrySet().stream()
                 .filter(entry -> score >= entry.getValue())
                 .max(Map.Entry.comparingByValue())
