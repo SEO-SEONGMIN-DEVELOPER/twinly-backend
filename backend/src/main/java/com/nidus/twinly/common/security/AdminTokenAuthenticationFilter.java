@@ -20,7 +20,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AdminTokenAuthenticationFilter extends OncePerRequestFilter {
 
-    private static final String ADMIN_TOKEN_HEADER = "X-Admin-Token";
+    public static final String ADMIN_TOKEN_HEADER = "X-Admin-Token";
     private static final String ADMIN_PRINCIPAL = "admin";
     private static final SimpleGrantedAuthority ROLE_ADMIN = new SimpleGrantedAuthority("ROLE_ADMIN");
 

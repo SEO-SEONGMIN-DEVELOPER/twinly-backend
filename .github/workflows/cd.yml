@@ -157,6 +157,53 @@ jobs:
 
           jq -r '.data.counters | "동기화 완료 — endpoint 생성 \(.endpointCreated) / 수정 \(.endpointUpdated) / 실패 \(.endpointFailed), schema 생성 \(.schemaCreated) / 수정 \(.schemaUpdated)"' <<< "$response"
 
+      - name: Sync Admin Collection to Postman
+        continue-on-error: true
+        env:
+          POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
+          COLLECTION_UID: ${{ vars.POSTMAN_STAGE_COLLECTION_UID }}
+          COLLECTION_NAME: Twinly Admin API (stage)
+          BASE_URL: https://stage-api.trytwinly.com
+          VAULT_REF: "{{vault:twinly-admin-token-stage}}"
+        run: |
+          curl -sSf https://stage-api.trytwinly.com/docs/openapi -o /tmp/spec.json
+
+          jq '.paths |= with_entries(select(.key | startswith("/admin")))' /tmp/spec.json > /tmp/admin-spec.json
+
+          count=$(jq '.paths | length' /tmp/admin-spec.json)
+          if [ "$count" -eq 0 ]; then
+            echo "::warning::/admin 경로가 하나도 없어 동기화를 중단합니다."
+            exit 1
+          fi
+
+          npx --yes openapi-to-postmanv2@5 \
+            -s /tmp/admin-spec.json -o /tmp/collection.json -p \
+            -O folderStrategy=Tags >/dev/null
+
+          jq --arg name "$COLLECTION_NAME" --arg base "$BASE_URL" --arg vault "$VAULT_REF" '
+            .info.name = $name
+            | .auth = { type: "apikey",
+                        apikey: [{ key: "key",   value: "X-Admin-Token", type: "string" },
+                                 { key: "value", value: "{{adminToken}}", type: "string" },
+                                 { key: "in",    value: "header",        type: "string" }] }
+            | .variable = [{ key: "baseUrl",    value: $base,  type: "string" },
+                           { key: "adminToken", value: $vault, type: "string" }]
+            | walk(if type == "object" and has("request") then .request |= del(.auth) else . end)
+            | { collection: . }
+          ' /tmp/collection.json > /tmp/payload.json
+
+          response=$(curl -sS -X PUT "https://api.getpostman.com/collections/${COLLECTION_UID}" \
+            -H "X-API-Key: ${POSTMAN_API_KEY}" \
+            -H "Content-Type: application/json" \
+            --data-binary @/tmp/payload.json)
+
+          if ! jq -e '.collection.uid' >/dev/null 2>&1 <<< "$response"; then
+            echo "::warning::Postman 컬렉션 동기화에 실패했습니다 — $(jq -rc '.error.message // .' <<< "$response")"
+            exit 1
+          fi
+
+          echo "동기화 완료 — $(jq -r '.collection.name' <<< "$response") / 요청 $(jq '[.. | objects | select(has("request"))] | length' /tmp/collection.json) 개"
+
       - name: Deploy Monitoring Stack
         run: |
           MONITORING_B64=$(tar czf - monitoring docker-compose.stage.monitoring.yaml | base64 -w0)
@@ -354,6 +401,64 @@ jobs:
           fi
 
           jq -r '.data.counters | "동기화 완료 — endpoint 생성 \(.endpointCreated) / 수정 \(.endpointUpdated) / 실패 \(.endpointFailed), schema 생성 \(.schemaCreated) / 수정 \(.schemaUpdated)"' <<< "$response"
+
+
+      - name: Sync Admin Collection to Postman
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
+          COLLECTION_UID: ${{ vars.POSTMAN_PROD_COLLECTION_UID }}
+          COLLECTION_NAME: Twinly Admin API (prod)
+          BASE_URL: https://api.trytwinly.com
+          VAULT_REF: "{{vault:twinly-admin-token-prod}}"
+        run: |
+          run_id=$(gh run list --workflow ci.yml --commit "$IMAGE_TAG" --event push --status success \
+            --json databaseId --jq '.[0].databaseId')
+
+          if [ -z "$run_id" ]; then
+            echo "::warning::커밋 ${IMAGE_TAG} 의 성공한 CI 실행을 찾지 못해 컬렉션 동기화를 건너뜁니다."
+            exit 1
+          fi
+
+          gh run download "$run_id" --name openapi-spec --dir /tmp/postman-spec
+          cp /tmp/postman-spec/openapi.json /tmp/spec.json
+
+          jq '.paths |= with_entries(select(.key | startswith("/admin")))' /tmp/spec.json > /tmp/admin-spec.json
+
+          count=$(jq '.paths | length' /tmp/admin-spec.json)
+          if [ "$count" -eq 0 ]; then
+            echo "::warning::/admin 경로가 하나도 없어 동기화를 중단합니다."
+            exit 1
+          fi
+
+          npx --yes openapi-to-postmanv2@5 \
+            -s /tmp/admin-spec.json -o /tmp/collection.json -p \
+            -O folderStrategy=Tags >/dev/null
+
+          jq --arg name "$COLLECTION_NAME" --arg base "$BASE_URL" --arg vault "$VAULT_REF" '
+            .info.name = $name
+            | .auth = { type: "apikey",
+                        apikey: [{ key: "key",   value: "X-Admin-Token", type: "string" },
+                                 { key: "value", value: "{{adminToken}}", type: "string" },
+                                 { key: "in",    value: "header",        type: "string" }] }
+            | .variable = [{ key: "baseUrl",    value: $base,  type: "string" },
+                           { key: "adminToken", value: $vault, type: "string" }]
+            | walk(if type == "object" and has("request") then .request |= del(.auth) else . end)
+            | { collection: . }
+          ' /tmp/collection.json > /tmp/payload.json
+
+          response=$(curl -sS -X PUT "https://api.getpostman.com/collections/${COLLECTION_UID}" \
+            -H "X-API-Key: ${POSTMAN_API_KEY}" \
+            -H "Content-Type: application/json" \
+            --data-binary @/tmp/payload.json)
+
+          if ! jq -e '.collection.uid' >/dev/null 2>&1 <<< "$response"; then
+            echo "::warning::Postman 컬렉션 동기화에 실패했습니다 — $(jq -rc '.error.message // .' <<< "$response")"
+            exit 1
+          fi
+
+          echo "동기화 완료 — $(jq -r '.collection.name' <<< "$response") / 요청 $(jq '[.. | objects | select(has("request"))] | length' /tmp/collection.json) 개"
 
       - name: Deploy Monitoring Stack
         run: |
