@@ -1,0 +1,17 @@
+apiVersion: 1
+
+datasources:
+  - name: MySQL
+    uid: mysql
+    type: mysql
+    url: ${GRAFANA_DB_HOST}:${GRAFANA_DB_PORT}
+    database: ${GRAFANA_DB_NAME}
+    user: ${GRAFANA_DB_USERNAME}
+    editable: false
+    secureJsonData:
+      password: ${GRAFANA_DB_PASSWORD}
+    jsonData:
+      maxOpenConns: 3
+      maxIdleConns: 1
+      connMaxLifetime: 14400
+      sessionTimezone: UTC
