@@ -1,6 +1,7 @@
 package com.nidus.twinly.common.openapi;
 
 import com.nidus.twinly.anon.dto.snapshot.AnonSessionSnapshot;
+import com.nidus.twinly.common.security.AdminTokenAuthenticationFilter;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.user.dto.header.UserInfo;
 import io.swagger.v3.core.converter.AnnotatedType;
@@ -37,6 +38,8 @@ public class OpenApiConfig {
 
     private static final String JWT_SCHEME = "jwtAuth";
     private static final String ANON_SESSION_SCHEME = "anonSessionAuth";
+    private static final String ADMIN_SCHEME = "adminTokenAuth";
+    private static final String ADMIN_PATH_PREFIX = "/admin";
 
     static {
         SpringDocUtils.getConfig().addRequestWrapperToIgnore(UserInfo.class, AnonSessionSnapshot.class);
@@ -54,7 +57,12 @@ public class OpenApiConfig {
                         .addSecuritySchemes(ANON_SESSION_SCHEME,
                                 new SecurityScheme()
                                         .type(SecurityScheme.Type.HTTP)
-                                        .scheme("bearer")));
+                                        .scheme("bearer"))
+                        .addSecuritySchemes(ADMIN_SCHEME,
+                                new SecurityScheme()
+                                        .type(SecurityScheme.Type.APIKEY)
+                                        .in(SecurityScheme.In.HEADER)
+                                        .name(AdminTokenAuthenticationFilter.ADMIN_TOKEN_HEADER)));
     }
 
     @Bean
@@ -69,6 +77,24 @@ public class OpenApiConfig {
             }
 
             return operation;
+        };
+    }
+
+    @Bean
+    public OpenApiCustomizer adminSecurityCustomizer() {
+        return openApi -> {
+            if (openApi.getPaths() == null) {
+                return;
+            }
+
+            openApi.getPaths().forEach((path, pathItem) -> {
+                if (!path.startsWith(ADMIN_PATH_PREFIX)) {
+                    return;
+                }
+
+                pathItem.readOperations()
+                        .forEach(operation -> operation.addSecurityItem(new SecurityRequirement().addList(ADMIN_SCHEME)));
+            });
         };
     }
 
