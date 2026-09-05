@@ -13,6 +13,7 @@ public record ParallelRelationListItemResponse(
         ParallelRelationType relation,
         String title,
         Integer similarity,
+        Double topPercent,
         Instant createdAt
 ) {
 
@@ -23,6 +24,7 @@ public record ParallelRelationListItemResponse(
                 result.relation(),
                 result.title(),
                 result.similarity(),
+                result.topPercent(),
                 result.createdAt()
         );
     }

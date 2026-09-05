@@ -2,6 +2,7 @@ package com.nidus.twinly.parallelrelation.controller;
 
 import com.nidus.twinly.anon.service.AnonService;
 import com.nidus.twinly.common.parallel.ParallelRelationType;
+import com.nidus.twinly.common.parallel.ParallelScoreBand;
 import com.nidus.twinly.common.security.SecurityConfig;
 import com.nidus.twinly.parallelrelation.dto.command.ParallelRelationSubmitCodeCommand;
 import com.nidus.twinly.parallelrelation.dto.result.ParallelRelationDetailResult;
@@ -155,6 +156,7 @@ class ParallelRelationControllerUnitTest {
                         ParallelRelationType.BEST_FRIEND,
                         "아무때나 전화해도 좋아하는 사이",
                         78,
+                        27.4,
                         Instant.parse("2026-08-18T03:11:22Z")
                 ))));
 
@@ -167,7 +169,9 @@ class ParallelRelationControllerUnitTest {
                 .andExpect(jsonPath("$.relations[0].parallelRelationId").value("1041"))
                 .andExpect(jsonPath("$.relations[0].partner.userId").value("77"))
                 .andExpect(jsonPath("$.relations[0].partner.profilePhoto").doesNotExist())
-                .andExpect(jsonPath("$.relations[0].relation").value("bestFriend"));
+                .andExpect(jsonPath("$.relations[0].relation").value("bestFriend"))
+                .andExpect(jsonPath("$.relations[0].similarity").value(78))
+                .andExpect(jsonPath("$.relations[0].topPercent").value(27.4));
     }
 
     @Test
@@ -182,7 +186,13 @@ class ParallelRelationControllerUnitTest {
 
         // then: 200 + 이야기 문장 포함 + 인증 유저 id와 경로 id로 위임
         result.andExpect(status().isOk())
-                .andExpect(jsonPath("$.story").value("지훈과 서연은 다른 평행우주에서는"));
+                .andExpect(jsonPath("$.story").value("지훈과 서연은 다른 평행우주에서는"))
+                .andExpect(jsonPath("$.similarity").value(78))
+                .andExpect(jsonPath("$.topPercent").value(27.4))
+                .andExpect(jsonPath("$.scoreDistribution.length()").value(2))
+                .andExpect(jsonPath("$.scoreDistribution[1].from").value(75))
+                .andExpect(jsonPath("$.scoreDistribution[1].to").value(79))
+                .andExpect(jsonPath("$.scoreDistribution[1].percent").value(17.3));
         then(parallelRelationService).should().relationDetail(12L, 1041L);
     }
 
@@ -204,9 +214,11 @@ class ParallelRelationControllerUnitTest {
                 new ParallelRelationUserResult(12L, "지훈", null),
                 new ParallelRelationUserResult(77L, "서연", null),
                 78,
+                27.4,
                 ParallelRelationType.BEST_FRIEND,
                 "아무때나 전화해도 좋아하는 사이",
                 "지훈과 서연은 다른 평행우주에서는",
+                List.of(new ParallelScoreBand(70, 74, 11.6), new ParallelScoreBand(75, 79, 17.3)),
                 Instant.parse("2026-08-18T03:11:22Z")
         );
     }

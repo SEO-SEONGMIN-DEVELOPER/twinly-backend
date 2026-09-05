@@ -26,7 +26,7 @@ class ParallelRelationResolverUnitTest {
         loader = new ParallelRelationLoader(new ObjectMapper(), new ParallelStoryRenderer());
         loader.load();
 
-        resolver = new ParallelRelationResolver(new ParallelRelationProperties(thresholds()), loader, new ParallelStoryRenderer());
+        resolver = new ParallelRelationResolver(new ParallelRelationProperties(thresholds(), similarityScore()), loader, new ParallelStoryRenderer());
         resolver.validateThresholds();
     }
 
@@ -34,19 +34,19 @@ class ParallelRelationResolverUnitTest {
     @DisplayName("점수 구간에 맞는 등급으로 매핑된다")
     void relation_of_maps_score_to_relation() {
         // when & then
-        assertThat(resolver.relationOf(0.00)).isEqualTo(ParallelRelationType.ENEMY);
-        assertThat(resolver.relationOf(0.40)).isEqualTo(ParallelRelationType.STRANGER);
-        assertThat(resolver.relationOf(0.55)).isEqualTo(ParallelRelationType.AWKWARD);
-        assertThat(resolver.relationOf(0.65)).isEqualTo(ParallelRelationType.CLOSE);
-        assertThat(resolver.relationOf(1.00)).isEqualTo(ParallelRelationType.BEST_FRIEND);
+        assertThat(resolver.relationOf(30)).isEqualTo(ParallelRelationType.ENEMY);
+        assertThat(resolver.relationOf(45)).isEqualTo(ParallelRelationType.STRANGER);
+        assertThat(resolver.relationOf(65)).isEqualTo(ParallelRelationType.AWKWARD);
+        assertThat(resolver.relationOf(80)).isEqualTo(ParallelRelationType.CLOSE);
+        assertThat(resolver.relationOf(99)).isEqualTo(ParallelRelationType.BEST_FRIEND);
     }
 
     @Test
     @DisplayName("경계값과 정확히 같은 점수는 위쪽 등급을 받는다")
     void score_on_the_boundary_belongs_to_the_upper_relation() {
-        // when & then: 0.72는 CLOSE가 아니라 BEST_FRIEND다
-        assertThat(resolver.relationOf(0.72)).isEqualTo(ParallelRelationType.BEST_FRIEND);
-        assertThat(resolver.relationOf(0.7199)).isEqualTo(ParallelRelationType.CLOSE);
+        // when & then: 85점은 CLOSE가 아니라 BEST_FRIEND다
+        assertThat(resolver.relationOf(85)).isEqualTo(ParallelRelationType.BEST_FRIEND);
+        assertThat(resolver.relationOf(84)).isEqualTo(ParallelRelationType.CLOSE);
     }
 
     @Test
@@ -110,11 +110,11 @@ class ParallelRelationResolverUnitTest {
     @DisplayName("경계값이 빠진 등급이 있으면 기동 시점에 실패한다")
     void missing_threshold_fails_fast() {
         // given: BEST_FRIEND 경계값을 빠뜨린 설정
-        Map<ParallelRelationType, Double> incomplete = thresholds();
+        Map<ParallelRelationType, Integer> incomplete = thresholds();
         incomplete.remove(ParallelRelationType.BEST_FRIEND);
 
         ParallelRelationResolver brokenResolver =
-                new ParallelRelationResolver(new ParallelRelationProperties(incomplete), loader, new ParallelStoryRenderer());
+                new ParallelRelationResolver(new ParallelRelationProperties(incomplete, similarityScore()), loader, new ParallelStoryRenderer());
 
         // when & then: 첫 요청이 아니라 기동 때 터진다
         assertThatThrownBy(brokenResolver::validateThresholds)
@@ -128,15 +128,20 @@ class ParallelRelationResolverUnitTest {
                 .toList();
     }
 
-    private Map<ParallelRelationType, Double> thresholds() {
-        Map<ParallelRelationType, Double> thresholds = new EnumMap<>(ParallelRelationType.class);
+    private Map<ParallelRelationType, Integer> thresholds() {
+        Map<ParallelRelationType, Integer> thresholds = new EnumMap<>(ParallelRelationType.class);
 
-        thresholds.put(ParallelRelationType.ENEMY, 0.0);
-        thresholds.put(ParallelRelationType.STRANGER, 0.36);
-        thresholds.put(ParallelRelationType.AWKWARD, 0.48);
-        thresholds.put(ParallelRelationType.CLOSE, 0.60);
-        thresholds.put(ParallelRelationType.BEST_FRIEND, 0.72);
+        thresholds.put(ParallelRelationType.ENEMY, 0);
+        thresholds.put(ParallelRelationType.STRANGER, 40);
+        thresholds.put(ParallelRelationType.AWKWARD, 62);
+        thresholds.put(ParallelRelationType.CLOSE, 72);
+        thresholds.put(ParallelRelationType.BEST_FRIEND, 85);
 
         return thresholds;
+    }
+
+    private ParallelRelationProperties.SimilarityScore similarityScore() {
+        return new ParallelRelationProperties.SimilarityScore(0.457, 0.084, 10, 99,
+                List.of(new ParallelRelationProperties.SimilarityScore.Quantile(0.5, 70)));
     }
 }

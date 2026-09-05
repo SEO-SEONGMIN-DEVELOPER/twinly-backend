@@ -1,5 +1,6 @@
 package com.nidus.twinly.parallelrelation.integration;
 
+import com.nidus.twinly.common.parallel.ParallelRelationType;
 import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.parallelrelation.entity.ParallelRelation;
 import com.nidus.twinly.parallelrelation.entity.ParallelRelationCode;
@@ -18,6 +19,9 @@ import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.allOf;
+import static org.hamcrest.Matchers.greaterThan;
+import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -70,6 +74,11 @@ class ParallelRelationIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.user.userId").value(submitter.getId().toString()))
                 .andExpect(jsonPath("$.partner.userId").value(codeOwner.getId().toString()))
                 .andExpect(jsonPath("$.similarity").isNumber())
+                .andExpect(jsonPath("$.topPercent").isNumber())
+                .andExpect(jsonPath("$.topPercent").value(allOf(greaterThan(0.0), lessThanOrEqualTo(100.0))))
+                .andExpect(jsonPath("$.scoreDistribution.length()").value(18))
+                .andExpect(jsonPath("$.scoreDistribution[0].from").value(10))
+                .andExpect(jsonPath("$.scoreDistribution[17].to").value(99))
                 .andExpect(jsonPath("$.story").isNotEmpty());
 
         // then: DB에 쌍이 정렬 저장되고 코드 주인이 A 역할로 남는다
@@ -193,9 +202,59 @@ class ParallelRelationIntegrationTest extends AbstractIntegrationTest {
         ));
     }
 
+    @Test
+    @DisplayName("단건 조회: 저장된 표시 점수가 실제 설정을 거쳐 상위 비율과 구간 분포로 관통한다")
+    void relation_detail_exposes_score_fields_end_to_end() throws Exception {
+        // given: 표시 점수 78, close 등급으로 결과 한 건을 실제 저장
+        User codeOwner = saveUser();
+        User submitter = saveUser();
+        ParallelRelation relation = saveRelation(codeOwner, submitter, 78, ParallelRelationType.CLOSE);
+
+        // when: 당사자가 단건 조회
+        mockMvc.perform(get("/api/v1/parallel-relations/{id}", relation.getId().toString())
+                        .header("Authorization", bearer(submitter.getId())))
+                // then: 목킹 없이 실제 분위수 곡선이 계산한 값이 그대로 실린다
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.similarity").value(78))
+                .andExpect(jsonPath("$.topPercent").value(27.4))
+                .andExpect(jsonPath("$.relation").value("close"))
+                // then: 구간 분포는 10부터 99까지 5점 단위 18구간으로 빈틈없이 이어진다
+                .andExpect(jsonPath("$.scoreDistribution.length()").value(18))
+                .andExpect(jsonPath("$.scoreDistribution[0].from").value(10))
+                .andExpect(jsonPath("$.scoreDistribution[0].to").value(14))
+                .andExpect(jsonPath("$.scoreDistribution[17].from").value(95))
+                .andExpect(jsonPath("$.scoreDistribution[17].to").value(99))
+                // then: 봉우리 구간의 확률까지 설정대로 나온다
+                .andExpect(jsonPath("$.scoreDistribution[13].from").value(75))
+                .andExpect(jsonPath("$.scoreDistribution[13].percent").value(17.3));
+    }
+
+    @Test
+    @DisplayName("목록 조회: 항목마다 상위 비율은 실리고 구간 분포는 실리지 않는다")
+    void relation_list_carries_top_percent_without_distribution() throws Exception {
+        // given: 표시 점수 78로 결과 한 건을 실제 저장
+        User me = saveUser();
+        User partner = saveUser();
+        saveRelation(partner, me, 78, ParallelRelationType.CLOSE);
+
+        // when: 목록 조회
+        mockMvc.perform(get("/api/v1/parallel-relations")
+                        .header("Authorization", bearer(me.getId())))
+                // then: 단건과 같은 상위 비율이 나오지만 구간 분포는 목록에서 빠진다
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.relations[0].similarity").value(78))
+                .andExpect(jsonPath("$.relations[0].topPercent").value(27.4))
+                .andExpect(jsonPath("$.relations[0].scoreDistribution").doesNotExist());
+    }
+
+    private ParallelRelation saveRelation(User codeOwner, User submitter, int similarity, ParallelRelationType relation) {
+        return parallelRelationRepository.save(ParallelRelation.create(
+                codeOwner.getId(), submitter.getId(), similarity, similarity / 100.0, relation, 3));
+    }
+
     private ParallelRelation saveRelation(User codeOwner, User submitter) {
         return parallelRelationRepository.save(ParallelRelation.create(
-                codeOwner.getId(), submitter.getId(), 78,
-                com.nidus.twinly.common.parallel.ParallelRelationType.BEST_FRIEND, 3));
+                codeOwner.getId(), submitter.getId(), 94, 0.784,
+                ParallelRelationType.BEST_FRIEND, 3));
     }
 }

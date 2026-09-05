@@ -117,11 +117,25 @@ anon:
 
 parallel:
   relation-thresholds:
-    enemy: 0.0
-    stranger: 0.36
-    awkward: 0.48
-    close: 0.60
-    best-friend: 0.72
+    enemy: 0
+    stranger: 30
+    awkward: 50
+    close: 70
+    best-friend: 85
+  similarity-score:
+    raw-mean: 0.457
+    raw-std-dev: 0.084
+    min: 10
+    max: 99
+    quantiles:
+      - percentile: 0.10
+        score: 30
+      - percentile: 0.29
+        score: 50
+      - percentile: 0.51
+        score: 70
+      - percentile: 0.90
+        score: 85
 
 server:
   port: 8080
