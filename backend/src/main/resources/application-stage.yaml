@@ -3,6 +3,9 @@ spring:
     locations: classpath:db/migration, classpath:db/seed
     out-of-order: true
 
+server:
+  forward-headers-strategy: framework
+
 logging:
   structured:
     format:
