@@ -32,3 +32,5 @@ docs/api-spec
 
 # demonstration
 demo
+# python
+__pycache__
