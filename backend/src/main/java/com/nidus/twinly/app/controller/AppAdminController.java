@@ -33,7 +33,7 @@ public class AppAdminController {
         return AppBlockPolicyResponse.from(appBlockPolicyService.current());
     }
 
-    @Operation(summary = "점검 상태 변경 (재배포 없이 켜고 끈다)")
+    @Operation(summary = "점검 상태 변경")
     @ApiResponse(responseCode = "401", description = "UNAUTHORIZED")
     @ApiResponse(responseCode = "403", description = "FORBIDDEN")
     @PutMapping("/admin/app/maintenance")
