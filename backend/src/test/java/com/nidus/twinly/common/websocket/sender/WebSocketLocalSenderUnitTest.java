@@ -15,6 +15,7 @@ import org.springframework.messaging.simp.user.SimpUserRegistry;
 
 import java.util.Set;
 
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
@@ -48,7 +49,7 @@ class WebSocketLocalSenderUnitTest {
         sender.sendToUser("42", "/queue/season", body);
 
         // then
-        then(messagingTemplate).should().convertAndSendToUser(eq("42"), eq("/queue/season"), eq(body));
+        then(messagingTemplate).should().convertAndSendToUser(eq("42"), eq("/queue/season"), eq(body), anyMap());
         then(simpUserRegistry).should(never()).getUsers();
     }
 
@@ -65,8 +66,8 @@ class WebSocketLocalSenderUnitTest {
         sender.sendToAll("/queue/season", body);
 
         // then
-        then(messagingTemplate).should().convertAndSendToUser(eq("1"), eq("/queue/season"), eq(body));
-        then(messagingTemplate).should().convertAndSendToUser(eq("2"), eq("/queue/season"), eq(body));
+        then(messagingTemplate).should().convertAndSendToUser(eq("1"), eq("/queue/season"), eq(body), anyMap());
+        then(messagingTemplate).should().convertAndSendToUser(eq("2"), eq("/queue/season"), eq(body), anyMap());
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.nidus.twinly.common.websocket.relay;
 
 import com.nidus.twinly.common.logging.ErrorLog;
+import com.nidus.twinly.common.logging.TraceContext;
 import com.nidus.twinly.common.websocket.domain.WebSocketErrorCode;
 import com.nidus.twinly.common.websocket.dto.WebSocketResponseBody;
 import lombok.RequiredArgsConstructor;
@@ -21,11 +22,11 @@ public class WebSocketRelayPublisher {
     private final RedisTemplate<String, WebSocketRelayMessage> webSocketRelayRedisTemplate;
 
     public void publishToUser(String userId, String destination, WebSocketResponseBody body) {
-        publish(WebSocketRelayMessage.toUser(userId, destination, body));
+        publish(WebSocketRelayMessage.toUser(userId, destination, body, TraceContext.currentTraceId()));
     }
 
     public void publishToAll(String destination, WebSocketResponseBody body) {
-        publish(WebSocketRelayMessage.toAll(destination, body));
+        publish(WebSocketRelayMessage.toAll(destination, body, TraceContext.currentTraceId()));
     }
 
     private void publish(WebSocketRelayMessage message) {

@@ -1,5 +1,6 @@
 package com.nidus.twinly.common.websocket.relay;
 
+import com.nidus.twinly.common.logging.TraceContext;
 import com.nidus.twinly.common.websocket.domain.WebSocketBodyType;
 import com.nidus.twinly.common.websocket.dto.WebSocketEventBody;
 import com.nidus.twinly.common.websocket.sender.WebSocketLocalSender;
@@ -10,14 +11,19 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.MDC;
 import org.springframework.data.redis.connection.Message;
 import org.springframework.data.redis.serializer.RedisSerializer;
 import org.springframework.data.redis.serializer.SerializationException;
 
+import java.util.concurrent.atomic.AtomicReference;
+
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 
@@ -44,7 +50,7 @@ class WebSocketRelayDispatcherUnitTest {
         // given
         WebSocketEventBody<SeasonChangedPayload> body = WebSocketEventBody.of(
                 WebSocketBodyType.SEASON_CHANGED, new SeasonChangedPayload(7L));
-        givenRelayMessage(WebSocketRelayMessage.toUser("42", "/queue/season", body));
+        givenRelayMessage(WebSocketRelayMessage.toUser("42", "/queue/season", body, "a3f9c210"));
 
         // when
         dispatcher.onMessage(message(), null);
@@ -60,7 +66,7 @@ class WebSocketRelayDispatcherUnitTest {
         // given: 수신자를 특정하지 않은 릴레이 메시지
         WebSocketEventBody<SeasonChangedPayload> body = WebSocketEventBody.of(
                 WebSocketBodyType.SEASON_CHANGED, new SeasonChangedPayload(7L));
-        givenRelayMessage(WebSocketRelayMessage.toAll("/queue/season", body));
+        givenRelayMessage(WebSocketRelayMessage.toAll("/queue/season", body, "a3f9c210"));
 
         // when
         dispatcher.onMessage(message(), null);
@@ -81,6 +87,45 @@ class WebSocketRelayDispatcherUnitTest {
 
         // then
         then(webSocketLocalSender).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("보낸 서버의 traceId 를 이어받아 처리한다")
+    void onMessage_carries_trace_id() {
+        // given: 다른 서버가 traceId 를 실어 보낸 메시지
+        WebSocketEventBody<SeasonChangedPayload> body = WebSocketEventBody.of(
+                WebSocketBodyType.SEASON_CHANGED, new SeasonChangedPayload(7L));
+        givenRelayMessage(WebSocketRelayMessage.toUser("42", "/queue/season", body, "a3f9c210"));
+
+        AtomicReference<String> seen = new AtomicReference<>();
+        willAnswer(invocation -> seen.getAndSet(MDC.get(TraceContext.TRACE_ID)))
+                .given(webSocketLocalSender).sendToUser(any(), any(), any());
+
+        // when
+        dispatcher.onMessage(message(), null);
+
+        // then: 서버를 넘어와도 같은 traceId 로 묶인다
+        assertThat(seen.get()).isEqualTo("a3f9c210");
+        assertThat(MDC.get(TraceContext.TRACE_ID)).isNull();
+    }
+
+    @Test
+    @DisplayName("traceId 가 없는 메시지도 자기 traceId 를 갖고 처리된다")
+    void onMessage_falls_back_when_trace_id_missing() {
+        // given: traceId 를 싣지 않던 이전 버전 서버가 보낸 메시지
+        WebSocketEventBody<SeasonChangedPayload> body = WebSocketEventBody.of(
+                WebSocketBodyType.SEASON_CHANGED, new SeasonChangedPayload(7L));
+        givenRelayMessage(WebSocketRelayMessage.toUser("42", "/queue/season", body, null));
+
+        AtomicReference<String> seen = new AtomicReference<>();
+        willAnswer(invocation -> seen.getAndSet(MDC.get(TraceContext.TRACE_ID)))
+                .given(webSocketLocalSender).sendToUser(any(), any(), any());
+
+        // when
+        dispatcher.onMessage(message(), null);
+
+        // then: 원인 요청과는 못 잇지만, 이 서버 안에서는 묶을 수 있어야 한다
+        assertThat(seen.get()).isNotNull();
     }
 
     private void givenRelayMessage(WebSocketRelayMessage relayMessage) {
