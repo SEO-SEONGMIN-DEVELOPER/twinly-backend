@@ -146,6 +146,37 @@ class PushMessageBuilderUnitTest {
         assertThat(toJson(messages.get(1))).contains("\"notification\"");
     }
 
+    @Test
+    @DisplayName("발송 대상 사용자와 푸시 종류를 메시지에 함께 싣는다")
+    void carries_recipient_and_type() {
+        // given: 서로 다른 사용자의 기기 두 대
+        Device deviceA = Device.create(41L, UUID.randomUUID(), DevicePlatform.IOS, "token-A");
+        Device deviceB = Device.create(52L, UUID.randomUUID(), DevicePlatform.ANDROID, "token-B");
+
+        // when: 채팅 푸시 생성
+        List<PushMessage> messages = pushMessageBuilder.chatMessage(List.of(deviceA, deviceB), chatContent(null));
+
+        // then: 실패 로그가 누구에게 실패했는지 말하려면 여기서 실려야 한다
+        assertThat(messages).extracting(PushMessage::userId).containsExactly(41L, 52L);
+        assertThat(messages).extracting(PushMessage::type).containsOnly(PushType.CHAT_MESSAGE);
+    }
+
+    @Test
+    @DisplayName("피드 푸시는 피드 종류에 맞는 푸시 종류를 싣는다")
+    void carries_feed_type() {
+        // given: 매칭 피드
+        FeedPushContent content = new FeedPushContent(
+                1002L, AppNotificationFeedType.MATCH, "제목", "본문",
+                AppNotificationFeedTargetType.CHAT, 77L, CREATED_AT);
+
+        // when: 피드 푸시 생성
+        List<PushMessage> messages = pushMessageBuilder.feed(
+                List.of(device(DevicePlatform.IOS, "token-ios")), content);
+
+        // then: 집계에서 채팅 푸시와 섞이면 안 된다
+        assertThat(messages).extracting(PushMessage::type).containsExactly(PushType.MATCH);
+    }
+
     private Device device(DevicePlatform platform, String token) {
         return Device.create(1L, UUID.randomUUID(), platform, token);
     }

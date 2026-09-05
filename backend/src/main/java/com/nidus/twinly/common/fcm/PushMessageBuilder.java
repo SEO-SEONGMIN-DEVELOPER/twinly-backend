@@ -31,9 +31,14 @@ public class PushMessageBuilder {
 
     public List<PushMessage> feed(List<Device> devices, FeedPushContent content) {
         Map<String, String> data = feedData(content);
+        PushType type = PushType.from(content.type());
 
         return devices.stream()
-                .map(device -> new PushMessage(device.getPushToken(), feedMessage(device, content, data)))
+                .map(device -> new PushMessage(
+                        device.getUserId(),
+                        type,
+                        device.getPushToken(),
+                        feedMessage(device, content, data)))
                 .toList();
     }
 
@@ -41,9 +46,13 @@ public class PushMessageBuilder {
         Map<String, String> data = chatData(content);
 
         return devices.stream()
-                .map(device -> new PushMessage(device.getPushToken(), device.getPlatform() == DevicePlatform.IOS
-                        ? iosChatMessage(device, content, data)
-                        : androidChatMessage(device, content, data)))
+                .map(device -> new PushMessage(
+                        device.getUserId(),
+                        PushType.CHAT_MESSAGE,
+                        device.getPushToken(),
+                        device.getPlatform() == DevicePlatform.IOS
+                                ? iosChatMessage(device, content, data)
+                                : androidChatMessage(device, content, data)))
                 .toList();
     }
 

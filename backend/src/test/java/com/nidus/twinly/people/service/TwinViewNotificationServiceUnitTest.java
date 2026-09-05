@@ -4,6 +4,7 @@ import com.google.firebase.messaging.Message;
 import com.nidus.twinly.common.fcm.FcmSender;
 import com.nidus.twinly.common.fcm.FeedPushContent;
 import com.nidus.twinly.common.fcm.PushMessage;
+import com.nidus.twinly.common.fcm.PushType;
 import com.nidus.twinly.common.fcm.PushMessageBuilder;
 import com.nidus.twinly.common.fcm.PushRecipientResolver;
 import com.nidus.twinly.common.time.KstTimes;
@@ -218,6 +219,6 @@ class TwinViewNotificationServiceUnitTest {
     }
 
     private PushMessage pushMessage(String token) {
-        return new PushMessage(token, Message.builder().setToken(token).build());
+        return new PushMessage(1L, PushType.TWIN_VIEW, token, Message.builder().setToken(token).build());
     }
 }

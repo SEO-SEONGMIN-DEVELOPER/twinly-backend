@@ -6,8 +6,11 @@ import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.messaging.FirebaseMessagingException;
 import com.google.firebase.messaging.MessagingErrorCode;
 import com.google.firebase.messaging.SendResponse;
+import com.nidus.twinly.common.logging.Actor;
+import com.nidus.twinly.common.logging.ErrorLog;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.event.Level;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -28,6 +31,16 @@ public class FcmSender {
             ErrorCode.UNAUTHENTICATED,
             ErrorCode.PERMISSION_DENIED);
 
+    private static final String MIXED = "MIXED";
+
+    private static final String PUSH_TYPE = "pushType";
+    private static final String MESSAGING_ERROR_CODE = "messagingErrorCode";
+    private static final String REQUESTED = "requested";
+    private static final String SUCCEEDED = "succeeded";
+    private static final String FAILED = "failed";
+    private static final String REVOKED = "revoked";
+    private static final String AUTH_FAILED = "authFailed";
+
     private final FirebaseMessaging firebaseMessaging;
     private final DeviceTokenRevoker deviceTokenRevoker;
 
@@ -40,19 +53,41 @@ public class FcmSender {
         try {
             response = firebaseMessaging.sendEach(pushMessages.stream().map(PushMessage::message).toList());
         } catch (FirebaseMessagingException e) {
-            log.warn("푸시 발송이 중단되었습니다. count={}", pushMessages.size(), e);
+            ErrorLog.error(log, e.getErrorCode().name(), null, e)
+                    .addKeyValue(REQUESTED, pushMessages.size())
+                    .log("푸시 발송이 중단되었습니다");
             return PushSendResult.cancelled();
         }
 
-        deviceTokenRevoker.revoke(collectRevokableTokens(pushMessages, response));
+        List<String> revokableTokens = collectRevokableTokens(pushMessages, response);
+        deviceTokenRevoker.revoke(revokableTokens);
 
-        return new PushSendResult(response.getSuccessCount(), response.getFailureCount(), hasAuthFailure(response));
+        boolean authFailed = hasAuthFailure(response);
+
+        log.atLevel(authFailed ? Level.ERROR : Level.INFO)
+                .addKeyValue(PUSH_TYPE, pushType(pushMessages))
+                .addKeyValue(REQUESTED, pushMessages.size())
+                .addKeyValue(SUCCEEDED, response.getSuccessCount())
+                .addKeyValue(FAILED, response.getFailureCount())
+                .addKeyValue(REVOKED, revokableTokens.size())
+                .addKeyValue(AUTH_FAILED, authFailed)
+                .log("푸시 발송 결과");
+
+        return new PushSendResult(response.getSuccessCount(), response.getFailureCount(), authFailed);
+    }
+
+    private String pushType(List<PushMessage> pushMessages) {
+        return pushMessages.stream().map(PushMessage::type).distinct().count() == 1
+                ? pushMessages.getFirst().type().name()
+                : MIXED;
     }
 
     private boolean hasAuthFailure(BatchResponse response) {
         return response.getResponses().stream()
                 .filter(each -> !each.isSuccessful())
-                .anyMatch(each -> AUTH_FAILURES.contains(each.getException().getErrorCode()));
+                .map(SendResponse::getException)
+                .anyMatch(exception -> exception.getMessagingErrorCode() == null
+                        && AUTH_FAILURES.contains(exception.getErrorCode()));
     }
 
     private List<String> collectRevokableTokens(List<PushMessage> pushMessages, BatchResponse response) {
@@ -64,12 +99,17 @@ public class FcmSender {
                 continue;
             }
 
-            MessagingErrorCode errorCode = each.getException().getMessagingErrorCode();
+            PushMessage pushMessage = pushMessages.get(i);
+            FirebaseMessagingException exception = each.getException();
+            MessagingErrorCode messagingErrorCode = exception.getMessagingErrorCode();
 
-            if (REVOKABLE.contains(errorCode)) {
-                revokable.add(pushMessages.get(i).token());
+            if (REVOKABLE.contains(messagingErrorCode)) {
+                revokable.add(pushMessage.token());
             } else {
-                log.warn("푸시 발송 실패. errorCode={}", errorCode, each.getException());
+                ErrorLog.warn(log, exception.getErrorCode().name(), Actor.user(pushMessage.userId()), exception)
+                        .addKeyValue(PUSH_TYPE, pushMessage.type())
+                        .addKeyValue(MESSAGING_ERROR_CODE, messagingErrorCode)
+                        .log("푸시 발송에 실패했습니다");
             }
         }
 
