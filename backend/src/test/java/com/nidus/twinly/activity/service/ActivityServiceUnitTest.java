@@ -2,14 +2,7 @@ package com.nidus.twinly.activity.service;
 
 import com.nidus.twinly.activity.domain.QuestionType;
 import com.nidus.twinly.activity.domain.SceneType;
-import com.nidus.twinly.activity.dto.result.ActivityActionSceneResult;
-import com.nidus.twinly.common.scene.SceneBubbleLine;
-import com.nidus.twinly.common.scene.SceneNameRenderer;
-import com.nidus.twinly.common.scene.SceneNarrationLine;
-import com.nidus.twinly.activity.dto.result.ActivityDialogueSceneResult;
-import com.nidus.twinly.activity.dto.result.ActivityQuestionResult;
-import com.nidus.twinly.activity.dto.result.ActivityResult;
-import com.nidus.twinly.activity.dto.result.ActivityUserInfoResult;
+import com.nidus.twinly.activity.dto.result.*;
 import com.nidus.twinly.activity.entity.Question;
 import com.nidus.twinly.activity.entity.Scene;
 import com.nidus.twinly.activity.entity.ScenePartner;
@@ -21,6 +14,9 @@ import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.photo.PhotoPosInfo;
 import com.nidus.twinly.common.photo.PhotoType;
 import com.nidus.twinly.common.photo.ProfilePhotoInfo;
+import com.nidus.twinly.common.scene.SceneBubbleLine;
+import com.nidus.twinly.common.scene.SceneNameRenderer;
+import com.nidus.twinly.common.scene.SceneNarrationLine;
 import com.nidus.twinly.season.entity.Season;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.user.entity.Photo;
@@ -37,19 +33,13 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.ObjectMapper;
 
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
+import java.time.*;
 import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
-import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
 class ActivityServiceUnitTest {
@@ -225,12 +215,6 @@ class ActivityServiceUnitTest {
         assertThat(bubble.text()).isEqualTo("안녕");
         assertThat(bubble.occursAt()).isEqualTo(OffsetDateTime.of(2026, 7, 26, 12, 5, 0, 0, KST));
     }
-
-    /*
-     * [멘토링 피드백]
-     * 정상 / 실패 / 경계값
-     * 잘못된 input이 실패하는지도 테스트로 작성
-     */
 
     @Test
     @DisplayName("lines JSON이 손상되어도 그 씬의 대사만 비우고 하루치 조회는 성공한다")
