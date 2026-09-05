@@ -10,6 +10,7 @@ import java.util.stream.Stream;
 public record RevenueCatWebhookCommand(
         String eventId,
         String type,
+        String appUserId,
         List<String> appUserIds,
         String environment
 ) {
@@ -18,12 +19,13 @@ public record RevenueCatWebhookCommand(
         RevenueCatWebhookRequest.Event event = request.event();
 
         if (event == null) {
-            return new RevenueCatWebhookCommand(null, null, List.of(), null);
+            return new RevenueCatWebhookCommand(null, null, null, List.of(), null);
         }
 
         return new RevenueCatWebhookCommand(
                 event.id(),
                 event.type(),
+                event.appUserId(),
                 appUserIds(event),
                 event.environment()
         );

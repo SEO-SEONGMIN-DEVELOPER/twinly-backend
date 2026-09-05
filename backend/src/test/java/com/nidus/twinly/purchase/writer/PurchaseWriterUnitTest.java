@@ -1,7 +1,9 @@
 package com.nidus.twinly.purchase.writer;
 
 import com.nidus.twinly.purchase.client.RevenueCatEntitlement;
+import com.nidus.twinly.purchase.entity.RevenueCatEvent;
 import com.nidus.twinly.purchase.entity.UserEntitlement;
+import com.nidus.twinly.purchase.repository.RevenueCatEventRepository;
 import com.nidus.twinly.purchase.repository.UserEntitlementRepository;
 import com.nidus.twinly.user.repository.UserRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -14,6 +16,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
 import java.util.Collection;
+import java.util.Optional;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -31,6 +34,9 @@ class PurchaseWriterUnitTest {
 
     @Mock
     UserEntitlementRepository userEntitlementRepository;
+
+    @Mock
+    RevenueCatEventRepository revenueCatEventRepository;
 
     @Mock
     UserRepository userRepository;
@@ -132,5 +138,68 @@ class PurchaseWriterUnitTest {
 
         // then: 유저의 동기화 시각이 갱신됨 (실패해도 재시도가 몰리지 않게 하는 근거)
         then(userRepository).should().markPurchasesSynced(USER_ID, NOW);
+    }
+
+    @Test
+    @DisplayName("처음 받은 이벤트는 저장하고 처리해도 좋다고 알린다")
+    void beginEvent_saves_new_event() {
+        // given: 같은 event_id 로 저장된 이벤트가 없음
+        given(revenueCatEventRepository.findByEventId("evt_1")).willReturn(Optional.empty());
+
+        // when: 이벤트 수신 기록
+        boolean proceed = purchaseWriter.beginEvent("evt_1", "INITIAL_PURCHASE", USER_ID, "PRODUCTION", NOW);
+
+        // then: 새 행을 저장하고 처리를 허용한다
+        assertThat(proceed).isTrue();
+        ArgumentCaptor<RevenueCatEvent> captor = ArgumentCaptor.forClass(RevenueCatEvent.class);
+        then(revenueCatEventRepository).should().save(captor.capture());
+        assertThat(captor.getValue().getEventId()).isEqualTo("evt_1");
+        assertThat(captor.getValue().getReceivedAt()).isEqualTo(NOW);
+        assertThat(captor.getValue().getCompletedAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("이미 완료된 이벤트는 저장도 처리도 하지 않는다")
+    void beginEvent_rejects_completed_event() {
+        // given: 완료 표시까지 끝난 이벤트가 저장돼 있음
+        RevenueCatEvent completed = RevenueCatEvent.receive("evt_1", "RENEWAL", USER_ID, "PRODUCTION", NOW);
+        completed.complete(NOW);
+        given(revenueCatEventRepository.findByEventId("evt_1")).willReturn(Optional.of(completed));
+
+        // when: 같은 이벤트가 재전송됨
+        boolean proceed = purchaseWriter.beginEvent("evt_1", "RENEWAL", USER_ID, "PRODUCTION", NOW);
+
+        // then: 중복 처리를 막는다
+        assertThat(proceed).isFalse();
+        then(revenueCatEventRepository).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("받았지만 완료하지 못한 이벤트는 재전송 때 다시 처리한다")
+    void beginEvent_allows_retry_of_incomplete_event() {
+        // given: 수신은 됐지만 동기화에 실패해 완료 표시가 없는 이벤트
+        RevenueCatEvent incomplete = RevenueCatEvent.receive("evt_1", "RENEWAL", USER_ID, "PRODUCTION", NOW);
+        given(revenueCatEventRepository.findByEventId("evt_1")).willReturn(Optional.of(incomplete));
+
+        // when: 같은 이벤트가 재전송됨
+        boolean proceed = purchaseWriter.beginEvent("evt_1", "RENEWAL", USER_ID, "PRODUCTION", NOW);
+
+        // then: 행은 그대로 두고 처리만 다시 허용한다 (중복 행이 생기면 집계가 부풀어 오른다)
+        assertThat(proceed).isTrue();
+        then(revenueCatEventRepository).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("완료 표시는 저장된 이벤트에 시각을 남긴다")
+    void completeEvent_marks_completion() {
+        // given: 아직 완료되지 않은 이벤트
+        RevenueCatEvent event = RevenueCatEvent.receive("evt_1", "RENEWAL", USER_ID, "PRODUCTION", NOW);
+        given(revenueCatEventRepository.findByEventId("evt_1")).willReturn(Optional.of(event));
+
+        // when: 처리 완료 표시
+        purchaseWriter.completeEvent("evt_1", EXPIRES_AT);
+
+        // then: 더티 체킹으로 완료 시각이 반영된다
+        assertThat(event.getCompletedAt()).isEqualTo(EXPIRES_AT);
     }
 }

@@ -15,6 +15,7 @@ import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -42,11 +43,19 @@ public class PurchaseService {
     public void receiveWebhook(RevenueCatWebhookCommand command) {
         log.info("RevenueCat webhook: type={}, environment={}, eventId={}", command.type(), command.environment(), command.eventId());
 
-        if (!matchesEnvironment(command.environment())) {
+        if (!identifiable(command)) {
+            log.warn("RevenueCat 이벤트에 식별자 또는 종류가 없어 기록 없이 동기화만 수행합니다. eventId={}, type={}",
+                    command.eventId(), command.type());
+            syncTargets(command);
             return;
         }
 
-        command.appUserIds().forEach(this::sync);
+        if (!begin(command)) {
+            return;
+        }
+
+        syncTargets(command);
+        purchaseWriter.completeEvent(command.eventId(), Instant.now());
     }
 
     @Async("purchaseSyncTaskExecutor")
@@ -84,6 +93,31 @@ public class PurchaseService {
         }
     }
 
+    private boolean identifiable(RevenueCatWebhookCommand command) {
+        return command.eventId() != null && command.type() != null;
+    }
+
+    private boolean begin(RevenueCatWebhookCommand command) {
+        try {
+            return purchaseWriter.beginEvent(
+                    command.eventId(),
+                    command.type(),
+                    findUser(command.appUserId()).map(User::getId).orElse(null),
+                    command.environment(),
+                    Instant.now());
+        } catch (DataIntegrityViolationException e) {
+            return false;
+        }
+    }
+
+    private void syncTargets(RevenueCatWebhookCommand command) {
+        if (!matchesEnvironment(command.environment())) {
+            return;
+        }
+
+        command.appUserIds().forEach(this::sync);
+    }
+
     private boolean matchesEnvironment(String environment) {
         return environment == null || revenueCatProperties.environment().name().equalsIgnoreCase(environment);
     }
@@ -93,6 +127,10 @@ public class PurchaseService {
     }
 
     private Optional<User> findUser(String appUserId) {
+        if (appUserId == null) {
+            return Optional.empty();
+        }
+
         try {
             UUID revenueCatUserId = UUID.fromString(appUserId);
             return userRepository.findByRevenueCatUserId(revenueCatUserId);
