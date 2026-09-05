@@ -1,5 +1,6 @@
 package com.nidus.twinly.common.fcm;
 
+import com.google.firebase.ErrorCode;
 import com.google.firebase.messaging.BatchResponse;
 import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.messaging.FirebaseMessagingException;
@@ -22,6 +23,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 
@@ -68,8 +70,8 @@ class FcmSenderUnitTest {
         // given: 1번은 성공, 2번은 앱 삭제, 3번은 다른 프로젝트 토큰
         BatchResponse response = batchResponse(
                 success(),
-                failure(MessagingErrorCode.UNREGISTERED),
-                failure(MessagingErrorCode.SENDER_ID_MISMATCH));
+                failure(ErrorCode.NOT_FOUND, MessagingErrorCode.UNREGISTERED),
+                failure(ErrorCode.PERMISSION_DENIED, MessagingErrorCode.SENDER_ID_MISMATCH));
         given(firebaseMessaging.sendEach(anyList())).willReturn(response);
 
         // when: 발송
@@ -86,8 +88,8 @@ class FcmSenderUnitTest {
     void send_does_not_revoke_on_invalid_argument() throws Exception {
         // given: 페이로드 버그로도 발생하는 코드. 폐기했다간 빌더 버그 한 번에 전 사용자 토큰이 날아간다
         BatchResponse response = batchResponse(
-                failure(MessagingErrorCode.INVALID_ARGUMENT),
-                failure(MessagingErrorCode.INVALID_ARGUMENT));
+                failure(ErrorCode.INVALID_ARGUMENT, MessagingErrorCode.INVALID_ARGUMENT),
+                failure(ErrorCode.INVALID_ARGUMENT, MessagingErrorCode.INVALID_ARGUMENT));
         given(firebaseMessaging.sendEach(anyList())).willReturn(response);
 
         // when: 발송
@@ -102,7 +104,7 @@ class FcmSenderUnitTest {
     void send_does_not_revoke_on_apns_config_error() throws Exception {
         // given: APNs 인증 키 미설정. 설정 문제지 토큰 문제가 아니다
         BatchResponse response = batchResponse(
-                failure(MessagingErrorCode.THIRD_PARTY_AUTH_ERROR));
+                failure(ErrorCode.UNAUTHENTICATED, MessagingErrorCode.THIRD_PARTY_AUTH_ERROR));
         given(firebaseMessaging.sendEach(anyList())).willReturn(response);
 
         // when: 발송
@@ -117,7 +119,7 @@ class FcmSenderUnitTest {
     void send_does_not_revoke_on_transient_error() throws Exception {
         // given: FCM 일시 장애
         BatchResponse response = batchResponse(
-                failure(MessagingErrorCode.UNAVAILABLE));
+                failure(ErrorCode.UNAVAILABLE, MessagingErrorCode.UNAVAILABLE));
         given(firebaseMessaging.sendEach(anyList())).willReturn(response);
 
         // when: 발송
@@ -128,10 +130,42 @@ class FcmSenderUnitTest {
     }
 
     @Test
+    @DisplayName("개별 사유가 붙은 실패는 자격 증명 장애로 보지 않는다")
+    void send_does_not_flag_auth_failure_on_per_message_error() throws Exception {
+        // given: 403·401 이지만 FCM 이 메시지 단위 사유를 알려준 실패
+        BatchResponse response = batchResponse(
+                failure(ErrorCode.PERMISSION_DENIED, MessagingErrorCode.SENDER_ID_MISMATCH),
+                failure(ErrorCode.UNAUTHENTICATED, MessagingErrorCode.THIRD_PARTY_AUTH_ERROR));
+        given(firebaseMessaging.sendEach(anyList())).willReturn(response);
+
+        // when: 발송
+        PushSendResult result = fcmSender.send(List.of(pushMessage("token-A"), pushMessage("token-B")));
+
+        // then: 토큰 한 개 문제로 전체 장애 경보가 울리면 안 된다
+        assertThat(result.authFailed()).isFalse();
+    }
+
+    @Test
+    @DisplayName("사유 없는 인증 실패는 자격 증명 장애로 본다")
+    void send_flags_auth_failure_when_credentials_are_broken() throws Exception {
+        // given: 서비스 계정이 깨지면 FCM 사유 없이 401 만 돌아온다
+        BatchResponse response = batchResponse(failure(ErrorCode.UNAUTHENTICATED, null));
+        given(firebaseMessaging.sendEach(anyList())).willReturn(response);
+
+        // when: 발송
+        PushSendResult result = fcmSender.send(List.of(pushMessage("token-A")));
+
+        // then: 전체 발송이 죽은 상태이므로 즉시 알아채야 한다
+        assertThat(result.authFailed()).isTrue();
+    }
+
+    @Test
     @DisplayName("요청 자체가 실패하면 토큰을 건드리지 않고 조용히 끝낸다")
     void send_swallows_request_failure() throws Exception {
         // given: 네트워크 단절 등으로 요청 전체가 실패
-        willThrow(mock(FirebaseMessagingException.class)).given(firebaseMessaging).sendEach(anyList());
+        FirebaseMessagingException exception = mock(FirebaseMessagingException.class);
+        given(exception.getErrorCode()).willReturn(ErrorCode.UNAVAILABLE);
+        willThrow(exception).given(firebaseMessaging).sendEach(anyList());
 
         // when & then: 예외가 밖으로 나가지 않는다 (푸시 실패가 본 기능을 실패시키면 안 된다)
         fcmSender.send(List.of(pushMessage("token-A")));
@@ -140,7 +174,7 @@ class FcmSenderUnitTest {
     }
 
     private PushMessage pushMessage(String token) {
-        return new PushMessage(token, Message.builder().setToken(token).build());
+        return new PushMessage(1L, PushType.CHAT_MESSAGE, token, Message.builder().setToken(token).build());
     }
 
     private BatchResponse batchResponse(SendResponse... responses) {
@@ -155,9 +189,10 @@ class FcmSenderUnitTest {
         return sendResponse;
     }
 
-    private SendResponse failure(MessagingErrorCode errorCode) {
+    private SendResponse failure(ErrorCode errorCode, MessagingErrorCode messagingErrorCode) {
         FirebaseMessagingException exception = mock(FirebaseMessagingException.class);
-        given(exception.getMessagingErrorCode()).willReturn(errorCode);
+        lenient().when(exception.getErrorCode()).thenReturn(errorCode);
+        given(exception.getMessagingErrorCode()).willReturn(messagingErrorCode);
 
         SendResponse sendResponse = mock(SendResponse.class);
         given(sendResponse.isSuccessful()).willReturn(false);

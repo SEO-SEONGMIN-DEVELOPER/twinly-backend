@@ -66,7 +66,7 @@ class FcmExternalTest {
     }
 
     private PushMessage pushMessage(String token) {
-        return new PushMessage(token, Message.builder()
+        return new PushMessage(1L, PushType.CHAT_MESSAGE, token, Message.builder()
                 .setToken(token)
                 .setNotification(Notification.builder()
                         .setTitle("twinly")

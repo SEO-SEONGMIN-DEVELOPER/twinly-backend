@@ -7,6 +7,7 @@ import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.fcm.ChatMessagePushContent;
 import com.nidus.twinly.common.fcm.FcmSender;
 import com.nidus.twinly.common.fcm.PushMessage;
+import com.nidus.twinly.common.fcm.PushType;
 import com.nidus.twinly.common.fcm.PushMessageBuilder;
 import com.nidus.twinly.common.fcm.PushRecipientResolver;
 import com.nidus.twinly.common.photo.PhotoType;
@@ -98,7 +99,7 @@ class ChatPushNotifierUnitTest {
         given(userRepository.findById(SENDER)).willReturn(Optional.of(user()));
         given(photoRepository.findByUserIdAndType(SENDER, PhotoType.PROFILE)).willReturn(Optional.of(photo("profile/1/abc-thumb")));
 
-        List<PushMessage> built = List.of(new PushMessage("token", null));
+        List<PushMessage> built = List.of(new PushMessage(1L, PushType.CHAT_MESSAGE, "token", null));
         ArgumentCaptor<ChatMessagePushContent> captor = ArgumentCaptor.captor();
         given(pushMessageBuilder.chatMessage(anyList(), captor.capture())).willReturn(built);
 

@@ -61,6 +61,11 @@ services:
       - prometheus-twinly
     environment:
       SLACK_ALERT_WEBHOOK_URL: ${SLACK_ALERT_WEBHOOK_URL:-}
+      GRAFANA_DB_HOST: ${GRAFANA_DB_HOST:?GRAFANA_DB_HOST is not set}
+      GRAFANA_DB_PORT: ${GRAFANA_DB_PORT:?GRAFANA_DB_PORT is not set}
+      GRAFANA_DB_NAME: ${GRAFANA_DB_NAME:?GRAFANA_DB_NAME is not set}
+      GRAFANA_DB_USERNAME: ${GRAFANA_DB_USERNAME:?GRAFANA_DB_USERNAME is not set}
+      GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:?GRAFANA_DB_PASSWORD is not set}
     ports:
       - "127.0.0.1:3000:3000"
     volumes:

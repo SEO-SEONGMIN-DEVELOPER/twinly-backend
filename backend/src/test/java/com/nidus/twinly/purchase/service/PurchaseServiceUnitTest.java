@@ -22,6 +22,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
@@ -31,13 +32,16 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
@@ -71,7 +75,8 @@ class PurchaseServiceUnitTest {
     void setUp() {
         RevenueCatProperties properties = new RevenueCatProperties("secret", "sk_test", RevenueCatEnvironment.SANDBOX);
         purchaseService = new PurchaseService(
-                properties, revenueCatClient, userRepository, purchaseWriter, entitlementReader, seasonParticipationWriter, eventPublisher);
+                properties, revenueCatClient, userRepository, purchaseWriter, entitlementReader,
+                seasonParticipationWriter, eventPublisher);
     }
 
     @Test
@@ -83,6 +88,8 @@ class PurchaseServiceUnitTest {
         given(userRepository.findByRevenueCatUserId(REVENUE_CAT_USER_ID)).willReturn(Optional.of(user()));
         given(revenueCatClient.entitlements(APP_USER_ID)).willReturn(entitlements);
 
+        given(purchaseWriter.beginEvent(anyString(), anyString(), any(), any(), any())).willReturn(true);
+
         // when: SANDBOX 이벤트 수신
         purchaseService.receiveWebhook(command("RENEWAL", "SANDBOX", List.of(APP_USER_ID)));
 
@@ -93,6 +100,8 @@ class PurchaseServiceUnitTest {
     @Test
     @DisplayName("환경이 다르면 RevenueCat 을 조회하지도, 권한을 건드리지도 않는다")
     void receiveWebhook_with_other_environment_is_ignored() {
+        given(purchaseWriter.beginEvent(anyString(), anyString(), any(), any(), any())).willReturn(true);
+
         // when: SANDBOX 서버에 PRODUCTION 이벤트가 도착
         purchaseService.receiveWebhook(command("RENEWAL", "PRODUCTION", List.of(APP_USER_ID)));
 
@@ -107,6 +116,8 @@ class PurchaseServiceUnitTest {
         // given: 우리 유저이고 권한이 비어 있음
         given(userRepository.findByRevenueCatUserId(REVENUE_CAT_USER_ID)).willReturn(Optional.of(user()));
         given(revenueCatClient.entitlements(APP_USER_ID)).willReturn(List.of());
+
+        given(purchaseWriter.beginEvent(anyString(), anyString(), any(), any(), any())).willReturn(true);
 
         // when: environment 가 빠진 이벤트 수신 (TRANSFER 등)
         purchaseService.receiveWebhook(command("TRANSFER", null, List.of(APP_USER_ID)));
@@ -125,6 +136,8 @@ class PurchaseServiceUnitTest {
         given(userRepository.findByRevenueCatUserId(to)).willReturn(Optional.of(user(20L, to)));
         given(revenueCatClient.entitlements(anyString())).willReturn(List.of());
 
+        given(purchaseWriter.beginEvent(anyString(), anyString(), any(), any(), any())).willReturn(true);
+
         // when: TRANSFER 이벤트 수신
         purchaseService.receiveWebhook(command("TRANSFER", "SANDBOX", List.of(from.toString(), to.toString())));
 
@@ -141,6 +154,8 @@ class PurchaseServiceUnitTest {
         // given: 해당 식별자를 가진 유저가 없음
         given(userRepository.findByRevenueCatUserId(REVENUE_CAT_USER_ID)).willReturn(Optional.empty());
 
+        given(purchaseWriter.beginEvent(anyString(), anyString(), any(), any(), any())).willReturn(true);
+
         // when: 이벤트 수신
         purchaseService.receiveWebhook(command("RENEWAL", "SANDBOX", List.of(APP_USER_ID)));
 
@@ -152,6 +167,8 @@ class PurchaseServiceUnitTest {
     @Test
     @DisplayName("app_user_id 가 UUID 형식이 아니면 조회 없이 무시한다")
     void receiveWebhook_with_non_uuid_app_user_id_is_ignored() {
+        given(purchaseWriter.beginEvent(anyString(), anyString(), any(), any(), any())).willReturn(true);
+
         // when: 익명 식별자처럼 UUID 가 아닌 값이 담긴 이벤트 수신
         purchaseService.receiveWebhook(command("RENEWAL", "SANDBOX", List.of("$RCAnonymousID:abc123")));
 
@@ -270,8 +287,99 @@ class PurchaseServiceUnitTest {
         then(eventPublisher).should(never()).publishEvent(any(SimulationAccessGrantedEvent.class));
     }
 
+    @Test
+    @DisplayName("웹훅을 받으면 종류·유저·환경과 함께 이벤트를 기록한다")
+    void receiveWebhook_records_event() {
+        // given: 우리 유저
+        given(userRepository.findByRevenueCatUserId(REVENUE_CAT_USER_ID)).willReturn(Optional.of(user()));
+        given(revenueCatClient.entitlements(APP_USER_ID)).willReturn(List.of());
+
+        given(purchaseWriter.beginEvent(anyString(), anyString(), any(), any(), any())).willReturn(true);
+
+        // when: 최초 결제 이벤트 수신
+        purchaseService.receiveWebhook(command("INITIAL_PURCHASE", "SANDBOX", List.of(APP_USER_ID)));
+
+        // then: 대시보드 집계와 CS 대조에 쓰일 값이 그대로 기록된다
+        then(purchaseWriter).should().beginEvent(eq("evt_1"), eq("INITIAL_PURCHASE"), eq(USER_ID), eq("SANDBOX"), any());
+        then(purchaseWriter).should().completeEvent(eq("evt_1"), any());
+    }
+
+    @Test
+    @DisplayName("이미 처리한 이벤트는 기록도 동기화도 하지 않는다")
+    void receiveWebhook_with_processed_event_is_ignored() {
+        // given: 같은 event_id 가 이미 완료 처리돼 있음 (RevenueCat 재전송)
+        given(purchaseWriter.beginEvent(anyString(), anyString(), any(), any(), any())).willReturn(false);
+
+        // when: 같은 이벤트 재수신
+        purchaseService.receiveWebhook(command("RENEWAL", "SANDBOX", List.of(APP_USER_ID)));
+
+        // then: 중복 동기화도, 완료 표시 갱신도 일어나지 않는다
+        then(revenueCatClient).should(never()).entitlements(anyString());
+        then(purchaseWriter).should(never()).completeEvent(anyString(), any());
+    }
+
+    @Test
+    @DisplayName("동시 수신으로 기록이 충돌하면 뒤늦은 쪽은 동기화하지 않는다")
+    void receiveWebhook_with_race_on_unique_event_id_is_ignored() {
+        // given: exists 검사는 통과했지만 저장 시점에 유니크 제약이 걸림
+        willThrow(new DataIntegrityViolationException("duplicate event_id"))
+                .given(purchaseWriter).beginEvent(anyString(), anyString(), any(), any(), any());
+
+        // when: 이벤트 수신
+        purchaseService.receiveWebhook(command("RENEWAL", "SANDBOX", List.of(APP_USER_ID)));
+
+        // then: 먼저 기록한 쪽이 처리하므로 여기서는 동기화하지 않는다
+        then(revenueCatClient).should(never()).entitlements(anyString());
+    }
+
+    @Test
+    @DisplayName("환경이 달라 동기화하지 않는 이벤트도 기록은 남긴다")
+    void receiveWebhook_with_other_environment_is_still_recorded() {
+        given(purchaseWriter.beginEvent(anyString(), anyString(), any(), any(), any())).willReturn(true);
+
+        // when: SANDBOX 서버에 PRODUCTION 이벤트가 도착
+        purchaseService.receiveWebhook(command("RENEWAL", "PRODUCTION", List.of(APP_USER_ID)));
+
+        // then: 처리는 건너뛰되 수신 사실은 남는다 (환경별 유입량을 볼 수 있어야 한다)
+        then(purchaseWriter).should().beginEvent(eq("evt_1"), eq("RENEWAL"), any(), eq("PRODUCTION"), any());
+        then(purchaseWriter).should().completeEvent(eq("evt_1"), any());
+        then(revenueCatClient).should(never()).entitlements(anyString());
+    }
+
+    @Test
+    @DisplayName("우리 유저가 아니어도 이벤트는 user_id 없이 기록한다")
+    void receiveWebhook_with_unknown_user_is_recorded_without_user_id() {
+        // given: 해당 식별자를 가진 유저가 없음
+        given(userRepository.findByRevenueCatUserId(REVENUE_CAT_USER_ID)).willReturn(Optional.empty());
+
+        given(purchaseWriter.beginEvent(anyString(), anyString(), any(), any(), any())).willReturn(true);
+
+        // when: 이벤트 수신
+        purchaseService.receiveWebhook(command("INITIAL_PURCHASE", "SANDBOX", List.of(APP_USER_ID)));
+
+        // then: 유저를 못 찾은 결제야말로 나중에 조사해야 하므로 버리지 않는다
+        then(purchaseWriter).should().beginEvent(eq("evt_1"), eq("INITIAL_PURCHASE"), isNull(), eq("SANDBOX"), any());
+    }
+
+    @Test
+    @DisplayName("동기화가 실패하면 완료로 표시하지 않아 재전송 때 다시 처리된다")
+    void receiveWebhook_does_not_complete_when_sync_fails() {
+        // given: 기록은 되지만 RevenueCat 조회가 실패하는 상황
+        given(purchaseWriter.beginEvent(anyString(), anyString(), any(), any(), any())).willReturn(true);
+        given(userRepository.findByRevenueCatUserId(REVENUE_CAT_USER_ID)).willReturn(Optional.of(user()));
+        given(revenueCatClient.entitlements(APP_USER_ID))
+                .willThrow(new BusinessException(ErrorCode.REVENUE_CAT_SYNC_FAILED));
+
+        // when & then: 예외가 밖으로 나가야 502 가 되고 RevenueCat 이 재전송한다
+        assertThatThrownBy(() -> purchaseService.receiveWebhook(command("RENEWAL", "SANDBOX", List.of(APP_USER_ID))))
+                .isInstanceOf(BusinessException.class);
+
+        // then: completed_at 이 비어 있어야 재전송 때 다시 처리된다
+        then(purchaseWriter).should(never()).completeEvent(anyString(), any());
+    }
+
     private RevenueCatWebhookCommand command(String type, String environment, List<String> appUserIds) {
-        return new RevenueCatWebhookCommand("evt_1", type, appUserIds, environment);
+        return new RevenueCatWebhookCommand("evt_1", type, appUserIds.isEmpty() ? null : appUserIds.getFirst(), appUserIds, environment);
     }
 
     private User user() {

@@ -1,7 +1,9 @@
 package com.nidus.twinly.purchase.writer;
 
 import com.nidus.twinly.purchase.client.RevenueCatEntitlement;
+import com.nidus.twinly.purchase.entity.RevenueCatEvent;
 import com.nidus.twinly.purchase.entity.UserEntitlement;
+import com.nidus.twinly.purchase.repository.RevenueCatEventRepository;
 import com.nidus.twinly.purchase.repository.UserEntitlementRepository;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -11,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -19,7 +22,26 @@ import java.util.stream.Collectors;
 public class PurchaseWriter {
 
     private final UserEntitlementRepository userEntitlementRepository;
+    private final RevenueCatEventRepository revenueCatEventRepository;
     private final UserRepository userRepository;
+
+    @Transactional
+    public boolean beginEvent(String eventId, String type, Long userId, String environment, Instant receivedAt) {
+        Optional<RevenueCatEvent> stored = revenueCatEventRepository.findByEventId(eventId);
+
+        if (stored.isPresent()) {
+            return stored.get().getCompletedAt() == null;
+        }
+
+        revenueCatEventRepository.save(RevenueCatEvent.receive(eventId, type, userId, environment, receivedAt));
+        return true;
+    }
+
+    @Transactional
+    public void completeEvent(String eventId, Instant completedAt) {
+        revenueCatEventRepository.findByEventId(eventId)
+                .ifPresent(event -> event.complete(completedAt));
+    }
 
     @Transactional
     public void markSyncAttempt(Long userId, Instant attemptedAt) {
