@@ -26,6 +26,8 @@ class AdminSecurityRuleIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("관리자 경로는 아무 인증이 없으면 401로 끊긴다")
     void adminPath_withoutAnyCredential_returns401() throws Exception {
+        // when: 자격증명 없이 관리자 경로 호출
+        // then: 인증 단계에서 401로 끊긴다
         mockMvc.perform(get(ADMIN_PATH))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value(ErrorCode.UNAUTHORIZED.name()));
@@ -34,6 +36,8 @@ class AdminSecurityRuleIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("관리자 토큰이 틀리면 권한을 얻지 못하고 401로 끊긴다")
     void adminPath_withWrongToken_returns401() throws Exception {
+        // when: 틀린 관리자 토큰으로 호출
+        // then: 토큰이 있어도 권한이 부여되지 않아 401로 끊긴다
         mockMvc.perform(get(ADMIN_PATH).header("X-Admin-Token", "wrong-token"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value(ErrorCode.UNAUTHORIZED.name()));
@@ -42,8 +46,11 @@ class AdminSecurityRuleIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("규칙 순서 고정: 로그인한 일반 유저는 인증은 되지만 권한이 없어 403이다")
     void adminPath_withUserJwtOnly_returns403() throws Exception {
+        // given: 실제 유저를 저장해 유효한 JWT를 만든다
         User user = saveUser();
 
+        // when: 일반 유저 JWT만 들고 관리자 경로 호출
+        // then: 인증은 통과하지만 ADMIN 권한이 없어 403이다 (401이 아니다)
         mockMvc.perform(get(ADMIN_PATH)
                         .header(HttpHeaders.AUTHORIZATION, bearer(user.getId())))
                 .andExpect(status().isForbidden())
@@ -53,6 +60,8 @@ class AdminSecurityRuleIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("올바른 관리자 토큰이면 인가를 통과한다 (경로가 없어 404)")
     void adminPath_withAdminToken_passesAuthorization() throws Exception {
+        // when: 올바른 관리자 토큰으로 호출
+        // then: 인가를 통과했다는 증거로 404가 온다 (매핑되지 않은 경로를 일부러 썼다)
         mockMvc.perform(get(ADMIN_PATH).header("X-Admin-Token", ADMIN_TOKEN))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value(ErrorCode.NOT_FOUND.name()));
@@ -61,8 +70,11 @@ class AdminSecurityRuleIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("필터 순서 고정: 유저 JWT를 함께 보내도 관리자 토큰이 먼저 평가되어 인가를 통과한다")
     void adminPath_withBothCredentials_adminTokenWins() throws Exception {
+        // given: 유저 JWT와 관리자 토큰을 모두 준비한다
         User user = saveUser();
 
+        // when: 두 자격증명을 함께 보낸다
+        // then: 관리자 토큰 필터가 먼저 평가되어 인가를 통과한다(404)
         mockMvc.perform(get(ADMIN_PATH)
                         .header("X-Admin-Token", ADMIN_TOKEN)
                         .header(HttpHeaders.AUTHORIZATION, bearer(user.getId())))
@@ -72,6 +84,8 @@ class AdminSecurityRuleIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("관리자 토큰은 관리자 경로 밖에서는 아무 권한도 주지 않는다")
     void adminToken_doesNotLeakOutsideAdminPaths() throws Exception {
+        // when: 관리자 토큰을 일반 유저 API에 들고 간다
+        // then: 관리자 경로 밖에서는 아무 권한도 주지 않아 401이다
         mockMvc.perform(get("/api/v1/blocks").header("X-Admin-Token", ADMIN_TOKEN))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value(ErrorCode.UNAUTHORIZED.name()));

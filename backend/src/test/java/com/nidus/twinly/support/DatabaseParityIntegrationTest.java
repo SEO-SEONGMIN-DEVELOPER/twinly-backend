@@ -36,30 +36,36 @@ class DatabaseParityIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("컬럼 비교는 운영 RDS와 같이 대소문자를 구분하지 않는다")
     void collation_matches_production() {
-        // 운영 RDS는 utf8mb4_0900_ai_ci 다. cs 로 두면 닉네임 중복 판정이 운영과 달라진다.
-        // 리터럴끼리의 비교는 연결 콜레이션을 타므로 반드시 실제 컬럼으로 재야 한다.
+        // given: 실제 유저를 저장해 커밋 전 상태를 DB에 반영한다
+        //        (운영 RDS는 utf8mb4_0900_ai_ci 다. cs 로 두면 닉네임 중복 판정이 운영과 달라진다)
         User user = saveUser();
         entityManager.flush();
 
+        // when: 저장한 닉네임을 대문자로 바꿔 실제 컬럼과 비교한다
+        //       (리터럴끼리의 비교는 연결 콜레이션을 타므로 반드시 실제 컬럼으로 재야 한다)
         Integer matched = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM users WHERE nickname = ?", Integer.class,
                 user.getNickname().toUpperCase(Locale.ROOT));
 
+        // then: 대소문자를 구분하지 않으므로 같은 행으로 매칭된다
         assertThat(matched).isEqualTo(1);
     }
 
     @Test
     @DisplayName("앱이 쓴 시각과 DB의 UTC_TIMESTAMP가 같은 기준을 쓴다")
     void connection_time_zone_matches_production() {
-        // 앱은 Instant 로 쓰고 일부 네이티브 쿼리는 UTC_TIMESTAMP() 로 쓴다. 연결 시간대가 어긋나면
-        // 두 값이 JVM 기본 시간대만큼 벌어져, 만료 판정 같은 비교가 로컬에서만 다르게 동작한다.
+        // given: 앱이 Instant 로 쓴 시각을 가진 행을 만든다
+        //        (일부 네이티브 쿼리는 UTC_TIMESTAMP() 를 쓰는데, 연결 시간대가 어긋나면 두 값이
+        //         JVM 기본 시간대만큼 벌어져 만료 판정 같은 비교가 로컬에서만 다르게 동작한다)
         Season season = seasonRepository.save(Season.create(
                 Instant.now(), Instant.now().plus(Duration.ofDays(30))));
 
+        // when: 앱이 쓴 created_at 과 DB의 UTC_TIMESTAMP() 차이를 잰다
         Number gapSeconds = jdbcTemplate.queryForObject(
                 "SELECT TIMESTAMPDIFF(SECOND, created_at, UTC_TIMESTAMP(6)) FROM seasons WHERE id = ?",
                 Number.class, season.getId());
 
+        // then: 같은 기준을 쓰므로 차이는 실행 지연 수준에 머문다
         assertThat(gapSeconds.longValue()).isBetween(-5L, 5L);
     }
 }
