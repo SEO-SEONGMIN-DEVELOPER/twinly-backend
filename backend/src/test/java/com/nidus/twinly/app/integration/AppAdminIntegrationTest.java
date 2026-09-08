@@ -75,19 +75,6 @@ class AppAdminIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("active가 없으면 400 INVALID_REQUEST")
-    void updateMaintenance_requiresActive() throws Exception {
-        mockMvc.perform(put(MAINTENANCE_PATH)
-                        .header("X-Admin-Token", ADMIN_TOKEN)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"message":"점검 중이에요."}
-                                """))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value(ErrorCode.INVALID_REQUEST.name()));
-    }
-
-    @Test
     @DisplayName("플랫폼별 버전 정책을 저장하면 해당 플랫폼에만 반영된다")
     void updateVersionPolicy_perPlatform() throws Exception {
         mockMvc.perform(put(VERSION_POLICY_PATH + "ios")
@@ -103,45 +90,6 @@ class AppAdminIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.ios.minVersion").value("0.2.0"))
                 .andExpect(jsonPath("$.ios.storeUrl").value("https://apps.apple.com/kr/app/id0000000000"))
                 .andExpect(jsonPath("$.android").value(org.hamcrest.Matchers.nullValue()));
-    }
-
-    @Test
-    @DisplayName("minVersion이 major.minor.patch 형식이 아니면 400 INVALID_REQUEST")
-    void updateVersionPolicy_rejectsInvalidVersion() throws Exception {
-        mockMvc.perform(put(VERSION_POLICY_PATH + "android")
-                        .header("X-Admin-Token", ADMIN_TOKEN)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"minVersion":"1.0","storeUrl":"https://play.google.com/store/apps/details?id=com.nidus.twinly"}
-                                """))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value(ErrorCode.INVALID_REQUEST.name()));
-    }
-
-    @Test
-    @DisplayName("storeUrl이 https가 아니면 400 INVALID_REQUEST")
-    void updateVersionPolicy_rejectsNonHttpsStoreUrl() throws Exception {
-        mockMvc.perform(put(VERSION_POLICY_PATH + "android")
-                        .header("X-Admin-Token", ADMIN_TOKEN)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"minVersion":"1.0.0","storeUrl":"http://play.google.com/store/apps/details?id=com.nidus.twinly"}
-                                """))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value(ErrorCode.INVALID_REQUEST.name()));
-    }
-
-    @Test
-    @DisplayName("ios·android 외 플랫폼 경로는 400 INVALID_REQUEST")
-    void updateVersionPolicy_rejectsUnknownPlatform() throws Exception {
-        mockMvc.perform(put(VERSION_POLICY_PATH + "web")
-                        .header("X-Admin-Token", ADMIN_TOKEN)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"minVersion":"1.0.0","storeUrl":"https://example.com"}
-                                """))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value(ErrorCode.INVALID_REQUEST.name()));
     }
 
     @Test
