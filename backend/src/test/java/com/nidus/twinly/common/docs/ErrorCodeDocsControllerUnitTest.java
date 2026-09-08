@@ -6,7 +6,7 @@ import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class ErrorCodeDocsControllerTest {
+class ErrorCodeDocsControllerUnitTest {
 
     private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner()
             .withUserConfiguration(ErrorCodeDocsController.class);
@@ -14,6 +14,7 @@ class ErrorCodeDocsControllerTest {
     @Test
     @DisplayName("API 문서를 여는 환경에서만 오류 명세 엔드포인트가 등록된다")
     void registered_only_when_api_docs_enabled() {
+        // when & then: 문서를 여는 설정이면 컨트롤러 빈이 등록된다
         contextRunner.withPropertyValues("springdoc.api-docs.enabled=true")
                 .run(context -> assertThat(context).hasSingleBean(ErrorCodeDocsController.class));
     }
@@ -21,6 +22,7 @@ class ErrorCodeDocsControllerTest {
     @Test
     @DisplayName("API 문서가 꺼진 환경에서는 오류 명세 엔드포인트가 등록되지 않는다")
     void not_registered_when_api_docs_disabled() {
+        // when & then: 문서를 끈 설정이면 등록되지 않는다
         contextRunner.withPropertyValues("springdoc.api-docs.enabled=false")
                 .run(context -> assertThat(context).doesNotHaveBean(ErrorCodeDocsController.class));
     }
@@ -28,6 +30,7 @@ class ErrorCodeDocsControllerTest {
     @Test
     @DisplayName("설정 자체가 없으면 문서가 열리지 않는 쪽으로 동작한다")
     void not_registered_when_property_missing() {
+        // when & then: 설정이 아예 없으면 문서가 열리지 않는 쪽(미등록)으로 기운다
         contextRunner.run(context -> assertThat(context).doesNotHaveBean(ErrorCodeDocsController.class));
     }
 }
