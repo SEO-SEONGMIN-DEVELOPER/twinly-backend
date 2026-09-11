@@ -1,5 +1,6 @@
 package com.nidus.twinly.user.seed;
 
+import com.nidus.twinly.activity.repository.SceneRepository;
 import com.nidus.twinly.common.crypto.BlindIndexHasher;
 import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.interest.InterestLoader;
@@ -23,7 +24,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -50,7 +50,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
-import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 
@@ -67,6 +66,7 @@ class UserSeederUnitTest {
     private static final int SIMULATION_ACCESS_USER_COUNT = 200;
     private static final int SUMMARY_ELEMENTS_PER_USER = 1;
     private static final int SCENARIO_DAY_COUNT = 390;
+    private static final int FIRST_USER_SCENARIO_DAY_COUNT = 19;
     private static final long EXPIRED_USER_ID = 26L;
 
     @Mock
@@ -91,7 +91,7 @@ class UserSeederUnitTest {
     SimulationService simulationService;
 
     @Mock
-    ScenarioCleaner scenarioCleaner;
+    SceneRepository sceneRepository;
 
     UserSeeder userSeeder;
 
@@ -117,7 +117,7 @@ class UserSeederUnitTest {
 
         userSeeder = new UserSeeder(userRepository, personaElementRepository, blindIndexHasher, surveyLoader,
                 interestLoader, currentSeasonReader, seasonParticipationRepository, userEntitlementRepository,
-                simulationService, scenarioCleaner, new ObjectMapper());
+                simulationService, sceneRepository, new ObjectMapper());
 
         given(userRepository.save(any(User.class))).willAnswer(invocation -> {
             User user = invocation.getArgument(0);
@@ -547,25 +547,18 @@ class UserSeederUnitTest {
     }
 
     @Test
-    @DisplayName("적재 전에 시나리오에 등장하는 유저의 기존 시뮬레이션 데이터를 지운다")
-    void run_clears_previous_scenarios_before_seeding() throws IOException {
-        // given: 아직 시드 유저가 없는 상태
+    @DisplayName("이미 시뮬레이션이 있는 날은 건너뛰고 없는 날만 적재한다")
+    void run_seeds_only_missing_scenario_days() throws IOException {
+        // given: 1번 유저의 날짜는 이미 적재된 상태
         given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
+        given(sceneRepository.existsByUserIdAndDate(eq(1L), any())).willReturn(true);
 
         // when: 시더 실행
         userSeeder.run(null);
 
-        // then: 시나리오에 등장하는 유저 전원을 한 번에 지운 뒤 적재한다
-        ArgumentCaptor<List<Long>> captor = ArgumentCaptor.forClass(List.class);
-        InOrder inOrder = inOrder(scenarioCleaner, simulationService);
-        inOrder.verify(scenarioCleaner).clear(captor.capture());
-        inOrder.verify(simulationService, times(SCENARIO_DAY_COUNT)).simulations(any(), any());
-
-        assertThat(captor.getValue())
-                .hasSize(SHOWCASE_USER_COUNT)
-                .doesNotHaveDuplicates()
-                .containsExactlyInAnyOrderElementsOf(
-                        LongStream.rangeClosed(1, SHOWCASE_USER_COUNT).boxed().toList());
+        // then: 1번 유저 날짜는 지우지도 다시 넣지도 않고, 나머지 날만 저장한다
+        then(simulationService).should(never()).simulations(eq(1L), any());
+        then(simulationService).should(times(SCENARIO_DAY_COUNT - FIRST_USER_SCENARIO_DAY_COUNT)).simulations(any(), any());
     }
 
 }
