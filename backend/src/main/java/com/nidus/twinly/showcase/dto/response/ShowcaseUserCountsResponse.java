@@ -4,10 +4,11 @@ import com.nidus.twinly.showcase.dto.result.ShowcaseUserCountsResult;
 
 public record ShowcaseUserCountsResponse(
         Integer total,
-        Integer sameOrganization
+        Integer sameOrganization,
+        String organization
 ) {
 
     public static ShowcaseUserCountsResponse from(ShowcaseUserCountsResult result) {
-        return new ShowcaseUserCountsResponse(result.total(), result.sameOrganization());
+        return new ShowcaseUserCountsResponse(result.total(), result.sameOrganization(), result.organization());
     }
 }
