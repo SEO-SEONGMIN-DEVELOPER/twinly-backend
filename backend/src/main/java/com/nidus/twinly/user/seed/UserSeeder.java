@@ -1,5 +1,6 @@
 package com.nidus.twinly.user.seed;
 
+import com.nidus.twinly.activity.repository.SceneRepository;
 import com.nidus.twinly.common.crypto.BlindIndexHasher;
 import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.interest.InterestLoader;
@@ -88,7 +89,7 @@ public class UserSeeder implements ApplicationRunner {
     private final SeasonParticipationRepository seasonParticipationRepository;
     private final UserEntitlementRepository userEntitlementRepository;
     private final SimulationService simulationService;
-    private final ScenarioCleaner scenarioCleaner;
+    private final SceneRepository sceneRepository;
     private final ObjectMapper objectMapper;
 
     enum SeedOrganization {
@@ -275,11 +276,14 @@ public class UserSeeder implements ApplicationRunner {
             requests.add(objectMapper.treeToValue(day, SimulationsRequest.class));
         }
 
-        scenarioCleaner.clear(requests.stream().map(SimulationsRequest::userId).distinct().toList());
+        List<SimulationsRequest> missing = requests.stream()
+                .filter(request -> !sceneRepository.existsByUserIdAndDate(request.userId(), request.date()))
+                .toList();
 
-        requests.forEach(request -> simulationService.simulations(request.userId(), SimulationsCommand.from(request)));
+        missing.forEach(request -> simulationService.simulations(request.userId(), SimulationsCommand.from(request)));
 
-        log.info("쇼케이스 시나리오를 채웠습니다. dayCount={}, shiftDays={}", requests.size(), shift);
+        log.info("쇼케이스 시나리오를 채웠습니다. dayCount={}, insertedCount={}, shiftDays={}",
+                requests.size(), missing.size(), shift);
     }
 
     /**

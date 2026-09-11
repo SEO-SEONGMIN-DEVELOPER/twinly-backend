@@ -84,7 +84,8 @@ class ShowcaseControllerUnitTest {
                 .andExpect(jsonPath("$.userInfos[0].organization").value("한국대"))
                 .andExpect(jsonPath("$.userInfos[0].profilePhoto").doesNotExist())
                 .andExpect(jsonPath("$.userCounts.total").value(12840))
-                .andExpect(jsonPath("$.userCounts.sameOrganization").value(320));
+                .andExpect(jsonPath("$.userCounts.sameOrganization").value(320))
+                .andExpect(jsonPath("$.userCounts.organization").value("성신여대"));
         then(showcaseService).should().today(12L);
     }
 
@@ -114,7 +115,7 @@ class ShowcaseControllerUnitTest {
                                 List.of(new ShowcaseBubbleLineResult("bubble", 2L, "웃으며", "여기 앉아.", startsAt)))
                 ),
                 List.of(new ShowcaseUserInfoResult(1L, "김OO", Gender.MALE, "한국대")),
-                new ShowcaseUserCountsResult(12840, 320)
+                new ShowcaseUserCountsResult(12840, 320, "성신여대")
         );
     }
 }

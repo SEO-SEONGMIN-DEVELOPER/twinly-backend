@@ -79,6 +79,7 @@ class ShowcaseIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.userInfos[0].organization").isNotEmpty())
                 .andExpect(jsonPath("$.userInfos[0].profilePhoto").doesNotExist())
                 .andExpect(jsonPath("$.userCounts.total").isNumber())
+                .andExpect(jsonPath("$.userCounts.organization").isNotEmpty())
                 .andExpect(jsonPath("$.scenes[0].sceneId").value(scene.getId().toString()));
 
         // then: 오늘자 배정 행이 실제로 생성됐다

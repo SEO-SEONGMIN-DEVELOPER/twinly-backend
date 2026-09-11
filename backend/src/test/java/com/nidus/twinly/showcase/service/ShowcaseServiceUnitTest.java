@@ -222,6 +222,28 @@ class ShowcaseServiceUnitTest {
                 .containsExactly("성신여대", "이화여대");
     }
 
+    @Test
+    @DisplayName("userCounts.organization은 관람 대상이 아니라 호출자의 소속을 userInfos와 같은 표기로 내려준다")
+    void today_user_counts_include_viewer_organization() {
+        // given: 관람 대상은 고려대학교, 호출자는 성신여자대학교 소속이다
+        given(showcaseRepository.findByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(showcase()));
+        given(sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(anyLong(), any())).willReturn(List.of());
+        given(scenePartnerRepository.findAllBySceneIdIn(anyList())).willReturn(List.of());
+        given(userRepository.findAllById(any())).willReturn(List.of(user(TARGET_ID, "김", "민수", "고려대학교")));
+        given(userRepository.findById(VIEWER_ID)).willReturn(Optional.of(user(VIEWER_ID, "이", "서연", "성신여자대학교")));
+        given(userRepository.countByDeletedAtIsNull()).willReturn(12840);
+        given(userRepository.countByDeletedAtIsNullAndOrganizationHash(any())).willReturn(320);
+
+        // when: 오늘 관람 조회
+        ShowcaseTodayResult result = showcaseService.today(VIEWER_ID);
+
+        // then: 호출자 소속(성신여자대학교 → 성신여대)이 userCounts에 실리고, 대상 소속과 섞이지 않는다
+        assertThat(result.userCounts().total()).isEqualTo(12840);
+        assertThat(result.userCounts().sameOrganization()).isEqualTo(320);
+        assertThat(result.userCounts().organization()).isEqualTo("성신여대");
+        assertThat(result.userInfos().get(0).organization()).isEqualTo("고려대");
+    }
+
     private void givenEmptyDay() {
         given(sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(anyLong(), any())).willReturn(List.of());
         given(scenePartnerRepository.findAllBySceneIdIn(anyList())).willReturn(List.of());

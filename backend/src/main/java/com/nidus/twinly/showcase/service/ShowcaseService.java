@@ -272,7 +272,8 @@ public class ShowcaseService {
 
         return new ShowcaseUserCountsResult(
                 userRepository.countByDeletedAtIsNull(),
-                userRepository.countByDeletedAtIsNullAndOrganizationHash(viewer.getOrganizationHash())
+                userRepository.countByDeletedAtIsNullAndOrganizationHash(viewer.getOrganizationHash()),
+                toDisplayOrganization(viewer.getOrganization())
         );
     }
 }

@@ -2,6 +2,7 @@ package com.nidus.twinly.showcase.dto.result;
 
 public record ShowcaseUserCountsResult(
         Integer total,
-        Integer sameOrganization
+        Integer sameOrganization,
+        String organization
 ) {
 }
