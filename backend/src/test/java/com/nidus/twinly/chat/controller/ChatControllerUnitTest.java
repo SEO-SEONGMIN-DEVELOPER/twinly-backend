@@ -3,6 +3,7 @@ package com.nidus.twinly.chat.controller;
 import com.nidus.twinly.anon.service.AnonService;
 import com.nidus.twinly.chat.domain.ChatSenderType;
 import com.nidus.twinly.chat.dto.command.ChatReadMessagesCommand;
+import com.nidus.twinly.chat.dto.result.ChatCommonPointResult;
 import com.nidus.twinly.chat.dto.result.ChatReadMessagesResult;
 import com.nidus.twinly.chat.dto.command.ChatSendMessageCommand;
 import com.nidus.twinly.chat.dto.result.ChatMessageItemResult;
@@ -346,6 +347,46 @@ class ChatControllerUnitTest {
         // then: 200 반환 + 인증 유저 id·roomId로 위임
         result.andExpect(status().isOk());
         then(chatService).should().leaveRoom(1L, 10L);
+    }
+
+    @Test
+    @DisplayName("공통점 조회 성공 시 200과 message를 반환하고 인증 유저 id·roomId로 서비스를 호출한다")
+    void commonPoint_success() throws Exception {
+        // given: 서비스가 공통점 문구를 반환
+        given(chatService.commonPoint(1L, 10L))
+                .willReturn(new ChatCommonPointResult("두 사람의 공통점은 새로운 경험을 즐긴다는 점이에요."));
+
+        // when: 공통점 조회 API 호출
+        var result = mockMvc.perform(get("/api/v1/chat/rooms/{roomId}/common-point", "10")
+                .header("Authorization", AUTH_HEADER));
+
+        // then: 200 반환 + message 가 JSON에 그대로 실림 + 인증 유저 id·roomId로 위임
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("두 사람의 공통점은 새로운 경험을 즐긴다는 점이에요."));
+        then(chatService).should().commonPoint(1L, 10L);
+    }
+
+    @Test
+    @DisplayName("공통점 조회 시 인증 헤더가 없으면 401을 반환하고 서비스를 호출하지 않는다")
+    void commonPoint_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 공통점 조회 API 호출
+        var result = mockMvc.perform(get("/api/v1/chat/rooms/{roomId}/common-point", "10"));
+
+        // then: 401 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isUnauthorized());
+        then(chatService).should(never()).commonPoint(anyLong(), anyLong());
+    }
+
+    @Test
+    @DisplayName("공통점 조회 시 경로 변수 roomId가 숫자가 아니면 400을 반환하고 서비스를 호출하지 않는다")
+    void commonPoint_with_non_numeric_roomId_returns_400() throws Exception {
+        // when: 경로 변수 roomId를 숫자가 아닌 값으로 공통점 조회 API 호출
+        var result = mockMvc.perform(get("/api/v1/chat/rooms/{roomId}/common-point", "abc")
+                .header("Authorization", AUTH_HEADER));
+
+        // then: 400 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest());
+        then(chatService).should(never()).commonPoint(anyLong(), anyLong());
     }
 
     private ChatRoomDetailResult roomDetailResult(boolean myEntryAgreed, boolean partnerEntryAgreed) {

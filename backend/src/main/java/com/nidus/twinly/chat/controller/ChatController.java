@@ -7,6 +7,7 @@ import com.nidus.twinly.chat.dto.command.ChatReadMessagesCommand;
 import com.nidus.twinly.chat.dto.command.ChatSendMessageCommand;
 import com.nidus.twinly.chat.dto.request.ChatReadMessagesRequest;
 import com.nidus.twinly.chat.dto.request.ChatSendMessageRequest;
+import com.nidus.twinly.chat.dto.response.ChatCommonPointResponse;
 import com.nidus.twinly.chat.dto.response.ChatMessagesResponse;
 import com.nidus.twinly.chat.dto.response.ChatReadMessagesResponse;
 import com.nidus.twinly.chat.dto.response.ChatRoomDetailResponse;
@@ -125,5 +126,18 @@ public class ChatController {
     public void leaveRoom(@AuthenticationPrincipal UserInfo userInfo,
                           @PathVariable String roomId) {
         chatService.leaveRoom(userInfo.id(), RequestId.toLong(roomId, "roomId"));
+    }
+
+    @Operation(summary = "두 사람의 공통점 문구 조회")
+    @ApiResponses({
+            @ApiResponse(responseCode = "403", description = "NOT_MATCH_PARTICIPANT, NOT_ACTIVE_ROOM_PARTICIPANT"),
+            @ApiResponse(responseCode = "404", description = "ROOM_NOT_FOUND, MATCH_NOT_FOUND, USER_NOT_FOUND"),
+            @ApiResponse(responseCode = "409", description = "ROOM_ENTRY_NOT_AGREED"),
+            @ApiResponse(responseCode = "422", description = "PERSONA_NOT_FOUND")
+    })
+    @GetMapping("/api/v1/chat/rooms/{roomId}/common-point")
+    public ChatCommonPointResponse commonPoint(@AuthenticationPrincipal UserInfo userInfo,
+                                               @PathVariable String roomId) {
+        return ChatCommonPointResponse.from(chatService.commonPoint(userInfo.id(), RequestId.toLong(roomId, "roomId")));
     }
 }

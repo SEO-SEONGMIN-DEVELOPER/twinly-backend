@@ -26,6 +26,9 @@ public class ChatRoom {
     @Column(columnDefinition = "TEXT")
     private String closeReason;
 
+    @Column(columnDefinition = "TEXT")
+    private String commonPoint;
+
     private Instant createdAt;
 
     public static ChatRoom create(Long matchId) {
@@ -45,5 +48,9 @@ public class ChatRoom {
     public void reopen() {
         this.closedAt = null;
         this.closeReason = null;
+    }
+
+    public void assignCommonPoint(String commonPoint) {
+        this.commonPoint = commonPoint;
     }
 }
