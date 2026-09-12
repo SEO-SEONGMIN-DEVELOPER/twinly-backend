@@ -59,7 +59,6 @@ class UserSeederUnitTest {
 
     private static final int SEED_USER_COUNT = 520;
     private static final int SHOWCASE_USER_COUNT = 20;
-    private static final int BUILT_IN_USER_COUNT = 40;
     private static final int INTERESTS_PER_USER = 5;
     private static final int DETAIL_ELEMENTS_PER_USER = 5;
     private static final int PERSONA_DETAILS_PER_USER = 8;
@@ -318,9 +317,9 @@ class UserSeederUnitTest {
         assertThat(elements).extracting(PersonaElement::getDimension).containsOnly(PersonaDimension.SUMMARY);
         assertThat(elements).extracting(PersonaElement::getUserId).doesNotHaveDuplicates();
         assertThat(elements.getFirst().getExplanation()).isEqualTo(PersonaSeedElements.SUMMARY.getFirst());
-        assertThat(elements.get(BUILT_IN_USER_COUNT - 1).getExplanation())
-                .isEqualTo(PersonaSeedElements.SUMMARY.get(BUILT_IN_USER_COUNT - 1));
-        assertThat(elements.get(BUILT_IN_USER_COUNT).getExplanation()).isEqualTo(personaSummaries().getFirst());
+        assertThat(elements.get(SHOWCASE_USER_COUNT - 1).getExplanation())
+                .isEqualTo(PersonaSeedElements.SUMMARY.get(SHOWCASE_USER_COUNT - 1));
+        assertThat(elements.get(SHOWCASE_USER_COUNT).getExplanation()).isEqualTo(personaSummaries().getFirst());
         assertThat(elements.getLast().getExplanation()).isEqualTo(personaSummaries().getLast());
     }
 
@@ -369,12 +368,12 @@ class UserSeederUnitTest {
         int common = surveyLoader.getAllQuestions().size() + INTERESTS_PER_USER + SUMMARY_ELEMENTS_PER_USER;
 
         return SEED_USER_COUNT * common
-                + BUILT_IN_USER_COUNT * DETAIL_ELEMENTS_PER_USER
-                + (SEED_USER_COUNT - BUILT_IN_USER_COUNT) * PERSONA_DETAILS_PER_USER;
+                + SHOWCASE_USER_COUNT * DETAIL_ELEMENTS_PER_USER
+                + (SEED_USER_COUNT - SHOWCASE_USER_COUNT) * PERSONA_DETAILS_PER_USER;
     }
 
     private long detailsFor(Long userId) {
-        return userId <= BUILT_IN_USER_COUNT ? DETAIL_ELEMENTS_PER_USER : PERSONA_DETAILS_PER_USER;
+        return userId <= SHOWCASE_USER_COUNT ? DETAIL_ELEMENTS_PER_USER : PERSONA_DETAILS_PER_USER;
     }
 
     private List<String> personaSummaries() throws IOException {

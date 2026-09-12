@@ -47,7 +47,6 @@ import java.util.List;
 import java.util.Random;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 @Slf4j
 @Component
@@ -160,32 +159,6 @@ public class UserSeeder implements ApplicationRunner {
             new SeedUser("류", "채원", Gender.FEMALE, SeedOrganization.SUNGSHIN, "중국어문·문화학과"),
             new SeedUser("전", "지아", Gender.FEMALE, SeedOrganization.SUNGSHIN, "프랑스어문·문화학과")
     );
-
-    private static final List<SeedUser> AI_TEST_USERS = List.of(
-            new SeedUser("배", "건우", Gender.MALE, SeedOrganization.SKKU, "소프트웨어학과"),
-            new SeedUser("백", "태윤", Gender.MALE, SeedOrganization.SKKU, "행정학과"),
-            new SeedUser("허", "승현", Gender.MALE, SeedOrganization.SKKU, "정치외교학과"),
-            new SeedUser("남", "우진", Gender.MALE, SeedOrganization.SKKU, "사회복지학과"),
-            new SeedUser("심", "로운", Gender.MALE, SeedOrganization.SKKU, "문헌정보학과"),
-            new SeedUser("노", "소율", Gender.FEMALE, SeedOrganization.SKKU, "소비자학과"),
-            new SeedUser("하", "나연", Gender.FEMALE, SeedOrganization.SKKU, "아동청소년학과"),
-            new SeedUser("곽", "지환", Gender.MALE, SeedOrganization.KOREA, "정치외교학과"),
-            new SeedUser("성", "현우", Gender.MALE, SeedOrganization.KOREA, "미디어학부"),
-            new SeedUser("차", "도경", Gender.MALE, SeedOrganization.KOREA, "심리학부"),
-            new SeedUser("주", "하람", Gender.MALE, SeedOrganization.KOREA, "통계학과"),
-            new SeedUser("우", "시온", Gender.MALE, SeedOrganization.KOREA, "행정학과"),
-            new SeedUser("구", "예서", Gender.FEMALE, SeedOrganization.KOREA, "불어불문학과"),
-            new SeedUser("민", "하은", Gender.FEMALE, SeedOrganization.KOREA, "중어중문학과"),
-            new SeedUser("문", "채은", Gender.FEMALE, SeedOrganization.SUNGSHIN, "사학과"),
-            new SeedUser("양", "서아", Gender.FEMALE, SeedOrganization.SUNGSHIN, "정치외교학과"),
-            new SeedUser("손", "다온", Gender.FEMALE, SeedOrganization.SUNGSHIN, "심리학과"),
-            new SeedUser("진", "은채", Gender.FEMALE, SeedOrganization.SUNGSHIN, "지리학과"),
-            new SeedUser("방", "윤아", Gender.FEMALE, SeedOrganization.SUNGSHIN, "경제학과"),
-            new SeedUser("유", "지민", Gender.FEMALE, SeedOrganization.SUNGSHIN, "사회복지학과")
-    );
-
-    private static final List<SeedUser> BUILT_IN_USERS =
-            Stream.concat(SHOWCASE_USERS.stream(), AI_TEST_USERS.stream()).toList();
 
     @Override
     public void run(ApplicationArguments args) throws IOException {
@@ -332,8 +305,8 @@ public class UserSeeder implements ApplicationRunner {
 
     private List<SeedUser> loadSeedUsers() throws IOException {
         List<SeedUser> seedUsers = new ArrayList<>();
-        for (int index = 0; index < BUILT_IN_USERS.size(); index++) {
-            seedUsers.add(BUILT_IN_USERS.get(index).withPersona(details(index), PersonaSeedElements.SUMMARY.get(index)));
+        for (int index = 0; index < SHOWCASE_USERS.size(); index++) {
+            seedUsers.add(SHOWCASE_USERS.get(index).withPersona(details(index), PersonaSeedElements.SUMMARY.get(index)));
         }
 
         List<AiTestPersona> personas;
@@ -357,16 +330,16 @@ public class UserSeeder implements ApplicationRunner {
     }
 
     private void requireEnoughElements() {
-        int required = BUILT_IN_USERS.size() * DETAIL_ELEMENTS_PER_USER;
+        int required = SHOWCASE_USERS.size() * DETAIL_ELEMENTS_PER_USER;
 
         if (PersonaSeedElements.DETAIL.size() < required) {
             throw new IllegalStateException("페르소나 시드 문장이 부족합니다. dimension=%s, required=%d, actual=%d"
                     .formatted(PersonaDimension.DETAIL, required, PersonaSeedElements.DETAIL.size()));
         }
 
-        if (PersonaSeedElements.SUMMARY.size() < BUILT_IN_USERS.size()) {
+        if (PersonaSeedElements.SUMMARY.size() < SHOWCASE_USERS.size()) {
             throw new IllegalStateException("페르소나 시드 문장이 부족합니다. dimension=%s, required=%d, actual=%d"
-                    .formatted(PersonaDimension.SUMMARY, BUILT_IN_USERS.size(), PersonaSeedElements.SUMMARY.size()));
+                    .formatted(PersonaDimension.SUMMARY, SHOWCASE_USERS.size(), PersonaSeedElements.SUMMARY.size()));
         }
 
         if (INTEREST_POOL.size() < INTERESTS_PER_USER) {
