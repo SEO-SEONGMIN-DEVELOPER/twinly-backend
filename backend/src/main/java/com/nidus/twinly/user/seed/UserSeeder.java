@@ -64,7 +64,7 @@ public class UserSeeder implements ApplicationRunner {
     private static final String SCENARIO_RESOURCE = "seed/showcase-scenarios.json";
     private static final String PERSONA_RESOURCE = "seed/ai-test-personas.json";
     private static final int PERSONA_DETAILS_PER_USER = 8;
-    private static final int SIMULATION_ACCESS_USER_COUNT = 200;
+    private static final int SIMULATION_ACCESS_USER_COUNT = 50;
     static final String ANCHOR_DATE = "anchorDate";
     private static final String DAYS = "days";
     static final Pattern DATE = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");

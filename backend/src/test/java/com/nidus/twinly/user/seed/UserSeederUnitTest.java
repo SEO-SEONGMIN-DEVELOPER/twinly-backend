@@ -62,7 +62,7 @@ class UserSeederUnitTest {
     private static final int INTERESTS_PER_USER = 5;
     private static final int DETAIL_ELEMENTS_PER_USER = 5;
     private static final int PERSONA_DETAILS_PER_USER = 8;
-    private static final int SIMULATION_ACCESS_USER_COUNT = 200;
+    private static final int SIMULATION_ACCESS_USER_COUNT = 50;
     private static final int SUMMARY_ELEMENTS_PER_USER = 1;
     private static final int SCENARIO_DAY_COUNT = 390;
     private static final int FIRST_USER_SCENARIO_DAY_COUNT = 19;
@@ -426,7 +426,7 @@ class UserSeederUnitTest {
     }
 
     @Test
-    @DisplayName("AI 테스트용 시드 유저 앞쪽 200명에게만 만료 없는 시뮬레이션 이용 권한을 부여한다")
+    @DisplayName("AI 테스트용 시드 유저 앞쪽 50명에게만 만료 없는 시뮬레이션 이용 권한을 부여한다")
     void run_grants_simulation_access_to_ai_test_users_only() throws IOException {
         // given: 아직 시드 유저가 없는 상태
         given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
@@ -436,7 +436,7 @@ class UserSeederUnitTest {
         // when: 시더 실행
         userSeeder.run(null);
 
-        // then: 쇼케이스 20명 바로 뒤 200명만 만료 없는 simulation_access 를 받는다
+        // then: 쇼케이스 20명 바로 뒤 50명만 만료 없는 simulation_access 를 받는다
         List<UserEntitlement> granted = savedEntitlements();
 
         assertThat(granted).hasSize(SIMULATION_ACCESS_USER_COUNT);
@@ -463,7 +463,7 @@ class UserSeederUnitTest {
         // when: 시더 실행
         userSeeder.run(null);
 
-        // then: 앞쪽 20명과 권한 대상 200명을 지난 나머지의 권한이 삭제된다
+        // then: 앞쪽 20명과 권한 대상 50명을 지난 나머지의 권한이 삭제된다
         ArgumentCaptor<List<UserEntitlement>> captor = ArgumentCaptor.forClass(List.class);
         then(userEntitlementRepository).should(times(2)).deleteAll(captor.capture());
 
