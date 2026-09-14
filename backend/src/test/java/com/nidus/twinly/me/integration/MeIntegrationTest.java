@@ -304,29 +304,41 @@ class MeIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.givenName").value(me.getGivenName()))
                 .andExpect(jsonPath("$.affiliation").value(me.getAffiliation()))
                 .andExpect(jsonPath("$.birthDate").value(me.getBirthDate()))
-                .andExpect(jsonPath("$.profilePhoto").doesNotExist());
+                .andExpect(jsonPath("$.profilePhoto").doesNotExist())
+                .andExpect(jsonPath("$.interests").isEmpty());
     }
 
     @Test
-    @DisplayName("프로필 수정: 소속을 바꾸면 DB의 평문·블라인드 인덱스가 함께 갱신된다")
+    @DisplayName("프로필 수정: 소속을 바꾸면 DB의 평문·블라인드 인덱스가 함께 갱신되고 관심사는 요청한 목록으로 교체된다")
     void profile_patch_end_to_end() throws Exception {
-        // given: 실제 유저 저장
+        // given: 실제 유저 저장 + 기존 관심사 2개
         User me = saveUser();
+        personaElementRepository.saveAll(List.of(
+                PersonaElement.create(me.getId(), PersonaDimension.INTEREST, "등산", Instant.now()),
+                PersonaElement.create(me.getId(), PersonaDimension.INTEREST, "영화", Instant.now()),
+                PersonaElement.create(me.getId(), PersonaDimension.OPENNESS, "새로운 걸 좋아한다", Instant.now())));
+        flushAndClear();
 
-        // when: 실제 액세스 토큰으로 소속 변경 API 호출
+        // when: 실제 액세스 토큰으로 소속·관심사 변경 API 호출
         mockMvc.perform(patch("/api/v1/me/profile")
                         .header("Authorization", bearer(me.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"affiliation": "트윈리대학교"}
+                                {"affiliation": "트윈리대학교", "interests": ["독서", "요리", "여행"]}
                                 """))
                 .andExpect(status().isOk());
 
-        // then: DB에서 다시 읽어도 소속이 갱신되고, 해시도 새 값 기준으로 저장됨
+        // then: 소속·해시가 갱신되고, INTEREST 차원만 새 목록으로 교체되며 다른 차원은 그대로 남음
         flushAndClear();
         User reloaded = userRepository.findById(me.getId()).orElseThrow();
         assertThat(reloaded.getAffiliation()).isEqualTo("트윈리대학교");
         assertThat(reloaded.getAffiliationHash()).isEqualTo(blindIndexHasher.hash("트윈리대학교"));
+        assertThat(personaElementRepository.findAllByUserIdAndDimensionOrderByIdAsc(me.getId(), PersonaDimension.INTEREST))
+                .extracting(PersonaElement::getExplanation)
+                .containsExactly("독서", "요리", "여행");
+        assertThat(personaElementRepository.findAllByUserIdAndDimensionOrderByIdAsc(me.getId(), PersonaDimension.OPENNESS))
+                .extracting(PersonaElement::getExplanation)
+                .containsExactly("새로운 걸 좋아한다");
     }
 
     @Test

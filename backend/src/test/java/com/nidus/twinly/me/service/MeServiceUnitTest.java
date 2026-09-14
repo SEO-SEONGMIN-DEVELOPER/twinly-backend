@@ -80,6 +80,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -95,13 +96,16 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 
 @ExtendWith(MockitoExtension.class)
 class MeServiceUnitTest {
@@ -367,6 +371,9 @@ class MeServiceUnitTest {
         Photo photo = Photo.create(ME, PhotoType.PROFILE, "profile/1/key", 10, 20, 100, 200, Instant.now());
         given(photoRepository.findByUserIdAndType(ME, PhotoType.PROFILE)).willReturn(Optional.of(photo));
         given(cloudFrontService.getSignedUrl("profile/1/key")).willReturn("https://cdn/signed.jpg");
+        given(personaElementRepository.findAllByUserIdAndDimensionOrderByIdAsc(ME, PersonaDimension.INTEREST)).willReturn(List.of(
+                personaElement(PersonaDimension.INTEREST, "등산"),
+                personaElement(PersonaDimension.INTEREST, "영화")));
 
         // when: 프로필 수정 화면 조회
         MeProfileEditViewResult result = meService.profileEditView(ME);
@@ -381,6 +388,7 @@ class MeServiceUnitTest {
         assertThat(result.profilePhoto().photoUrl()).isEqualTo("https://cdn/signed.jpg");
         assertThat(result.profilePhoto().position())
                 .isEqualTo(new PhotoPosInfo(new PhotoPosInfo.StartPos(10, 20), 100, 200));
+        assertThat(result.interests()).containsExactly("등산", "영화");
     }
 
     @Test
@@ -407,7 +415,7 @@ class MeServiceUnitTest {
         given(userRepository.findById(ME)).willReturn(Optional.empty());
 
         // when & then: USER_NOT_FOUND 예외 발생
-        assertThatThrownBy(() -> meService.profile(ME, new MeProfileCommand("새소속")))
+        assertThatThrownBy(() -> meService.profile(ME, new MeProfileCommand("새소속", List.of("등산"))))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.USER_NOT_FOUND);
@@ -422,11 +430,50 @@ class MeServiceUnitTest {
         given(blindIndexHasher.hash("새소속")).willReturn("newAffHash");
 
         // when: 소속 변경
-        meService.profile(ME, new MeProfileCommand("새소속"));
+        meService.profile(ME, new MeProfileCommand("새소속", List.of("등산")));
 
         // then: 소속과 해시가 함께 갱신됨
         assertThat(user.getAffiliation()).isEqualTo("새소속");
         assertThat(user.getAffiliationHash()).isEqualTo("newAffHash");
+    }
+
+    @Test
+    @DisplayName("프로필 수정 시 기존 관심사를 모두 지우고 요청한 관심사를 순서대로 저장한다")
+    void profile_replaces_interests() {
+        // given: 유저 존재
+        User user = user();
+        given(userRepository.findById(ME)).willReturn(Optional.of(user));
+        given(blindIndexHasher.hash("새소속")).willReturn("newAffHash");
+
+        // when: 관심사 2개로 수정
+        meService.profile(ME, new MeProfileCommand("새소속", List.of("등산", "영화")));
+
+        // then: INTEREST 차원 삭제 후 요청 순서대로 저장
+        InOrder inOrder = inOrder(personaElementRepository);
+        inOrder.verify(personaElementRepository).deleteByUserIdAndDimension(ME, PersonaDimension.INTEREST);
+        ArgumentCaptor<PersonaElement> captor = ArgumentCaptor.forClass(PersonaElement.class);
+        inOrder.verify(personaElementRepository, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues())
+                .extracting(PersonaElement::getUserId, PersonaElement::getDimension, PersonaElement::getExplanation)
+                .containsExactly(
+                        tuple(ME, PersonaDimension.INTEREST, "등산"),
+                        tuple(ME, PersonaDimension.INTEREST, "영화"));
+    }
+
+    @Test
+    @DisplayName("프로필 수정 시 관심사가 빈 배열이면 기존 관심사만 지우고 아무것도 저장하지 않는다")
+    void profile_with_empty_interests_only_deletes() {
+        // given: 유저 존재
+        User user = user();
+        given(userRepository.findById(ME)).willReturn(Optional.of(user));
+        given(blindIndexHasher.hash("새소속")).willReturn("newAffHash");
+
+        // when: 빈 관심사로 수정
+        meService.profile(ME, new MeProfileCommand("새소속", List.of()));
+
+        // then: 삭제만 수행되고 저장은 없음
+        then(personaElementRepository).should().deleteByUserIdAndDimension(ME, PersonaDimension.INTEREST);
+        then(personaElementRepository).should(never()).save(any());
     }
 
     // ---------------------------------------------------------------- 약관 동의

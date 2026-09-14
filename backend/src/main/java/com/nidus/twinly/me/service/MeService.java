@@ -189,6 +189,10 @@ public class MeService {
                 .map(photo -> new ProfilePhotoInfo(photo.getKey(), cloudFrontService.getSignedUrl(photo.getKey()), photo.position()))
                 .orElse(null);
 
+        List<String> interests = personaElementRepository.findAllByUserIdAndDimensionOrderByIdAsc(userId, PersonaDimension.INTEREST).stream()
+                .map(PersonaElement::getExplanation)
+                .toList();
+
         return new MeProfileEditViewResult(
                 user.getId(),
                 user.getFamilyName(),
@@ -196,7 +200,8 @@ public class MeService {
                 user.getAffiliation(),
                 user.getAffiliationNumber(),
                 user.getBirthDate(),
-                profilePhoto
+                profilePhoto,
+                interests
         );
     }
 
@@ -206,6 +211,13 @@ public class MeService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
         user.changeAffiliation(command.affiliation(), blindIndexHasher.hash(command.affiliation()));
+
+        personaElementRepository.deleteByUserIdAndDimension(userId, PersonaDimension.INTEREST);
+
+        Instant now = Instant.now();
+        for (String interest : command.interests()) {
+            personaElementRepository.save(PersonaElement.create(userId, PersonaDimension.INTEREST, interest, now));
+        }
     }
 
     @Transactional
