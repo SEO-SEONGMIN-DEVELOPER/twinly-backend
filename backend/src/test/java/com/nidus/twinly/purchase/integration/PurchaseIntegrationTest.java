@@ -5,9 +5,11 @@ import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.purchase.client.RevenueCatClient;
 import com.nidus.twinly.simulation.client.SimulationPreloadClient;
 import com.nidus.twinly.purchase.client.RevenueCatEntitlement;
+import com.nidus.twinly.purchase.entity.PoolCounter;
 import com.nidus.twinly.purchase.entity.UserEntitlement;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.purchase.entity.RevenueCatEvent;
+import com.nidus.twinly.purchase.repository.PoolCounterRepository;
 import com.nidus.twinly.purchase.repository.RevenueCatEventRepository;
 import com.nidus.twinly.purchase.repository.UserEntitlementRepository;
 import com.nidus.twinly.season.entity.Season;
@@ -15,6 +17,7 @@ import com.nidus.twinly.season.repository.SeasonParticipationRepository;
 import com.nidus.twinly.season.repository.SeasonRepository;
 import com.nidus.twinly.support.AbstractIntegrationTest;
 import com.nidus.twinly.user.entity.User;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,6 +49,12 @@ class PurchaseIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     RevenueCatEventRepository revenueCatEventRepository;
+
+    @Autowired
+    PoolCounterRepository poolCounterRepository;
+
+    @Autowired
+    EntityManager entityManager;
 
     @Autowired
     SeasonRepository seasonRepository;
@@ -130,6 +139,38 @@ class PurchaseIntegrationTest extends AbstractIntegrationTest {
 
         // then: 별도 참가 API 호출 없이 현재 시즌 참가 행이 생긴다 (결제 = 평행우주 입장)
         assertThat(seasonParticipationRepository.findByUserIdAndSeasonId(user.getId(), season.getId())).isPresent();
+    }
+
+    @Test
+    @DisplayName("결제 반영: simulation_access 가 처음 생기면 결제 순서대로 풀 번호가 배정된다")
+    void webhook_with_simulation_access_assigns_pool_number() throws Exception {
+        // given: 진행 중인 시즌에서 두 명의 유저가 차례로 결제
+        Instant now = Instant.now();
+        seasonRepository.save(Season.create(now.minus(Duration.ofDays(30)), now.plus(Duration.ofDays(30))));
+        User first = saveUser();
+        User second = saveUser();
+        given(revenueCatClient.entitlements(anyString()))
+                .willReturn(List.of(new RevenueCatEntitlement(
+                        EntitlementReader.SIMULATION_ACCESS, now.plus(Duration.ofDays(30)))));
+
+        // when: 각각 구매 웹훅, 첫 유저는 별도 이벤트 id 의 갱신 웹훅을 한 번 더 받음
+        for (String payload : List.of(
+                payload("INITIAL_PURCHASE", first),
+                payload("INITIAL_PURCHASE", second),
+                payload("evt_renewal_" + first.getId(), "RENEWAL", first))) {
+            mockMvc.perform(post("/webhook/v1/revenue-cat")
+                            .header("Authorization", WEBHOOK_SECRET)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(payload))
+                    .andExpect(status().isOk());
+        }
+
+        // then: 둘 다 풀 1, 두 번째 웹훅으로 번호가 바뀌거나 중복 배정되지 않는다 (캐시가 아닌 실제 DB 값으로 확인)
+        entityManager.flush();
+        entityManager.clear();
+        assertThat(userRepository.findById(first.getId()).orElseThrow().getPoolNumber()).isEqualTo(1);
+        assertThat(userRepository.findById(second.getId()).orElseThrow().getPoolNumber()).isEqualTo(1);
+        assertThat(poolCounterRepository.findById(PoolCounter.SINGLETON_ID).orElseThrow().getAssignedCount()).isEqualTo(2);
     }
 
     @Test
@@ -271,16 +312,20 @@ class PurchaseIntegrationTest extends AbstractIntegrationTest {
     }
 
     private String payload(String type, User user) {
+        return payload("evt_" + user.getId(), type, user);
+    }
+
+    private String payload(String eventId, String type, User user) {
         return """
                 {
                   "api_version": "1.0",
                   "event": {
-                    "id": "evt_%s",
+                    "id": "%s",
                     "type": "%s",
                     "app_user_id": "%s",
                     "environment": "SANDBOX"
                   }
                 }
-                """.formatted(user.getId(), type, user.getRevenueCatUserId());
+                """.formatted(eventId, type, user.getRevenueCatUserId());
     }
 }

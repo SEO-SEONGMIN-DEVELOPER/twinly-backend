@@ -237,6 +237,22 @@ class PurchaseServiceUnitTest {
     }
 
     @Test
+    @DisplayName("동기화 결과 simulation_access 가 살아 있으면 풀 배정을 요청한다")
+    void sync_assigns_pool_when_access_granted() {
+        // given: simulation_access 를 가진 유저
+        User user = user();
+        given(revenueCatClient.entitlements(APP_USER_ID))
+                .willReturn(List.of(new RevenueCatEntitlement("simulation_access", Instant.parse("2026-09-30T00:00:00Z"))));
+        given(entitlementReader.hasSimulationAccess(USER_ID)).willReturn(true);
+
+        // when: 동기화
+        purchaseService.sync(user);
+
+        // then: 풀 배정이 요청된다
+        then(purchaseWriter).should().assignPool(USER_ID);
+    }
+
+    @Test
     @DisplayName("simulation_access 가 없으면 시즌 참가를 만들지 않는다")
     void sync_does_not_participate_without_access() {
         // given: 결제 권한이 없는 유저
@@ -247,8 +263,9 @@ class PurchaseServiceUnitTest {
         // when: 동기화
         purchaseService.sync(user);
 
-        // then: 참가 행을 만들지 않는다
+        // then: 참가 행을 만들지 않고 풀도 배정하지 않는다
         then(seasonParticipationWriter).should(never()).participateInCurrentSeason(anyLong());
+        then(purchaseWriter).should(never()).assignPool(anyLong());
     }
 
     @Test

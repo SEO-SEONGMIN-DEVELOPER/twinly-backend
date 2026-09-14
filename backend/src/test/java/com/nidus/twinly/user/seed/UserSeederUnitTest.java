@@ -11,6 +11,7 @@ import com.nidus.twinly.common.survey.SurveyQuestion;
 import com.nidus.twinly.purchase.entity.UserEntitlement;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.purchase.repository.UserEntitlementRepository;
+import com.nidus.twinly.purchase.writer.PurchaseWriter;
 import com.nidus.twinly.season.entity.Season;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.season.repository.SeasonParticipationRepository;
@@ -87,6 +88,9 @@ class UserSeederUnitTest {
     UserEntitlementRepository userEntitlementRepository;
 
     @Mock
+    PurchaseWriter purchaseWriter;
+
+    @Mock
     SimulationService simulationService;
 
     @Mock
@@ -116,7 +120,7 @@ class UserSeederUnitTest {
 
         userSeeder = new UserSeeder(userRepository, personaElementRepository, blindIndexHasher, surveyLoader,
                 interestLoader, currentSeasonReader, seasonParticipationRepository, userEntitlementRepository,
-                simulationService, sceneRepository, new ObjectMapper());
+                purchaseWriter, simulationService, sceneRepository, new ObjectMapper());
 
         given(userRepository.save(any(User.class))).willAnswer(invocation -> {
             User user = invocation.getArgument(0);

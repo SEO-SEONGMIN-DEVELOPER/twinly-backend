@@ -1,8 +1,10 @@
 package com.nidus.twinly.purchase.writer;
 
 import com.nidus.twinly.purchase.client.RevenueCatEntitlement;
+import com.nidus.twinly.purchase.entity.PoolCounter;
 import com.nidus.twinly.purchase.entity.RevenueCatEvent;
 import com.nidus.twinly.purchase.entity.UserEntitlement;
+import com.nidus.twinly.purchase.repository.PoolCounterRepository;
 import com.nidus.twinly.purchase.repository.RevenueCatEventRepository;
 import com.nidus.twinly.purchase.repository.UserEntitlementRepository;
 import com.nidus.twinly.user.repository.UserRepository;
@@ -24,6 +26,7 @@ public class PurchaseWriter {
     private final UserEntitlementRepository userEntitlementRepository;
     private final RevenueCatEventRepository revenueCatEventRepository;
     private final UserRepository userRepository;
+    private final PoolCounterRepository poolCounterRepository;
 
     @Transactional
     public boolean beginEvent(String eventId, String type, Long userId, String environment, Instant receivedAt) {
@@ -70,5 +73,17 @@ public class PurchaseWriter {
         }
 
         userEntitlementRepository.deleteAll(removed.values());
+    }
+
+    @Transactional
+    public void assignPool(Long userId) {
+        PoolCounter counter = poolCounterRepository.findWithLockById(PoolCounter.SINGLETON_ID)
+                .orElseThrow(() -> new IllegalStateException("pool_counter 행이 없습니다."));
+
+        if (userRepository.assignPoolNumber(userId, counter.nextPoolNumber()) == 0) {
+            return;
+        }
+
+        counter.increase();
     }
 }

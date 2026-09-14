@@ -1,8 +1,10 @@
 package com.nidus.twinly.purchase.writer;
 
 import com.nidus.twinly.purchase.client.RevenueCatEntitlement;
+import com.nidus.twinly.purchase.entity.PoolCounter;
 import com.nidus.twinly.purchase.entity.RevenueCatEvent;
 import com.nidus.twinly.purchase.entity.UserEntitlement;
+import com.nidus.twinly.purchase.repository.PoolCounterRepository;
 import com.nidus.twinly.purchase.repository.RevenueCatEventRepository;
 import com.nidus.twinly.purchase.repository.UserEntitlementRepository;
 import com.nidus.twinly.user.repository.UserRepository;
@@ -13,6 +15,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.BeanUtils;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
 import java.util.Collection;
@@ -20,6 +24,7 @@ import java.util.Optional;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
@@ -40,6 +45,9 @@ class PurchaseWriterUnitTest {
 
     @Mock
     UserRepository userRepository;
+
+    @Mock
+    PoolCounterRepository poolCounterRepository;
 
     @InjectMocks
     PurchaseWriter purchaseWriter;
@@ -201,5 +209,54 @@ class PurchaseWriterUnitTest {
 
         // then: 더티 체킹으로 완료 시각이 반영된다
         assertThat(event.getCompletedAt()).isEqualTo(EXPIRES_AT);
+    }
+
+    @Test
+    @DisplayName("풀이 없던 유저에게 카운터 기준 풀 번호를 배정하고 카운터를 1 올린다")
+    void assignPool_assigns_next_pool_and_increases_counter() {
+        // given: 지금까지 50명이 배정되어 다음 유저는 풀 2
+        PoolCounter counter = counter(50);
+        given(poolCounterRepository.findWithLockById(PoolCounter.SINGLETON_ID)).willReturn(Optional.of(counter));
+        given(userRepository.assignPoolNumber(USER_ID, 2)).willReturn(1);
+
+        // when: 배정
+        purchaseWriter.assignPool(USER_ID);
+
+        // then: 풀 2 로 갱신 쿼리가 나가고 카운터는 51
+        then(userRepository).should().assignPoolNumber(USER_ID, 2);
+        assertThat(counter.getAssignedCount()).isEqualTo(51);
+    }
+
+    @Test
+    @DisplayName("이미 풀이 있는 유저는 갱신되지 않고 카운터도 그대로다")
+    void assignPool_keeps_counter_when_already_assigned() {
+        // given: 조건부 갱신이 0건
+        PoolCounter counter = counter(50);
+        given(poolCounterRepository.findWithLockById(PoolCounter.SINGLETON_ID)).willReturn(Optional.of(counter));
+        given(userRepository.assignPoolNumber(USER_ID, 2)).willReturn(0);
+
+        // when: 배정
+        purchaseWriter.assignPool(USER_ID);
+
+        // then: 카운터는 50 유지
+        assertThat(counter.getAssignedCount()).isEqualTo(50);
+    }
+
+    @Test
+    @DisplayName("카운터 행이 없으면 예외를 던진다")
+    void assignPool_throws_when_counter_missing() {
+        // given: 카운터 행 없음
+        given(poolCounterRepository.findWithLockById(PoolCounter.SINGLETON_ID)).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> purchaseWriter.assignPool(USER_ID))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    private PoolCounter counter(int assignedCount) {
+        PoolCounter counter = BeanUtils.instantiateClass(PoolCounter.class);
+        ReflectionTestUtils.setField(counter, "id", PoolCounter.SINGLETON_ID);
+        ReflectionTestUtils.setField(counter, "assignedCount", assignedCount);
+        return counter;
     }
 }
