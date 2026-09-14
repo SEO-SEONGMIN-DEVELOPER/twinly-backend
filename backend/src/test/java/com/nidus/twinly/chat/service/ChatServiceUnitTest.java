@@ -909,6 +909,42 @@ class ChatServiceUnitTest {
     }
 
     @Test
+    @DisplayName("채팅방 목록은 마지막 메시지 시각 내림차순, 메시지가 없는 방은 생성 시각으로 정렬한다")
+    void rooms_sorted_by_last_activity_desc() {
+        // given: 방 3개 — 10번은 오래된 메시지, 20번은 최신 메시지, 30번은 메시지 없이 가장 오래전 생성
+        Instant base = Instant.parse("2026-01-01T00:00:00Z");
+        given(currentSeasonReader.read()).willReturn(currentSeason());
+        given(matchRepository.findAllByUserAIdOrUserBId(ME, ME)).willReturn(List.of(
+                match(MATCH_ID, ME, PARTNER, CURRENT_SEASON_ID),
+                match(200L, ME, 3L, CURRENT_SEASON_ID),
+                match(300L, ME, 4L, CURRENT_SEASON_ID)
+        ));
+        ChatRoom noMessageRoom = room(30L, 300L);
+        ReflectionTestUtils.setField(noMessageRoom, "createdAt", base.minusSeconds(3600));
+        given(chatRoomRepository.findAllByMatchIdIn(List.of(MATCH_ID, 200L, 300L)))
+                .willReturn(List.of(room(ROOM_ID, MATCH_ID), room(20L, 200L), noMessageRoom));
+        given(chatRoomParticipationRepository.findAllByRoomIdIn(List.of(ROOM_ID, 20L, 30L)))
+                .willReturn(List.of(participation(ROOM_ID, ME), participation(20L, ME), participation(30L, ME)));
+
+        given(userRepository.findAllById(List.of(PARTNER, 3L, 4L)))
+                .willReturn(List.of(user(PARTNER, "p1"), user(3L, "p2"), user(4L, "p3")));
+        given(photoRepository.findAllByUserIdInAndType(List.of(PARTNER, 3L, 4L), PhotoType.PROFILE)).willReturn(List.of());
+        given(relationshipRepository.findLatestByUserIdAndPartnerUserIdIn(ME, List.of(PARTNER, 3L, 4L))).willReturn(List.of());
+        Chat oldChat = chat(55L, ROOM_ID, PARTNER, ME, "old", "client-55");
+        ReflectionTestUtils.setField(oldChat, "sentAt", base.plusSeconds(60));
+        Chat newChat = chat(56L, 20L, 3L, ME, "new", "client-56");
+        ReflectionTestUtils.setField(newChat, "sentAt", base.plusSeconds(120));
+        given(chatRepository.findLatestByRoomIdIn(List.of(ROOM_ID, 20L, 30L))).willReturn(List.of(oldChat, newChat));
+        given(chatRepository.countUnreadByRoomIdIn(ME, List.of(ROOM_ID, 20L, 30L))).willReturn(List.of());
+
+        // when: 채팅방 목록 조회
+        ChatRoomsResult result = chatService.rooms(ME);
+
+        // then: 최신 메시지 방 → 오래된 메시지 방 → 메시지 없는 방 순서
+        assertThat(result.rooms()).extracting(ChatRoomResult::roomId).containsExactly(20L, ROOM_ID, 30L);
+    }
+
+    @Test
     @DisplayName("채팅방 상세는 상대가 공개 동의한 필드만 노출하고 친밀도로 관계 타입을 계산한다")
     void roomDetail_discloses_only_agreed_fields() {
         // given: 상대가 소속만 공개 동의했고 친밀도가 45인 관계
