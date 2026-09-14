@@ -5,6 +5,8 @@ import com.nidus.twinly.common.photo.ProfilePhotoInfo;
 import com.nidus.twinly.me.dto.result.MeProfileEditViewResult;
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import java.util.List;
+
 public record MeProfileEditViewResponse(
         @JsonFormat(shape = JsonFormat.Shape.STRING)
         Long userId,
@@ -14,10 +16,11 @@ public record MeProfileEditViewResponse(
         String affiliationNumber,
         String birthDate,
         @Schema(nullable = true)
-        ProfilePhotoInfo profilePhoto
+        ProfilePhotoInfo profilePhoto,
+        List<String> interests
 ) {
 
     public static MeProfileEditViewResponse from(MeProfileEditViewResult result) {
-        return new MeProfileEditViewResponse(result.userId(), result.familyName(), result.givenName(), result.affiliation(), result.affiliationNumber(), result.birthDate(), result.profilePhoto());
+        return new MeProfileEditViewResponse(result.userId(), result.familyName(), result.givenName(), result.affiliation(), result.affiliationNumber(), result.birthDate(), result.profilePhoto(), result.interests());
     }
 }

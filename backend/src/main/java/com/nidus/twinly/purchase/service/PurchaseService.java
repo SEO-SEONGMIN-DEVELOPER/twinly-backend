@@ -85,6 +85,7 @@ public class PurchaseService {
         boolean hasAccess = entitlementReader.hasSimulationAccess(user.getId());
 
         if (hasAccess) {
+            purchaseWriter.assignPool(user.getId());
             seasonParticipationWriter.participateInCurrentSeason(user.getId());
         }
 

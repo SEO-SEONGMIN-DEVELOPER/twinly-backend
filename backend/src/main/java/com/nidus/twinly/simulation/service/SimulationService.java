@@ -295,7 +295,8 @@ public class SimulationService {
                 user.getOrganization(),
                 user.getAffiliation(),
                 birthDate(user),
-                personaElements
+                personaElements,
+                user.getPoolNumber()
         );
     }
 

@@ -11,6 +11,7 @@ import com.nidus.twinly.common.survey.SurveyQuestion;
 import com.nidus.twinly.purchase.entity.UserEntitlement;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.purchase.repository.UserEntitlementRepository;
+import com.nidus.twinly.purchase.writer.PurchaseWriter;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.season.repository.SeasonParticipationRepository;
 import com.nidus.twinly.common.time.KstTimes;
@@ -87,6 +88,7 @@ public class UserSeeder implements ApplicationRunner {
     private final CurrentSeasonReader currentSeasonReader;
     private final SeasonParticipationRepository seasonParticipationRepository;
     private final UserEntitlementRepository userEntitlementRepository;
+    private final PurchaseWriter purchaseWriter;
     private final SimulationService simulationService;
     private final SceneRepository sceneRepository;
     private final ObjectMapper objectMapper;
@@ -233,6 +235,8 @@ public class UserSeeder implements ApplicationRunner {
         if (!granted.isEmpty()) {
             userEntitlementRepository.saveAll(granted);
         }
+
+        userIds.forEach(purchaseWriter::assignPool);
     }
 
     private void seedScenarios() throws IOException {

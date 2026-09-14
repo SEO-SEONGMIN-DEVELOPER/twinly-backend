@@ -66,7 +66,8 @@ import java.util.stream.Stream;
 @Transactional(readOnly = true)
 public class PeopleService {
 
-    private static final int DEFAULT_LIMIT = 20;
+    private static final int DEFAULT_PEOPLE_LIMIT = 50;
+    private static final int DEFAULT_EVENTS_LIMIT = 20;
     private static final int INTIMACY_SERIES_MAX_POINTS = 30;
 
         private final UserRepository userRepository;
@@ -87,7 +88,7 @@ public class PeopleService {
     private final TwinViewWriter twinViewWriter;
 
     public PeopleResult people(Long userId, Long cursor, Integer limit) {
-        int effectiveLimit = (limit != null && limit > 0) ? limit : DEFAULT_LIMIT;
+        int effectiveLimit = (limit != null && limit > 0) ? limit : DEFAULT_PEOPLE_LIMIT;
 
         List<Long> fetched = relationshipRepository.findPartnerUserIdsByUserId(userId, cursor, effectiveLimit + 1);
 
@@ -281,7 +282,7 @@ public class PeopleService {
                 RelationshipSpecificType.fromIntimacy(intimacy)
         );
 
-        int effectiveLimit = (limit != null && limit > 0) ? limit : DEFAULT_LIMIT;
+        int effectiveLimit = (limit != null && limit > 0) ? limit : DEFAULT_EVENTS_LIMIT;
 
         List<LocalDate> fetchedDates = sceneRepository.findDistinctDatesFromCursorByUserIdAndWithPartnerUserId(userId, partnerUserId, cursor, effectiveLimit + 1);
         boolean hasMore = fetchedDates.size() > effectiveLimit;

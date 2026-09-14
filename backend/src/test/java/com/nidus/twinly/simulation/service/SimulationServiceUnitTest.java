@@ -184,7 +184,9 @@ class SimulationServiceUnitTest {
     void persona_groups_elements_by_dimension() {
         given(entitlementReader.hasSimulationAccess(USER_ID)).willReturn(true);
         // given: 성향 4건(관심사 2건 포함)을 가진 유저
-        given(userRepository.findById(USER_ID)).willReturn(Optional.of(user(USER_ID, "서", "성민", "컴퓨터공학과", "1999-03-21")));
+        User user = user(USER_ID, "서", "성민", "컴퓨터공학과", "1999-03-21");
+        ReflectionTestUtils.setField(user, "poolNumber", 3);
+        given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
         given(personaElementRepository.findAllByUserIdOrderByIdAsc(USER_ID)).willReturn(List.of(
                 personaElement(PersonaDimension.OPENNESS, "새로운 시도를 즐긴다"),
                 personaElement(PersonaDimension.CONFLICT_STYLE, "직접 말하기보다 시간을 둔다"),
@@ -203,6 +205,7 @@ class SimulationServiceUnitTest {
         assertThat(result.organization()).isEqualTo("성균관대학교");
         assertThat(result.affiliation()).isEqualTo("컴퓨터공학과");
         assertThat(result.birthDate()).isEqualTo(LocalDate.of(1999, 3, 21));
+        assertThat(result.poolNumber()).isEqualTo(3);
         assertThat(result.personaElements())
                 .containsEntry(PersonaDimension.OPENNESS, List.of("새로운 시도를 즐긴다"))
                 .containsEntry(PersonaDimension.CONFLICT_STYLE, List.of("직접 말하기보다 시간을 둔다"))

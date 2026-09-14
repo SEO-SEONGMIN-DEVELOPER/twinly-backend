@@ -65,7 +65,7 @@ class SimulationControllerUnitTest {
         personaElements.put(PersonaDimension.CONFLICT_STYLE, List.of("직접 말하기보다 시간을 둔다"));
         personaElements.put(PersonaDimension.INTEREST, List.of("등산", "재즈"));
         given(simulationService.persona(USER_ID)).willReturn(new SimulationPersonaResult(
-                USER_ID, "서", "성민", Gender.MALE, "성균관대학교", "컴퓨터공학과", LocalDate.of(1999, 3, 21), personaElements));
+                USER_ID, "서", "성민", Gender.MALE, "성균관대학교", "컴퓨터공학과", LocalDate.of(1999, 3, 21), personaElements, 3));
 
         // when: 경로 변수 userId로 페르소나 조회 API 호출
         var result = mockMvc.perform(get("/internal/v1/users/{userId}/persona", "12"));
@@ -82,7 +82,8 @@ class SimulationControllerUnitTest {
                 .andExpect(jsonPath("$.personaElements.openness", hasSize(1)))
                 .andExpect(jsonPath("$.personaElements.openness[0]", is("새로운 시도를 즐긴다")))
                 .andExpect(jsonPath("$.personaElements.conflictStyle[0]", is("직접 말하기보다 시간을 둔다")))
-                .andExpect(jsonPath("$.personaElements.interest", hasSize(2)));
+                .andExpect(jsonPath("$.personaElements.interest", hasSize(2)))
+                .andExpect(jsonPath("$.poolNumber", is(3)));
         then(simulationService).should().persona(USER_ID);
     }
 
@@ -91,7 +92,7 @@ class SimulationControllerUnitTest {
     void persona_without_elements_returns_empty_object() throws Exception {
         // given: 성향이 하나도 없는 유저의 페르소나 조회 결과
         given(simulationService.persona(USER_ID)).willReturn(new SimulationPersonaResult(
-                USER_ID, "서", "성민", Gender.MALE, "성균관대학교", "컴퓨터공학과", LocalDate.of(1999, 3, 21), Map.of()));
+                USER_ID, "서", "성민", Gender.MALE, "성균관대학교", "컴퓨터공학과", LocalDate.of(1999, 3, 21), Map.of(), 1));
 
         // when: 페르소나 조회 API 호출
         var result = mockMvc.perform(get("/internal/v1/users/{userId}/persona", "12"));

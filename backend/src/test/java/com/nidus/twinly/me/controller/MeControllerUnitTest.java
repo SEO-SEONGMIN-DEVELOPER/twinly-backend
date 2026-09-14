@@ -235,7 +235,8 @@ class MeControllerUnitTest {
         // given: 서비스가 프로필 수정 화면 정보를 반환
         given(meService.profileEditView(ME))
                 .willReturn(new MeProfileEditViewResult(1L, "홍", "길동", "니두스", "2020123", "2000-01-01",
-                        new ProfilePhotoInfo("profile/1/key", "https://cdn/p.jpg", new PhotoPosInfo(new PhotoPosInfo.StartPos(10, 20), 100, 200))));
+                        new ProfilePhotoInfo("profile/1/key", "https://cdn/p.jpg", new PhotoPosInfo(new PhotoPosInfo.StartPos(10, 20), 100, 200)),
+                        List.of("등산", "영화")));
 
         // when: 프로필 수정 화면 조회 API 호출
         var result = mockMvc.perform(get("/api/v1/me/profile-edit-view")
@@ -254,7 +255,9 @@ class MeControllerUnitTest {
                 .andExpect(jsonPath("$.profilePhoto.position.startPos.x").value(10))
                 .andExpect(jsonPath("$.profilePhoto.position.startPos.y").value(20))
                 .andExpect(jsonPath("$.profilePhoto.position.width").value(100))
-                .andExpect(jsonPath("$.profilePhoto.position.height").value(200));
+                .andExpect(jsonPath("$.profilePhoto.position.height").value(200))
+                .andExpect(jsonPath("$.interests[0]").value("등산"))
+                .andExpect(jsonPath("$.interests[1]").value("영화"));
     }
 
     @Test
@@ -265,12 +268,12 @@ class MeControllerUnitTest {
                 .header("Authorization", BEARER)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                        {"affiliation":"니두스"}
+                        {"affiliation":"니두스","interests":["등산","영화"]}
                         """));
 
-        // then: 200 반환 + affiliation 커맨드로 위임
+        // then: 200 반환 + affiliation/interests 커맨드로 위임
         result.andExpect(status().isOk());
-        then(meService).should().profile(ME, new MeProfileCommand("니두스"));
+        then(meService).should().profile(ME, new MeProfileCommand("니두스", List.of("등산", "영화")));
     }
 
     @Test

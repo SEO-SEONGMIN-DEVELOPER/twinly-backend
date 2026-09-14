@@ -102,6 +102,8 @@ public class User {
 
     private Instant purchasesSyncedAt;
 
+    private Integer poolNumber;
+
     private Instant withdrawalRequestedAt;
 
     private Instant withdrawalScheduledAt;

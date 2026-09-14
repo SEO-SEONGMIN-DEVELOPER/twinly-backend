@@ -15,6 +15,7 @@ public record SimulationPersonaResult(
         String organization,
         String affiliation,
         LocalDate birthDate,
-        Map<PersonaDimension, List<String>> personaElements
+        Map<PersonaDimension, List<String>> personaElements,
+        Integer poolNumber
 ) {
 }

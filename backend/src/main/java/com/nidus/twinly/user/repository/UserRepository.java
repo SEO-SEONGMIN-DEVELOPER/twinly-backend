@@ -32,6 +32,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("UPDATE User u SET u.purchasesSyncedAt = :syncedAt WHERE u.id = :userId")
     void markPurchasesSynced(@Param("userId") Long userId, @Param("syncedAt") Instant syncedAt);
 
+    @Modifying
+    @Query("UPDATE User u SET u.poolNumber = :poolNumber WHERE u.id = :userId AND u.poolNumber IS NULL")
+    int assignPoolNumber(@Param("userId") Long userId, @Param("poolNumber") int poolNumber);
+
     List<User> findAllByDeletedAtIsNullAndWithdrawalScheduledAtLessThanEqual(Instant now, Pageable pageable);
 
     int countByDeletedAtIsNull();

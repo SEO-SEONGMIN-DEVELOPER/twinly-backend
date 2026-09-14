@@ -140,7 +140,7 @@ class PeopleServiceUnitTest {
     @DisplayName("사람 목록은 사진·친밀도·씬 수·채팅방·즐겨찾기를 파트너별로 결합해 반환한다")
     void people_merges_all_sources() {
         // given: 파트너 2명(10,20) 중 10만 사진·매칭/채팅방·씬·즐겨찾기가 있는 상태
-        given(relationshipRepository.findPartnerUserIdsByUserId(ME, null, 21))
+        given(relationshipRepository.findPartnerUserIdsByUserId(ME, null, 51))
                 .willReturn(List.of(10L, 20L));
         given(userRepository.findAllById(List.of(10L, 20L)))
                 .willReturn(List.of(user(10L, "홍", "길동"), user(20L, "김", "철수")));
@@ -214,7 +214,7 @@ class PeopleServiceUnitTest {
         // given: 파트너 2명 중 20이 탈퇴한 상태
         User withdrawn = user(20L, "김", "철수");
         ReflectionTestUtils.setField(withdrawn, "deletedAt", Instant.now());
-        given(relationshipRepository.findPartnerUserIdsByUserId(ME, null, 21)).willReturn(List.of(10L, 20L));
+        given(relationshipRepository.findPartnerUserIdsByUserId(ME, null, 51)).willReturn(List.of(10L, 20L));
         given(userRepository.findAllById(List.of(10L, 20L)))
                 .willReturn(List.of(user(10L, "홍", "길동"), withdrawn));
         given(photoRepository.findAllByUserIdInAndType(List.of(10L), PhotoType.PROFILE))
@@ -235,7 +235,7 @@ class PeopleServiceUnitTest {
     @DisplayName("관계된 파트너가 없으면 빈 목록을 반환하고 부가 정보를 조회하지 않는다")
     void people_empty_short_circuits() {
         // given: 관계된 파트너가 하나도 없는 상태
-        given(relationshipRepository.findPartnerUserIdsByUserId(ME, null, 21))
+        given(relationshipRepository.findPartnerUserIdsByUserId(ME, null, 51))
                 .willReturn(List.of());
 
         // when: 사람 목록 조회

@@ -18,10 +18,11 @@ public record SimulationPersonaResponse(
         String organization,
         String affiliation,
         LocalDate birthDate,
-        Map<PersonaDimension, List<String>> personaElements
+        Map<PersonaDimension, List<String>> personaElements,
+        Integer poolNumber
 ) {
 
     public static SimulationPersonaResponse from(SimulationPersonaResult result) {
-        return new SimulationPersonaResponse(result.userId(), result.familyName(), result.givenName(), result.gender(), result.organization(), result.affiliation(), result.birthDate(), result.personaElements());
+        return new SimulationPersonaResponse(result.userId(), result.familyName(), result.givenName(), result.gender(), result.organization(), result.affiliation(), result.birthDate(), result.personaElements(), result.poolNumber());
     }
 }

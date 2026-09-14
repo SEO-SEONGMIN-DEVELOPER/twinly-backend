@@ -45,6 +45,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -231,6 +233,8 @@ public class ChatService {
         Long currentSeasonId = currentSeasonReader.read().getId();
 
         List<ChatRoomResult> roomResults = visibleRooms.stream()
+                .sorted(Comparator.comparing((ChatRoom room) -> lastActivityAt(room, context.lastChatByRoomId())).reversed()
+                        .thenComparing(ChatRoom::getId, Comparator.reverseOrder()))
                 .map(room -> toChatRoomResult(room, userId, context, currentSeasonId))
                 .toList();
 
@@ -247,6 +251,11 @@ public class ChatService {
             Map<Long, Chat> lastChatByRoomId,
             Map<Long, Long> unreadCountByRoomId
     ) {
+    }
+
+    private Instant lastActivityAt(ChatRoom room, Map<Long, Chat> lastChatByRoomId) {
+        Chat lastChat = lastChatByRoomId.get(room.getId());
+        return lastChat != null ? lastChat.getSentAt() : room.getCreatedAt();
     }
 
     private Map<Long, ChatRoomParticipation> participationByRoomId(List<ChatRoomParticipation> participations, Long userId, boolean mine) {
