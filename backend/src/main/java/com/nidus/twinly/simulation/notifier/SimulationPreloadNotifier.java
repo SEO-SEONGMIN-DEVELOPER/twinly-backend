@@ -1,6 +1,7 @@
 package com.nidus.twinly.simulation.notifier;
 
 import com.nidus.twinly.common.logging.ErrorLog;
+import com.nidus.twinly.common.logging.InfoLog;
 import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
@@ -18,6 +19,8 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.stream.Stream;
+
+import static com.nidus.twinly.common.logging.LogField.field;
 
 @Slf4j
 @Component
@@ -39,7 +42,7 @@ public class SimulationPreloadNotifier {
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
             try {
                 simulationPreloadClient.preload(event.userId(), grantedAt, dates);
-                log.info("시뮬레이션 선생성 요청 접수. userId={}, grantedAt={}, dates={}, attempt={}", event.userId(), grantedAt, dates, attempt);
+                InfoLog.log(log, "시뮬레이션 선생성 요청을 접수했습니다.", field("userId", event.userId()), field("grantedAt", grantedAt), field("dates", dates), field("attempt", attempt));
                 return;
             } catch (BusinessException e) {
                 if (attempt == MAX_ATTEMPTS) {

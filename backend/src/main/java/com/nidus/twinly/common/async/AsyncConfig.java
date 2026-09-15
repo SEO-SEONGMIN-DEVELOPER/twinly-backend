@@ -2,6 +2,7 @@ package com.nidus.twinly.common.async;
 
 import com.nidus.twinly.common.logging.ErrorLog;
 import com.nidus.twinly.common.logging.MdcTaskDecorator;
+import com.nidus.twinly.common.logging.WarnLog;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.aop.interceptor.AsyncUncaughtExceptionHandler;
 import org.springframework.context.annotation.Bean;
@@ -11,6 +12,8 @@ import org.springframework.core.task.TaskExecutor;
 import org.springframework.scheduling.annotation.AsyncConfigurer;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+
+import static com.nidus.twinly.common.logging.LogField.field;
 
 @Slf4j
 @Configuration
@@ -38,7 +41,7 @@ public class AsyncConfig implements AsyncConfigurer {
         executor.setTaskDecorator(MDC_TASK_DECORATOR);
         executor.setThreadNamePrefix("push-");
         executor.setRejectedExecutionHandler((rejected, threadPoolExecutor) ->
-                log.warn("푸시 작업 큐가 가득 차 발송을 건너뜁니다. queued={}", threadPoolExecutor.getQueue().size()));
+                WarnLog.log(log, "푸시 작업 큐가 가득 차 발송을 건너뜁니다.", field("queued", threadPoolExecutor.getQueue().size())));
 
         return executor;
     }
@@ -53,7 +56,7 @@ public class AsyncConfig implements AsyncConfigurer {
         executor.setTaskDecorator(MDC_TASK_DECORATOR);
         executor.setThreadNamePrefix("purchase-sync-");
         executor.setRejectedExecutionHandler((rejected, threadPoolExecutor) ->
-                log.warn("구매 상태 동기화 큐가 가득 차 동기화를 건너뜁니다. queued={}", threadPoolExecutor.getQueue().size()));
+                WarnLog.log(log, "구매 상태 동기화 큐가 가득 차 동기화를 건너뜁니다.", field("queued", threadPoolExecutor.getQueue().size())));
 
         return executor;
     }
@@ -68,7 +71,7 @@ public class AsyncConfig implements AsyncConfigurer {
         executor.setTaskDecorator(MDC_TASK_DECORATOR);
         executor.setThreadNamePrefix("twin-view-");
         executor.setRejectedExecutionHandler((rejected, threadPoolExecutor) ->
-                log.warn("트윈 열람 기록 큐가 가득 차 기록을 건너뜁니다. queued={}", threadPoolExecutor.getQueue().size()));
+                WarnLog.log(log, "트윈 열람 기록 큐가 가득 차 기록을 건너뜁니다.", field("queued", threadPoolExecutor.getQueue().size())));
 
         return executor;
     }
@@ -83,7 +86,7 @@ public class AsyncConfig implements AsyncConfigurer {
         executor.setTaskDecorator(MDC_TASK_DECORATOR);
         executor.setThreadNamePrefix("simulation-preload-");
         executor.setRejectedExecutionHandler((rejected, threadPoolExecutor) ->
-                log.warn("시뮬레이션 선생성 요청 큐가 가득 차 요청을 건너뜁니다. queued={}", threadPoolExecutor.getQueue().size()));
+                WarnLog.log(log, "시뮬레이션 선생성 요청 큐가 가득 차 요청을 건너뜁니다.", field("queued", threadPoolExecutor.getQueue().size())));
 
         return executor;
     }

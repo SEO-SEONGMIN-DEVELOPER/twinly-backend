@@ -3,6 +3,9 @@ package com.nidus.twinly.auth.integration;
 import com.nidus.twinly.anon.entity.AnonSession;
 import com.nidus.twinly.anon.repository.AnonSessionRepository;
 import com.nidus.twinly.auth.repository.AnonSessionVerificationSessionRepository;
+import com.nidus.twinly.common.crypto.BlindIndexHasher;
+import com.nidus.twinly.common.domain.Gender;
+import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.common.domain.VerificationType;
 import com.nidus.twinly.support.AbstractIntegrationTest;
 import org.junit.jupiter.api.AfterEach;
@@ -49,6 +52,9 @@ class AuthSendFailureIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    BlindIndexHasher blindIndexHasher;
+
     @AfterEach
     void cleanUp() {
         // 롤백이 없으므로 직접 지운다. 순서는 FK 의존의 역방향(자식 → 부모)
@@ -83,25 +89,46 @@ class AuthSendFailureIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("SMS 발송이 실패하면 500을 반환하고 인증 세션도 남기지 않는다")
+    @DisplayName("로그인용 SMS 발송이 실패하면 500을 반환하고 인증 세션도 남기지 않는다")
     void sms_send_failure_rolls_back_verification_session() throws Exception {
-        // given: SOLAPI가 장애인 상황
-        AnonSession anonSession = saveAnonSession();
+        // given: 가입된 번호가 있고 SOLAPI가 장애인 상황
+        String phone = "01098765432";
+        User user = userRepository.save(User.create(
+                "sendfail-nick",
+                "발", blindIndexHasher.hash("발"),
+                "송", blindIndexHasher.hash("송"),
+                Gender.MALE,
+                ORGANIZATION, blindIndexHasher.hash(ORGANIZATION),
+                ORGANIZATION, blindIndexHasher.hash(ORGANIZATION),
+                "20250009", blindIndexHasher.hash("20250009"),
+                "2000-01-01", blindIndexHasher.hash("2000-01-01"),
+                phone, blindIndexHasher.hash(phone),
+                "sendfail@" + DOMAIN, blindIndexHasher.hash("sendfail@" + DOMAIN),
+                "di-sendfail", blindIndexHasher.hash("di-sendfail"),
+                null, null));
+        long before = verificationSessionCount();
         willThrow(new IllegalStateException("SOLAPI 장애"))
                 .given(solapiService).send(anyString(), anyString());
 
-        // when: 온보딩 SMS 인증번호 발송
-        mockMvc.perform(post("/api/v1/auth/onboarding/sms/send")
-                        .header("Authorization", "Bearer " + anonSession.getToken())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"phone":"01098765432"}
-                                """))
-                .andExpect(status().isInternalServerError());
+        try {
+            // when: 로그인용 SMS 인증번호 발송
+            mockMvc.perform(post("/api/v1/auth/sms/send")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"phone":"%s"}
+                                    """.formatted(phone)))
+                    .andExpect(status().isInternalServerError());
 
-        // then: 인증 세션이 남지 않는다
-        assertThat(anonSessionVerificationSessionRepository
-                .findByAnonSessionIdAndType(anonSession.getId(), VerificationType.SMS)).isEmpty();
+            // then: 인증 세션이 남지 않는다
+            assertThat(verificationSessionCount()).isEqualTo(before);
+        } finally {
+            userRepository.deleteById(user.getId());
+        }
+    }
+
+    private long verificationSessionCount() {
+        Long count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM verification_sessions", Long.class);
+        return count == null ? 0 : count;
     }
 
     private AnonSession saveAnonSession() {

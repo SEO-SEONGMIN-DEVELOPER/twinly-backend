@@ -303,7 +303,7 @@ class ShowcaseServiceUnitTest {
                 "2000-01-01", "birthHash",
                 "phone" + id, "phoneHash",
                 "email" + id + "@test.com", "emailHash", null, null
-        );
+        , null, null);
         ReflectionTestUtils.setField(user, "id", id);
 
         return user;

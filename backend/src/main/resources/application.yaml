@@ -102,9 +102,11 @@ revenue-cat:
   webhook-secret: ${REVENUECAT_WEBHOOK_SECRET}
   secret-api-key: ${REVENUECAT_SECRET_API_KEY}
 
-portone:
-  api-secret: ${PORTONE_API_SECRET}
-  allowed-channel-types: LIVE
+nice:
+  client-id: ${NICE_CLIENT_ID}
+  client-secret: ${NICE_CLIENT_SECRET}
+  return-url: ${NICE_RETURN_URL}
+  close-url: ${NICE_CLOSE_URL}
 
 ai-server:
   base-url: ${AI_SERVER_BASE_URL}

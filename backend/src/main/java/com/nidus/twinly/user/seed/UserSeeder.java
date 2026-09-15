@@ -4,6 +4,7 @@ import com.nidus.twinly.activity.repository.SceneRepository;
 import com.nidus.twinly.common.crypto.BlindIndexHasher;
 import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.interest.InterestLoader;
+import com.nidus.twinly.common.logging.InfoLog;
 import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.common.survey.SurveyLoader;
 import com.nidus.twinly.common.survey.SurveyOptionName;
@@ -48,6 +49,8 @@ import java.util.List;
 import java.util.Random;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import static com.nidus.twinly.common.logging.LogField.field;
 
 @Slf4j
 @Component
@@ -201,7 +204,7 @@ public class UserSeeder implements ApplicationRunner {
 
         seedScenarios();
 
-        log.info("시드 유저를 채웠습니다. userCount={}, elementCount={}", users.size(), elements.size());
+        InfoLog.log(log, "시드 유저를 채웠습니다.", field("userCount", users.size()), field("elementCount", elements.size()));
     }
 
     private void revokeSimulationAccess(List<User> users) {
@@ -259,8 +262,7 @@ public class UserSeeder implements ApplicationRunner {
 
         missing.forEach(request -> simulationService.simulations(request.userId(), SimulationsCommand.from(request)));
 
-        log.info("쇼케이스 시나리오를 채웠습니다. dayCount={}, insertedCount={}, shiftDays={}",
-                requests.size(), missing.size(), shift);
+        InfoLog.log(log, "쇼케이스 시나리오를 채웠습니다.", field("dayCount", requests.size()), field("insertedCount", missing.size()), field("shiftDays", shift));
     }
 
     /**
@@ -379,6 +381,7 @@ public class UserSeeder implements ApplicationRunner {
                 birthDate, blindIndexHasher.hash(birthDate),
                 phoneNumber, blindIndexHasher.hash(phoneNumber),
                 email, blindIndexHasher.hash(email),
+                null, null,
                 null, null
         );
     }

@@ -43,8 +43,8 @@
    - 회원가입 필수값: `nickname`, `familyName`, `givenName`, `gender`, `organization`, `affiliation`, `affiliationNumber`, `birthDate`
    - 하나라도 비면 `PROFILE_NOT_COMPLETED`
    - `organization`, `affiliation` 은 미리 시드된 값을 써야 합니다 (8절 참고)
-3. `POST /api/v1/auth/onboarding/sms/send` → `smsVerificationToken` 수신 → `POST /api/v1/auth/onboarding/sms/verify` (`code: "000000"`)
-4. 이메일도 동일하게 `send` → `verify`
+3. `POST /api/v1/auth/onboarding/identity/prepare` → `authUrl` 을 웹뷰로 열어 NICE 휴대폰 본인인증 → 가로챈 `web_transaction_id` 로 `POST /api/v1/auth/onboarding/identity/verify` (전화번호는 여기서 확정되며 별도 SMS 인증은 없습니다. 상세: `docs/api-spec/identity-verification-nice_v2.md`)
+4. 이메일 `POST /api/v1/auth/onboarding/email/send` → `verify` (`code: "000000"`)
 5. `POST /api/v1/auth/signup` → `accessToken`, `refreshToken` 발급
 
 재로그인: `POST /api/v1/auth/sms/send` → `verify` 로 받은 `smsVerifiedToken` 을 `POST /api/v1/auth/login` 에 전달.

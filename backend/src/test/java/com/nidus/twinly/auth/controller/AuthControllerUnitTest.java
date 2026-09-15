@@ -22,6 +22,7 @@ import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.user.dto.header.UserInfo;
 import com.nidus.twinly.user.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
+import com.nidus.twinly.auth.dto.command.AuthIdentityVerifyCommand;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import com.nidus.twinly.common.security.SecurityConfig;
@@ -55,7 +56,9 @@ class AuthControllerUnitTest {
     private static final UUID VERIFICATION_TOKEN = UUID.fromString("22222222-2222-2222-2222-222222222222");
     private static final UUID VERIFIED_TOKEN = UUID.fromString("33333333-3333-3333-3333-333333333333");
     private static final Instant EXPIRES_AT = Instant.parse("2030-01-01T00:00:00Z");
-    private static final String IDENTITY_VERIFICATION_ID = "identity-11111111-2222-3333-4444-555555555555";
+    private static final String IDENTITY_AUTH_URL = "https://auth.niceid.co.kr/ido/cert/request/S1afc40674-b094-44e7-be4b-3e42011b5f81";
+    private static final String IDENTITY_RETURN_URL = "https://stage-api.trytwinly.com/api/v1/auth/onboarding/identity/return";
+    private static final String IDENTITY_CLOSE_URL = "https://stage-api.trytwinly.com/api/v1/auth/onboarding/identity/close";
 
     private static final AnonSessionSnapshot ANON_SESSION = new AnonSessionSnapshot(
             7L,
@@ -64,7 +67,6 @@ class AuthControllerUnitTest {
             "nick",
             "홍", "길동",
             "트윈리대학교", "20250001",
-            "01012345678", "phoneHash",
             "user@test.com", "emailHash",
             Instant.parse("2026-01-01T00:00:00Z")
     );
@@ -192,45 +194,6 @@ class AuthControllerUnitTest {
     }
 
     @Test
-    @DisplayName("온보딩 SMS 인증번호 발송 성공 시 200과 발급된 인증 토큰을 반환하고 익명 세션·커맨드로 서비스를 호출한다")
-    void onboardingSmsSend_success() throws Exception {
-        // given: 서비스가 인증 토큰과 만료 시각을 반환
-        given(authService.onboardingSmsSend(any(), any()))
-                .willReturn(new AuthSmsSendResult(VERIFICATION_TOKEN, EXPIRES_AT));
-
-        // when: 익명 세션 토큰을 붙여 온보딩 SMS 발송 API 호출
-        var result = mockMvc.perform(post("/api/v1/auth/onboarding/sms/send")
-                .header("Authorization", "Bearer " + ANON_TOKEN)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""
-                        {"phone":"01012345678"}
-                        """));
-
-        // then: 200 + 인증 토큰 JSON 반환 + 익명 세션 스냅샷·커맨드로 서비스에 위임
-        result.andExpect(status().isOk())
-                .andExpect(jsonPath("$.smsVerificationToken").value(VERIFICATION_TOKEN.toString()))
-                .andExpect(jsonPath("$.expiresAt").exists());
-        then(authService).should().onboardingSmsSend(ANON_SESSION, new AuthSmsSendCommand("01012345678"));
-    }
-
-    @Test
-    @DisplayName("온보딩 SMS 인증 확인 성공 시 200을 반환하고 익명 세션·커맨드로 서비스를 호출한다")
-    void onboardingSmsVerify_success() throws Exception {
-        // when: 인증 토큰과 코드를 담아 온보딩 SMS 인증 확인 API 호출
-        var result = mockMvc.perform(post("/api/v1/auth/onboarding/sms/verify")
-                .header("Authorization", "Bearer " + ANON_TOKEN)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""
-                        {"smsVerificationToken":"%s","code":"654321"}
-                        """.formatted(VERIFICATION_TOKEN)));
-
-        // then: 200 반환 + 익명 세션 스냅샷·커맨드로 서비스에 위임
-        result.andExpect(status().isOk());
-        then(authService).should().onboardingSmsVerify(
-                ANON_SESSION, new AuthSmsVerifyCommand(VERIFICATION_TOKEN, "654321"));
-    }
-
-    @Test
     @DisplayName("로그인용 이메일 인증번호 발송은 인증 헤더 없이도 200과 인증 토큰을 반환한다")
     void emailSend_success() throws Exception {
         // given: 서비스가 인증 토큰과 만료 시각을 반환
@@ -325,20 +288,23 @@ class AuthControllerUnitTest {
     }
 
     @Test
-    @DisplayName("본인인증 발급 성공 시 200과 발급된 id·만료 시각을 반환하고 익명 세션 스냅샷으로 서비스를 호출한다")
+    @DisplayName("본인인증 발급 성공 시 200과 authUrl·만료 시각·return/close URL을 반환하고 익명 세션 스냅샷으로 서비스를 호출한다")
     void onboardingIdentityPrepare_success() throws Exception {
-        // given: 서비스가 발급된 본인인증 id와 만료 시각을 반환
+        // given: 서비스가 NICE 인증 URL과 만료 시각, 웹뷰가 가로챌 URL 두 개를 반환
         given(authService.onboardingIdentityPrepare(any()))
-                .willReturn(new AuthIdentityPrepareResult(IDENTITY_VERIFICATION_ID, EXPIRES_AT));
+                .willReturn(new AuthIdentityPrepareResult(IDENTITY_AUTH_URL, EXPIRES_AT, IDENTITY_RETURN_URL, IDENTITY_CLOSE_URL));
 
         // when: 익명 세션 토큰을 붙여 본인인증 발급 API 호출
         var result = mockMvc.perform(post("/api/v1/auth/onboarding/identity/prepare")
                 .header("Authorization", "Bearer " + ANON_TOKEN));
 
-        // then: 200 + 앞뒤 공백 없는 id JSON 반환 + 익명 세션 스냅샷으로 서비스에 위임
+        // then: 200 + authUrl은 가공 없이 그대로, transaction_id는 응답에 없음 + 익명 세션 스냅샷으로 서비스에 위임
         result.andExpect(status().isOk())
-                .andExpect(jsonPath("$.identityVerificationId").value(IDENTITY_VERIFICATION_ID))
-                .andExpect(jsonPath("$.expiresAt").exists());
+                .andExpect(jsonPath("$.authUrl").value(IDENTITY_AUTH_URL))
+                .andExpect(jsonPath("$.expiresAt").exists())
+                .andExpect(jsonPath("$.returnUrl").value(IDENTITY_RETURN_URL))
+                .andExpect(jsonPath("$.closeUrl").value(IDENTITY_CLOSE_URL))
+                .andExpect(jsonPath("$.transactionId").doesNotExist());
         then(authService).should().onboardingIdentityPrepare(ANON_SESSION);
     }
 
@@ -370,16 +336,34 @@ class AuthControllerUnitTest {
     }
 
     @Test
-    @DisplayName("본인인증 검증 성공 시 본문 없는 200을 반환하고 익명 세션 스냅샷으로 서비스를 호출한다")
+    @DisplayName("본인인증 검증 성공 시 본문 없는 200을 반환하고 익명 세션 스냅샷과 webTransactionId 커맨드로 서비스를 호출한다")
     void onboardingIdentityVerify_success() throws Exception {
-        // when: 익명 세션 토큰을 붙여 본인인증 검증 API 호출
+        // when: 앱이 웹뷰에서 가로챈 web_transaction_id 를 본문에 담아 호출
         var result = mockMvc.perform(post("/api/v1/auth/onboarding/identity/verify")
-                .header("Authorization", "Bearer " + ANON_TOKEN));
+                .header("Authorization", "Bearer " + ANON_TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"webTransactionId":"web-tx-1"}
+                        """));
 
-        // then: 인증 결과 원문이 응답에 실리지 않도록 본문 없는 200 + 익명 세션 스냅샷으로 서비스에 위임
+        // then: 인증 결과 원문이 응답에 실리지 않도록 본문 없는 200 + 커맨드로 서비스에 위임
         result.andExpect(status().isOk())
                 .andExpect(content().string(""));
-        then(authService).should().onboardingIdentityVerify(ANON_SESSION);
+        then(authService).should().onboardingIdentityVerify(ANON_SESSION, new AuthIdentityVerifyCommand("web-tx-1"));
+    }
+
+    @Test
+    @DisplayName("본인인증 검증 시 webTransactionId 가 없으면 400을 반환하고 서비스를 호출하지 않는다")
+    void onboardingIdentityVerify_without_web_transaction_id_returns_400() throws Exception {
+        // when: 본문에 값이 없는 호출 (구버전 앱이 그대로 호출하는 경우)
+        var result = mockMvc.perform(post("/api/v1/auth/onboarding/identity/verify")
+                .header("Authorization", "Bearer " + ANON_TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"));
+
+        // then
+        result.andExpect(status().isBadRequest());
+        verifyNoInteractions(authService);
     }
 
     @Test
@@ -398,11 +382,15 @@ class AuthControllerUnitTest {
     void onboardingIdentityVerify_when_age_not_allowed_returns_422() throws Exception {
         // given: 서비스가 연령 제한으로 실패
         willThrow(new BusinessException(ErrorCode.IDENTITY_AGE_NOT_ALLOWED))
-                .given(authService).onboardingIdentityVerify(any());
+                .given(authService).onboardingIdentityVerify(any(), any());
 
-        // when: 익명 세션 토큰을 붙여 본인인증 검증 API 호출
+        // when: 익명 세션 토큰과 webTransactionId 를 붙여 본인인증 검증 API 호출
         var result = mockMvc.perform(post("/api/v1/auth/onboarding/identity/verify")
-                .header("Authorization", "Bearer " + ANON_TOKEN));
+                .header("Authorization", "Bearer " + ANON_TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"webTransactionId":"web-tx-1"}
+                        """));
 
         // then: 도메인 예외가 422 상태와 에러 코드로 매핑됨
         result.andExpect(status().isUnprocessableEntity())

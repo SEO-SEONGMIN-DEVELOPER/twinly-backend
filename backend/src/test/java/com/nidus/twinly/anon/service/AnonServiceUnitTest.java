@@ -75,7 +75,6 @@ class AnonServiceUnitTest {
         assertThat(saved.getCreatedAt()).isNotNull();
         assertThat(saved.getNickname()).isNull();
         assertThat(saved.getFamilyName()).isNull();
-        assertThat(saved.getPhoneNumberHash()).isNull();
         assertThat(saved.getEmailHash()).isNull();
     }
 

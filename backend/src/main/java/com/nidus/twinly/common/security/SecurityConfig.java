@@ -33,7 +33,9 @@ public class SecurityConfig {
 
     private static final String[] PUBLIC_ONBOARDING_PATHS = {
             "/api/v1/onboarding/organizations",
-            "/api/v1/onboarding/survey-questions"
+            "/api/v1/onboarding/survey-questions",
+            "/api/v1/auth/onboarding/identity/return",
+            "/api/v1/auth/onboarding/identity/close"
     };
 
     private static final String[] ADMIN_PATHS = {

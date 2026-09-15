@@ -168,7 +168,7 @@ class ChatPushNotifierUnitTest {
                 "2000-01-01", "birthHash",
                 "phone", "phoneHash",
                 "email", "emailHash", null, null
-        );
+        , null, null);
     }
 
     private Device device() {

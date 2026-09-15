@@ -9,11 +9,6 @@ import com.nidus.twinly.anon.repository.AnonSessionAgreementRepository;
 import com.nidus.twinly.anon.repository.AnonSessionPersonaElementRepository;
 import com.nidus.twinly.anon.repository.AnonSessionPhotoRepository;
 import com.nidus.twinly.anon.repository.AnonSessionRepository;
-import com.nidus.twinly.auth.client.PortOneChannelType;
-import com.nidus.twinly.auth.client.PortOneIdentityClient;
-import com.nidus.twinly.auth.client.PortOneIdentityVerificationBody;
-import com.nidus.twinly.auth.client.PortOneIdentityVerificationStatus;
-import com.nidus.twinly.auth.config.PortOneProperties;
 import com.nidus.twinly.auth.dto.command.AuthEmailSendCommand;
 import com.nidus.twinly.auth.dto.command.AuthEmailVerifyCommand;
 import com.nidus.twinly.auth.dto.command.AuthLoginCommand;
@@ -54,6 +49,12 @@ import com.nidus.twinly.user.repository.PhotoRepository;
 import com.nidus.twinly.user.repository.UserRepository;
 import com.nidus.twinly.user.repository.VerificationRepository;
 import io.jsonwebtoken.JwtException;
+import com.nidus.twinly.auth.dto.result.NiceAuthUrlResult;
+import com.nidus.twinly.auth.client.NiceAuthResult;
+import com.nidus.twinly.auth.client.NiceResultNotAvailableException;
+import com.nidus.twinly.auth.dto.command.AuthIdentityVerifyCommand;
+import com.nidus.twinly.common.domain.MobileCarrier;
+import com.nidus.twinly.common.domain.NationalInfo;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -66,6 +67,7 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Duration;
+import java.time.format.DateTimeFormatter;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -95,11 +97,17 @@ class AuthServiceUnitTest {
     private static final String PHONE = "01012345678";
     private static final String EMAIL = "user@test.com";
     private static final String CODE = "123456";
-    private static final String IDENTITY_VERIFICATION_ID = "identity-11111111-2222-3333-4444-555555555555";
+    private static final String IDENTITY_REQUEST_NO = "TWINLY-11111111-2222-3333-4444-555555555555";
+    private static final String IDENTITY_TRANSACTION_ID = "UzE0MUQyNkFDOEQ3NzYyMDIwMjUxMTEzMTAwMjM3MzM4OTQ5QUMwMkU";
+    private static final String IDENTITY_AUTH_URL = "https://auth.niceid.co.kr/ido/cert/request/S1afc40674-b094-44e7-be4b-3e42011b5f81";
+    private static final String IDENTITY_RETURN_URL = "https://stage-api.trytwinly.com/api/v1/auth/onboarding/identity/return";
+    private static final String IDENTITY_CLOSE_URL = "https://stage-api.trytwinly.com/api/v1/auth/onboarding/identity/close";
+    private static final String WEB_TRANSACTION_ID = "ZGIxOGZkYjUtMjE4NC00MDZmLTkxZjgtM2ZhNjA0OTdiZTY2";
+    private static final AuthIdentityVerifyCommand VERIFY_COMMAND = new AuthIdentityVerifyCommand(WEB_TRANSACTION_ID);
     private static final String IDENTITY_NAME = "홍길동";
     private static final String IDENTITY_BIRTH_DATE = "1999-03-14";
     private static final String IDENTITY_PHONE = "01087654321";
-    private static final String CI = "ci-value";
+    private static final String DI = "di-value";
 
     private static final AnonSessionSnapshot SNAPSHOT = new AnonSessionSnapshot(
             ANON_SESSION_ID,
@@ -108,7 +116,6 @@ class AuthServiceUnitTest {
             "nick",
             "홍", "길동",
             "트윈리대학교", "20250001",
-            PHONE, "phoneHash",
             EMAIL, "emailHash",
             Instant.parse("2026-01-01T00:00:00Z")
     );
@@ -132,10 +139,7 @@ class AuthServiceUnitTest {
     AnonSessionIdentityVerificationRepository anonSessionIdentityVerificationRepository;
 
     @Mock
-    PortOneIdentityClient portOneIdentityClient;
-
-    @Spy
-    PortOneProperties portOneProperties = new PortOneProperties("api-secret", Set.of(PortOneChannelType.LIVE));
+    NiceIdentityService niceIdentityService;
 
     @Mock
     AnonSessionRepository anonSessionRepository;
@@ -259,31 +263,6 @@ class AuthServiceUnitTest {
         then(verificationCodeIssuer).should(never()).send(any(), any(), any());
     }
 
-    @Test
-    @DisplayName("온보딩 SMS 발송: 새 세션을 저장하고 발급된 코드를 SMS로 보낸다")
-    void onboardingSmsSend_creates_new_session() {
-        // given: 해당 익명 세션의 SMS 인증 세션이 아직 없음
-        given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.SMS))
-                .willReturn(Optional.empty());
-        given(verificationCodeIssuer.issue(PHONE)).willReturn(CODE);
-        given(verificationCodeIssuer.codeExpiresAt()).willReturn(Instant.now().plusSeconds(300));
-
-        // when: 온보딩 SMS 인증번호 발송
-        AuthSmsSendResult result = authService.onboardingSmsSend(SNAPSHOT, new AuthSmsSendCommand(PHONE));
-
-        // then: SMS 타입 세션이 저장되고, 저장된 토큰이 결과로 나가며, 발급 코드가 담긴 문자가 발송됨
-        ArgumentCaptor<AnonSessionVerificationSession> captor =
-                ArgumentCaptor.forClass(AnonSessionVerificationSession.class);
-        then(anonSessionVerificationSessionRepository).should().save(captor.capture());
-
-        AnonSessionVerificationSession saved = captor.getValue();
-        assertThat(saved.getType()).isEqualTo(VerificationType.SMS);
-        assertThat(saved.getContact()).isEqualTo(PHONE);
-        assertThat(result.smsVerificationToken()).isEqualTo(saved.getVerificationToken());
-
-        then(verificationCodeIssuer).should().send(VerificationType.SMS, PHONE, CODE);
-    }
-
     // ---------- 온보딩 인증 확인 ----------
 
     @Test
@@ -320,59 +299,6 @@ class AuthServiceUnitTest {
         // then: 세션에 인증 완료 시각이 기록되고, 학교는 사용자 입력이 아니라 인증된 도메인으로 결정됨
         assertThat(session.getVerifiedAt()).isNotNull();
         assertThat(anonSession.getOrganization()).isEqualTo("트윈리대학교");
-    }
-
-    @Test
-    @DisplayName("온보딩 SMS 인증 확인: 인증 토큰이 세션의 토큰과 다르면 VERIFICATION_NOT_FOUND 예외가 발생한다")
-    void onboardingSmsVerify_with_wrong_token_throws() {
-        // given: SMS 인증 세션이 존재하지만 요청 토큰은 다른 값
-        AnonSessionVerificationSession session = AnonSessionVerificationSession.create(
-                VerificationType.SMS, ANON_SESSION_ID, PHONE, "123456", Instant.now().plusSeconds(60));
-        given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.SMS))
-                .willReturn(Optional.of(session));
-
-        // when & then: VERIFICATION_NOT_FOUND 예외 발생 + 인증 완료 기록 없음
-        assertThatThrownBy(() -> authService.onboardingSmsVerify(
-                SNAPSHOT, new AuthSmsVerifyCommand(UUID.randomUUID(), "123456")))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(ErrorCode.VERIFICATION_NOT_FOUND);
-        assertThat(session.getVerifiedAt()).isNull();
-    }
-
-    @Test
-    @DisplayName("온보딩 SMS 인증 확인: 코드 유효 시간이 지났으면 VERIFICATION_CODE_EXPIRED 예외가 발생한다")
-    void onboardingSmsVerify_with_expired_code_throws() {
-        // given: 코드 만료 시각이 이미 지난 SMS 인증 세션
-        AnonSessionVerificationSession session = AnonSessionVerificationSession.create(
-                VerificationType.SMS, ANON_SESSION_ID, PHONE, "123456", Instant.now().minusSeconds(1));
-        given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.SMS))
-                .willReturn(Optional.of(session));
-
-        // when & then: VERIFICATION_CODE_EXPIRED 예외 발생
-        assertThatThrownBy(() -> authService.onboardingSmsVerify(
-                SNAPSHOT, new AuthSmsVerifyCommand(session.getVerificationToken(), "123456")))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(ErrorCode.VERIFICATION_CODE_EXPIRED);
-    }
-
-    @Test
-    @DisplayName("온보딩 SMS 인증 확인: 코드가 일치하지 않으면 VERIFICATION_CODE_MISMATCH 예외가 발생한다")
-    void onboardingSmsVerify_with_wrong_code_throws() {
-        // given: 유효 기간이 남은 SMS 인증 세션
-        AnonSessionVerificationSession session = AnonSessionVerificationSession.create(
-                VerificationType.SMS, ANON_SESSION_ID, PHONE, "123456", Instant.now().plusSeconds(60));
-        given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.SMS))
-                .willReturn(Optional.of(session));
-
-        // when & then: VERIFICATION_CODE_MISMATCH 예외 발생 + 인증 완료 기록 없음
-        assertThatThrownBy(() -> authService.onboardingSmsVerify(
-                SNAPSHOT, new AuthSmsVerifyCommand(session.getVerificationToken(), "999999")))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(ErrorCode.VERIFICATION_CODE_MISMATCH);
-        assertThat(session.getVerifiedAt()).isNull();
     }
 
     // ---------- 로그인용 인증번호 발송 ----------
@@ -500,53 +426,67 @@ class AuthServiceUnitTest {
     // ---------- 온보딩 본인인증 ----------
 
     @Test
-    @DisplayName("본인인증 발급: 발급 이력이 없으면 새 인증 건을 저장하고 발급한 id와 만료 시각을 반환한다")
+    @DisplayName("본인인증 발급: 발급 이력이 없으면 NICE 인증 URL을 받아 새 인증 건을 저장하고 authUrl과 return/close URL을 반환한다")
     void identityPrepare_creates_new_verification() {
-        // given: 이 익명 세션의 본인인증 행이 아직 없음
+        // given: 이 익명 세션의 본인인증 행이 아직 없고, NICE가 인증 URL을 정상 발급
         given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
                 .willReturn(Optional.empty());
+        givenNiceAuthUrl();
 
         // when: 본인인증 발급
         AuthIdentityPrepareResult result = authService.onboardingIdentityPrepare(SNAPSHOT);
 
-        // then: 예측 불가능한 id가 세션에 묶여 저장되고, 발급 횟수는 1로 시작한다
+        // then: 서버가 만든 request_no와 NICE가 준 transaction_id가 세션에 묶여 저장되고, 발급 횟수는 1로 시작한다
         ArgumentCaptor<AnonSessionIdentityVerification> captor =
                 ArgumentCaptor.forClass(AnonSessionIdentityVerification.class);
         then(anonSessionIdentityVerificationRepository).should().save(captor.capture());
 
         AnonSessionIdentityVerification saved = captor.getValue();
         assertThat(saved.getAnonSessionId()).isEqualTo(ANON_SESSION_ID);
-        assertThat(saved.getIdentityVerificationId()).startsWith("identity-").isEqualTo(result.identityVerificationId());
+        assertThat(saved.getRequestNo()).startsWith("TWINLY-");
+        assertThat(saved.getTransactionId()).isEqualTo(IDENTITY_TRANSACTION_ID);
         assertThat(saved.getIssueCount()).isEqualTo(1);
         assertThat(saved.isVerified()).isFalse();
 
-        // then: 만료는 30분 뒤이고 응답의 만료 시각과 같다
+        // then: NICE에 보낸 request_no와 저장된 값이 같다
+        then(niceIdentityService).should().requestAuthUrl(saved.getRequestNo());
+
+        // then: 앱에는 authUrl, return/close URL이 나가고 transaction_id는 나가지 않는다
+        assertThat(result.authUrl()).isEqualTo(IDENTITY_AUTH_URL);
+        assertThat(result.returnUrl()).isEqualTo(IDENTITY_RETURN_URL);
+        assertThat(result.closeUrl()).isEqualTo(IDENTITY_CLOSE_URL);
+
+        // then: 만료는 NICE transaction_id 유효시간에 맞춘 10분 뒤이고 응답의 만료 시각과 같다
         assertThat(result.expiresAt()).isEqualTo(saved.getExpiresAt());
-        assertThat(result.expiresAt()).isBetween(Instant.now().plus(29, ChronoUnit.MINUTES), Instant.now().plus(30, ChronoUnit.MINUTES));
+        assertThat(result.expiresAt()).isBetween(Instant.now().plus(9, ChronoUnit.MINUTES), Instant.now().plus(10, ChronoUnit.MINUTES));
     }
 
     @Test
-    @DisplayName("본인인증 발급: 이미 발급 이력이 있으면 새로 저장하지 않고 id를 교체하며 발급 횟수를 올린다")
-    void identityPrepare_replaces_previous_id() {
+    @DisplayName("본인인증 발급: 이미 발급 이력이 있으면 새로 저장하지 않고 request_no·transaction_id를 교체하며 발급 횟수를 올린다")
+    void identityPrepare_replaces_previous_request() {
         // given: 아직 인증되지 않은 발급 이력이 1회 존재
         AnonSessionIdentityVerification existing = issuedIdentity();
-        String previousId = existing.getIdentityVerificationId();
+        String previousRequestNo = existing.getRequestNo();
         given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
                 .willReturn(Optional.of(existing));
+        given(niceIdentityService.requestAuthUrl(anyString())).willReturn(new NiceAuthUrlResult(
+                IDENTITY_AUTH_URL, "tx-second", IDENTITY_RETURN_URL, IDENTITY_CLOSE_URL));
 
         // when: 본인인증 재발급
         AuthIdentityPrepareResult result = authService.onboardingIdentityPrepare(SNAPSHOT);
 
-        // then: 새 행을 만들지 않고 기존 행의 id가 교체되어 이전 id는 무효가 된다
+        // then: 새 행을 만들지 않고 기존 행의 식별자가 교체되어 이전 인증 건은 무효가 된다
         then(anonSessionIdentityVerificationRepository).should(never()).save(any());
-        assertThat(existing.getIdentityVerificationId()).isNotEqualTo(previousId).isEqualTo(result.identityVerificationId());
+        assertThat(existing.getRequestNo()).isNotEqualTo(previousRequestNo);
+        assertThat(existing.getTransactionId()).isEqualTo("tx-second");
+        assertThat(result.authUrl()).isEqualTo(IDENTITY_AUTH_URL);
 
         // then: 발급 횟수가 누적된다 (재발급으로 초기화되지 않는다)
         assertThat(existing.getIssueCount()).isEqualTo(2);
     }
 
     @Test
-    @DisplayName("본인인증 발급: 이미 인증이 끝난 세션이면 IDENTITY_ALREADY_VERIFIED 예외가 발생한다")
+    @DisplayName("본인인증 발급: 이미 인증이 끝난 세션이면 NICE를 호출하지 않고 IDENTITY_ALREADY_VERIFIED 예외가 발생한다")
     void identityPrepare_when_already_verified_throws() {
         // given: 이미 본인인증을 마친 세션
         given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
@@ -557,25 +497,27 @@ class AuthServiceUnitTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.IDENTITY_ALREADY_VERIFIED);
+        then(niceIdentityService).shouldHaveNoInteractions();
     }
 
     @Test
-    @DisplayName("본인인증 발급: 같은 시간 창에서 5회를 채웠으면 IDENTITY_RATE_LIMITED 예외가 발생하고 id를 바꾸지 않는다")
+    @DisplayName("본인인증 발급: 같은 시간 창에서 5회를 채웠으면 NICE를 호출하지 않고 IDENTITY_RATE_LIMITED 예외가 발생하며 인증 건을 바꾸지 않는다")
     void identityPrepare_when_rate_limited_throws() {
         // given: 1시간 창 안에서 이미 5회 발급한 세션
         AnonSessionIdentityVerification existing = issuedIdentity();
         ReflectionTestUtils.setField(existing, "issueCount", 5);
-        String previousId = existing.getIdentityVerificationId();
+        String previousRequestNo = existing.getRequestNo();
         given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
                 .willReturn(Optional.of(existing));
 
-        // when & then: 429로 막고, 발급 상태는 그대로 유지된다
+        // when & then: 429로 막고, NICE 호출 없이 발급 상태는 그대로 유지된다
         assertThatThrownBy(() -> authService.onboardingIdentityPrepare(SNAPSHOT))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.IDENTITY_RATE_LIMITED);
 
-        assertThat(existing.getIdentityVerificationId()).isEqualTo(previousId);
+        then(niceIdentityService).shouldHaveNoInteractions();
+        assertThat(existing.getRequestNo()).isEqualTo(previousRequestNo);
         assertThat(existing.getIssueCount()).isEqualTo(5);
     }
 
@@ -588,129 +530,132 @@ class AuthServiceUnitTest {
         ReflectionTestUtils.setField(existing, "issueWindowStartedAt", Instant.now().minus(Duration.ofHours(2)));
         given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
                 .willReturn(Optional.of(existing));
+        givenNiceAuthUrl();
 
         // when: 본인인증 발급
         AuthIdentityPrepareResult result = authService.onboardingIdentityPrepare(SNAPSHOT);
 
         // then: 새 창이 시작되어 발급이 허용된다
-        assertThat(result.identityVerificationId()).isEqualTo(existing.getIdentityVerificationId());
+        assertThat(result.authUrl()).isEqualTo(IDENTITY_AUTH_URL);
         assertThat(existing.getIssueCount()).isEqualTo(1);
     }
 
     @Test
-    @DisplayName("본인인증 검증: PortOne이 인증 완료로 응답하면 이름·생년월일·성별·연락처·CI를 세션에 기록한다")
-    void identityVerify_success_records_customer() {
-        // given: 발급된 id가 있고, PortOne이 LIVE 채널의 인증 완료 건을 반환
-        AnonSessionIdentityVerification issued = issuedIdentity();
-        givenIssuedIdentity(issued);
-        givenPortOneReturns(verifiedBody(adultBirthDate()));
-        given(blindIndexHasher.hash(CI)).willReturn("hash:" + CI);
-        given(userRepository.existsByCiHash("hash:" + CI)).willReturn(false);
+    @DisplayName("본인인증 발급: NICE 인증 URL 발급이 실패하면 예외가 그대로 올라가고 인증 건은 저장·변경되지 않는다")
+    void identityPrepare_when_nice_fails_does_not_persist() {
+        // given: 발급 이력이 없고, NICE 연동이 실패
+        given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
+                .willReturn(Optional.empty());
+        given(niceIdentityService.requestAuthUrl(anyString()))
+                .willThrow(new BusinessException(ErrorCode.IDENTITY_VERIFICATION_FAILED));
 
-        // when: 본인인증 검증
-        authService.onboardingIdentityVerify(SNAPSHOT);
-
-        // then: 검증된 개인정보가 세션에 기록되고 id가 소비 처리된다
-        assertThat(issued.isVerified()).isTrue();
-        assertThat(issued.getName()).isEqualTo(IDENTITY_NAME);
-        assertThat(issued.getBirthDate()).isEqualTo(adultBirthDate());
-        assertThat(issued.getGender()).isEqualTo(Gender.MALE);
-        assertThat(issued.getPhoneNumber()).isEqualTo(IDENTITY_PHONE);
-        assertThat(issued.getCi()).isEqualTo(CI);
-        assertThat(issued.getCiHash()).isEqualTo("hash:" + CI);
+        // when & then: 502로 나가고, transaction_id 없는 반쪽 인증 건이 남지 않는다
+        assertThatThrownBy(() -> authService.onboardingIdentityPrepare(SNAPSHOT))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.IDENTITY_VERIFICATION_FAILED);
+        then(anonSessionIdentityVerificationRepository).should(never()).save(any());
     }
 
     @Test
-    @DisplayName("본인인증 검증: 발급 이력이 없으면 IDENTITY_NOT_VERIFIED 예외가 발생하고 PortOne을 조회하지 않는다")
-    void identityVerify_without_issued_id_throws() {
-        // given: 이 세션에 발급된 본인인증 건이 없음
+    @DisplayName("본인인증 검증: NICE 결과를 받으면 이름·생년월일·성별·내외국인·연락처·통신사·DI를 세션에 기록한다")
+    void identityVerify_success_records_result() {
+        // given: 발급된 인증 건이 있고, NICE 가 휴대폰 인증 결과 7개 항목을 돌려줌
+        AnonSessionIdentityVerification issued = issuedIdentity();
+        givenIssuedIdentity(issued);
+        givenNiceResult(niceResult(compact(adult())));
+        given(blindIndexHasher.hash(DI)).willReturn("hash:" + DI);
+        given(userRepository.existsByDiHash("hash:" + DI)).willReturn(false);
+
+        // when: 앱이 웹뷰에서 가로챈 web_transaction_id 로 검증
+        authService.onboardingIdentityVerify(SNAPSHOT, VERIFY_COMMAND);
+
+        // then: NICE 코드값이 우리 enum 으로, yyyymmdd 가 yyyy-MM-dd 로 바뀌어 기록된다
+        assertThat(issued.isVerified()).isTrue();
+        assertThat(issued.getName()).isEqualTo(IDENTITY_NAME);
+        assertThat(issued.getBirthDate()).isEqualTo(adult().toString());
+        assertThat(issued.getGender()).isEqualTo(Gender.MALE);
+        assertThat(issued.getNationalInfo()).isEqualTo(NationalInfo.DOMESTIC);
+        assertThat(issued.getPhoneNumber()).isEqualTo(IDENTITY_PHONE);
+        assertThat(issued.getMobileCarrier()).isEqualTo(MobileCarrier.SKT);
+        assertThat(issued.getDi()).isEqualTo(DI);
+        assertThat(issued.getDiHash()).isEqualTo("hash:" + DI);
+
+        // then: 결과 조회에 저장된 request_no·transaction_id 와 앱이 보낸 web_transaction_id 세 값을 함께 쓴다
+        then(niceIdentityService).should().fetchResult(IDENTITY_REQUEST_NO, IDENTITY_TRANSACTION_ID, WEB_TRANSACTION_ID);
+    }
+
+    @Test
+    @DisplayName("본인인증 검증: 발급 이력이 없으면 IDENTITY_NOT_VERIFIED 예외가 발생하고 NICE 를 조회하지 않는다")
+    void identityVerify_without_issued_throws() {
+        // given
         given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
                 .willReturn(Optional.empty());
 
-        // when & then: 422로 막고 외부 조회는 하지 않는다
-        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT))
+        // when & then
+        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT, VERIFY_COMMAND))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.IDENTITY_NOT_VERIFIED);
-
-        then(portOneIdentityClient).should(never()).identityVerification(anyString());
+        then(niceIdentityService).shouldHaveNoInteractions();
     }
 
     @Test
-    @DisplayName("본인인증 검증: 이미 인증된 세션의 재호출은 PortOne 조회 없이 성공으로 끝난다 (멱등)")
+    @DisplayName("본인인증 검증: 이미 인증된 세션의 재호출은 NICE 조회 없이 성공으로 끝난다 (결과 조회는 1회만 가능하므로 멱등이어야 한다)")
     void identityVerify_when_already_verified_is_idempotent() {
-        // given: 이미 인증이 끝난 세션
+        // given
         given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
                 .willReturn(Optional.of(verifiedIdentity()));
 
-        // when: 본인인증 검증 재호출
-        authService.onboardingIdentityVerify(SNAPSHOT);
+        // when
+        authService.onboardingIdentityVerify(SNAPSHOT, VERIFY_COMMAND);
 
-        // then: 외부 조회(과금 유발 지점)를 반복하지 않는다
-        then(portOneIdentityClient).should(never()).identityVerification(anyString());
+        // then
+        then(niceIdentityService).shouldHaveNoInteractions();
     }
 
     @Test
-    @DisplayName("본인인증 검증: 발급한 id가 만료되었으면 IDENTITY_NOT_VERIFIED 예외가 발생하고 PortOne을 조회하지 않는다")
-    void identityVerify_with_expired_id_throws() {
-        // given: 만료 시각이 지난 발급 건
+    @DisplayName("본인인증 검증: 발급한 인증 건이 만료되었으면 IDENTITY_NOT_VERIFIED 예외가 발생하고 NICE 를 조회하지 않는다")
+    void identityVerify_with_expired_throws() {
+        // given
         AnonSessionIdentityVerification expired = issuedIdentity();
         ReflectionTestUtils.setField(expired, "expiresAt", Instant.now().minusSeconds(1));
-        given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
-                .willReturn(Optional.of(expired));
+        givenIssuedIdentity(expired);
 
-        // when & then: 422로 막고 외부 조회는 하지 않는다
-        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT))
+        // when & then
+        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT, VERIFY_COMMAND))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.IDENTITY_NOT_VERIFIED);
-
-        then(portOneIdentityClient).should(never()).identityVerification(anyString());
+        then(niceIdentityService).shouldHaveNoInteractions();
     }
 
     @Test
-    @DisplayName("본인인증 검증: PortOne에 인증 건이 없으면 IDENTITY_NOT_VERIFIED 예외가 발생한다")
-    void identityVerify_when_portone_not_found_throws() {
-        // given: PortOne 조회 결과 없음(404)
-        givenIssuedIdentity(issuedIdentity());
-        given(portOneIdentityClient.identityVerification(IDENTITY_VERIFICATION_ID)).willReturn(Optional.empty());
+    @DisplayName("본인인증 검증: transaction_id 가 없는 행(NICE 전환 전 발급 건)이면 IDENTITY_NOT_VERIFIED 로 재발급을 유도한다")
+    void identityVerify_without_transaction_id_throws() {
+        // given
+        AnonSessionIdentityVerification legacy = issuedIdentity();
+        ReflectionTestUtils.setField(legacy, "transactionId", null);
+        givenIssuedIdentity(legacy);
 
-        // when & then: 인증되지 않은 것과 같게 취급한다
-        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT))
+        // when & then
+        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT, VERIFY_COMMAND))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.IDENTITY_NOT_VERIFIED);
+        then(niceIdentityService).shouldHaveNoInteractions();
     }
 
     @Test
-    @DisplayName("본인인증 검증: PortOne 상태가 READY면 IDENTITY_NOT_VERIFIED 예외가 발생한다")
-    void identityVerify_when_status_is_not_verified_throws() {
-        // given: 인증창을 열었지만 아직 끝나지 않은 상태
+    @DisplayName("본인인증 검증: NICE 가 결과를 제공하지 않으면(미완료·만료·기제공) IDENTITY_NOT_VERIFIED 가 그대로 올라간다")
+    void identityVerify_when_nice_result_not_available_throws() {
+        // given
         givenIssuedIdentity(issuedIdentity());
-        givenPortOneReturns(new PortOneIdentityVerificationBody(
-                PortOneIdentityVerificationStatus.READY,
-                new PortOneIdentityVerificationBody.Channel(PortOneChannelType.LIVE),
-                customer(adultBirthDate(), IDENTITY_NAME, "MALE", IDENTITY_PHONE, CI)));
+        given(niceIdentityService.fetchResult(IDENTITY_REQUEST_NO, IDENTITY_TRANSACTION_ID, WEB_TRANSACTION_ID))
+                .willThrow(new NiceResultNotAvailableException("3032"));
 
-        // when & then: VERIFIED가 아니면 통과시키지 않는다
-        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(ErrorCode.IDENTITY_NOT_VERIFIED);
-    }
-
-    @Test
-    @DisplayName("본인인증 검증: 허용되지 않은 TEST 채널 인증 건이면 IDENTITY_NOT_VERIFIED 예외가 발생한다")
-    void identityVerify_with_not_allowed_channel_throws() {
-        // given: LIVE만 허용하는 환경에서 TEST 채널로 인증된 건
-        givenIssuedIdentity(issuedIdentity());
-        givenPortOneReturns(new PortOneIdentityVerificationBody(
-                PortOneIdentityVerificationStatus.VERIFIED,
-                new PortOneIdentityVerificationBody.Channel(PortOneChannelType.TEST),
-                customer(adultBirthDate(), IDENTITY_NAME, "MALE", IDENTITY_PHONE, CI)));
-
-        // when & then: 테스트 채널 키로 운영 가입이 뚫리지 않도록 막는다
-        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT))
+        // when & then
+        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT, VERIFY_COMMAND))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.IDENTITY_NOT_VERIFIED);
@@ -719,29 +664,29 @@ class AuthServiceUnitTest {
     @Test
     @DisplayName("본인인증 검증: 만 18세 생일 당일은 통과한다 (하한 경계)")
     void identityVerify_at_min_age_boundary_passes() {
-        // given: 오늘이 만 18세 생일인 사람
+        // given
         AnonSessionIdentityVerification issued = issuedIdentity();
         givenIssuedIdentity(issued);
-        givenPortOneReturns(verifiedBody(KstTimes.today().minusYears(18).toString()));
-        given(blindIndexHasher.hash(CI)).willReturn("hash:" + CI);
-        given(userRepository.existsByCiHash("hash:" + CI)).willReturn(false);
+        givenNiceResult(niceResult(compact(KstTimes.today().minusYears(18))));
+        given(blindIndexHasher.hash(DI)).willReturn("hash:" + DI);
+        given(userRepository.existsByDiHash("hash:" + DI)).willReturn(false);
 
-        // when: 본인인증 검증
-        authService.onboardingIdentityVerify(SNAPSHOT);
+        // when
+        authService.onboardingIdentityVerify(SNAPSHOT, VERIFY_COMMAND);
 
-        // then: 경계값은 통과한다
+        // then
         assertThat(issued.isVerified()).isTrue();
     }
 
     @Test
     @DisplayName("본인인증 검증: 만 18세 생일 하루 전이면 IDENTITY_AGE_NOT_ALLOWED 예외가 발생한다")
     void identityVerify_below_min_age_throws() {
-        // given: 만 18세가 되기 하루 전인 사람
+        // given
         givenIssuedIdentity(issuedIdentity());
-        givenPortOneReturns(verifiedBody(KstTimes.today().minusYears(18).plusDays(1).toString()));
+        givenNiceResult(niceResult(compact(KstTimes.today().minusYears(18).plusDays(1))));
 
-        // when & then: 연령 미달로 막는다
-        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT))
+        // when & then
+        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT, VERIFY_COMMAND))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.IDENTITY_AGE_NOT_ALLOWED);
@@ -750,103 +695,88 @@ class AuthServiceUnitTest {
     @Test
     @DisplayName("본인인증 검증: 만 29세 생일 당일이면 IDENTITY_AGE_NOT_ALLOWED 예외가 발생한다 (상한 경계)")
     void identityVerify_at_max_age_boundary_throws() {
-        // given: 오늘이 만 29세 생일인 사람
+        // given
         givenIssuedIdentity(issuedIdentity());
-        givenPortOneReturns(verifiedBody(KstTimes.today().minusYears(29).toString()));
+        givenNiceResult(niceResult(compact(KstTimes.today().minusYears(29))));
 
-        // when & then: 상한 경계는 거절한다
-        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT))
+        // when & then
+        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT, VERIFY_COMMAND))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.IDENTITY_AGE_NOT_ALLOWED);
     }
 
     @Test
-    @DisplayName("본인인증 검증: 인증은 끝났는데 CI가 없으면 IDENTITY_VERIFICATION_FAILED 예외가 발생한다")
-    void identityVerify_without_ci_throws() {
-        // given: 인증 완료 응답이지만 CI가 비어 있음
+    @DisplayName("본인인증 검증: 결과에 DI 가 없으면 IDENTITY_VERIFICATION_FAILED 예외가 발생한다 (계약·연동 이상)")
+    void identityVerify_without_di_throws() {
+        // given
         givenIssuedIdentity(issuedIdentity());
-        givenPortOneReturns(new PortOneIdentityVerificationBody(
-                PortOneIdentityVerificationStatus.VERIFIED,
-                new PortOneIdentityVerificationBody.Channel(PortOneChannelType.LIVE),
-                customer(adultBirthDate(), IDENTITY_NAME, "MALE", IDENTITY_PHONE, null)));
+        givenNiceResult(niceResult(compact(adult()), "1", "0", null, "1", IDENTITY_PHONE));
 
-        // when & then: 유저 사유가 아니라 연동 이상이므로 5xx로 보고한다
-        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT))
+        // when & then
+        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT, VERIFY_COMMAND))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.IDENTITY_VERIFICATION_FAILED);
     }
 
     @Test
-    @DisplayName("본인인증 검증: 우리 성별 값으로 매핑되지 않는 응답이면 IDENTITY_VERIFICATION_FAILED 예외가 발생한다")
-    void identityVerify_with_unmappable_gender_throws() {
-        // given: 인증 완료 응답이지만 성별이 OTHER
+    @DisplayName("본인인증 검증: 성별 코드가 0/1 이 아니면 IDENTITY_VERIFICATION_FAILED 예외가 발생한다")
+    void identityVerify_with_unknown_gender_code_throws() {
+        // given
         givenIssuedIdentity(issuedIdentity());
-        givenPortOneReturns(new PortOneIdentityVerificationBody(
-                PortOneIdentityVerificationStatus.VERIFIED,
-                new PortOneIdentityVerificationBody.Channel(PortOneChannelType.LIVE),
-                customer(adultBirthDate(), IDENTITY_NAME, "OTHER", IDENTITY_PHONE, CI)));
+        givenNiceResult(niceResult(compact(adult()), "9", "0", DI, "1", IDENTITY_PHONE));
 
-        // when & then: 저장할 수 없는 값이므로 통과시키지 않는다
-        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT))
+        // when & then
+        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT, VERIFY_COMMAND))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.IDENTITY_VERIFICATION_FAILED);
     }
 
     @Test
-    @DisplayName("본인인증 검증: TEST 채널이 허용된 환경에서 성별이 비어 있으면 MALE로 채워 통과한다")
-    void identityVerify_with_missing_gender_on_test_channel_falls_back_to_male() {
-        // given: TEST 채널을 허용하는 환경이고, 테스트 채널이 성별을 내려주지 않은 응답
+    @DisplayName("본인인증 검증: 통신사 코드가 정의되지 않은 값이면 IDENTITY_VERIFICATION_FAILED 예외가 발생한다")
+    void identityVerify_with_unknown_carrier_code_throws() {
+        // given: NICE 가 새 코드를 추가했는데 우리가 모르는 상태를 조용히 넘기지 않는다
+        givenIssuedIdentity(issuedIdentity());
+        givenNiceResult(niceResult(compact(adult()), "1", "0", DI, "8", IDENTITY_PHONE));
+
+        // when & then
+        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT, VERIFY_COMMAND))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.IDENTITY_VERIFICATION_FAILED);
+    }
+
+    @Test
+    @DisplayName("본인인증 검증: 생년월일이 yyyymmdd 형식이 아니면 IDENTITY_VERIFICATION_FAILED 예외가 발생한다")
+    void identityVerify_with_broken_birthdate_throws() {
+        // given
+        givenIssuedIdentity(issuedIdentity());
+        givenNiceResult(niceResult("1999-03-14"));
+
+        // when & then
+        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT, VERIFY_COMMAND))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.IDENTITY_VERIFICATION_FAILED);
+    }
+
+    @Test
+    @DisplayName("본인인증 검증: 같은 DI 로 이미 가입한 계정이 있으면 IDENTITY_ALREADY_REGISTERED 예외가 발생하고 세션에 기록하지 않는다")
+    void identityVerify_with_duplicated_di_throws() {
+        // given
         AnonSessionIdentityVerification issued = issuedIdentity();
         givenIssuedIdentity(issued);
-        willReturn(true).given(portOneProperties).allows(PortOneChannelType.TEST);
-        givenPortOneReturns(new PortOneIdentityVerificationBody(
-                PortOneIdentityVerificationStatus.VERIFIED,
-                new PortOneIdentityVerificationBody.Channel(PortOneChannelType.TEST),
-                customer(adultBirthDate(), IDENTITY_NAME, null, IDENTITY_PHONE, CI)));
-        given(blindIndexHasher.hash(CI)).willReturn("hash:" + CI);
-        given(userRepository.existsByCiHash("hash:" + CI)).willReturn(false);
+        givenNiceResult(niceResult(compact(adult())));
+        given(blindIndexHasher.hash(DI)).willReturn("hash:" + DI);
+        given(userRepository.existsByDiHash("hash:" + DI)).willReturn(true);
 
-        // when: 본인인증 검증
-        authService.onboardingIdentityVerify(SNAPSHOT);
-
-        // then: 검증을 막지 않고 MALE로 채워 진행한다
-        assertThat(issued.isVerified()).isTrue();
-        assertThat(issued.getGender()).isEqualTo(Gender.MALE);
-    }
-
-    @Test
-    @DisplayName("본인인증 검증: 생년월일 형식이 깨져 있으면 IDENTITY_VERIFICATION_FAILED 예외가 발생한다")
-    void identityVerify_with_broken_birth_date_throws() {
-        // given: 인증 완료 응답이지만 생년월일이 yyyy-MM-dd 형식이 아님
-        givenIssuedIdentity(issuedIdentity());
-        givenPortOneReturns(verifiedBody("19990314"));
-
-        // when & then: 연령을 계산할 수 없으므로 5xx로 보고한다
-        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(ErrorCode.IDENTITY_VERIFICATION_FAILED);
-    }
-
-    @Test
-    @DisplayName("본인인증 검증: 같은 CI로 이미 가입한 계정이 있으면 IDENTITY_ALREADY_REGISTERED 예외가 발생하고 세션에 기록하지 않는다")
-    void identityVerify_with_duplicated_ci_throws() {
-        // given: 인증은 통과했지만 같은 CI의 활성 계정이 이미 존재
-        AnonSessionIdentityVerification issued = issuedIdentity();
-        givenIssuedIdentity(issued);
-        givenPortOneReturns(verifiedBody(adultBirthDate()));
-        given(blindIndexHasher.hash(CI)).willReturn("hash:" + CI);
-        given(userRepository.existsByCiHash("hash:" + CI)).willReturn(true);
-
-        // when & then: 409로 막고 인증 완료로 기록하지 않는다
-        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT))
+        // when & then
+        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT, VERIFY_COMMAND))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.IDENTITY_ALREADY_REGISTERED);
-
         assertThat(issued.isVerified()).isFalse();
     }
 
@@ -989,7 +919,7 @@ class AuthServiceUnitTest {
         given(blindIndexHasher.hash(anyString())).willAnswer(invocation -> "hash:" + invocation.getArgument(0));
         given(userRepository.existsByPhoneNumberHash("hash:" + IDENTITY_PHONE)).willReturn(false);
         given(userRepository.existsByEmailHash("hash:" + EMAIL)).willReturn(false);
-        given(userRepository.existsByCiHash("hash:" + CI)).willReturn(true);
+        given(userRepository.existsByDiHash("hash:" + DI)).willReturn(true);
 
         // when & then: verify와 signup 사이의 경합을 가입 직전에 다시 막는다
         assertThatThrownBy(() -> authService.signup(SNAPSHOT))
@@ -1032,8 +962,8 @@ class AuthServiceUnitTest {
         assertThat(created.getPhoneNumberHash()).isEqualTo("hash:" + IDENTITY_PHONE);
         assertThat(created.getBirthDate()).isEqualTo(IDENTITY_BIRTH_DATE);
         assertThat(created.getGender()).isEqualTo(Gender.FEMALE);
-        assertThat(created.getCi()).isEqualTo(CI);
-        assertThat(created.getCiHash()).isEqualTo("hash:" + CI);
+        assertThat(created.getDi()).isEqualTo(DI);
+        assertThat(created.getDiHash()).isEqualTo("hash:" + DI);
 
         // then: 이름은 본인인증 값이 아니라 온보딩 입력값을 그대로 쓴다
         assertThat(created.getFamilyName()).isEqualTo("홍");
@@ -1253,34 +1183,40 @@ class AuthServiceUnitTest {
                 .willReturn(Optional.of(issued));
     }
 
-    private void givenPortOneReturns(PortOneIdentityVerificationBody body) {
-        given(portOneIdentityClient.identityVerification(IDENTITY_VERIFICATION_ID)).willReturn(Optional.of(body));
-    }
-
     private AnonSessionIdentityVerification issuedIdentity() {
         return AnonSessionIdentityVerification.create(
-                ANON_SESSION_ID, IDENTITY_VERIFICATION_ID, Instant.now().plus(30, ChronoUnit.MINUTES));
+                ANON_SESSION_ID, IDENTITY_REQUEST_NO, IDENTITY_TRANSACTION_ID, Instant.now().plus(10, ChronoUnit.MINUTES));
+    }
+
+    private void givenNiceAuthUrl() {
+        given(niceIdentityService.requestAuthUrl(anyString())).willReturn(new NiceAuthUrlResult(
+                IDENTITY_AUTH_URL, IDENTITY_TRANSACTION_ID, IDENTITY_RETURN_URL, IDENTITY_CLOSE_URL));
     }
 
     private AnonSessionIdentityVerification verifiedIdentity() {
         AnonSessionIdentityVerification verification = issuedIdentity();
-        verification.verify(IDENTITY_NAME, IDENTITY_BIRTH_DATE, Gender.FEMALE, IDENTITY_PHONE, CI, "hash:" + CI);
+        verification.verify(IDENTITY_NAME, IDENTITY_BIRTH_DATE, Gender.FEMALE, IDENTITY_PHONE, DI, "hash:" + DI, NationalInfo.DOMESTIC, MobileCarrier.SKT);
         return verification;
     }
 
-    private PortOneIdentityVerificationBody verifiedBody(String birthDate) {
-        return new PortOneIdentityVerificationBody(
-                PortOneIdentityVerificationStatus.VERIFIED,
-                new PortOneIdentityVerificationBody.Channel(PortOneChannelType.LIVE),
-                customer(birthDate, IDENTITY_NAME, "MALE", IDENTITY_PHONE, CI));
+    private void givenNiceResult(NiceAuthResult result) {
+        given(niceIdentityService.fetchResult(IDENTITY_REQUEST_NO, IDENTITY_TRANSACTION_ID, WEB_TRANSACTION_ID)).willReturn(result);
     }
 
-    private PortOneIdentityVerificationBody.VerifiedCustomer customer(String birthDate,
-                                                                     String name,
-                                                                     String gender,
-                                                                     String phoneNumber,
-                                                                     String ci) {
-        return new PortOneIdentityVerificationBody.VerifiedCustomer(name, birthDate, gender, phoneNumber, ci);
+    private NiceAuthResult niceResult(String birthdate) {
+        return niceResult(birthdate, "1", "0", DI, "1", IDENTITY_PHONE);
+    }
+
+    private NiceAuthResult niceResult(String birthdate, String gender, String nationalInfo, String di, String mobileCo, String mobileNo) {
+        return new NiceAuthResult(IDENTITY_NAME, birthdate, gender, nationalInfo, di, mobileCo, mobileNo);
+    }
+
+    private LocalDate adult() {
+        return KstTimes.today().minusYears(25);
+    }
+
+    private String compact(LocalDate date) {
+        return date.format(DateTimeFormatter.BASIC_ISO_DATE);
     }
 
     private String adultBirthDate() {
@@ -1326,7 +1262,7 @@ class AuthServiceUnitTest {
                 "20250001", "hash:20250001",
                 "2000-01-01", "hash:2000-01-01",
                 PHONE, "hash:" + PHONE,
-                EMAIL, "hash:" + EMAIL, null, null);
+                EMAIL, "hash:" + EMAIL, null, null, null, null);
         ReflectionTestUtils.setField(user, "id", USER_ID);
         return user;
     }

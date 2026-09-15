@@ -117,7 +117,7 @@ public abstract class AbstractWebSocketIntegrationTest {
                 "2000-01-01", "birthHash" + n,
                 "phone" + n, "phoneHash" + n,
                 "email" + n + "@test.com", "emailHash" + n, null, null
-        ));
+        , null, null));
     }
 
     /** 해당 유저의 WS 접속 티켓(단발성)을 발급한다. 핸드셰이크 쿼리파라미터 ticket 로 쓴다. */
