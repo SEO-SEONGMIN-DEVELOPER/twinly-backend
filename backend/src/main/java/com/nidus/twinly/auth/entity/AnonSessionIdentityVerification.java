@@ -2,6 +2,8 @@ package com.nidus.twinly.auth.entity;
 
 import com.nidus.twinly.common.crypto.EncryptedStringConverter;
 import com.nidus.twinly.common.domain.Gender;
+import com.nidus.twinly.common.domain.MobileCarrier;
+import com.nidus.twinly.common.domain.NationalInfo;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -24,7 +26,9 @@ public class AnonSessionIdentityVerification {
 
     private Long anonSessionId;
 
-    private String identityVerificationId;
+    private String requestNo;
+
+    private String transactionId;
 
     private Instant expiresAt;
 
@@ -41,16 +45,22 @@ public class AnonSessionIdentityVerification {
     @Enumerated(EnumType.STRING)
     private Gender gender;
 
+    @Enumerated(EnumType.STRING)
+    private NationalInfo nationalInfo;
+
     @Convert(converter = EncryptedStringConverter.class)
     @Column(columnDefinition = "TEXT")
     private String phoneNumber;
 
+    @Enumerated(EnumType.STRING)
+    private MobileCarrier mobileCarrier;
+
     @Convert(converter = EncryptedStringConverter.class)
     @Column(columnDefinition = "TEXT")
-    private String ci;
+    private String di;
 
     @Column(columnDefinition = "TEXT")
-    private String ciHash;
+    private String diHash;
 
     private Instant issueWindowStartedAt;
 
@@ -58,11 +68,12 @@ public class AnonSessionIdentityVerification {
 
     private Instant createdAt;
 
-    public static AnonSessionIdentityVerification create(Long anonSessionId, String identityVerificationId, Instant expiresAt) {
+    public static AnonSessionIdentityVerification create(Long anonSessionId, String requestNo, String transactionId, Instant expiresAt) {
         AnonSessionIdentityVerification verification = new AnonSessionIdentityVerification();
 
         verification.anonSessionId = anonSessionId;
-        verification.identityVerificationId = identityVerificationId;
+        verification.requestNo = requestNo;
+        verification.transactionId = transactionId;
         verification.expiresAt = expiresAt;
         verification.issueWindowStartedAt = Instant.now();
         verification.issueCount = 1;
@@ -93,18 +104,22 @@ public class AnonSessionIdentityVerification {
         this.issueCount = 1;
     }
 
-    public void refresh(String identityVerificationId, Instant expiresAt) {
-        this.identityVerificationId = identityVerificationId;
+    public void refresh(String requestNo, String transactionId, Instant expiresAt) {
+        this.requestNo = requestNo;
+        this.transactionId = transactionId;
         this.expiresAt = expiresAt;
     }
 
-    public void verify(String name, String birthDate, Gender gender, String phoneNumber, String ci, String ciHash) {
+    public void verify(String name, String birthDate, Gender gender, String phoneNumber, String di, String diHash,
+                       NationalInfo nationalInfo, MobileCarrier mobileCarrier) {
         this.name = name;
         this.birthDate = birthDate;
         this.gender = gender;
         this.phoneNumber = phoneNumber;
-        this.ci = ci;
-        this.ciHash = ciHash;
+        this.di = di;
+        this.diHash = diHash;
+        this.nationalInfo = nationalInfo;
+        this.mobileCarrier = mobileCarrier;
         this.verifiedAt = Instant.now();
     }
 }

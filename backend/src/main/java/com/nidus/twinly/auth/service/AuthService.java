@@ -15,15 +15,12 @@ import com.nidus.twinly.anon.repository.AnonSessionPhotoRepository;
 import com.nidus.twinly.anon.repository.AnonSessionRepository;
 import com.nidus.twinly.auth.entity.RefreshToken;
 import com.nidus.twinly.auth.repository.RefreshTokenRepository;
+import com.nidus.twinly.common.logging.WarnLog;
 import com.nidus.twinly.legal.domain.PolicyKind;
 import com.nidus.twinly.legal.entity.Agreement;
 import com.nidus.twinly.legal.repository.AgreementRepository;
 import com.nidus.twinly.legal.service.PolicyCatalog;
-import com.nidus.twinly.auth.client.PortOneChannelType;
-import com.nidus.twinly.auth.client.PortOneIdentityClient;
-import com.nidus.twinly.auth.client.PortOneIdentityVerificationBody;
-import com.nidus.twinly.auth.client.PortOneIdentityVerificationStatus;
-import com.nidus.twinly.auth.config.PortOneProperties;
+import com.nidus.twinly.auth.client.NiceAuthResult;
 import com.nidus.twinly.auth.dto.command.*;
 import com.nidus.twinly.auth.dto.result.*;
 import com.nidus.twinly.auth.entity.AnonSessionIdentityVerification;
@@ -34,6 +31,8 @@ import com.nidus.twinly.auth.repository.AnonSessionVerificationSessionRepository
 import com.nidus.twinly.auth.repository.VerificationSessionRepository;
 import com.nidus.twinly.common.crypto.BlindIndexHasher;
 import com.nidus.twinly.common.domain.Gender;
+import com.nidus.twinly.common.domain.MobileCarrier;
+import com.nidus.twinly.common.domain.NationalInfo;
 import com.nidus.twinly.common.domain.VerificationType;
 import com.nidus.twinly.common.jwt.JwtService;
 import com.nidus.twinly.common.photo.ProfileThumbnailService;
@@ -61,6 +60,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Period;
+import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -68,26 +68,26 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static com.nidus.twinly.common.logging.LogField.field;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
 
-    private static final String IDENTITY_VERIFICATION_ID_PREFIX = "identity-";
-    private static final int IDENTITY_EXPIRES_MINUTES = 30;
+    private static final String IDENTITY_REQUEST_NO_PREFIX = "TWINLY-";
+    private static final int IDENTITY_EXPIRES_MINUTES = 10;
     private static final Duration IDENTITY_ISSUE_WINDOW = Duration.ofHours(1);
     private static final int IDENTITY_ISSUE_LIMIT = 5;
     private static final int IDENTITY_MIN_AGE = 18;
     private static final int IDENTITY_MAX_AGE = 29;
-    private static final Gender IDENTITY_TEST_CHANNEL_FALLBACK_GENDER = Gender.MALE;
 
     private final VerificationCodeIssuer verificationCodeIssuer;
     private final JwtService jwtService;
     private final VerificationService verificationService;
     private final OrganizationCatalog organizationCatalog;
     private final PolicyCatalog policyCatalog;
-    private final PortOneIdentityClient portOneIdentityClient;
-    private final PortOneProperties portOneProperties;
+    private final NiceIdentityService niceIdentityService;
 
     private final VerificationSessionRepository verificationSessionRepository;
     private final AnonSessionVerificationSessionRepository anonSessionVerificationSessionRepository;
@@ -140,36 +140,38 @@ public class AuthService {
     @Transactional
     public AuthIdentityPrepareResult onboardingIdentityPrepare(AnonSessionSnapshot anonSessionSnapshot) {
         Instant now = Instant.now();
-        String identityVerificationId = IDENTITY_VERIFICATION_ID_PREFIX + UUID.randomUUID();
-        Instant expiresAt = now.plus(IDENTITY_EXPIRES_MINUTES, ChronoUnit.MINUTES);
 
         AnonSessionIdentityVerification verification = anonSessionIdentityVerificationRepository
                 .findByAnonSessionId(anonSessionSnapshot.id())
                 .orElse(null);
 
+        if (verification != null) {
+            if (verification.isVerified()) {
+                throw new BusinessException(ErrorCode.IDENTITY_ALREADY_VERIFIED);
+            }
+
+            if (verification.isRateLimited(now, IDENTITY_ISSUE_WINDOW, IDENTITY_ISSUE_LIMIT)) {
+                throw new BusinessException(ErrorCode.IDENTITY_RATE_LIMITED);
+            }
+        }
+
+        String requestNo = IDENTITY_REQUEST_NO_PREFIX + UUID.randomUUID();
+        Instant expiresAt = now.plus(IDENTITY_EXPIRES_MINUTES, ChronoUnit.MINUTES);
+        NiceAuthUrlResult authUrl = niceIdentityService.requestAuthUrl(requestNo);
+
         if (verification == null) {
-            anonSessionIdentityVerificationRepository.save(
-                    AnonSessionIdentityVerification.create(anonSessionSnapshot.id(), identityVerificationId, expiresAt));
-
-            return new AuthIdentityPrepareResult(identityVerificationId, expiresAt);
+            anonSessionIdentityVerificationRepository.save(AnonSessionIdentityVerification.create(
+                    anonSessionSnapshot.id(), requestNo, authUrl.transactionId(), expiresAt));
+        } else {
+            verification.countIssue(now, IDENTITY_ISSUE_WINDOW);
+            verification.refresh(requestNo, authUrl.transactionId(), expiresAt);
         }
 
-        if (verification.isVerified()) {
-            throw new BusinessException(ErrorCode.IDENTITY_ALREADY_VERIFIED);
-        }
-
-        if (verification.isRateLimited(now, IDENTITY_ISSUE_WINDOW, IDENTITY_ISSUE_LIMIT)) {
-            throw new BusinessException(ErrorCode.IDENTITY_RATE_LIMITED);
-        }
-
-        verification.countIssue(now, IDENTITY_ISSUE_WINDOW);
-        verification.refresh(identityVerificationId, expiresAt);
-
-        return new AuthIdentityPrepareResult(identityVerificationId, expiresAt);
+        return new AuthIdentityPrepareResult(authUrl.authUrl(), expiresAt, authUrl.returnUrl(), authUrl.closeUrl());
     }
 
     @Transactional
-    public void onboardingIdentityVerify(AnonSessionSnapshot anonSessionSnapshot) {
+    public void onboardingIdentityVerify(AnonSessionSnapshot anonSessionSnapshot, AuthIdentityVerifyCommand command) {
         Long anonSessionId = anonSessionSnapshot.id();
 
         AnonSessionIdentityVerification verification = anonSessionIdentityVerificationRepository
@@ -180,60 +182,49 @@ public class AuthService {
             return;
         }
 
-        if (verification.isExpired(Instant.now())) {
+        if (verification.isExpired(Instant.now()) || verification.getTransactionId() == null) {
             throw new BusinessException(ErrorCode.IDENTITY_NOT_VERIFIED);
         }
 
-        PortOneIdentityVerificationBody body = portOneIdentityClient
-                .identityVerification(verification.getIdentityVerificationId())
-                .orElse(null);
+        NiceAuthResult result = niceIdentityService.fetchResult(
+                verification.getRequestNo(), verification.getTransactionId(), command.webTransactionId());
 
-        if (body == null) {
-            log.info("본인인증 건을 PortOne에서 찾을 수 없습니다. anonSessionId={}, status=NOT_FOUND", anonSessionId);
-            throw new BusinessException(ErrorCode.IDENTITY_NOT_VERIFIED);
-        }
-
-        if (body.status() != PortOneIdentityVerificationStatus.VERIFIED) {
-            log.info("본인인증이 완료되지 않은 건입니다. anonSessionId={}, status={}", anonSessionId, body.status());
-            throw new BusinessException(ErrorCode.IDENTITY_NOT_VERIFIED);
-        }
-
-        if (body.channel() == null || body.verifiedCustomer() == null) {
+        if (isBlank(result.name()) || isBlank(result.birthdate()) || isBlank(result.gender())
+                || isBlank(result.di()) || isBlank(result.mobileNo())) {
+            WarnLog.log(log, "NICE 인증 결과에 필수 항목이 없습니다.", field("anonSessionId", anonSessionId));
             throw new BusinessException(ErrorCode.IDENTITY_VERIFICATION_FAILED);
         }
 
-        if (!portOneProperties.allows(body.channel().type())) {
-            log.warn("허용되지 않은 채널의 본인인증 건입니다. anonSessionId={}, channelType={}", anonSessionId, body.channel().type());
-            throw new BusinessException(ErrorCode.IDENTITY_NOT_VERIFIED);
-        }
+        Gender gender = Gender.fromNiceCode(result.gender());
+        NationalInfo nationalInfo = NationalInfo.fromNiceCode(result.nationalInfo());
+        MobileCarrier mobileCarrier = MobileCarrier.fromNiceCode(result.mobileCo());
 
-        PortOneIdentityVerificationBody.VerifiedCustomer customer = body.verifiedCustomer();
-
-        if (isBlank(customer.name()) || isBlank(customer.phoneNumber()) || isBlank(customer.ci())) {
+        if (gender == null || nationalInfo == null || mobileCarrier == null) {
+            WarnLog.log(log, "NICE 인증 결과의 코드값을 해석할 수 없습니다.", field("anonSessionId", anonSessionId), field("gender", result.gender()), field("nationalInfo", result.nationalInfo()), field("mobileCo", result.mobileCo()));
             throw new BusinessException(ErrorCode.IDENTITY_VERIFICATION_FAILED);
         }
 
-        Gender gender = resolveGender(customer.gender(), body.channel().type());
-
-        LocalDate birthDate = parseBirthDate(customer.birthDate());
+        LocalDate birthDate = parseBirthDate(result.birthdate());
 
         if (!isAllowedAge(birthDate)) {
             throw new BusinessException(ErrorCode.IDENTITY_AGE_NOT_ALLOWED);
         }
 
-        String ciHash = blindIndexHasher.hash(customer.ci());
+        String diHash = blindIndexHasher.hash(result.di());
 
-        if (userRepository.existsByCiHash(ciHash)) {
+        if (userRepository.existsByDiHash(diHash)) {
             throw new BusinessException(ErrorCode.IDENTITY_ALREADY_REGISTERED);
         }
 
         verification.verify(
-                customer.name(),
+                result.name(),
                 birthDate.toString(),
                 gender,
-                customer.phoneNumber(),
-                customer.ci(),
-                ciHash
+                result.mobileNo(),
+                result.di(),
+                diHash,
+                nationalInfo,
+                mobileCarrier
         );
     }
 
@@ -247,7 +238,7 @@ public class AuthService {
         }
 
         try {
-            return LocalDate.parse(birthDate);
+            return LocalDate.parse(birthDate, DateTimeFormatter.BASIC_ISO_DATE);
         } catch (DateTimeParseException e) {
             throw new BusinessException(ErrorCode.IDENTITY_VERIFICATION_FAILED, e);
         }
@@ -257,32 +248,6 @@ public class AuthService {
         int age = Period.between(birthDate, KstTimes.today()).getYears();
 
         return age >= IDENTITY_MIN_AGE && age < IDENTITY_MAX_AGE;
-    }
-
-    private Gender resolveGender(String gender, PortOneChannelType channelType) {
-        Gender resolved = toGender(gender);
-
-        if (resolved != null) {
-            return resolved;
-        }
-
-        if (channelType == PortOneChannelType.TEST) {
-            return IDENTITY_TEST_CHANNEL_FALLBACK_GENDER;
-        }
-
-        throw new BusinessException(ErrorCode.IDENTITY_VERIFICATION_FAILED);
-    }
-
-    private Gender toGender(String gender) {
-        if (Gender.MALE.name().equals(gender)) {
-            return Gender.MALE;
-        }
-
-        if (Gender.FEMALE.name().equals(gender)) {
-            return Gender.FEMALE;
-        }
-
-        return null;
     }
 
     @Transactional
@@ -388,7 +353,7 @@ public class AuthService {
         String phoneNumberHash = blindIndexHasher.hash(phoneNumber);
         String email = emailSession.getContact();
         String emailHash = blindIndexHasher.hash(email);
-        String ciHash = identityVerification.getCiHash();
+        String diHash = identityVerification.getDiHash();
 
         if (userRepository.existsByPhoneNumberHash(phoneNumberHash)) {
             throw new BusinessException(ErrorCode.PHONE_ALREADY_REGISTERED);
@@ -398,7 +363,7 @@ public class AuthService {
             throw new BusinessException(ErrorCode.EMAIL_ALREADY_REGISTERED);
         }
 
-        if (userRepository.existsByCiHash(ciHash)) {
+        if (userRepository.existsByDiHash(diHash)) {
             throw new BusinessException(ErrorCode.IDENTITY_ALREADY_REGISTERED);
         }
 
@@ -421,7 +386,8 @@ public class AuthService {
                         identityVerification.getBirthDate(), birthDateHash,
                         phoneNumber, phoneNumberHash,
                         email, emailHash,
-                        identityVerification.getCi(), ciHash
+                        identityVerification.getDi(), diHash,
+                        identityVerification.getNationalInfo(), identityVerification.getMobileCarrier()
                 )
         );
 

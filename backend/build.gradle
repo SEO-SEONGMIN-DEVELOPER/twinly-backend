@@ -139,6 +139,15 @@ tasks.register('externalTest', Test) {
 	testClassesDirs = sourceSets.test.output.classesDirs
 	classpath = sourceSets.test.runtimeClasspath
 	systemProperty 'spring.profiles.active', 'external'
+
+	String socksProxy = System.getenv('EXTERNAL_TEST_SOCKS_PROXY')
+	if (socksProxy) {
+		String[] hostPort = socksProxy.split(':')
+		systemProperty 'socksProxyHost', hostPort[0]
+		systemProperty 'socksProxyPort', hostPort[1]
+		systemProperty 'socksProxyVersion', '5'
+	}
+
 	testLogging {
 		events "passed", "skipped", "failed"
 		showStandardStreams = true

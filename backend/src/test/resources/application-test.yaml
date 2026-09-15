@@ -27,9 +27,11 @@ revenue-cat:
   secret-api-key: test-revenue-cat-secret-api-key
   environment: SANDBOX
 
-portone:
-  api-secret: test-portone-api-secret
-  allowed-channel-types: LIVE
+nice:
+  client-id: test-nice-client-id
+  client-secret: test-nice-client-secret
+  return-url: http://localhost:8080/api/v1/auth/onboarding/identity/return
+  close-url: http://localhost:8080/api/v1/auth/onboarding/identity/close
 
 ai-server:
   base-url: http://localhost:8000

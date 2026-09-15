@@ -65,6 +65,8 @@ import com.nidus.twinly.user.repository.UserRepository;
 import org.springframework.beans.BeanUtils;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
+import com.nidus.twinly.common.domain.MobileCarrier;
+import com.nidus.twinly.common.domain.NationalInfo;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -229,7 +231,7 @@ class OnboardingServiceUnitTest {
     void name_when_identity_not_verified_throws() {
         // given: 발급만 되고 verify가 끝나지 않은 본인인증 행
         AnonSessionIdentityVerification issued = AnonSessionIdentityVerification.create(
-                ANON_SESSION_ID, "identity-1", Instant.now().plusSeconds(600));
+                ANON_SESSION_ID, "TWINLY-1", "tx-1", Instant.now().plusSeconds(600));
         given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID)).willReturn(Optional.of(issued));
 
         // when & then: IDENTITY_VERIFICATION_NOT_COMPLETED 예외 발생
@@ -319,8 +321,8 @@ class OnboardingServiceUnitTest {
 
     private AnonSessionIdentityVerification verifiedIdentity(String name) {
         AnonSessionIdentityVerification verification = AnonSessionIdentityVerification.create(
-                ANON_SESSION_ID, "identity-1", Instant.now().plusSeconds(600));
-        verification.verify(name, "2000-01-01", Gender.MALE, "01012345678", "ci", "ciHash");
+                ANON_SESSION_ID, "TWINLY-1", "tx-1", Instant.now().plusSeconds(600));
+        verification.verify(name, "2000-01-01", Gender.MALE, "01012345678", "di", "diHash", NationalInfo.DOMESTIC, MobileCarrier.SKT);
         return verification;
     }
 

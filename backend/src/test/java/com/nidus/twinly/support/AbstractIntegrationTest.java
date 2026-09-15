@@ -86,7 +86,7 @@ public abstract class AbstractIntegrationTest {
                 "2000-01-01", "birthHash" + n,
                 "phone" + n, "phoneHash" + n,
                 "email" + n + "@test.com", "emailHash" + n, null, null
-        ));
+        , null, null));
     }
 
     /** 해당 유저의 실제 액세스 토큰으로 Authorization 헤더 값을 만든다. */

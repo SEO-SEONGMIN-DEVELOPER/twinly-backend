@@ -27,6 +27,8 @@ import com.nidus.twinly.onboarding.entity.SurveyAnswer;
 import com.nidus.twinly.onboarding.repository.SurveyAnswerRepository;
 import com.nidus.twinly.support.AbstractIntegrationTest;
 import jakarta.persistence.EntityManager;
+import com.nidus.twinly.common.domain.MobileCarrier;
+import com.nidus.twinly.common.domain.NationalInfo;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -762,8 +764,9 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
     /** 본인인증이 완료된 상태의 행을 실제 DB에 저장한다. */
     private void saveVerifiedIdentity(Long anonSessionId, String name) {
         AnonSessionIdentityVerification verification = AnonSessionIdentityVerification.create(
-                anonSessionId, "identity-" + UUID.randomUUID(), Instant.now().plus(Duration.ofMinutes(30)));
-        verification.verify(name, "2000-01-01", Gender.MALE, "01012345678", "ci-" + anonSessionId, "ciHash-" + anonSessionId);
+                anonSessionId, "TWINLY-" + UUID.randomUUID(), "tx-" + anonSessionId, Instant.now().plus(Duration.ofMinutes(10)));
+        verification.verify(name, "2000-01-01", Gender.MALE, "01012345678", "di-" + anonSessionId, "diHash-" + anonSessionId,
+                NationalInfo.DOMESTIC, MobileCarrier.SKT);
         anonSessionIdentityVerificationRepository.save(verification);
     }
 

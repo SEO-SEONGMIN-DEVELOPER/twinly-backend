@@ -3,6 +3,8 @@ package com.nidus.twinly.user.entity;
 import org.hibernate.annotations.DynamicUpdate;
 import com.nidus.twinly.common.crypto.EncryptedStringConverter;
 import com.nidus.twinly.common.domain.Gender;
+import com.nidus.twinly.common.domain.MobileCarrier;
+import com.nidus.twinly.common.domain.NationalInfo;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -93,10 +95,16 @@ public class User {
 
     @Convert(converter = EncryptedStringConverter.class)
     @Column(columnDefinition = "TEXT")
-    private String ci;
+    private String di;
 
     @Column(columnDefinition = "TEXT")
-    private String ciHash;
+    private String diHash;
+
+    @Enumerated(EnumType.STRING)
+    private NationalInfo nationalInfo;
+
+    @Enumerated(EnumType.STRING)
+    private MobileCarrier mobileCarrier;
 
     private UUID revenueCatUserId;
 
@@ -122,7 +130,8 @@ public class User {
                               String birthDate, String birthDateHash,
                               String phoneNumber, String phoneNumberHash,
                               String email, String emailHash,
-                              String ci, String ciHash) {
+                              String di, String diHash,
+                              NationalInfo nationalInfo, MobileCarrier mobileCarrier) {
         User user = new User();
 
         user.nickname = nickname;
@@ -143,8 +152,10 @@ public class User {
         user.phoneNumberHash = phoneNumberHash;
         user.email = email;
         user.emailHash = emailHash;
-        user.ci = ci;
-        user.ciHash = ciHash;
+        user.di = di;
+        user.diHash = diHash;
+        user.nationalInfo = nationalInfo;
+        user.mobileCarrier = mobileCarrier;
         user.revenueCatUserId = UUID.randomUUID();
         user.createdAt = Instant.now();
 
@@ -199,8 +210,10 @@ public class User {
         this.phoneNumberHash = null;
         this.email = null;
         this.emailHash = null;
-        this.ci = null;
-        this.ciHash = null;
+        this.di = null;
+        this.diHash = null;
+        this.nationalInfo = null;
+        this.mobileCarrier = null;
         this.birthDate = generalizeBirthDate(this.birthDate);
         this.birthDateHash = null;
         this.deletedAt = Instant.now();

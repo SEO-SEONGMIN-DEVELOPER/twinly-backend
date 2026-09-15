@@ -281,7 +281,7 @@ class SimulationServiceUnitTest {
                 "nickname", familyName, "familyNameHash", givenName, "givenNameHash", Gender.MALE,
                 "성균관대학교", "organizationHash",
                 affiliation, "affiliationHash", "20191234", "affiliationNumberHash",
-                birthDate, "birthDateHash", "01012345678", "phoneNumberHash", "a@b.ac.kr", "emailHash", null, null);
+                birthDate, "birthDateHash", "01012345678", "phoneNumberHash", "a@b.ac.kr", "emailHash", null, null, null, null);
         ReflectionTestUtils.setField(user, "id", id);
 
         return user;

@@ -65,8 +65,9 @@ public class AuthController {
             @ApiResponse(responseCode = "502", description = "IDENTITY_VERIFICATION_FAILED")
     })
     @PostMapping("/api/v1/auth/onboarding/identity/verify")
-    public void onboardingIdentityVerify(@AuthenticationPrincipal AnonSessionSnapshot anonSessionSnapshot) {
-        authService.onboardingIdentityVerify(anonSessionSnapshot);
+    public void onboardingIdentityVerify(@AuthenticationPrincipal AnonSessionSnapshot anonSessionSnapshot,
+                                         @Valid @RequestBody AuthIdentityVerifyRequest request) {
+        authService.onboardingIdentityVerify(anonSessionSnapshot, AuthIdentityVerifyCommand.from(request));
     }
 
     @Operation(summary = "이메일 인증번호 발송")
