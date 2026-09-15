@@ -24,6 +24,14 @@
         "defaultValue": 0.0
     },
     {
+        "name": "twinly-prod-api-identity-verification-failure",
+        "pattern": "{ $.errorCode = \"IDENTITY_VERIFICATION_FAILED\" }",
+        "metric": "IdentityVerificationFailureCount",
+        "namespace": "twinly/prod/api",
+        "value": "1",
+        "defaultValue": 0.0
+    },
+    {
         "name": "twinly-prod-api-stack-overflow",
         "pattern": "StackOverflowError",
         "metric": "StackOverflowCount",
