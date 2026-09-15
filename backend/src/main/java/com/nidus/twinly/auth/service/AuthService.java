@@ -138,24 +138,6 @@ public class AuthService {
     }
 
     @Transactional
-    public AuthSmsSendResult onboardingSmsSend(AnonSessionSnapshot anonSessionSnapshot, AuthSmsSendCommand command) {
-        String code = verificationCodeIssuer.issue(command.phone());
-        Instant codeExpiresAt = verificationCodeIssuer.codeExpiresAt();
-
-        AnonSessionVerificationSession session = upsertVerificationSession(
-                anonSessionSnapshot.id(), VerificationType.SMS, command.phone(), code, codeExpiresAt);
-
-        verificationCodeIssuer.send(VerificationType.SMS, command.phone(), code);
-
-        return new AuthSmsSendResult(session.getVerificationToken(), codeExpiresAt);
-    }
-
-    @Transactional
-    public void onboardingSmsVerify(AnonSessionSnapshot anonSessionSnapshot, AuthSmsVerifyCommand command) {
-        verifyAnonSession(anonSessionSnapshot.id(), command, VerificationType.SMS);
-    }
-
-    @Transactional
     public AuthIdentityPrepareResult onboardingIdentityPrepare(AnonSessionSnapshot anonSessionSnapshot) {
         Instant now = Instant.now();
         String identityVerificationId = IDENTITY_VERIFICATION_ID_PREFIX + UUID.randomUUID();

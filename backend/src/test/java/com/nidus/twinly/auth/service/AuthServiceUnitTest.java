@@ -108,7 +108,6 @@ class AuthServiceUnitTest {
             "nick",
             "홍", "길동",
             "트윈리대학교", "20250001",
-            PHONE, "phoneHash",
             EMAIL, "emailHash",
             Instant.parse("2026-01-01T00:00:00Z")
     );
@@ -259,31 +258,6 @@ class AuthServiceUnitTest {
         then(verificationCodeIssuer).should(never()).send(any(), any(), any());
     }
 
-    @Test
-    @DisplayName("온보딩 SMS 발송: 새 세션을 저장하고 발급된 코드를 SMS로 보낸다")
-    void onboardingSmsSend_creates_new_session() {
-        // given: 해당 익명 세션의 SMS 인증 세션이 아직 없음
-        given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.SMS))
-                .willReturn(Optional.empty());
-        given(verificationCodeIssuer.issue(PHONE)).willReturn(CODE);
-        given(verificationCodeIssuer.codeExpiresAt()).willReturn(Instant.now().plusSeconds(300));
-
-        // when: 온보딩 SMS 인증번호 발송
-        AuthSmsSendResult result = authService.onboardingSmsSend(SNAPSHOT, new AuthSmsSendCommand(PHONE));
-
-        // then: SMS 타입 세션이 저장되고, 저장된 토큰이 결과로 나가며, 발급 코드가 담긴 문자가 발송됨
-        ArgumentCaptor<AnonSessionVerificationSession> captor =
-                ArgumentCaptor.forClass(AnonSessionVerificationSession.class);
-        then(anonSessionVerificationSessionRepository).should().save(captor.capture());
-
-        AnonSessionVerificationSession saved = captor.getValue();
-        assertThat(saved.getType()).isEqualTo(VerificationType.SMS);
-        assertThat(saved.getContact()).isEqualTo(PHONE);
-        assertThat(result.smsVerificationToken()).isEqualTo(saved.getVerificationToken());
-
-        then(verificationCodeIssuer).should().send(VerificationType.SMS, PHONE, CODE);
-    }
-
     // ---------- 온보딩 인증 확인 ----------
 
     @Test
@@ -320,59 +294,6 @@ class AuthServiceUnitTest {
         // then: 세션에 인증 완료 시각이 기록되고, 학교는 사용자 입력이 아니라 인증된 도메인으로 결정됨
         assertThat(session.getVerifiedAt()).isNotNull();
         assertThat(anonSession.getOrganization()).isEqualTo("트윈리대학교");
-    }
-
-    @Test
-    @DisplayName("온보딩 SMS 인증 확인: 인증 토큰이 세션의 토큰과 다르면 VERIFICATION_NOT_FOUND 예외가 발생한다")
-    void onboardingSmsVerify_with_wrong_token_throws() {
-        // given: SMS 인증 세션이 존재하지만 요청 토큰은 다른 값
-        AnonSessionVerificationSession session = AnonSessionVerificationSession.create(
-                VerificationType.SMS, ANON_SESSION_ID, PHONE, "123456", Instant.now().plusSeconds(60));
-        given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.SMS))
-                .willReturn(Optional.of(session));
-
-        // when & then: VERIFICATION_NOT_FOUND 예외 발생 + 인증 완료 기록 없음
-        assertThatThrownBy(() -> authService.onboardingSmsVerify(
-                SNAPSHOT, new AuthSmsVerifyCommand(UUID.randomUUID(), "123456")))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(ErrorCode.VERIFICATION_NOT_FOUND);
-        assertThat(session.getVerifiedAt()).isNull();
-    }
-
-    @Test
-    @DisplayName("온보딩 SMS 인증 확인: 코드 유효 시간이 지났으면 VERIFICATION_CODE_EXPIRED 예외가 발생한다")
-    void onboardingSmsVerify_with_expired_code_throws() {
-        // given: 코드 만료 시각이 이미 지난 SMS 인증 세션
-        AnonSessionVerificationSession session = AnonSessionVerificationSession.create(
-                VerificationType.SMS, ANON_SESSION_ID, PHONE, "123456", Instant.now().minusSeconds(1));
-        given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.SMS))
-                .willReturn(Optional.of(session));
-
-        // when & then: VERIFICATION_CODE_EXPIRED 예외 발생
-        assertThatThrownBy(() -> authService.onboardingSmsVerify(
-                SNAPSHOT, new AuthSmsVerifyCommand(session.getVerificationToken(), "123456")))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(ErrorCode.VERIFICATION_CODE_EXPIRED);
-    }
-
-    @Test
-    @DisplayName("온보딩 SMS 인증 확인: 코드가 일치하지 않으면 VERIFICATION_CODE_MISMATCH 예외가 발생한다")
-    void onboardingSmsVerify_with_wrong_code_throws() {
-        // given: 유효 기간이 남은 SMS 인증 세션
-        AnonSessionVerificationSession session = AnonSessionVerificationSession.create(
-                VerificationType.SMS, ANON_SESSION_ID, PHONE, "123456", Instant.now().plusSeconds(60));
-        given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.SMS))
-                .willReturn(Optional.of(session));
-
-        // when & then: VERIFICATION_CODE_MISMATCH 예외 발생 + 인증 완료 기록 없음
-        assertThatThrownBy(() -> authService.onboardingSmsVerify(
-                SNAPSHOT, new AuthSmsVerifyCommand(session.getVerificationToken(), "999999")))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(ErrorCode.VERIFICATION_CODE_MISMATCH);
-        assertThat(session.getVerifiedAt()).isNull();
     }
 
     // ---------- 로그인용 인증번호 발송 ----------

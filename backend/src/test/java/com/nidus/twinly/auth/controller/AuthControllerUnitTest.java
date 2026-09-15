@@ -64,7 +64,6 @@ class AuthControllerUnitTest {
             "nick",
             "홍", "길동",
             "트윈리대학교", "20250001",
-            "01012345678", "phoneHash",
             "user@test.com", "emailHash",
             Instant.parse("2026-01-01T00:00:00Z")
     );
@@ -189,45 +188,6 @@ class AuthControllerUnitTest {
         // then: 400 반환 + 서비스는 호출되지 않음
         result.andExpect(status().isBadRequest());
         verifyNoInteractions(authService);
-    }
-
-    @Test
-    @DisplayName("온보딩 SMS 인증번호 발송 성공 시 200과 발급된 인증 토큰을 반환하고 익명 세션·커맨드로 서비스를 호출한다")
-    void onboardingSmsSend_success() throws Exception {
-        // given: 서비스가 인증 토큰과 만료 시각을 반환
-        given(authService.onboardingSmsSend(any(), any()))
-                .willReturn(new AuthSmsSendResult(VERIFICATION_TOKEN, EXPIRES_AT));
-
-        // when: 익명 세션 토큰을 붙여 온보딩 SMS 발송 API 호출
-        var result = mockMvc.perform(post("/api/v1/auth/onboarding/sms/send")
-                .header("Authorization", "Bearer " + ANON_TOKEN)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""
-                        {"phone":"01012345678"}
-                        """));
-
-        // then: 200 + 인증 토큰 JSON 반환 + 익명 세션 스냅샷·커맨드로 서비스에 위임
-        result.andExpect(status().isOk())
-                .andExpect(jsonPath("$.smsVerificationToken").value(VERIFICATION_TOKEN.toString()))
-                .andExpect(jsonPath("$.expiresAt").exists());
-        then(authService).should().onboardingSmsSend(ANON_SESSION, new AuthSmsSendCommand("01012345678"));
-    }
-
-    @Test
-    @DisplayName("온보딩 SMS 인증 확인 성공 시 200을 반환하고 익명 세션·커맨드로 서비스를 호출한다")
-    void onboardingSmsVerify_success() throws Exception {
-        // when: 인증 토큰과 코드를 담아 온보딩 SMS 인증 확인 API 호출
-        var result = mockMvc.perform(post("/api/v1/auth/onboarding/sms/verify")
-                .header("Authorization", "Bearer " + ANON_TOKEN)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""
-                        {"smsVerificationToken":"%s","code":"654321"}
-                        """.formatted(VERIFICATION_TOKEN)));
-
-        // then: 200 반환 + 익명 세션 스냅샷·커맨드로 서비스에 위임
-        result.andExpect(status().isOk());
-        then(authService).should().onboardingSmsVerify(
-                ANON_SESSION, new AuthSmsVerifyCommand(VERIFICATION_TOKEN, "654321"));
     }
 
     @Test

@@ -48,26 +48,6 @@ public class AuthController {
         authService.onboardingEmailVerify(anonSessionSnapshot, AuthEmailVerifyCommand.from(request));
     }
 
-    @Operation(summary = "가입용 휴대폰 인증번호 발송")
-    @ApiResponse(responseCode = "502", description = "SMS_SEND_FAILED")
-    @PostMapping("/api/v1/auth/onboarding/sms/send")
-    public AuthSmsSendResponse onboardingSmsSend(@AuthenticationPrincipal AnonSessionSnapshot anonSessionSnapshot,
-                                                 @Valid @RequestBody AuthSmsSendRequest request) {
-        return AuthSmsSendResponse.from(authService.onboardingSmsSend(anonSessionSnapshot, AuthSmsSendCommand.from(request)));
-    }
-
-    @Operation(summary = "가입용 휴대폰 인증번호 검증")
-    @ApiResponses({
-            @ApiResponse(responseCode = "404", description = "VERIFICATION_NOT_FOUND"),
-            @ApiResponse(responseCode = "410", description = "VERIFICATION_CODE_EXPIRED"),
-            @ApiResponse(responseCode = "422", description = "VERIFICATION_CODE_MISMATCH")
-    })
-    @PostMapping("/api/v1/auth/onboarding/sms/verify")
-    public void onboardingSmsVerify(@AuthenticationPrincipal AnonSessionSnapshot anonSessionSnapshot,
-                                    @Valid @RequestBody AuthSmsVerifyRequest request) {
-        authService.onboardingSmsVerify(anonSessionSnapshot, AuthSmsVerifyCommand.from(request));
-    }
-
     @Operation(summary = "가입용 본인인증 발급")
     @ApiResponses({
             @ApiResponse(responseCode = "409", description = "IDENTITY_ALREADY_VERIFIED"),

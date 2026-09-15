@@ -50,8 +50,6 @@ class AiChatServiceUnitTest {
             "길동",
             "트윈리대학교",
             "2024001",
-            "01012345678",
-            "phoneHash",
             "test@test.com",
             "emailHash",
             Instant.parse("2026-01-01T00:00:00Z")

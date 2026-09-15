@@ -14,8 +14,6 @@ public record AnonSessionSnapshot(
         String givenName,
         String affiliation,
         String affiliationNumber,
-        String phoneNumber,
-        String phoneNumberHash,
         String email,
         String emailHash,
         Instant createdAt
@@ -30,8 +28,6 @@ public record AnonSessionSnapshot(
                 anonSession.getGivenName(),
                 anonSession.getAffiliation(),
                 anonSession.getAffiliationNumber(),
-                anonSession.getPhoneNumber(),
-                anonSession.getPhoneNumberHash(),
                 anonSession.getEmail(),
                 anonSession.getEmailHash(),
                 anonSession.getCreatedAt()

@@ -50,13 +50,6 @@ public class AnonSession {
 
     @Convert(converter = EncryptedStringConverter.class)
     @Column(columnDefinition = "TEXT")
-    private String phoneNumber;
-
-    @Column(columnDefinition = "TEXT")
-    private String phoneNumberHash;
-
-    @Convert(converter = EncryptedStringConverter.class)
-    @Column(columnDefinition = "TEXT")
     private String email;
 
     @Column(columnDefinition = "TEXT")
@@ -78,8 +71,6 @@ public class AnonSession {
     public void changeOrganization(String organization) { this.organization = organization; }
     public void changeAffiliation(String affiliation) { this.affiliation = affiliation; }
     public void changeAffiliationNumber(String affiliationNumber) { this.affiliationNumber = affiliationNumber; }
-    public void changePhoneNumber(String phoneNumber) { this.phoneNumber = phoneNumber; }
-    public void changePhoneNumberHash(String phoneNumberHash) { this.phoneNumberHash = phoneNumberHash; }
     public void changeEmail(String email) { this.email = email; }
     public void changeEmailHash(String emailHash) { this.emailHash = emailHash; }
 }

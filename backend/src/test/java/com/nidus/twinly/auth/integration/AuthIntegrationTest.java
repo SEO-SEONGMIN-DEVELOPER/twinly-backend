@@ -556,35 +556,6 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("온보딩 SMS 인증번호 발송: 익명 세션 인증을 통과해 SMS 인증 세션이 생성되고 코드가 문자로 나간다")
-    void onboarding_sms_send_end_to_end() throws Exception {
-        // given: 실제 익명 세션을 저장하고 외부 문자 발송은 목으로 차단
-        UUID anonToken = UUID.randomUUID();
-        AnonSession anonSession = anonSessionRepository.save(
-                AnonSession.create(anonToken, Instant.now().plus(Duration.ofDays(1))));
-        willDoNothing().given(solapiService).send(anyString(), anyString());
-
-        // when: 익명 세션 토큰을 Bearer로 붙여 온보딩 SMS 발송 API 호출
-        mockMvc.perform(post("/api/v1/auth/onboarding/sms/send")
-                        .header("Authorization", "Bearer " + anonToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"phone":"01011112222"}
-                                """))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.smsVerificationToken").exists())
-                .andExpect(jsonPath("$.expiresAt").exists());
-
-        // then: DB에 SMS 인증 세션이 생성되고, 그 코드가 담긴 문자가 발송됨
-        AnonSessionVerificationSession session = anonSessionVerificationSessionRepository
-                .findByAnonSessionIdAndType(anonSession.getId(), VerificationType.SMS)
-                .orElseThrow();
-        assertThat(session.getContact()).isEqualTo("01011112222");
-        assertThat(session.getCode()).hasSize(6).containsOnlyDigits();
-        then(solapiService).should().send(eq("01011112222"), contains(session.getCode()));
-    }
-
-    @Test
     @DisplayName("온보딩 이메일 인증 확인: 올바른 토큰·코드면 verifiedAt이 채워지고 익명 세션에 학교가 기록된다")
     void onboarding_email_verify_end_to_end() throws Exception {
         // given: 아직 인증되지 않은 EMAIL 인증 세션과, 그 도메인을 쓰는 학교를 실제 DB에 저장
@@ -611,59 +582,6 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
         assertThat(verified.getVerifiedAt()).isNotNull();
         assertThat(anonSessionRepository.findById(anonSession.getId()).orElseThrow().getOrganization())
                 .isEqualTo("트윈리대학교");
-    }
-
-    @Test
-    @DisplayName("온보딩 SMS 인증 확인 실패: 코드가 다르면 422와 VERIFICATION_CODE_MISMATCH 코드를 반환한다")
-    void onboarding_sms_verify_with_wrong_code_returns_422() throws Exception {
-        // given: 코드가 123456인 SMS 인증 세션을 저장
-        UUID anonToken = UUID.randomUUID();
-        AnonSession anonSession = anonSessionRepository.save(
-                AnonSession.create(anonToken, Instant.now().plus(Duration.ofDays(1))));
-        AnonSessionVerificationSession session = anonSessionVerificationSessionRepository.save(
-                AnonSessionVerificationSession.create(VerificationType.SMS, anonSession.getId(),
-                        "01033334444", "123456", Instant.now().plus(Duration.ofMinutes(5))));
-
-        // when: 틀린 코드로 온보딩 SMS 인증 확인 API 호출
-        var result = mockMvc.perform(post("/api/v1/auth/onboarding/sms/verify")
-                .header("Authorization", "Bearer " + anonToken)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""
-                        {"smsVerificationToken":"%s","code":"000000"}
-                        """.formatted(session.getVerificationToken())));
-
-        // then: 도메인 예외가 422 + VERIFICATION_CODE_MISMATCH로 매핑되고 verifiedAt은 그대로 null
-        result.andExpect(status().is(422))
-                .andExpect(jsonPath("$.code").value(ErrorCode.VERIFICATION_CODE_MISMATCH.name()));
-        assertThat(anonSessionVerificationSessionRepository
-                .findByAnonSessionIdAndType(anonSession.getId(), VerificationType.SMS)
-                .orElseThrow().getVerifiedAt()).isNull();
-    }
-
-    @Test
-    @DisplayName("온보딩 SMS 인증 확인 성공: 올바른 토큰·코드면 DB 인증 세션의 verifiedAt이 채워진다")
-    void onboarding_sms_verify_end_to_end() throws Exception {
-        // given: 아직 인증되지 않은 SMS 인증 세션을 실제 DB에 저장
-        UUID anonToken = UUID.randomUUID();
-        AnonSession anonSession = anonSessionRepository.save(
-                AnonSession.create(anonToken, Instant.now().plus(Duration.ofDays(1))));
-        AnonSessionVerificationSession session = anonSessionVerificationSessionRepository.save(
-                AnonSessionVerificationSession.create(VerificationType.SMS, anonSession.getId(),
-                        "01055556666", "123456", Instant.now().plus(Duration.ofMinutes(5))));
-
-        // when: 저장된 토큰·코드로 온보딩 SMS 인증 확인 API 호출
-        mockMvc.perform(post("/api/v1/auth/onboarding/sms/verify")
-                        .header("Authorization", "Bearer " + anonToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"smsVerificationToken":"%s","code":"123456"}
-                                """.formatted(session.getVerificationToken())))
-                .andExpect(status().isOk());
-
-        // then: DB에 인증 완료 시각이 기록됨
-        assertThat(anonSessionVerificationSessionRepository
-                .findByAnonSessionIdAndType(anonSession.getId(), VerificationType.SMS)
-                .orElseThrow().getVerifiedAt()).isNotNull();
     }
 
     @Test
