@@ -5,6 +5,7 @@ import com.nidus.twinly.common.fcm.FeedPushContent;
 import com.nidus.twinly.common.fcm.PushMessage;
 import com.nidus.twinly.common.fcm.PushMessageBuilder;
 import com.nidus.twinly.common.fcm.PushRecipientResolver;
+import com.nidus.twinly.common.logging.InfoLog;
 import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.device.entity.Device;
 import com.nidus.twinly.notification.domain.AppNotificationFeedTargetType;
@@ -26,6 +27,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import static com.nidus.twinly.common.logging.LogField.field;
 
 @Slf4j
 @Service
@@ -66,7 +69,7 @@ public class TwinViewNotificationService {
 
         sendPushes(feeds, viewerCountByUserId.keySet().stream().toList());
 
-        log.info("트윈 열람 수 알림을 발송했습니다. feedCount={}", feeds.size());
+        InfoLog.log(log, "트윈 열람 수 알림을 발송했습니다.", field("feedCount", feeds.size()));
     }
 
     private AppNotificationFeed feed(Long userId, Long viewerCount) {

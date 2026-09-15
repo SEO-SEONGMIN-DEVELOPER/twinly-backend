@@ -1,6 +1,7 @@
 package com.nidus.twinly.common.photo;
 
 import com.nidus.twinly.common.aws.s3.S3Service;
+import com.nidus.twinly.common.logging.WarnLog;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -8,6 +9,8 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+
+import static com.nidus.twinly.common.logging.LogField.field;
 
 @Slf4j
 @Service
@@ -27,7 +30,7 @@ public class ProfileThumbnailService {
                     .map(sourceBytes -> generate(sourceKey, position, sourceBytes))
                     .orElse(null);
         } catch (RuntimeException e) {
-            log.warn("원본 정보를 읽지 못해 썸네일 없이 진행합니다. key={}", sourceKey, e);
+            WarnLog.log(log, "원본 정보를 읽지 못해 썸네일 없이 진행합니다.", e, field("key", sourceKey));
             return null;
         }
     }
@@ -35,7 +38,7 @@ public class ProfileThumbnailService {
     public String generate(String sourceKey, PhotoPosInfo position, long sourceBytes) {
         try {
             if (sourceBytes > MAX_SOURCE_BYTES) {
-                log.warn("원본이 너무 커 썸네일을 건너뜁니다. key={}, bytes={}", sourceKey, sourceBytes);
+                WarnLog.log(log, "원본이 너무 커 썸네일을 건너뜁니다.", field("key", sourceKey), field("bytes", sourceBytes));
                 return null;
             }
 
@@ -48,7 +51,7 @@ public class ProfileThumbnailService {
                 return thumbnailKey;
             }
         } catch (IOException | RuntimeException e) {
-            log.warn("썸네일 생성에 실패해 아바타 없이 진행합니다. key={}", sourceKey, e);
+            WarnLog.log(log, "썸네일 생성에 실패해 아바타 없이 진행합니다.", e, field("key", sourceKey));
             return null;
         }
     }
@@ -64,7 +67,7 @@ public class ProfileThumbnailService {
             try {
                 Files.deleteIfExists(path);
             } catch (IOException e) {
-                log.warn("임시 파일을 지우지 못했습니다. path={}", path, e);
+                WarnLog.log(log, "임시 파일을 지우지 못했습니다.", e, field("path", path));
             }
         }
     }

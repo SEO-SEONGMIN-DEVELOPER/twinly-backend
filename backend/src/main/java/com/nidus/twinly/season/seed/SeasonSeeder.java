@@ -1,5 +1,6 @@
 package com.nidus.twinly.season.seed;
 
+import com.nidus.twinly.common.logging.InfoLog;
 import com.nidus.twinly.season.entity.Season;
 import com.nidus.twinly.season.repository.SeasonRepository;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +13,8 @@ import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+
+import static com.nidus.twinly.common.logging.LogField.field;
 
 @Slf4j
 @Component
@@ -37,6 +40,6 @@ public class SeasonSeeder implements ApplicationRunner {
                 now.plus(ENDED_DAYS_AFTER, ChronoUnit.DAYS)
         ));
 
-        log.info("활성 시즌이 없어 시드 시즌을 생성했습니다. seasonId={}", season.getId());
+        InfoLog.log(log, "활성 시즌이 없어 시드 시즌을 생성했습니다.", field("seasonId", season.getId()));
     }
 }

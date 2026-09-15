@@ -1,6 +1,8 @@
 package com.nidus.twinly.purchase.service;
 
 import com.nidus.twinly.common.logging.ErrorLog;
+import com.nidus.twinly.common.logging.InfoLog;
+import com.nidus.twinly.common.logging.WarnLog;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.purchase.RevenueCatProperties;
 import com.nidus.twinly.purchase.client.RevenueCatClient;
@@ -25,6 +27,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static com.nidus.twinly.common.logging.LogField.field;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -41,11 +45,10 @@ public class PurchaseService {
     private final ApplicationEventPublisher eventPublisher;
 
     public void receiveWebhook(RevenueCatWebhookCommand command) {
-        log.info("RevenueCat webhook: type={}, environment={}, eventId={}", command.type(), command.environment(), command.eventId());
+        InfoLog.log(log, "RevenueCat 웹훅을 받았습니다.", field("type", command.type()), field("environment", command.environment()), field("eventId", command.eventId()));
 
         if (!identifiable(command)) {
-            log.warn("RevenueCat 이벤트에 식별자 또는 종류가 없어 기록 없이 동기화만 수행합니다. eventId={}, type={}",
-                    command.eventId(), command.type());
+            WarnLog.log(log, "RevenueCat 이벤트에 식별자 또는 종류가 없어 기록 없이 동기화만 수행합니다.", field("eventId", command.eventId()), field("type", command.type()));
             syncTargets(command);
             return;
         }

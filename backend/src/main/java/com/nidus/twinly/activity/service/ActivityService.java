@@ -8,6 +8,7 @@ import com.nidus.twinly.activity.repository.QuestionRepository;
 import com.nidus.twinly.activity.repository.ScenePartnerRepository;
 import com.nidus.twinly.activity.repository.SceneRepository;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
+import com.nidus.twinly.common.logging.WarnLog;
 import com.nidus.twinly.common.scene.SceneLine;
 import com.nidus.twinly.common.scene.SceneNameRenderer;
 import com.nidus.twinly.common.scene.StoredSceneLine;
@@ -36,6 +37,8 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static com.nidus.twinly.common.logging.LogField.field;
 
 @Slf4j
 @Service
@@ -163,7 +166,7 @@ public class ActivityService {
             return objectMapper.readValue(scene.getLines(), new TypeReference<List<StoredSceneLine>>() {
             });
         } catch (JacksonException e) {
-            log.warn("씬 대사 파싱에 실패해 빈 목록으로 대체합니다. sceneId={}", scene.getId(), e);
+            WarnLog.log(log, "씬 대사 파싱에 실패해 빈 목록으로 대체합니다.", e, field("sceneId", scene.getId()));
             return List.of();
         }
     }

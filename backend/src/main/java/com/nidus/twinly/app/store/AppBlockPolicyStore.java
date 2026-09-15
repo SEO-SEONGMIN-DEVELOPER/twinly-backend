@@ -5,6 +5,7 @@ import com.nidus.twinly.app.domain.AppPlatform;
 import com.nidus.twinly.app.domain.AppVersionPolicy;
 import com.nidus.twinly.app.domain.MaintenanceState;
 import com.nidus.twinly.common.jackson.EnumJsonNames;
+import com.nidus.twinly.common.logging.WarnLog;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -17,6 +18,8 @@ import java.time.Instant;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+
+import static com.nidus.twinly.common.logging.LogField.field;
 
 @Slf4j
 @Component
@@ -45,7 +48,7 @@ public class AppBlockPolicyStore {
             policy = load();
         } catch (RuntimeException e) {
             policy = snapshot != null ? snapshot.policy() : AppBlockPolicy.none();
-            log.warn("앱 차단 정책을 Redis에서 읽지 못해 {}으로 동작합니다.", snapshot != null ? "마지막 값" : "차단 없음", e);
+            WarnLog.log(log, "앱 차단 정책을 Redis에서 읽지 못해 대체 값으로 동작합니다.", e, field("fallback", snapshot != null ? "마지막 값" : "차단 없음"));
         }
 
         cache.set(new CachedSnapshot(policy, now.plus(CACHE_TTL)));

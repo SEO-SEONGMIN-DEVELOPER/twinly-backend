@@ -9,6 +9,7 @@ import com.nidus.twinly.activity.repository.QuestionRepository;
 import com.nidus.twinly.activity.repository.ScenePartnerRepository;
 import com.nidus.twinly.activity.repository.SceneRepository;
 import com.nidus.twinly.chat.opener.ChatRoomOpener;
+import com.nidus.twinly.common.logging.InfoLog;
 import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.chat.repository.ChatRoomOpeningRepository;
 import com.nidus.twinly.common.scene.StoredSceneBubbleLine;
@@ -44,6 +45,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+
+import static com.nidus.twinly.common.logging.LogField.field;
 
 @Slf4j
 @Service
@@ -256,7 +259,7 @@ public class SimulationService {
         try {
             chatRoomOpener.open(userId, partnerUserId);
         } catch (DataIntegrityViolationException e) {
-            log.info("상대 쪽에서 채팅방을 먼저 열어 개설을 건너뜁니다. userId={}, partnerUserId={}", userId, partnerUserId);
+            InfoLog.log(log, "상대 쪽에서 채팅방을 먼저 열어 개설을 건너뜁니다.", field("userId", userId), field("partnerUserId", partnerUserId));
         }
     }
 
