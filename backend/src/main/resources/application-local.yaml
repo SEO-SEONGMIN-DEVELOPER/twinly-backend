@@ -27,3 +27,6 @@ revenue-cat:
 
 ai-server:
   base-url: http://localhost:8000
+
+seed:
+  ai-test-users: true

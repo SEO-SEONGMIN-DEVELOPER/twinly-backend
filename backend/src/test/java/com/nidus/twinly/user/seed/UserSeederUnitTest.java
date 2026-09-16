@@ -15,6 +15,7 @@ import com.nidus.twinly.purchase.writer.PurchaseWriter;
 import com.nidus.twinly.season.entity.Season;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.season.repository.SeasonParticipationRepository;
+import com.nidus.twinly.simulation.dto.command.SimulationsCommand;
 import com.nidus.twinly.simulation.service.SimulationService;
 import com.nidus.twinly.user.entity.PersonaElement;
 import com.nidus.twinly.user.entity.User;
@@ -47,6 +48,7 @@ import java.util.stream.LongStream;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -118,9 +120,7 @@ class UserSeederUnitTest {
         ReflectionTestUtils.setField(season, "id", 7L);
         given(currentSeasonReader.read()).willReturn(season);
 
-        userSeeder = new UserSeeder(userRepository, personaElementRepository, blindIndexHasher, surveyLoader,
-                interestLoader, currentSeasonReader, seasonParticipationRepository, userEntitlementRepository,
-                purchaseWriter, simulationService, sceneRepository, new ObjectMapper());
+        userSeeder = seederWith(new SeedProperties(true));
 
         given(userRepository.save(any(User.class))).willAnswer(invocation -> {
             User user = invocation.getArgument(0);
@@ -534,6 +534,65 @@ class UserSeederUnitTest {
         then(userEntitlementRepository).should().saveAll(captor.capture());
 
         return captor.getValue();
+    }
+
+    private UserSeeder seederWith(SeedProperties seedProperties) {
+        return new UserSeeder(userRepository, personaElementRepository, blindIndexHasher, surveyLoader,
+                interestLoader, currentSeasonReader, seasonParticipationRepository, userEntitlementRepository,
+                purchaseWriter, simulationService, sceneRepository, seedProperties, new ObjectMapper());
+    }
+
+    @Test
+    @DisplayName("AI 테스트 유저 시드가 꺼져 있으면 쇼케이스 유저 20명만 만들고 시뮬레이션 권한은 건드리지 않는다")
+    void run_seeds_only_showcase_users_when_ai_test_users_disabled() throws IOException {
+        // given: 아직 시드 유저가 없고 AI 테스트 유저 시드가 꺼진 상태
+        given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
+        userSeeder = seederWith(new SeedProperties(false));
+
+        // when: 시더 실행
+        userSeeder.run(null);
+
+        // then: 쇼케이스 유저만 저장되고, 권한 부여·풀 배정은 일어나지 않으며, 시나리오는 그대로 적재된다
+        then(userRepository).should(times(SHOWCASE_USER_COUNT)).save(any(User.class));
+        then(userEntitlementRepository).should(never()).saveAll(any());
+        then(purchaseWriter).should(never()).assignPool(any());
+        then(simulationService).should(times(SCENARIO_DAY_COUNT)).simulations(any(), any());
+    }
+
+    @Test
+    @DisplayName("시나리오의 유저 번호는 실제 저장된 쇼케이스 유저 id 로 바꿔 적재한다")
+    void run_maps_scenario_user_refs_to_seeded_user_ids() throws IOException {
+        // given: 이미 다른 유저들이 있어 시드 유저 id 가 101 부터 시작하는 상태
+        sequence.set(100);
+        given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
+
+        // when: 시더 실행
+        userSeeder.run(null);
+
+        // then: 1번 유저 시나리오는 id 101 로 저장되고, 등장하는 상대 id 도 전부 쇼케이스 유저 범위 안이다
+        ArgumentCaptor<SimulationsCommand> captor = ArgumentCaptor.forClass(SimulationsCommand.class);
+        then(simulationService).should(times(SCENARIO_DAY_COUNT)).simulations(any(), captor.capture());
+        then(simulationService).should(times(FIRST_USER_SCENARIO_DAY_COUNT)).simulations(eq(101L), any());
+        then(simulationService).should(never()).simulations(eq(1L), any());
+
+        assertThat(captor.getAllValues()).allSatisfy(command -> {
+            assertThat(command.userId()).isBetween(101L, 100L + SHOWCASE_USER_COUNT);
+            assertThat(command.relationships()).allSatisfy(relationship ->
+                    assertThat(relationship.partnerId()).isBetween(101L, 100L + SHOWCASE_USER_COUNT));
+        });
+    }
+
+    @Test
+    @DisplayName("시나리오에 쇼케이스 유저가 아닌 번호가 있으면 적재를 중단한다")
+    void remapUserRefs_rejects_unknown_ref() {
+        // given: 매핑 표에 없는 21번을 가리키는 장면
+        ObjectMapper objectMapper = new ObjectMapper();
+        var day = objectMapper.createObjectNode().put("userId", "21");
+
+        // when & then: 조용히 넘기지 않고 예외로 알린다
+        assertThatThrownBy(() -> UserSeeder.remapUserRefs(day, Map.of("1", "101")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("21");
     }
 
     @Test

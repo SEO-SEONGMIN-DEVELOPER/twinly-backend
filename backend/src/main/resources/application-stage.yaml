@@ -35,3 +35,6 @@ verification:
 
 revenue-cat:
   environment: SANDBOX
+
+seed:
+  ai-test-users: true
