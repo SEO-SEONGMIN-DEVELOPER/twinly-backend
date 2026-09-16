@@ -46,7 +46,7 @@ public class SimulationController {
 
     @Operation(summary = "유저 페르소나 조회")
     @ApiResponses({
-            @ApiResponse(responseCode = "403", description = "SIMULATION_ACCESS_REQUIRED"),
+            @ApiResponse(responseCode = "403", description = "SIMULATION_ACCESS_REQUIRED, SIMULATION_CONSENT_REQUIRED"),
             @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND")
     })
     @GetMapping("/internal/v1/users/{userId}/persona")

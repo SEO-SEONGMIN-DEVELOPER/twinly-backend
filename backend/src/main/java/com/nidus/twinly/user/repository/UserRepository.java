@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -54,11 +55,20 @@ public interface UserRepository extends JpaRepository<User, Long> {
                     AND e.entitlement = :entitlement
                     AND (e.expires_at IS NULL OR e.expires_at > :now)
               )
+              AND :requiredPolicyCount = (
+                  SELECT COUNT(DISTINCT a.policy_id)
+                  FROM agreements a
+                  WHERE a.user_id = u.id
+                    AND a.revoked_at IS NULL
+                    AND a.policy_id IN (:requiredPolicyIds)
+              )
             ORDER BY u.id ASC
             LIMIT :limit
             """, nativeQuery = true)
     List<Long> findIdsAfterCursor(@Param("cursor") Long cursor,
                                   @Param("entitlement") String entitlement,
                                   @Param("now") Instant now,
+                                  @Param("requiredPolicyIds") Collection<Long> requiredPolicyIds,
+                                  @Param("requiredPolicyCount") int requiredPolicyCount,
                                   @Param("limit") int limit);
 }

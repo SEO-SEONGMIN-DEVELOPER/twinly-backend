@@ -183,7 +183,7 @@ class SeasonServiceUnitTest {
                 Instant.parse("2026-09-01T00:00:00Z"), Instant.parse("2026-12-01T00:00:00Z")));
 
         // then: 결제 유저는 다시 참가 요청을 하지 않아도 새 시즌 참가가 이어진다
-        then(seasonParticipationWriter).should().participateAllWithSimulationAccess(77L);
+        then(seasonParticipationWriter).should().participateAllEligible(77L);
     }
 
     @Test
@@ -198,7 +198,7 @@ class SeasonServiceUnitTest {
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_SEASON_PERIOD);
 
         then(seasonRepository).should(never()).save(any());
-        then(seasonParticipationWriter).should(never()).participateAllWithSimulationAccess(any());
+        then(seasonParticipationWriter).should(never()).participateAllEligible(any());
         then(eventPublisher).should(never()).publishEvent(any(SeasonChangedEvent.class));
     }
 

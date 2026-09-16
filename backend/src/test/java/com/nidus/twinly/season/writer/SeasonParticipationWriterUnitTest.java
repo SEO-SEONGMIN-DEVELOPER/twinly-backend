@@ -1,5 +1,7 @@
 package com.nidus.twinly.season.writer;
 
+import com.nidus.twinly.legal.domain.PolicyKind;
+import com.nidus.twinly.legal.reader.ConsentReader;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.season.entity.Season;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
@@ -34,19 +36,24 @@ class SeasonParticipationWriterUnitTest {
     EntitlementReader entitlementReader;
 
     @Mock
+    ConsentReader consentReader;
+
+    @Mock
     SeasonParticipationRepository seasonParticipationRepository;
 
     @InjectMocks
     SeasonParticipationWriter seasonParticipationWriter;
 
     @Test
-    @DisplayName("현재 시즌 참가는 조회 없이 upsert 한 번으로 위임한다")
-    void participateInCurrentSeason_delegates_to_upsert() {
-        // given: 활성 시즌이 있음
+    @DisplayName("구독 중이고 필수 약관에 동의했으면 현재 시즌 참가를 upsert 한 번으로 위임한다")
+    void participateInCurrentSeasonIfEligible_delegates_to_upsert() {
+        // given: 활성 시즌이 있고 구독·필수 약관 동의를 모두 갖춘 유저
+        given(entitlementReader.hasSimulationAccess(10L)).willReturn(true);
+        given(consentReader.hasAgreedAllRequired(10L, PolicyKind.PARALLEL_ENTRY)).willReturn(true);
         given(currentSeasonReader.read()).willReturn(season());
 
         // when: 현재 시즌 참가
-        seasonParticipationWriter.participateInCurrentSeason(10L);
+        seasonParticipationWriter.participateInCurrentSeasonIfEligible(10L);
 
         // then: 동기화가 반복돼도 유니크 제약을 위반하지 않도록 원자적 upsert 한 번
         then(seasonParticipationRepository).should().upsert(10L, CURRENT_SEASON_ID);
@@ -54,30 +61,62 @@ class SeasonParticipationWriterUnitTest {
     }
 
     @Test
+    @DisplayName("구독 중이어도 필수 약관에 동의하지 않았으면 현재 시즌에 참가시키지 않는다")
+    void participateInCurrentSeasonIfEligible_skips_without_consent() {
+        // given: 구독은 있지만 평행우주 입장 필수 약관 최신 버전에 동의하지 않음
+        given(entitlementReader.hasSimulationAccess(10L)).willReturn(true);
+        given(consentReader.hasAgreedAllRequired(10L, PolicyKind.PARALLEL_ENTRY)).willReturn(false);
+
+        // when: 현재 시즌 참가 시도
+        seasonParticipationWriter.participateInCurrentSeasonIfEligible(10L);
+
+        // then: 시뮬레이션 대상이 아니므로 앱에 참여 중으로 보이지 않도록 행을 만들지 않는다
+        then(seasonParticipationRepository).should(never()).upsert(any(), any());
+    }
+
+    @Test
+    @DisplayName("구독이 없으면 동의 여부를 보지 않고 현재 시즌에 참가시키지 않는다")
+    void participateInCurrentSeasonIfEligible_skips_without_access() {
+        // given: 약관 동의만 하고 구독은 없는 유저
+        given(entitlementReader.hasSimulationAccess(10L)).willReturn(false);
+
+        // when: 현재 시즌 참가 시도
+        seasonParticipationWriter.participateInCurrentSeasonIfEligible(10L);
+
+        // then: 참가 행을 만들지 않는다
+        then(seasonParticipationRepository).should(never()).upsert(any(), any());
+        then(consentReader).should(never()).hasAgreedAllRequired(any(), any());
+    }
+
+    @Test
     @DisplayName("활성 시즌이 없으면 참가를 저장하지 않고 예외가 전파된다")
     void participateInCurrentSeason_when_current_season_missing_throws() {
-        // given: 활성 시즌이 없는 비정상 상태
+        // given: 참가 조건은 갖췄지만 활성 시즌이 없는 비정상 상태
+        given(entitlementReader.hasSimulationAccess(10L)).willReturn(true);
+        given(consentReader.hasAgreedAllRequired(10L, PolicyKind.PARALLEL_ENTRY)).willReturn(true);
         given(currentSeasonReader.read()).willThrow(new IllegalStateException("활성화된 시즌이 존재하지 않습니다."));
 
         // when & then: 참가 행을 만들지 않는다 (구매 동기화 재시도로 복구된다)
-        assertThatThrownBy(() -> seasonParticipationWriter.participateInCurrentSeason(10L))
+        assertThatThrownBy(() -> seasonParticipationWriter.participateInCurrentSeasonIfEligible(10L))
                 .isInstanceOf(IllegalStateException.class);
 
         then(seasonParticipationRepository).should(never()).upsert(any(), any());
     }
 
     @Test
-    @DisplayName("결제 상태인 유저 전원을 지정한 시즌에 참가시킨다")
-    void participateAllWithSimulationAccess_upserts_every_entitled_user() {
-        // given: simulation_access 가 살아 있는 유저 두 명
-        given(entitlementReader.userIdsWithSimulationAccess()).willReturn(List.of(10L, 20L));
+    @DisplayName("결제 상태이면서 필수 약관에 동의한 유저만 지정한 시즌에 참가시킨다")
+    void participateAllEligible_upserts_only_consented_entitled_users() {
+        // given: simulation_access 가 살아 있는 유저 세 명 중 두 명만 필수 약관에 동의
+        given(entitlementReader.userIdsWithSimulationAccess()).willReturn(List.of(10L, 20L, 30L));
+        given(consentReader.filterAgreedAllRequired(List.of(10L, 20L, 30L), PolicyKind.PARALLEL_ENTRY)).willReturn(List.of(10L, 20L));
 
         // when: 새 시즌으로 일괄 참가
-        seasonParticipationWriter.participateAllWithSimulationAccess(NEW_SEASON_ID);
+        seasonParticipationWriter.participateAllEligible(NEW_SEASON_ID);
 
-        // then: 각각 새 시즌 참가 행이 생긴다
+        // then: 동의한 두 명만 새 시즌 참가 행이 생긴다
         then(seasonParticipationRepository).should().upsert(10L, NEW_SEASON_ID);
         then(seasonParticipationRepository).should().upsert(20L, NEW_SEASON_ID);
+        then(seasonParticipationRepository).should(never()).upsert(30L, NEW_SEASON_ID);
     }
 
     private Season season() {

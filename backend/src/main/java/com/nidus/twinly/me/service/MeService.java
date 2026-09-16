@@ -69,6 +69,7 @@ import com.nidus.twinly.relationship.repository.RelationshipRepository;
 import com.nidus.twinly.report.domain.ReportStatus;
 import com.nidus.twinly.report.entity.Report;
 import com.nidus.twinly.report.repository.ReportRepository;
+import com.nidus.twinly.season.writer.SeasonParticipationWriter;
 import com.nidus.twinly.user.domain.DisclosureField;
 import com.nidus.twinly.user.entity.DisclosureAgreement;
 import com.nidus.twinly.user.entity.PersonaElement;
@@ -135,6 +136,7 @@ public class MeService {
     private final RelationshipRepository relationshipRepository;
 
     private final PolicyCatalog policyCatalog;
+    private final SeasonParticipationWriter seasonParticipationWriter;
 
     public MeProfilePhotoPresignResult profilePhotoPresign(Long userId, MeProfilePhotoPresignCommand command) {
         PhotoPresignResult presign = presignService.presignPhoto(userId, command.contentType(), PhotoType.PROFILE);
@@ -291,6 +293,8 @@ public class MeService {
                 .toList();
 
         agreementRepository.saveAll(agreements);
+
+        seasonParticipationWriter.participateInCurrentSeasonIfEligible(userId);
     }
 
     @Transactional

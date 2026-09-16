@@ -1,6 +1,8 @@
 package com.nidus.twinly.user.service;
 
 import com.nidus.twinly.common.jwt.JwtService;
+import com.nidus.twinly.legal.domain.PolicyKind;
+import com.nidus.twinly.legal.service.PolicyCatalog;
 import com.nidus.twinly.user.dto.result.UsersResult;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.user.repository.UserRepository;
@@ -12,9 +14,11 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
@@ -29,6 +33,9 @@ class UserServiceUnitTest {
     @Mock
     UserRepository userRepository;
 
+    @Mock
+    PolicyCatalog policyCatalog;
+
     @InjectMocks
     UserService userService;
 
@@ -36,7 +43,7 @@ class UserServiceUnitTest {
     @DisplayName("조회 결과가 limit 이하면 hasMore는 false이고 nextCursor는 null이다")
     void users_last_page() {
         // given: limit보다 적게 조회되는 마지막 페이지
-        given(userRepository.findIdsAfterCursor(isNull(), eq(EntitlementReader.SIMULATION_ACCESS), any(), eq(3))).willReturn(List.of(1L, 2L));
+        given(userRepository.findIdsAfterCursor(isNull(), eq(EntitlementReader.SIMULATION_ACCESS), any(), any(), anyInt(), eq(3))).willReturn(List.of(1L, 2L));
 
         // when: limit 2로 유저 목록 조회
         UsersResult result = userService.users(null, 2);
@@ -51,7 +58,7 @@ class UserServiceUnitTest {
     @DisplayName("limit보다 하나 더 조회되면 초과분을 잘라내고 hasMore와 nextCursor를 채운다")
     void users_has_more() {
         // given: 다음 페이지 존재 여부 판별을 위해 limit+1개가 조회되는 상황
-        given(userRepository.findIdsAfterCursor(eq(10L), eq(EntitlementReader.SIMULATION_ACCESS), any(), eq(3))).willReturn(List.of(11L, 12L, 13L));
+        given(userRepository.findIdsAfterCursor(eq(10L), eq(EntitlementReader.SIMULATION_ACCESS), any(), any(), anyInt(), eq(3))).willReturn(List.of(11L, 12L, 13L));
 
         // when: 커서 10, limit 2로 유저 목록 조회
         UsersResult result = userService.users(10L, 2);
@@ -66,20 +73,20 @@ class UserServiceUnitTest {
     @DisplayName("limit이 없으면 기본값 500으로 조회한다")
     void users_without_limit_uses_default() {
         // given: limit 미지정 시 기본값(500)에 판별용 1건을 더한 501건을 조회
-        given(userRepository.findIdsAfterCursor(isNull(), eq(EntitlementReader.SIMULATION_ACCESS), any(), eq(501))).willReturn(List.of(1L));
+        given(userRepository.findIdsAfterCursor(isNull(), eq(EntitlementReader.SIMULATION_ACCESS), any(), any(), anyInt(), eq(501))).willReturn(List.of(1L));
 
         // when: limit 없이 유저 목록 조회
         userService.users(null, null);
 
         // then: 기본값 기준으로 리포지토리에 위임
-        then(userRepository).should().findIdsAfterCursor(isNull(), eq(EntitlementReader.SIMULATION_ACCESS), any(), eq(501));
+        then(userRepository).should().findIdsAfterCursor(isNull(), eq(EntitlementReader.SIMULATION_ACCESS), any(), any(), anyInt(), eq(501));
     }
 
     @Test
     @DisplayName("조회 결과가 없으면 빈 목록과 함께 마지막 페이지로 반환한다")
     void users_empty() {
         // given: 커서 이후 유저가 없는 상황
-        given(userRepository.findIdsAfterCursor(eq(99L), eq(EntitlementReader.SIMULATION_ACCESS), any(), eq(501))).willReturn(List.of());
+        given(userRepository.findIdsAfterCursor(eq(99L), eq(EntitlementReader.SIMULATION_ACCESS), any(), any(), anyInt(), eq(501))).willReturn(List.of());
 
         // when: 커서 99로 유저 목록 조회
         UsersResult result = userService.users(99L, null);
@@ -88,5 +95,20 @@ class UserServiceUnitTest {
         assertThat(result.userIds()).isEmpty();
         assertThat(result.page().hasMore()).isFalse();
         assertThat(result.page().nextCursor()).isNull();
+    }
+
+    @Test
+    @DisplayName("평행우주 입장 필수 약관의 최신 버전 id와 개수를 조회 조건으로 넘긴다")
+    void users_passes_required_parallel_entry_policies() {
+        // given: 평행우주 입장 필수 약관 최신 버전이 2건
+        given(policyCatalog.loadRequiredPolicyIds(PolicyKind.PARALLEL_ENTRY)).willReturn(Set.of(7L, 8L));
+        given(userRepository.findIdsAfterCursor(isNull(), eq(EntitlementReader.SIMULATION_ACCESS), any(), eq(Set.of(7L, 8L)), eq(2), eq(501)))
+                .willReturn(List.of(1L));
+
+        // when: 유저 목록 조회
+        UsersResult result = userService.users(null, null);
+
+        // then: 필수 약관 전부에 동의한 유저만 걸러지도록 id 집합과 개수가 함께 전달된다
+        assertThat(result.userIds()).containsExactly(1L);
     }
 }

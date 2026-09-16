@@ -7,6 +7,10 @@ import com.nidus.twinly.common.aws.ses.SesService;
 import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.jwt.JwtService;
 import com.nidus.twinly.common.solapi.SolapiService;
+import com.nidus.twinly.legal.domain.PolicyKind;
+import com.nidus.twinly.legal.entity.Agreement;
+import com.nidus.twinly.legal.repository.AgreementRepository;
+import com.nidus.twinly.legal.service.PolicyCatalog;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.UserRepository;
 import org.junit.jupiter.api.Tag;
@@ -20,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.mysql.MySQLContainer;
 
+import java.time.Instant;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -63,6 +68,12 @@ public abstract class AbstractIntegrationTest {
     @Autowired
     protected JwtService jwtService;
 
+    @Autowired
+    protected PolicyCatalog policyCatalog;
+
+    @Autowired
+    protected AgreementRepository agreementRepository;
+
     // 실제 외부 호출 차단 (메시지 발송·S3·Bedrock)
     @MockitoBean protected SesService sesService;
     @MockitoBean protected SolapiService solapiService;
@@ -87,6 +98,12 @@ public abstract class AbstractIntegrationTest {
                 "phone" + n, "phoneHash" + n,
                 "email" + n + "@test.com", "emailHash" + n, null, null
         , null, null));
+    }
+
+    /** 평행우주 입장 필수 약관의 시행 중인 최신 버전에 모두 동의시킨다. */
+    protected void agreeRequiredParallelEntryPolicies(Long userId) {
+        policyCatalog.loadRequiredPolicyIds(PolicyKind.PARALLEL_ENTRY)
+                .forEach(policyId -> agreementRepository.save(Agreement.create(userId, policyId, Instant.now())));
     }
 
     /** 해당 유저의 실제 액세스 토큰으로 Authorization 헤더 값을 만든다. */

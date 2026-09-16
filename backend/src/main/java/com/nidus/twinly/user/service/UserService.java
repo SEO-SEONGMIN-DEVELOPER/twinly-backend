@@ -3,6 +3,8 @@ package com.nidus.twinly.user.service;
 import com.nidus.twinly.common.jwt.JwtService;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
+import com.nidus.twinly.legal.domain.PolicyKind;
+import com.nidus.twinly.legal.service.PolicyCatalog;
 import com.nidus.twinly.user.dto.header.UserInfo;
 import com.nidus.twinly.user.dto.result.UsersPageResult;
 import com.nidus.twinly.user.dto.result.UsersResult;
@@ -16,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -25,6 +28,7 @@ public class UserService {
 
     private final JwtService jwtService;
     private final UserRepository userRepository;
+    private final PolicyCatalog policyCatalog;
 
     public UserInfo resolveByAccessToken(String token) {
         Long userId;
@@ -48,7 +52,10 @@ public class UserService {
     public UsersResult users(Long cursor, Integer limit) {
         int effectiveLimit = (limit != null && limit > 0) ? limit : DEFAULT_LIMIT;
 
-        List<Long> fetched = userRepository.findIdsAfterCursor(cursor, EntitlementReader.SIMULATION_ACCESS, Instant.now(), effectiveLimit + 1);
+        Set<Long> requiredPolicyIds = policyCatalog.loadRequiredPolicyIds(PolicyKind.PARALLEL_ENTRY);
+
+        List<Long> fetched = userRepository.findIdsAfterCursor(cursor, EntitlementReader.SIMULATION_ACCESS, Instant.now(),
+                requiredPolicyIds, requiredPolicyIds.size(), effectiveLimit + 1);
 
         boolean hasMore = fetched.size() > effectiveLimit;
         List<Long> userIds = hasMore ? fetched.subList(0, effectiveLimit) : fetched;

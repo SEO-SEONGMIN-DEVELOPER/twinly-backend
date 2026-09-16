@@ -9,6 +9,10 @@ import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.common.survey.SurveyLoader;
 import com.nidus.twinly.common.survey.SurveyOptionName;
 import com.nidus.twinly.common.survey.SurveyQuestion;
+import com.nidus.twinly.legal.domain.PolicyKind;
+import com.nidus.twinly.legal.entity.Agreement;
+import com.nidus.twinly.legal.repository.AgreementRepository;
+import com.nidus.twinly.legal.service.PolicyCatalog;
 import com.nidus.twinly.purchase.entity.UserEntitlement;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.purchase.repository.UserEntitlementRepository;
@@ -93,6 +97,12 @@ class UserSeederUnitTest {
 
     @Mock
     UserEntitlementRepository userEntitlementRepository;
+
+    @Mock
+    PolicyCatalog policyCatalog;
+
+    @Mock
+    AgreementRepository agreementRepository;
 
     @Mock
     PurchaseWriter purchaseWriter;
@@ -489,6 +499,34 @@ class UserSeederUnitTest {
     }
 
     @Test
+    @DisplayName("시뮬레이션 권한을 받은 시드 유저는 평행우주 입장 필수 약관 최신 버전에 동의한 상태로 만든다")
+    void run_agrees_parallel_entry_policies_for_ai_test_users() throws IOException {
+        // given: 필수 약관 최신 버전이 2건이고, 첫 번째 권한 대상 유저만 그중 1건에 이미 동의한 상태
+        long firstAccessUserId = SHOWCASE_USER_COUNT + 1L;
+        given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
+        given(userEntitlementRepository.findAllByUserIdInAndEntitlement(any(), eq(EntitlementReader.SIMULATION_ACCESS)))
+                .willReturn(List.of());
+        given(policyCatalog.loadRequiredPolicyIds(PolicyKind.PARALLEL_ENTRY)).willReturn(Set.of(7L, 8L));
+        given(agreementRepository.findAllByUserIdInAndRevokedAtIsNull(any()))
+                .willReturn(List.of(Agreement.create(firstAccessUserId, 7L, Instant.now())));
+
+        // when: 시더 실행
+        userSeeder.run(null);
+
+        // then: 권한 대상 50명 모두 두 약관에 동의가 채워지되, 이미 동의한 건은 다시 만들지 않는다
+        ArgumentCaptor<List<Agreement>> captor = ArgumentCaptor.forClass(List.class);
+        then(agreementRepository).should().saveAll(captor.capture());
+        List<Agreement> saved = captor.getValue();
+
+        assertThat(saved).hasSize(SIMULATION_ACCESS_USER_COUNT * 2 - 1);
+        assertThat(saved).noneMatch(agreement -> agreement.getUserId() == firstAccessUserId && agreement.getPolicyId() == 7L);
+        assertThat(saved.stream().map(Agreement::getUserId).distinct().toList())
+                .containsExactlyInAnyOrderElementsOf(
+                        LongStream.rangeClosed(firstAccessUserId, SHOWCASE_USER_COUNT + SIMULATION_ACCESS_USER_COUNT)
+                                .boxed().toList());
+    }
+
+    @Test
     @DisplayName("이미 권한이 있는 시드 유저에게는 다시 부여하지 않는다")
     void run_skips_simulation_access_when_already_granted() throws IOException {
         // given: 유저는 남아 있고 AI 테스트용 유저가 이미 권한을 가진 상태
@@ -547,7 +585,7 @@ class UserSeederUnitTest {
     private UserSeeder seederWith(SeedProperties seedProperties) {
         return new UserSeeder(userRepository, personaElementRepository, blindIndexHasher, surveyLoader,
                 interestLoader, currentSeasonReader, seasonParticipationRepository, userEntitlementRepository,
-                purchaseWriter, simulationService, sceneRepository, scenarioCleaner, seedProperties, new ObjectMapper());
+                policyCatalog, agreementRepository, purchaseWriter, simulationService, sceneRepository, scenarioCleaner, seedProperties, new ObjectMapper());
     }
 
     @Test

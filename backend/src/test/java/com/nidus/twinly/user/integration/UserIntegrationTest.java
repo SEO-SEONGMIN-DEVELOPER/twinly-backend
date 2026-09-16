@@ -1,5 +1,8 @@
 package com.nidus.twinly.user.integration;
 
+import com.nidus.twinly.legal.entity.Agreement;
+import com.nidus.twinly.legal.repository.PolicyNameRepository;
+import com.nidus.twinly.legal.repository.PolicyRepository;
 import com.nidus.twinly.purchase.entity.UserEntitlement;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.purchase.repository.UserEntitlementRepository;
@@ -8,9 +11,11 @@ import com.nidus.twinly.user.entity.User;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.hasSize;
@@ -24,6 +29,12 @@ class UserIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     UserEntitlementRepository userEntitlementRepository;
+
+    @Autowired
+    PolicyNameRepository policyNameRepository;
+
+    @Autowired
+    PolicyRepository policyRepository;
 
     @Test
     @DisplayName("유저 목록 조회: 커서와 같은 id는 제외하고 그보다 큰 유저만 오름차순으로 반환한다")
@@ -146,10 +157,63 @@ class UserIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.userIds", hasSize(0)));
     }
 
+    @Test
+    @DisplayName("유저 목록 조회: 구독 중이어도 평행우주 입장 필수 약관 최신 버전에 동의하지 않았으면 제외된다")
+    void users_excludes_users_without_required_consent_end_to_end() throws Exception {
+        // given: 최신 버전에 동의한 구독 유저, 동의가 없는 구독 유저, 구버전에만 동의한 구독 유저, 동의를 철회한 구독 유저
+        User agreed = saveSubscribedUser();
+        saveSubscribedUserWithoutConsent();
+        User oldVersionOnly = saveSubscribedUserWithoutConsent();
+        agreementRepository.save(Agreement.create(oldVersionOnly.getId(), oldParallelEntryPolicyId(), Instant.now()));
+        User revoked = saveSubscribedUser();
+        agreementRepository.findAllByUserIdAndRevokedAtIsNull(revoked.getId())
+                .forEach(agreement -> ReflectionTestUtils.setField(agreement, "revokedAt", Instant.now()));
+        userRepository.flush();
+        agreementRepository.flush();
+
+        // when: 유저 목록 API 호출
+        var result = mockMvc.perform(get("/internal/v1/users"));
+
+        // then: 최신 필수 약관에 유효한 동의가 있는 유저만 시뮬레이션 대상으로 내려온다
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.userIds", contains(agreed.getId().toString())));
+    }
+
+    @Test
+    @DisplayName("유저 목록 조회: 평행우주 입장 필수 약관이 없으면 구독만으로 목록에 포함된다")
+    void users_includes_subscribed_users_when_no_required_policy_end_to_end() throws Exception {
+        // given: 필수 약관 버전을 모두 비우고, 동의 기록이 없는 구독 유저 1명
+        policyRepository.deleteAllInBatch();
+        User subscribed = saveSubscribedUserWithoutConsent();
+        userRepository.flush();
+
+        // when: 유저 목록 API 호출
+        var result = mockMvc.perform(get("/internal/v1/users"));
+
+        // then: 빈 id 목록으로도 쿼리가 깨지지 않고 구독 유저가 내려온다
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.userIds", contains(subscribed.getId().toString())));
+    }
+
     private User saveSubscribedUser() {
+        User user = saveSubscribedUserWithoutConsent();
+        agreeRequiredParallelEntryPolicies(user.getId());
+        return user;
+    }
+
+    private User saveSubscribedUserWithoutConsent() {
         User user = saveUser();
         userEntitlementRepository.save(UserEntitlement.create(
                 user.getId(), EntitlementReader.SIMULATION_ACCESS, Instant.now().plus(Duration.ofDays(30)), Instant.now()));
         return user;
+    }
+
+    private Long oldParallelEntryPolicyId() {
+        Long policyNameId = policyNameRepository.findAllByIdentifierIn(List.of("thirdPartyRealIdentityDisclosure")).getFirst().getId();
+        return policyRepository.findAllProjectedByPolicyNameIdIn(List.of(policyNameId)).stream()
+                .filter(policy -> policy.getVersion().equals("1.0"))
+                .findFirst()
+                .orElseThrow()
+                .getId();
     }
 }

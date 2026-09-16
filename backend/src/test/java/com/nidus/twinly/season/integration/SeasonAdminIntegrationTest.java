@@ -92,11 +92,15 @@ class SeasonAdminIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("시즌 전환: simulation_access 가 살아 있는 유저는 새 시즌에 자동 참가되고, 없는 유저는 참가되지 않는다")
     void changeSeason_participatesPaidUsers_endToEnd() throws Exception {
-        // given: 결제 상태 유저와 무료 유저
+        // given: 결제·필수 약관 동의 유저, 결제만 하고 동의하지 않은 유저, 무료 유저
         User paid = saveUser();
+        User paidWithoutConsent = saveUser();
         User free = saveUser();
         userEntitlementRepository.save(UserEntitlement.create(
                 paid.getId(), EntitlementReader.SIMULATION_ACCESS, Instant.now().plus(Duration.ofDays(30)), Instant.now()));
+        userEntitlementRepository.save(UserEntitlement.create(
+                paidWithoutConsent.getId(), EntitlementReader.SIMULATION_ACCESS, Instant.now().plus(Duration.ofDays(30)), Instant.now()));
+        agreeRequiredParallelEntryPolicies(paid.getId());
 
         // when: 시즌 전환
         mockMvc.perform(post(ADMIN_SEASON_PATH)
@@ -107,7 +111,7 @@ class SeasonAdminIntegrationTest extends AbstractIntegrationTest {
                                 """))
                 .andExpect(status().isOk());
 
-        // then: 결제 유저만 새 시즌 참가 행을 갖는다 (재참가 요청 없이 다음 시즌으로 이어진다)
+        // then: 결제하고 필수 약관에 동의한 유저만 새 시즌 참가 행을 갖는다 (재참가 요청 없이 다음 시즌으로 이어진다)
         Long newSeasonId = seasonRepository.findAllByIsActiveTrue().getFirst().getId();
 
         assertThat(seasonParticipationRepository.findByUserIdAndSeasonId(paid.getId(), newSeasonId))
@@ -115,6 +119,7 @@ class SeasonAdminIntegrationTest extends AbstractIntegrationTest {
                 .get()
                 .extracting(SeasonParticipation::getParticipatedInAt)
                 .isNotNull();
+        assertThat(seasonParticipationRepository.findByUserIdAndSeasonId(paidWithoutConsent.getId(), newSeasonId)).isEmpty();
         assertThat(seasonParticipationRepository.findByUserIdAndSeasonId(free.getId(), newSeasonId)).isEmpty();
     }
 

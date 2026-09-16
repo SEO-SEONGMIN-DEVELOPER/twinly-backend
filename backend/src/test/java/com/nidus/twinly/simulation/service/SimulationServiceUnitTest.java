@@ -23,6 +23,8 @@ import com.nidus.twinly.simulation.dto.command.SimulationsSceneCommand;
 import com.nidus.twinly.simulation.dto.result.SimulationPersonaResult;
 import com.nidus.twinly.user.entity.PersonaElement;
 import com.nidus.twinly.user.entity.User;
+import com.nidus.twinly.legal.domain.PolicyKind;
+import com.nidus.twinly.legal.reader.ConsentReader;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.purchase.service.PurchaseService;
 import com.nidus.twinly.user.repository.PersonaElementRepository;
@@ -97,6 +99,9 @@ class SimulationServiceUnitTest {
     EntitlementReader entitlementReader;
 
     @Mock
+    ConsentReader consentReader;
+
+    @Mock
     PurchaseService purchaseService;
 
     SimulationService simulationService;
@@ -107,7 +112,7 @@ class SimulationServiceUnitTest {
                 sceneRepository, scenePartnerRepository, questionRepository, questionPartnerRepository,
                 relationshipRepository, encounterRepository, chatRoomOpener, chatRoomOpeningRepository,
                 appNotificationFeedWriter, userRepository,
-                personaElementRepository, entitlementReader, purchaseService, new ObjectMapper());
+                personaElementRepository, entitlementReader, consentReader, purchaseService, new ObjectMapper());
     }
 
     @Test
@@ -224,6 +229,7 @@ class SimulationServiceUnitTest {
     @DisplayName("유저 기본 정보와 성향을 차원별로 묶어 반환하고 birthDate를 LocalDate로 변환한다")
     void persona_groups_elements_by_dimension() {
         given(entitlementReader.hasSimulationAccess(USER_ID)).willReturn(true);
+        given(consentReader.hasAgreedAllRequired(USER_ID, PolicyKind.PARALLEL_ENTRY)).willReturn(true);
         // given: 성향 4건(관심사 2건 포함)을 가진 유저
         User user = user(USER_ID, "서", "성민", "컴퓨터공학과", "1999-03-21");
         ReflectionTestUtils.setField(user, "poolNumber", 3);
@@ -258,6 +264,7 @@ class SimulationServiceUnitTest {
     void persona_without_elements_returns_empty_map() {
         // given: 시뮬레이션 권한이 있고 성향이 한 건도 없는 유저
         given(entitlementReader.hasSimulationAccess(USER_ID)).willReturn(true);
+        given(consentReader.hasAgreedAllRequired(USER_ID, PolicyKind.PARALLEL_ENTRY)).willReturn(true);
         // given: 성향이 한 건도 없는 유저
         given(userRepository.findById(USER_ID)).willReturn(Optional.of(user(USER_ID, "서", "성민", "컴퓨터공학과", "1999-03-21")));
         given(personaElementRepository.findAllByUserIdOrderByIdAsc(USER_ID)).willReturn(List.of());
@@ -292,11 +299,29 @@ class SimulationServiceUnitTest {
         given(userRepository.findById(USER_ID)).willReturn(Optional.of(user(USER_ID, "서", "성민", "컴퓨터공학과", "1999-03-21")));
         given(entitlementReader.hasSimulationAccess(USER_ID)).willReturn(false);
 
-        // when & then: 파기(404)와 구분되는 403 코드로 실패하고 페르소나를 읽지 않는다
+        // when & then: 파기(404)와 구분되는 403 코드로 실패하고 동의 여부나 페르소나를 읽지 않는다
         assertThatThrownBy(() -> simulationService.persona(USER_ID))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.SIMULATION_ACCESS_REQUIRED);
+
+        then(consentReader).should(never()).hasAgreedAllRequired(any(), any());
+        then(personaElementRepository).should(never()).findAllByUserIdOrderByIdAsc(anyLong());
+    }
+
+    @Test
+    @DisplayName("페르소나 조회 시 구독 중이어도 평행우주 입장 필수 약관에 동의하지 않았으면 SIMULATION_CONSENT_REQUIRED 예외가 발생한다")
+    void persona_without_required_consent_throws() {
+        // given: 구독 권한은 있지만 평행우주 입장 필수 약관 최신 버전에 동의하지 않음
+        given(userRepository.findById(USER_ID)).willReturn(Optional.of(user(USER_ID, "서", "성민", "컴퓨터공학과", "1999-03-21")));
+        given(entitlementReader.hasSimulationAccess(USER_ID)).willReturn(true);
+        given(consentReader.hasAgreedAllRequired(USER_ID, PolicyKind.PARALLEL_ENTRY)).willReturn(false);
+
+        // when & then: AI 서버가 구독 없음과 구분할 수 있도록 전용 403 코드로 실패하고 페르소나를 읽지 않는다
+        assertThatThrownBy(() -> simulationService.persona(USER_ID))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.SIMULATION_CONSENT_REQUIRED);
 
         then(personaElementRepository).should(never()).findAllByUserIdOrderByIdAsc(anyLong());
     }
@@ -326,6 +351,7 @@ class SimulationServiceUnitTest {
         User user = user(USER_ID, "서", "성민", "컴퓨터공학과", "1999-03-21");
         given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
         given(entitlementReader.hasSimulationAccess(USER_ID)).willReturn(true);
+        given(consentReader.hasAgreedAllRequired(USER_ID, PolicyKind.PARALLEL_ENTRY)).willReturn(true);
         given(personaElementRepository.findAllByUserIdOrderByIdAsc(USER_ID)).willReturn(List.of());
 
         // when: 페르소나 조회

@@ -9,6 +9,10 @@ import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.common.survey.SurveyLoader;
 import com.nidus.twinly.common.survey.SurveyOptionName;
 import com.nidus.twinly.common.survey.SurveyQuestion;
+import com.nidus.twinly.legal.domain.PolicyKind;
+import com.nidus.twinly.legal.entity.Agreement;
+import com.nidus.twinly.legal.repository.AgreementRepository;
+import com.nidus.twinly.legal.service.PolicyCatalog;
 import com.nidus.twinly.purchase.entity.UserEntitlement;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.purchase.repository.UserEntitlementRepository;
@@ -95,6 +99,8 @@ public class UserSeeder implements ApplicationRunner {
     private final CurrentSeasonReader currentSeasonReader;
     private final SeasonParticipationRepository seasonParticipationRepository;
     private final UserEntitlementRepository userEntitlementRepository;
+    private final PolicyCatalog policyCatalog;
+    private final AgreementRepository agreementRepository;
     private final PurchaseWriter purchaseWriter;
     private final SimulationService simulationService;
     private final SceneRepository sceneRepository;
@@ -254,6 +260,27 @@ public class UserSeeder implements ApplicationRunner {
         }
 
         userIds.forEach(purchaseWriter::assignPool);
+
+        agreeParallelEntryPolicies(userIds, now);
+    }
+
+    private void agreeParallelEntryPolicies(List<Long> userIds, Instant now) {
+        Set<Long> requiredPolicyIds = policyCatalog.loadRequiredPolicyIds(PolicyKind.PARALLEL_ENTRY);
+
+        Map<Long, Set<Long>> agreedPolicyIdsByUserId = agreementRepository.findAllByUserIdInAndRevokedAtIsNull(userIds).stream()
+                .collect(Collectors.groupingBy(Agreement::getUserId, Collectors.mapping(Agreement::getPolicyId, Collectors.toSet())));
+
+        List<Agreement> agreements = new ArrayList<>();
+        for (Long userId : userIds) {
+            Set<Long> agreedPolicyIds = agreedPolicyIdsByUserId.getOrDefault(userId, Set.of());
+            requiredPolicyIds.stream()
+                    .filter(policyId -> !agreedPolicyIds.contains(policyId))
+                    .forEach(policyId -> agreements.add(Agreement.create(userId, policyId, now)));
+        }
+
+        if (!agreements.isEmpty()) {
+            agreementRepository.saveAll(agreements);
+        }
     }
 
     private void seedScenarios(List<User> showcaseUsers) throws IOException {

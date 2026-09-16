@@ -12,6 +12,8 @@ public interface AgreementRepository extends JpaRepository<Agreement, Long> {
 
     List<Agreement> findAllByUserIdAndRevokedAtIsNull(Long userId);
 
+    List<Agreement> findAllByUserIdInAndRevokedAtIsNull(List<Long> userIds);
+
     @Modifying
     @Query(value = """
             UPDATE agreements

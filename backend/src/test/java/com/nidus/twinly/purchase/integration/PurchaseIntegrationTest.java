@@ -119,9 +119,33 @@ class PurchaseIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("결제 반영: simulation_access 가 저장되면 현재 시즌 참가 행이 함께 생성된다")
+    @DisplayName("결제 반영: 필수 약관에 동의한 유저의 simulation_access 가 저장되면 현재 시즌 참가 행이 함께 생성된다")
     void webhook_with_simulation_access_participates_in_current_season() throws Exception {
-        // given: 진행 중인 시즌과 실제 유저 + RevenueCat 이 simulation_access 를 돌려줌
+        // given: 진행 중인 시즌과 평행우주 입장 필수 약관에 동의한 실제 유저 + RevenueCat 이 simulation_access 를 돌려줌
+        Instant now = Instant.now();
+        Season season = seasonRepository.save(
+                Season.create(now.minus(Duration.ofDays(30)), now.plus(Duration.ofDays(30))));
+        User user = saveUser();
+        agreeRequiredParallelEntryPolicies(user.getId());
+        given(revenueCatClient.entitlements(user.getRevenueCatUserId().toString()))
+                .willReturn(List.of(new RevenueCatEntitlement(
+                        EntitlementReader.SIMULATION_ACCESS, now.plus(Duration.ofDays(30)))));
+
+        // when: 구매 이벤트로 웹훅 호출
+        mockMvc.perform(post("/webhook/v1/revenue-cat")
+                        .header("Authorization", WEBHOOK_SECRET)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload("INITIAL_PURCHASE", user)))
+                .andExpect(status().isOk());
+
+        // then: 별도 참가 API 호출 없이 현재 시즌 참가 행이 생긴다 (결제 = 평행우주 입장)
+        assertThat(seasonParticipationRepository.findByUserIdAndSeasonId(user.getId(), season.getId())).isPresent();
+    }
+
+    @Test
+    @DisplayName("결제 반영: 필수 약관에 동의하지 않았으면 simulation_access 가 저장돼도 시즌 참가 행을 만들지 않는다")
+    void webhook_with_simulation_access_without_consent_does_not_participate() throws Exception {
+        // given: 진행 중인 시즌과 필수 약관에 동의하지 않은 실제 유저 + RevenueCat 이 simulation_access 를 돌려줌
         Instant now = Instant.now();
         Season season = seasonRepository.save(
                 Season.create(now.minus(Duration.ofDays(30)), now.plus(Duration.ofDays(30))));
@@ -137,8 +161,9 @@ class PurchaseIntegrationTest extends AbstractIntegrationTest {
                         .content(payload("INITIAL_PURCHASE", user)))
                 .andExpect(status().isOk());
 
-        // then: 별도 참가 API 호출 없이 현재 시즌 참가 행이 생긴다 (결제 = 평행우주 입장)
-        assertThat(seasonParticipationRepository.findByUserIdAndSeasonId(user.getId(), season.getId())).isPresent();
+        // then: 권한은 저장되지만 시뮬레이션 대상이 아니므로 참여 중으로 보이지 않는다
+        assertThat(userEntitlementRepository.findAllByUserId(user.getId())).isNotEmpty();
+        assertThat(seasonParticipationRepository.findByUserIdAndSeasonId(user.getId(), season.getId())).isEmpty();
     }
 
     @Test
