@@ -381,7 +381,7 @@ jobs:
 
           gh run download "$run_id" --name openapi-spec --dir /tmp/openapi
 
-          payload=$(jq -n --slurpfile spec /tmp/openapi/openapi.json '{
+          jq -n --slurpfile spec /tmp/openapi/openapi.json '{
             input: ($spec[0] | tojson),
             options: {
               endpointOverwriteBehavior: "OVERWRITE_EXISTING",
@@ -389,13 +389,13 @@ jobs:
               updateFolderOfChangedEndpoint: true,
               deleteUnmatchedResources: true
             }
-          }')
+          }' > /tmp/apidog-payload.json
 
           response=$(curl -sS -X POST "https://api.apidog.com/v1/projects/${APIDOG_PROJECT_ID}/import-openapi" \
             -H "Authorization: Bearer ${APIDOG_TOKEN}" \
             -H "X-Apidog-Api-Version: 2024-03-28" \
             -H "Content-Type: application/json" \
-            -d "$payload")
+            --data-binary @/tmp/apidog-payload.json)
 
           if ! jq -e '.data.counters' >/dev/null 2>&1 <<< "$response"; then
             echo "::warning::Apidog 문서 동기화에 실패했습니다 — $(jq -rc '.errorMessage // .' <<< "$response")"
