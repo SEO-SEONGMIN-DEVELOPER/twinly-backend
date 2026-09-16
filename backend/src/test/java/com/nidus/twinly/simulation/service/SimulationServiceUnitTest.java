@@ -24,6 +24,7 @@ import com.nidus.twinly.simulation.dto.result.SimulationPersonaResult;
 import com.nidus.twinly.user.entity.PersonaElement;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
+import com.nidus.twinly.purchase.service.PurchaseService;
 import com.nidus.twinly.user.repository.PersonaElementRepository;
 import com.nidus.twinly.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,6 +32,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.BeanUtils;
@@ -48,6 +50,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
@@ -93,6 +96,9 @@ class SimulationServiceUnitTest {
     @Mock
     EntitlementReader entitlementReader;
 
+    @Mock
+    PurchaseService purchaseService;
+
     SimulationService simulationService;
 
     @BeforeEach
@@ -101,7 +107,7 @@ class SimulationServiceUnitTest {
                 sceneRepository, scenePartnerRepository, questionRepository, questionPartnerRepository,
                 relationshipRepository, encounterRepository, chatRoomOpener, chatRoomOpeningRepository,
                 appNotificationFeedWriter, userRepository,
-                personaElementRepository, entitlementReader, new ObjectMapper());
+                personaElementRepository, entitlementReader, purchaseService, new ObjectMapper());
     }
 
     @Test
@@ -275,6 +281,7 @@ class SimulationServiceUnitTest {
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.USER_NOT_FOUND);
 
+        then(purchaseService).should(never()).syncQuietly(any());
         then(personaElementRepository).should(never()).findAllByUserIdOrderByIdAsc(any());
     }
 
@@ -308,7 +315,26 @@ class SimulationServiceUnitTest {
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.USER_NOT_FOUND);
 
+        then(purchaseService).should(never()).syncQuietly(any());
         then(personaElementRepository).should(never()).findAllByUserIdOrderByIdAsc(any());
+    }
+
+    @Test
+    @DisplayName("페르소나 조회 전에 RevenueCat 최신 상태를 동기화한 뒤 권한을 확인한다")
+    void persona_syncs_purchases_before_checking_access() {
+        // given: 정상 유저, 권한 있음
+        User user = user(USER_ID, "서", "성민", "컴퓨터공학과", "1999-03-21");
+        given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+        given(entitlementReader.hasSimulationAccess(USER_ID)).willReturn(true);
+        given(personaElementRepository.findAllByUserIdOrderByIdAsc(USER_ID)).willReturn(List.of());
+
+        // when: 페르소나 조회
+        simulationService.persona(USER_ID);
+
+        // then: 동기화가 권한 확인보다 먼저 수행됨
+        InOrder inOrder = inOrder(purchaseService, entitlementReader);
+        inOrder.verify(purchaseService).syncQuietly(user);
+        inOrder.verify(entitlementReader).hasSimulationAccess(USER_ID);
     }
 
     private User user(Long id, String familyName, String givenName, String affiliation, String birthDate) {

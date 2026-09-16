@@ -221,6 +221,35 @@ class PurchaseServiceUnitTest {
     }
 
     @Test
+    @DisplayName("syncQuietly 는 최근에 동기화했더라도 RevenueCat 을 다시 조회한다")
+    void syncQuietly_syncs_even_when_fresh() {
+        // given: 방금 동기화한 유저
+        User user = user();
+        ReflectionTestUtils.setField(user, "purchasesSyncedAt", Instant.now());
+        given(revenueCatClient.entitlements(APP_USER_ID)).willReturn(List.of());
+
+        // when: 즉시 동기화 호출
+        purchaseService.syncQuietly(user);
+
+        // then: 시도 시각을 기록하고 실제 조회까지 수행
+        then(purchaseWriter).should().markSyncAttempt(eq(USER_ID), any());
+        then(revenueCatClient).should().entitlements(APP_USER_ID);
+    }
+
+    @Test
+    @DisplayName("syncQuietly 는 동기화가 실패해도 예외를 밖으로 내보내지 않는다")
+    void syncQuietly_swallows_failure() {
+        // given: RevenueCat 조회가 실패하는 상황
+        User user = user();
+        given(revenueCatClient.entitlements(APP_USER_ID))
+                .willThrow(new BusinessException(ErrorCode.REVENUE_CAT_SYNC_FAILED));
+
+        // when & then: 호출한 쪽은 저장된 구매 상태로 계속 진행할 수 있어야 하므로 예외가 전파되지 않는다
+        assertThatCode(() -> purchaseService.syncQuietly(user)).doesNotThrowAnyException();
+        then(purchaseWriter).should(never()).replaceEntitlements(anyLong(), anyList(), any());
+    }
+
+    @Test
     @DisplayName("동기화 결과 simulation_access 가 살아 있으면 현재 시즌에 자동 참가시킨다")
     void sync_participates_in_current_season_when_access_granted() {
         // given: 결제로 simulation_access 를 갖게 된 유저
