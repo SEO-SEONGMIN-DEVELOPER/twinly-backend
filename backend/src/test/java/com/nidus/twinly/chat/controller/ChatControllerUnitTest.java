@@ -354,7 +354,7 @@ class ChatControllerUnitTest {
     void commonPoint_success() throws Exception {
         // given: 서비스가 공통점 문구를 반환
         given(chatService.commonPoint(1L, 10L))
-                .willReturn(new ChatCommonPointResult("두 사람의 공통점은 새로운 경험을 즐긴다는 점이에요."));
+                .willReturn(new ChatCommonPointResult("두 사람은 새로운 경험을 즐기고, 쉬는 날엔 낯선 동네를 걸어 다녀요."));
 
         // when: 공통점 조회 API 호출
         var result = mockMvc.perform(get("/api/v1/chat/rooms/{roomId}/common-point", "10")
@@ -362,7 +362,7 @@ class ChatControllerUnitTest {
 
         // then: 200 반환 + message 가 JSON에 그대로 실림 + 인증 유저 id·roomId로 위임
         result.andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("두 사람의 공통점은 새로운 경험을 즐긴다는 점이에요."));
+                .andExpect(jsonPath("$.message").value("두 사람은 새로운 경험을 즐기고, 쉬는 날엔 낯선 동네를 걸어 다녀요."));
         then(chatService).should().commonPoint(1L, 10L);
     }
 

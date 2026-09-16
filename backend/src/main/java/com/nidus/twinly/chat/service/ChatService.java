@@ -13,7 +13,7 @@ import com.nidus.twinly.chat.repository.ChatRoomParticipationRepository;
 import com.nidus.twinly.chat.repository.ChatRoomRepository;
 import com.nidus.twinly.block.entity.Block;
 import com.nidus.twinly.block.repository.BlockRepository;
-import com.nidus.twinly.common.aws.bedrock.BedrockService;
+import com.nidus.twinly.chat.generator.CommonPointGenerator;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
 import com.nidus.twinly.common.photo.PhotoType;
 import com.nidus.twinly.common.photo.ProfilePhotoInfo;
@@ -62,10 +62,9 @@ public class ChatService {
 
     private static final int DEFAULT_MESSAGES_LIMIT = 20;
     private static final int MAX_TEXT_BYTES = 4 * 1024;
-    private static final String COMMON_POINT_FORMAT = "두 사람의 공통점은 %s이에요.";
 
     private final CloudFrontService cloudFrontService;
-    private final BedrockService bedrockService;
+    private final CommonPointGenerator commonPointGenerator;
 
     private final UserRepository userRepository;
     private final ChatRoomRepository chatRoomRepository;
@@ -513,7 +512,7 @@ public class ChatService {
         checkAllEntryAgreed(participations);
 
         if (room.getCommonPoint() != null) {
-            return new ChatCommonPointResult(COMMON_POINT_FORMAT.formatted(room.getCommonPoint()));
+            return new ChatCommonPointResult(room.getCommonPoint());
         }
 
         List<PersonaElement> myPersona = personaElementRepository.findAllByUserIdOrderByIdAsc(userId);
@@ -523,46 +522,9 @@ public class ChatService {
             throw new BusinessException(ErrorCode.PERSONA_NOT_FOUND);
         }
 
-        String commonPoint = bedrockService.converse(buildCommonPointPrompt(myPersona, partnerPersona)).strip();
+        String commonPoint = commonPointGenerator.generate(myPersona, partnerPersona);
         room.assignCommonPoint(commonPoint);
 
-        return new ChatCommonPointResult(COMMON_POINT_FORMAT.formatted(commonPoint));
-    }
-
-    private String buildCommonPointPrompt(List<PersonaElement> myPersona, List<PersonaElement> partnerPersona) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("당신은 두 사람의 정보를 비교해 공통점을 찾아내는 작가입니다.\n");
-        sb.append("아래는 두 사람 각각에 대해 파악한 정보입니다.\n");
-
-        appendPersona(sb, "A", myPersona);
-        appendPersona(sb, "B", partnerPersona);
-
-        sb.append("\n두 사람이 실제로 공유하는 가장 두드러진 공통점 하나를 한국어로 쓰세요.\n");
-        sb.append("공통점은 [나눈 대화]에서 드러난 구체적인 경험이나 모습에서 먼저 찾으세요.\n");
-        sb.append("[나눈 대화]에서 공통점을 찾을 수 없을 때만 [관심사]와 [성격 특성]을 참고하세요.\n");
-        sb.append("반드시 \"~는 점\" 또는 \"~한 점\"으로 끝나는 명사구여야 합니다. (예: 새로운 경험을 즐긴다는 점, 혼자만의 시간을 소중히 여기는 점)\n");
-        sb.append("성격 특성 이름을 그대로 쓰지 말고, 구체적인 모습으로 표현하세요.\n");
-        sb.append("30자 이내로 쓰세요.\n");
-        sb.append("명사구 외에 다른 설명, 따옴표, 마침표는 붙이지 마세요.\n");
-
-        return sb.toString();
-    }
-
-    private void appendPersona(StringBuilder sb, String label, List<PersonaElement> personaElements) {
-        sb.append("\n[").append(label).append("의 관심사]\n");
-        personaElements.stream()
-                .filter(element -> element.getDimension() == PersonaDimension.INTEREST)
-                .forEach(element -> sb.append("- ").append(element.getExplanation()).append("\n"));
-
-        sb.append("\n[").append(label).append("의 성격 특성]\n");
-        personaElements.stream()
-                .filter(element -> element.getDimension() != PersonaDimension.INTEREST
-                        && element.getDimension() != PersonaDimension.DETAIL)
-                .forEach(element -> sb.append("- ").append(element.getDimension()).append(": ").append(element.getExplanation()).append("\n"));
-
-        sb.append("\n[").append(label).append("의 나눈 대화]\n");
-        personaElements.stream()
-                .filter(element -> element.getDimension() == PersonaDimension.DETAIL)
-                .forEach(element -> sb.append("- ").append(element.getExplanation()).append("\n"));
+        return new ChatCommonPointResult(commonPoint);
     }
 }
