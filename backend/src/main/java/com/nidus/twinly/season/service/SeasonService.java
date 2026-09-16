@@ -44,7 +44,7 @@ public class SeasonService {
 
         Season season = seasonRepository.save(Season.create(command.startedAt(), command.endedAt()));
 
-        seasonParticipationWriter.participateAllWithSimulationAccess(season.getId());
+        seasonParticipationWriter.participateAllEligible(season.getId());
 
         eventPublisher.publishEvent(new SeasonChangedEvent(season.getId()));
 

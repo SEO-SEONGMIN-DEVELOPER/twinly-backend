@@ -666,12 +666,12 @@ class AuthServiceUnitTest {
     }
 
     @Test
-    @DisplayName("본인인증 검증: 만 18세 생일 당일은 통과한다 (하한 경계)")
+    @DisplayName("본인인증 검증: 만 19세 생일 당일은 통과한다 (하한 경계)")
     void identityVerify_at_min_age_boundary_passes() {
         // given
         AnonSessionIdentityVerification issued = issuedIdentity();
         givenIssuedIdentity(issued);
-        givenNiceResult(niceResult(compact(KstTimes.today().minusYears(18))));
+        givenNiceResult(niceResult(compact(KstTimes.today().minusYears(19))));
         given(blindIndexHasher.hash(DI)).willReturn("hash:" + DI);
         given(userRepository.existsByDiHash("hash:" + DI)).willReturn(false);
 
@@ -683,11 +683,11 @@ class AuthServiceUnitTest {
     }
 
     @Test
-    @DisplayName("본인인증 검증: 만 18세 생일 하루 전이면 IDENTITY_AGE_NOT_ALLOWED 예외가 발생한다")
+    @DisplayName("본인인증 검증: 만 19세 생일 하루 전이면 IDENTITY_AGE_NOT_ALLOWED 예외가 발생한다")
     void identityVerify_below_min_age_throws() {
         // given
         givenIssuedIdentity(issuedIdentity());
-        givenNiceResult(niceResult(compact(KstTimes.today().minusYears(18).plusDays(1))));
+        givenNiceResult(niceResult(compact(KstTimes.today().minusYears(19).plusDays(1))));
 
         // when & then
         assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT, VERIFY_COMMAND))
@@ -697,17 +697,20 @@ class AuthServiceUnitTest {
     }
 
     @Test
-    @DisplayName("본인인증 검증: 만 29세 생일 당일이면 IDENTITY_AGE_NOT_ALLOWED 예외가 발생한다 (상한 경계)")
-    void identityVerify_at_max_age_boundary_throws() {
+    @DisplayName("본인인증 검증: 나이 상한은 없어 만 29세 이상도 통과한다")
+    void identityVerify_above_former_max_age_passes() {
         // given
-        givenIssuedIdentity(issuedIdentity());
-        givenNiceResult(niceResult(compact(KstTimes.today().minusYears(29))));
+        AnonSessionIdentityVerification issued = issuedIdentity();
+        givenIssuedIdentity(issued);
+        givenNiceResult(niceResult(compact(KstTimes.today().minusYears(60))));
+        given(blindIndexHasher.hash(DI)).willReturn("hash:" + DI);
+        given(userRepository.existsByDiHash("hash:" + DI)).willReturn(false);
 
-        // when & then
-        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT, VERIFY_COMMAND))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(ErrorCode.IDENTITY_AGE_NOT_ALLOWED);
+        // when
+        authService.onboardingIdentityVerify(SNAPSHOT, VERIFY_COMMAND);
+
+        // then
+        assertThat(issued.isVerified()).isTrue();
     }
 
     @Test
@@ -839,11 +842,11 @@ class AuthServiceUnitTest {
     }
 
     @Test
-    @DisplayName("본인인증 검증: 나이 범위 밖이면 예외가 나가더라도 AGE_NOT_ALLOWED 와 di_hash 를 기록한다 (NICE 는 이미 과금)")
+    @DisplayName("본인인증 검증: 최소 나이 미만이면 예외가 나가더라도 AGE_NOT_ALLOWED 와 di_hash 를 기록한다 (NICE 는 이미 과금)")
     void identityVerify_age_not_allowed_records_log() {
         // given
         givenIssuedIdentity(issuedIdentity());
-        givenNiceResult(niceResult(compact(KstTimes.today().minusYears(29))));
+        givenNiceResult(niceResult(compact(KstTimes.today().minusYears(18))));
         given(blindIndexHasher.hash(DI)).willReturn("hash:" + DI);
 
         // when & then

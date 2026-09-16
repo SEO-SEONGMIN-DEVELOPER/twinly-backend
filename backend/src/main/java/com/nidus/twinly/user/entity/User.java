@@ -23,8 +23,6 @@ public class User {
 
     public static final String WITHDRAWN_NAME = "탈퇴한 사용자";
 
-    private static final String MASKED_GIVEN_NAME = "OO";
-
     private static final int BIRTH_YEAR_LENGTH = 4;
 
     @Id
@@ -172,10 +170,6 @@ public class User {
 
     public String displayFullName() {
         return isWithdrawn() ? WITHDRAWN_NAME : familyName + givenName;
-    }
-
-    public String displayMaskedName() {
-        return isWithdrawn() ? WITHDRAWN_NAME : familyName + MASKED_GIVEN_NAME;
     }
 
     public String displayGivenName() {

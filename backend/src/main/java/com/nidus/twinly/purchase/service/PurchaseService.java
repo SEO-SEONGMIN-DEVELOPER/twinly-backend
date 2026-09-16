@@ -97,7 +97,7 @@ public class PurchaseService {
 
         if (hasAccess) {
             purchaseWriter.assignPool(user.getId());
-            seasonParticipationWriter.participateInCurrentSeason(user.getId());
+            seasonParticipationWriter.participateInCurrentSeasonIfEligible(user.getId());
         }
 
         if (!hadAccess && hasAccess) {

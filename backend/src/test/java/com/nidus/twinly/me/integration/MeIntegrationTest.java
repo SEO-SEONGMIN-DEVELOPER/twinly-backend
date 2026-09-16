@@ -12,7 +12,6 @@ import com.nidus.twinly.legal.entity.Agreement;
 import com.nidus.twinly.legal.entity.Policy;
 import com.nidus.twinly.legal.domain.PolicyKind;
 import com.nidus.twinly.legal.entity.PolicyName;
-import com.nidus.twinly.legal.repository.AgreementRepository;
 import com.nidus.twinly.legal.repository.PolicyNameRepository;
 import com.nidus.twinly.legal.repository.PolicyRepository;
 import com.nidus.twinly.notification.domain.AppNotificationFeedTargetType;
@@ -25,8 +24,14 @@ import com.nidus.twinly.notification.repository.AppNotificationFeedRepository;
 import com.nidus.twinly.notification.repository.NotificationSettingRepository;
 import com.nidus.twinly.people.entity.Encounter;
 import com.nidus.twinly.people.repository.EncounterRepository;
+import com.nidus.twinly.purchase.entity.UserEntitlement;
+import com.nidus.twinly.purchase.reader.EntitlementReader;
+import com.nidus.twinly.purchase.repository.UserEntitlementRepository;
 import com.nidus.twinly.relationship.entity.Relationship;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
+import com.nidus.twinly.season.entity.Season;
+import com.nidus.twinly.season.repository.SeasonParticipationRepository;
+import com.nidus.twinly.season.repository.SeasonRepository;
 import com.nidus.twinly.support.AbstractIntegrationTest;
 import com.nidus.twinly.user.domain.DisclosureField;
 import com.nidus.twinly.user.entity.PersonaElement;
@@ -102,7 +107,13 @@ class MeIntegrationTest extends AbstractIntegrationTest {
     PolicyRepository policyRepository;
 
     @Autowired
-    AgreementRepository agreementRepository;
+    SeasonRepository seasonRepository;
+
+    @Autowired
+    SeasonParticipationRepository seasonParticipationRepository;
+
+    @Autowired
+    UserEntitlementRepository userEntitlementRepository;
 
     @Autowired
     NotificationSettingRepository notificationSettingRepository;
@@ -172,6 +183,30 @@ class MeIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.consents[0].version").value("1"))
                 .andExpect(jsonPath("$.consents[0].isRequired").value(true))
                 .andExpect(jsonPath("$.consents[0].isGranted").value(true));
+    }
+
+    @Test
+    @DisplayName("약관 동의: 결제 후 평행우주 입장 필수 약관에 늦게 동의하면 그때 현재 시즌 참가 행이 생긴다")
+    void grantConsents_after_purchase_participates_in_current_season_end_to_end() throws Exception {
+        // given: 진행 중인 시즌, 구독 중이지만 아직 필수 약관에 동의하지 않아 참가 행이 없는 유저
+        Instant now = Instant.now();
+        Season season = seasonRepository.save(Season.create(now.minus(Duration.ofDays(1)), now.plus(Duration.ofDays(30))));
+        User me = saveUser();
+        userEntitlementRepository.save(UserEntitlement.create(
+                me.getId(), EntitlementReader.SIMULATION_ACCESS, now.plus(Duration.ofDays(30)), now));
+        assertThat(seasonParticipationRepository.findByUserIdAndSeasonId(me.getId(), season.getId())).isEmpty();
+
+        // when: 평행우주 입장 약관 목록의 최신 버전에 동의
+        mockMvc.perform(post("/api/v1/me/consents")
+                        .header("Authorization", bearer(me.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"grants":[{"policyId":"thirdPartyRealIdentityDisclosure","version":"1.1"}]}
+                                """))
+                .andExpect(status().isOk());
+
+        // then: 동의 시점에 현재 시즌 참가 행이 생겨 앱에 참여 중으로 보인다
+        assertThat(seasonParticipationRepository.findByUserIdAndSeasonId(me.getId(), season.getId())).isPresent();
     }
 
     @Test

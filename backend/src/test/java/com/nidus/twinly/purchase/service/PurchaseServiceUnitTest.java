@@ -262,7 +262,7 @@ class PurchaseServiceUnitTest {
         purchaseService.sync(user);
 
         // then: 별도 참가 요청 없이 평행우주(시즌) 참가가 이어진다
-        then(seasonParticipationWriter).should().participateInCurrentSeason(USER_ID);
+        then(seasonParticipationWriter).should().participateInCurrentSeasonIfEligible(USER_ID);
     }
 
     @Test
@@ -293,7 +293,7 @@ class PurchaseServiceUnitTest {
         purchaseService.sync(user);
 
         // then: 참가 행을 만들지 않고 풀도 배정하지 않는다
-        then(seasonParticipationWriter).should(never()).participateInCurrentSeason(anyLong());
+        then(seasonParticipationWriter).should(never()).participateInCurrentSeasonIfEligible(anyLong());
         then(purchaseWriter).should(never()).assignPool(anyLong());
     }
 
@@ -329,7 +329,7 @@ class PurchaseServiceUnitTest {
         purchaseService.sync(user);
 
         // then: 시즌 참가는 이어지지만 이벤트는 없다
-        then(seasonParticipationWriter).should().participateInCurrentSeason(USER_ID);
+        then(seasonParticipationWriter).should().participateInCurrentSeasonIfEligible(USER_ID);
         then(eventPublisher).should(never()).publishEvent(any(SimulationAccessGrantedEvent.class));
     }
 

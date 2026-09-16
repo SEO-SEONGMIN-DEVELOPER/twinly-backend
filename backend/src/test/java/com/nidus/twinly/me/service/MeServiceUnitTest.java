@@ -67,6 +67,7 @@ import com.nidus.twinly.people.repository.EncounterRepository;
 import com.nidus.twinly.relationship.entity.Relationship;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
 import com.nidus.twinly.report.repository.ReportRepository;
+import com.nidus.twinly.season.writer.SeasonParticipationWriter;
 import com.nidus.twinly.user.domain.DisclosureField;
 import com.nidus.twinly.user.entity.DisclosureAgreement;
 import com.nidus.twinly.user.entity.PersonaElement;
@@ -157,6 +158,9 @@ class MeServiceUnitTest {
 
     @Mock
     PolicyCatalog policyCatalog;
+
+    @Mock
+    SeasonParticipationWriter seasonParticipationWriter;
 
     @Mock
     PersonaElementRepository personaElementRepository;
@@ -556,6 +560,25 @@ class MeServiceUnitTest {
         assertThat(captor.getValue()).hasSize(1);
         assertThat(captor.getValue().get(0).getUserId()).isEqualTo(ME);
         assertThat(captor.getValue().get(0).getPolicyId()).isEqualTo(20L);
+    }
+
+    @Test
+    @DisplayName("약관 동의 후 현재 시즌 참가 조건을 다시 확인한다 (결제 후 늦게 동의한 유저도 참여 중으로 이어진다)")
+    void grantConsents_rechecks_season_participation() {
+        // given: 실신원 동의 v1.1에 새로 동의
+        PolicySummary disclosureV11 = policy(30L, 3L, "1.1", "https://policy/disclosure/1.1", true, Instant.now().minus(Duration.ofDays(1)));
+        given(policyCatalog.loadByKey(List.of("thirdPartyRealIdentityDisclosure")))
+                .willReturn(Map.of(new PolicyKey("thirdPartyRealIdentityDisclosure", "1.1"), disclosureV11));
+        given(agreementRepository.findAllByUserIdAndRevokedAtIsNull(ME)).willReturn(List.of());
+
+        // when: 동의 요청
+        meService.grantConsents(ME, new MeGrantConsentsCommand(List.of(
+                new MeGrantConsentsItemCommand("thirdPartyRealIdentityDisclosure", "1.1"))));
+
+        // then: 동의를 저장한 뒤 참가 조건 확인을 위임한다
+        InOrder inOrder = inOrder(agreementRepository, seasonParticipationWriter);
+        inOrder.verify(agreementRepository).saveAll(any());
+        inOrder.verify(seasonParticipationWriter).participateInCurrentSeasonIfEligible(ME);
     }
 
     @Test

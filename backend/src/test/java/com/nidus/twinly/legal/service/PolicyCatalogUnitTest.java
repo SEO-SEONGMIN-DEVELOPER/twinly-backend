@@ -1,5 +1,6 @@
 package com.nidus.twinly.legal.service;
 
+import com.nidus.twinly.legal.domain.PolicyKind;
 import com.nidus.twinly.legal.entity.PolicyName;
 import com.nidus.twinly.legal.repository.PolicyRepository.PolicySummary;
 import com.nidus.twinly.support.TestPolicySummary;
@@ -19,6 +20,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -129,6 +131,29 @@ class PolicyCatalogUnitTest {
 
         // then: 해당 정책명 자체가 맵에 없다
         assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("필수 동의 대상은 동의를 받는 정책명 중 is_required 인 최신 버전만이고, 고지용 정책은 필수여도 빠진다")
+    void loadRequiredPolicyIds_excludes_notice_only_policy() {
+        // given: 동의를 받는 필수 약관(1)과 고지만 하는 필수 정책(2)이 모두 시행 중
+        given(policyNameRepository.findAllByKindAndIsDeprecatedFalseOrderByIdAsc(PolicyKind.ONBOARDING)).willReturn(List.of(
+                policyName(1L, "serviceTerms", true),
+                policyName(2L, "privacyPolicy", false)));
+        given(policyRepository.findAllProjectedByPolicyNameIdIn(List.of(1L))).willReturn(List.of(
+                policy(101L, 1L, "1", Instant.parse("2024-01-01T00:00:00Z"))));
+
+        // when: 필수 동의 대상 조회
+        Set<Long> result = policyCatalog.loadRequiredPolicyIds(PolicyKind.ONBOARDING);
+
+        // then: 고지용 정책은 동의 기록이 생길 수 없으므로 검사 대상에서 빠지고 동의 약관만 남는다
+        assertThat(result).containsExactly(101L);
+    }
+
+    private PolicyName policyName(Long id, String identifier, boolean requiresAgreement) {
+        PolicyName policyName = policyName(id, identifier);
+        ReflectionTestUtils.setField(policyName, "requiresAgreement", requiresAgreement);
+        return policyName;
     }
 
     private PolicyName policyName(Long id, String identifier) {

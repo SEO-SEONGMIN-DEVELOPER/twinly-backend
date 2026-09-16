@@ -23,6 +23,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.matchesPattern;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -56,7 +57,7 @@ class ShowcaseIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("관람 조회: 후보가 실제 쿼리로 뽑혀 배정 행이 생기고, 이름은 성만 남긴 채 내려간다")
+    @DisplayName("관람 조회: 후보가 실제 쿼리로 뽑혀 배정 행이 생기고, 이름은 가명(랜덤 성+OO)으로 내려간다")
     void today_end_to_end() throws Exception {
         // given: 오늘 장면이 있는 시즌 참가자와 동행자, 그리고 관람자
         User viewer = saveUser();
@@ -68,14 +69,14 @@ class ShowcaseIntegrationTest extends AbstractIntegrationTest {
         // when: 관람 API 호출
         mockMvc.perform(get("/api/v1/showcases/today")
                         .header("Authorization", bearer(viewer.getId())))
-                // then: 대상은 userRef 1, 동행자는 2 + 이름은 성+OO + 실제 유저 id는 나가지 않는다
+                // then: 대상은 userRef 1, 동행자는 2 + 이름은 가명 + 실제 유저 id는 나가지 않는다
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.userRef").value("1"))
                 .andExpect(jsonPath("$.date").value(KstTimes.today().toString()))
-                .andExpect(jsonPath("$.scenes[0].narration").value(target.getFamilyName() + "OO이 뛰어서 등교했다."))
+                .andExpect(jsonPath("$.scenes[0].narration").value(matchesPattern("[가-힣]OO이 뛰어서 등교했다\\.")))
                 .andExpect(jsonPath("$.scenes[0].with[0]").value("2"))
                 .andExpect(jsonPath("$.userInfos[0].userRef").value("1"))
-                .andExpect(jsonPath("$.userInfos[0].userName").value(target.getFamilyName() + "OO"))
+                .andExpect(jsonPath("$.userInfos[0].userName").value(matchesPattern("[가-힣]OO")))
                 .andExpect(jsonPath("$.userInfos[0].organization").isNotEmpty())
                 .andExpect(jsonPath("$.userInfos[0].profilePhoto").doesNotExist())
                 .andExpect(jsonPath("$.userCounts.total").isNumber())

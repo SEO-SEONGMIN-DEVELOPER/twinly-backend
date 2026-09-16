@@ -1,6 +1,7 @@
 package com.nidus.twinly.user.seed;
 
 import com.nidus.twinly.activity.repository.SceneRepository;
+import com.nidus.twinly.activity.repository.SceneRepository.SceneDayProjection;
 import com.nidus.twinly.common.crypto.BlindIndexHasher;
 import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.interest.InterestLoader;
@@ -8,6 +9,10 @@ import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.common.survey.SurveyLoader;
 import com.nidus.twinly.common.survey.SurveyOptionName;
 import com.nidus.twinly.common.survey.SurveyQuestion;
+import com.nidus.twinly.legal.domain.PolicyKind;
+import com.nidus.twinly.legal.entity.Agreement;
+import com.nidus.twinly.legal.repository.AgreementRepository;
+import com.nidus.twinly.legal.service.PolicyCatalog;
 import com.nidus.twinly.purchase.entity.UserEntitlement;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.purchase.repository.UserEntitlementRepository;
@@ -32,11 +37,15 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.test.util.ReflectionTestUtils;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -90,6 +99,12 @@ class UserSeederUnitTest {
     UserEntitlementRepository userEntitlementRepository;
 
     @Mock
+    PolicyCatalog policyCatalog;
+
+    @Mock
+    AgreementRepository agreementRepository;
+
+    @Mock
     PurchaseWriter purchaseWriter;
 
     @Mock
@@ -97,6 +112,9 @@ class UserSeederUnitTest {
 
     @Mock
     SceneRepository sceneRepository;
+
+    @Mock
+    ScenarioCleaner scenarioCleaner;
 
     UserSeeder userSeeder;
 
@@ -481,6 +499,34 @@ class UserSeederUnitTest {
     }
 
     @Test
+    @DisplayName("시뮬레이션 권한을 받은 시드 유저는 평행우주 입장 필수 약관 최신 버전에 동의한 상태로 만든다")
+    void run_agrees_parallel_entry_policies_for_ai_test_users() throws IOException {
+        // given: 필수 약관 최신 버전이 2건이고, 첫 번째 권한 대상 유저만 그중 1건에 이미 동의한 상태
+        long firstAccessUserId = SHOWCASE_USER_COUNT + 1L;
+        given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
+        given(userEntitlementRepository.findAllByUserIdInAndEntitlement(any(), eq(EntitlementReader.SIMULATION_ACCESS)))
+                .willReturn(List.of());
+        given(policyCatalog.loadRequiredPolicyIds(PolicyKind.PARALLEL_ENTRY)).willReturn(Set.of(7L, 8L));
+        given(agreementRepository.findAllByUserIdInAndRevokedAtIsNull(any()))
+                .willReturn(List.of(Agreement.create(firstAccessUserId, 7L, Instant.now())));
+
+        // when: 시더 실행
+        userSeeder.run(null);
+
+        // then: 권한 대상 50명 모두 두 약관에 동의가 채워지되, 이미 동의한 건은 다시 만들지 않는다
+        ArgumentCaptor<List<Agreement>> captor = ArgumentCaptor.forClass(List.class);
+        then(agreementRepository).should().saveAll(captor.capture());
+        List<Agreement> saved = captor.getValue();
+
+        assertThat(saved).hasSize(SIMULATION_ACCESS_USER_COUNT * 2 - 1);
+        assertThat(saved).noneMatch(agreement -> agreement.getUserId() == firstAccessUserId && agreement.getPolicyId() == 7L);
+        assertThat(saved.stream().map(Agreement::getUserId).distinct().toList())
+                .containsExactlyInAnyOrderElementsOf(
+                        LongStream.rangeClosed(firstAccessUserId, SHOWCASE_USER_COUNT + SIMULATION_ACCESS_USER_COUNT)
+                                .boxed().toList());
+    }
+
+    @Test
     @DisplayName("이미 권한이 있는 시드 유저에게는 다시 부여하지 않는다")
     void run_skips_simulation_access_when_already_granted() throws IOException {
         // given: 유저는 남아 있고 AI 테스트용 유저가 이미 권한을 가진 상태
@@ -539,7 +585,7 @@ class UserSeederUnitTest {
     private UserSeeder seederWith(SeedProperties seedProperties) {
         return new UserSeeder(userRepository, personaElementRepository, blindIndexHasher, surveyLoader,
                 interestLoader, currentSeasonReader, seasonParticipationRepository, userEntitlementRepository,
-                purchaseWriter, simulationService, sceneRepository, seedProperties, new ObjectMapper());
+                policyCatalog, agreementRepository, purchaseWriter, simulationService, sceneRepository, scenarioCleaner, seedProperties, new ObjectMapper());
     }
 
     @Test
@@ -611,16 +657,84 @@ class UserSeederUnitTest {
     @Test
     @DisplayName("이미 시뮬레이션이 있는 날은 건너뛰고 없는 날만 적재한다")
     void run_seeds_only_missing_scenario_days() throws IOException {
-        // given: 1번 유저의 날짜는 이미 적재된 상태
+        // given: 1번 유저의 날짜는 현재 기준일로 이미 적재된 상태
         given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
-        given(sceneRepository.existsByUserIdAndDate(eq(1L), any())).willReturn(true);
+        given(sceneRepository.findAllDaysByUserIdIn(any())).willReturn(expectedDaysOf(1L));
 
         // when: 시더 실행
         userSeeder.run(null);
 
-        // then: 1번 유저 날짜는 지우지도 다시 넣지도 않고, 나머지 날만 저장한다
+        // then: 지우지 않고, 1번 유저 날짜는 다시 넣지 않으며, 나머지 날만 저장한다
+        then(scenarioCleaner).should(never()).clear(any());
         then(simulationService).should(never()).simulations(eq(1L), any());
         then(simulationService).should(times(SCENARIO_DAY_COUNT - FIRST_USER_SCENARIO_DAY_COUNT)).simulations(any(), any());
+    }
+
+    @Test
+    @DisplayName("현재 기준일에 없는 날짜의 시나리오가 남아 있으면 쇼케이스 유저 시나리오를 지우고 전부 다시 적재한다")
+    void run_reloads_all_scenario_days_when_stale_day_exists() throws IOException {
+        // given: 1번 유저는 현재 날짜대로 있고, 예전 기준일로 적재된 날짜 하나가 섞여 있는 상태
+        given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
+        List<SceneDayProjection> existing = new ArrayList<>(expectedDaysOf(1L));
+        existing.add(day(1L, LocalDate.of(2000, 1, 1)));
+        given(sceneRepository.findAllDaysByUserIdIn(any())).willReturn(existing);
+
+        // when: 시더 실행
+        userSeeder.run(null);
+
+        // then: 쇼케이스 유저 20명의 시나리오를 지운 뒤 하루도 빠짐없이 다시 넣는다
+        then(scenarioCleaner).should().clear(LongStream.rangeClosed(1, SHOWCASE_USER_COUNT).boxed().toList());
+        then(simulationService).should(times(SCENARIO_DAY_COUNT)).simulations(any(), any());
+    }
+
+    @Test
+    @DisplayName("모든 날짜가 현재 기준일대로 있으면 지우지도 넣지도 않는다")
+    void run_leaves_scenarios_when_every_day_is_current() throws IOException {
+        // given: 390일치가 전부 현재 기준일대로 적재된 상태
+        given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
+        given(sceneRepository.findAllDaysByUserIdIn(any())).willReturn(expectedDays());
+
+        // when: 시더 실행
+        userSeeder.run(null);
+
+        // then: 아무것도 지우지도 넣지도 않는다
+        then(scenarioCleaner).should(never()).clear(any());
+        then(simulationService).should(never()).simulations(any(), any());
+    }
+
+    private List<SceneDayProjection> expectedDaysOf(Long userId) {
+        return expectedDays().stream().filter(day -> day.getUserId().equals(userId)).toList();
+    }
+
+    private List<SceneDayProjection> expectedDays() {
+        JsonNode root;
+        try (InputStream in = new ClassPathResource("seed/showcase-scenarios.json").getInputStream()) {
+            root = new ObjectMapper().readTree(in);
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
+
+        long shift = ChronoUnit.DAYS.between(LocalDate.parse(root.get(UserSeeder.ANCHOR_DATE).asString()), UserSeeder.SCENARIO_BASE_DATE);
+        List<SceneDayProjection> days = new ArrayList<>();
+        root.get("days").forEach(day -> days.add(day(
+                Long.parseLong(day.get("userId").asString()),
+                LocalDate.parse(day.get("date").asString()).plusDays(shift))));
+
+        return days;
+    }
+
+    private SceneDayProjection day(Long userId, LocalDate date) {
+        return new SceneDayProjection() {
+            @Override
+            public Long getUserId() {
+                return userId;
+            }
+
+            @Override
+            public LocalDate getDate() {
+                return date;
+            }
+        };
     }
 
 }

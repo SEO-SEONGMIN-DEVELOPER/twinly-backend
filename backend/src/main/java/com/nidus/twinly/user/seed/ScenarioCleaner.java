@@ -4,6 +4,8 @@ import com.nidus.twinly.activity.repository.QuestionPartnerRepository;
 import com.nidus.twinly.activity.repository.QuestionRepository;
 import com.nidus.twinly.activity.repository.ScenePartnerRepository;
 import com.nidus.twinly.activity.repository.SceneRepository;
+import com.nidus.twinly.notification.domain.AppNotificationFeedType;
+import com.nidus.twinly.notification.repository.AppNotificationFeedRepository;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
 import com.nidus.twinly.showcase.repository.ShowcaseRepository;
 import lombok.RequiredArgsConstructor;
@@ -14,7 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 @Component
-@Profile({"stage", "local"})
+@Profile({"prod", "stage", "local"})
 @RequiredArgsConstructor
 public class ScenarioCleaner {
 
@@ -24,6 +26,7 @@ public class ScenarioCleaner {
     private final QuestionRepository questionRepository;
     private final RelationshipRepository relationshipRepository;
     private final ShowcaseRepository showcaseRepository;
+    private final AppNotificationFeedRepository appNotificationFeedRepository;
 
     @Transactional
     public void clear(List<Long> userIds) {
@@ -37,5 +40,6 @@ public class ScenarioCleaner {
         questionRepository.deleteAllByUserIdIn(userIds);
         relationshipRepository.deleteAllByUserIdIn(userIds);
         showcaseRepository.deleteAllByTargetUserIdIn(userIds);
+        appNotificationFeedRepository.deleteAllByUserIdInAndType(userIds, AppNotificationFeedType.FRIEND);
     }
 }

@@ -9,6 +9,10 @@ import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.common.survey.SurveyLoader;
 import com.nidus.twinly.common.survey.SurveyOptionName;
 import com.nidus.twinly.common.survey.SurveyQuestion;
+import com.nidus.twinly.legal.domain.PolicyKind;
+import com.nidus.twinly.legal.entity.Agreement;
+import com.nidus.twinly.legal.repository.AgreementRepository;
+import com.nidus.twinly.legal.service.PolicyCatalog;
 import com.nidus.twinly.purchase.entity.UserEntitlement;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.purchase.repository.UserEntitlementRepository;
@@ -68,7 +72,7 @@ public class UserSeeder implements ApplicationRunner {
     private static final int PHONE_START = 9001;
     private static final String EMAIL_LOCAL_PREFIX = "test-seed";
     private static final String SCENARIO_RESOURCE = "seed/showcase-scenarios.json";
-    private static final LocalDate SCENARIO_BASE_DATE = LocalDate.of(2026, 9, 16);
+    static final LocalDate SCENARIO_BASE_DATE = LocalDate.of(2026, 9, 16);
     private static final String PERSONA_RESOURCE = "seed/ai-test-personas.json";
     private static final int PERSONA_DETAILS_PER_USER = 8;
     private static final int SIMULATION_ACCESS_USER_COUNT = 50;
@@ -95,9 +99,12 @@ public class UserSeeder implements ApplicationRunner {
     private final CurrentSeasonReader currentSeasonReader;
     private final SeasonParticipationRepository seasonParticipationRepository;
     private final UserEntitlementRepository userEntitlementRepository;
+    private final PolicyCatalog policyCatalog;
+    private final AgreementRepository agreementRepository;
     private final PurchaseWriter purchaseWriter;
     private final SimulationService simulationService;
     private final SceneRepository sceneRepository;
+    private final ScenarioCleaner scenarioCleaner;
     private final SeedProperties seedProperties;
     private final ObjectMapper objectMapper;
 
@@ -253,6 +260,27 @@ public class UserSeeder implements ApplicationRunner {
         }
 
         userIds.forEach(purchaseWriter::assignPool);
+
+        agreeParallelEntryPolicies(userIds, now);
+    }
+
+    private void agreeParallelEntryPolicies(List<Long> userIds, Instant now) {
+        Set<Long> requiredPolicyIds = policyCatalog.loadRequiredPolicyIds(PolicyKind.PARALLEL_ENTRY);
+
+        Map<Long, Set<Long>> agreedPolicyIdsByUserId = agreementRepository.findAllByUserIdInAndRevokedAtIsNull(userIds).stream()
+                .collect(Collectors.groupingBy(Agreement::getUserId, Collectors.mapping(Agreement::getPolicyId, Collectors.toSet())));
+
+        List<Agreement> agreements = new ArrayList<>();
+        for (Long userId : userIds) {
+            Set<Long> agreedPolicyIds = agreedPolicyIdsByUserId.getOrDefault(userId, Set.of());
+            requiredPolicyIds.stream()
+                    .filter(policyId -> !agreedPolicyIds.contains(policyId))
+                    .forEach(policyId -> agreements.add(Agreement.create(userId, policyId, now)));
+        }
+
+        if (!agreements.isEmpty()) {
+            agreementRepository.saveAll(agreements);
+        }
     }
 
     private void seedScenarios(List<User> showcaseUsers) throws IOException {
@@ -271,13 +299,31 @@ public class UserSeeder implements ApplicationRunner {
             requests.add(objectMapper.treeToValue(day, SimulationsRequest.class));
         }
 
+        List<Long> showcaseUserIds = showcaseUsers.stream().map(User::getId).toList();
+        Set<SceneDay> expected = requests.stream()
+                .map(request -> new SceneDay(request.userId(), request.date()))
+                .collect(Collectors.toSet());
+        Set<SceneDay> existing = sceneRepository.findAllDaysByUserIdIn(showcaseUserIds).stream()
+                .map(day -> new SceneDay(day.getUserId(), day.getDate()))
+                .collect(Collectors.toSet());
+
+        boolean stale = !expected.containsAll(existing);
+        if (stale) {
+            scenarioCleaner.clear(showcaseUserIds);
+            existing = Set.of();
+        }
+
+        Set<SceneDay> present = existing;
         List<SimulationsRequest> missing = requests.stream()
-                .filter(request -> !sceneRepository.existsByUserIdAndDate(request.userId(), request.date()))
+                .filter(request -> !present.contains(new SceneDay(request.userId(), request.date())))
                 .toList();
 
         missing.forEach(request -> simulationService.simulations(request.userId(), SimulationsCommand.from(request)));
 
-        InfoLog.log(log, "쇼케이스 시나리오를 채웠습니다.", field("dayCount", requests.size()), field("insertedCount", missing.size()), field("shiftDays", shift));
+        InfoLog.log(log, "쇼케이스 시나리오를 채웠습니다.", field("dayCount", requests.size()), field("insertedCount", missing.size()), field("reloaded", stale), field("shiftDays", shift));
+    }
+
+    private record SceneDay(Long userId, LocalDate date) {
     }
 
     /**

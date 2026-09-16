@@ -21,6 +21,8 @@ import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.notification.writer.AppNotificationFeedWriter;
 import com.nidus.twinly.people.repository.EncounterRepository;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
+import com.nidus.twinly.legal.domain.PolicyKind;
+import com.nidus.twinly.legal.reader.ConsentReader;
 import com.nidus.twinly.purchase.service.PurchaseService;
 import com.nidus.twinly.relationship.domain.RelationshipType;
 import com.nidus.twinly.relationship.entity.Relationship;
@@ -73,6 +75,7 @@ public class SimulationService {
     private final UserRepository userRepository;
     private final PersonaElementRepository personaElementRepository;
     private final EntitlementReader entitlementReader;
+    private final ConsentReader consentReader;
     private final PurchaseService purchaseService;
     private final ObjectMapper objectMapper;
 
@@ -296,6 +299,9 @@ public class SimulationService {
 
         if (!entitlementReader.hasSimulationAccess(userId)) {
             throw new BusinessException(ErrorCode.SIMULATION_ACCESS_REQUIRED);
+        }
+        if (!consentReader.hasAgreedAllRequired(userId, PolicyKind.PARALLEL_ENTRY)) {
+            throw new BusinessException(ErrorCode.SIMULATION_CONSENT_REQUIRED);
         }
 
         Map<PersonaDimension, List<String>> personaElements = personaElementRepository.findAllByUserIdOrderByIdAsc(userId).stream()
