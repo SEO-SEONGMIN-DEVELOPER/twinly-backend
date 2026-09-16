@@ -1,5 +1,6 @@
 package com.nidus.twinly.simulation.service;
 
+import com.nidus.twinly.activity.entity.Scene;
 import com.nidus.twinly.activity.repository.QuestionPartnerRepository;
 import com.nidus.twinly.activity.repository.QuestionRepository;
 import com.nidus.twinly.activity.repository.ScenePartnerRepository;
@@ -14,8 +15,11 @@ import com.nidus.twinly.notification.writer.AppNotificationFeedWriter;
 import com.nidus.twinly.people.repository.EncounterRepository;
 import com.nidus.twinly.relationship.entity.Relationship;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
+import com.nidus.twinly.simulation.dto.command.SimulationsActionSceneCommand;
 import com.nidus.twinly.simulation.dto.command.SimulationsCommand;
+import com.nidus.twinly.simulation.dto.command.SimulationsDialogueSceneCommand;
 import com.nidus.twinly.simulation.dto.command.SimulationsRelationshipCommand;
+import com.nidus.twinly.simulation.dto.command.SimulationsSceneCommand;
 import com.nidus.twinly.simulation.dto.result.SimulationPersonaResult;
 import com.nidus.twinly.user.entity.PersonaElement;
 import com.nidus.twinly.user.entity.User;
@@ -26,6 +30,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.BeanUtils;
@@ -157,6 +162,36 @@ class SimulationServiceUnitTest {
 
         // then: 피드 없음
         then(appNotificationFeedWriter).should(never()).writeFriend(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("장면 장소의 ':' 구분자는 공백으로 바꿔 저장한다")
+    void simulations_replaces_place_separator_with_space() {
+        // given: 장소가 "A:B:C" 형태로 들어옴
+        givenEmptyPreviousSimulation();
+        SimulationsCommand command = new SimulationsCommand(USER_ID, DATE, List.of(
+                actionScene("학교:정문:앞"),
+                dialogueScene("카페:2층")
+        ), List.of(), List.of());
+
+        // when: 시뮬레이션 결과 저장
+        simulationService.simulations(USER_ID, command);
+
+        // then: 저장되는 Scene의 place에서 ':'가 공백으로 치환됨
+        ArgumentCaptor<List<Scene>> captor = ArgumentCaptor.captor();
+        then(sceneRepository).should().saveAll(captor.capture());
+        assertThat(captor.getValue()).extracting(Scene::getPlace)
+                .containsExactly("학교 정문 앞", "카페 2층");
+    }
+
+    private SimulationsSceneCommand actionScene(String place) {
+        return new SimulationsActionSceneCommand(
+                DATE.atTime(9, 0), DATE.atTime(10, 0), "action", place, List.of(), "narration", null);
+    }
+
+    private SimulationsSceneCommand dialogueScene(String place) {
+        return new SimulationsDialogueSceneCommand(
+                DATE.atTime(11, 0), DATE.atTime(12, 0), "dialogue", place, List.of(PARTNER_ID), List.of());
     }
 
     private void givenEmptyPreviousSimulation() {

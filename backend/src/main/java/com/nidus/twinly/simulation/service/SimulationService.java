@@ -56,6 +56,8 @@ public class SimulationService {
 
     private static final String VERSION_PREFIX = "v";
     private static final String FIRST_VERSION = "v1";
+    private static final String PLACE_SEPARATOR = ":";
+    private static final String PLACE_SEPARATOR_REPLACEMENT = " ";
 
     private final SceneRepository sceneRepository;
     private final ScenePartnerRepository scenePartnerRepository;
@@ -144,7 +146,7 @@ public class SimulationService {
                     userId,
                     date,
                     version,
-                    action.place(),
+                    normalizePlace(action.place()),
                     action.start(),
                     action.end(),
                     action.narration(),
@@ -154,12 +156,20 @@ public class SimulationService {
                     userId,
                     date,
                     version,
-                    dialogue.place(),
+                    normalizePlace(dialogue.place()),
                     dialogue.start(),
                     dialogue.end(),
                     writeLines(dialogue.lines())
             );
         };
+    }
+
+    private String normalizePlace(String place) {
+        if (place == null) {
+            return null;
+        }
+
+        return place.replace(PLACE_SEPARATOR, PLACE_SEPARATOR_REPLACEMENT);
     }
 
     private String writeLines(List<SimulationsLineCommand> commands) {
