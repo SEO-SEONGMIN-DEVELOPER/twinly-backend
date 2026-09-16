@@ -27,8 +27,9 @@ PR_BODY
 # loadtest
 loadtest/results
 
-# docs/api-spec
+# docs
 docs/api-spec
+docs/guide
 
 # demonstration
 demo
