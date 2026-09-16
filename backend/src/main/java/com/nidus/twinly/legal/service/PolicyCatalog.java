@@ -43,6 +43,7 @@ public class PolicyCatalog {
 
     public Set<Long> loadRequiredPolicyIds(PolicyKind kind) {
         List<Long> policyNameIds = policyNameRepository.findAllByKindAndIsDeprecatedFalseOrderByIdAsc(kind).stream()
+                .filter(policyName -> Boolean.TRUE.equals(policyName.getRequiresAgreement()))
                 .map(PolicyName::getId)
                 .toList();
 
