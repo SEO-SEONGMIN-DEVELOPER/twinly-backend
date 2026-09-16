@@ -378,7 +378,7 @@ class AuthControllerUnitTest {
     }
 
     @Test
-    @DisplayName("본인인증 검증 시 연령 범위 밖이면 422와 IDENTITY_AGE_NOT_ALLOWED를 반환한다")
+    @DisplayName("본인인증 검증 시 최소 나이 미만이면 422와 IDENTITY_AGE_NOT_ALLOWED를 반환한다")
     void onboardingIdentityVerify_when_age_not_allowed_returns_422() throws Exception {
         // given: 서비스가 연령 제한으로 실패
         willThrow(new BusinessException(ErrorCode.IDENTITY_AGE_NOT_ALLOWED))

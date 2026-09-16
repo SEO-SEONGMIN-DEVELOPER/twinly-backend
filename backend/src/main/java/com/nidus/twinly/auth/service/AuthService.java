@@ -80,8 +80,7 @@ public class AuthService {
     private static final int IDENTITY_EXPIRES_MINUTES = 10;
     private static final Duration IDENTITY_ISSUE_WINDOW = Duration.ofHours(1);
     private static final int IDENTITY_ISSUE_LIMIT = 5;
-    private static final int IDENTITY_MIN_AGE = 18;
-    private static final int IDENTITY_MAX_AGE = 29;
+    private static final int IDENTITY_MIN_AGE = 19;
 
     private final VerificationCodeIssuer verificationCodeIssuer;
     private final JwtService jwtService;
@@ -264,7 +263,7 @@ public class AuthService {
     private boolean isAllowedAge(LocalDate birthDate) {
         int age = Period.between(birthDate, KstTimes.today()).getYears();
 
-        return age >= IDENTITY_MIN_AGE && age < IDENTITY_MAX_AGE;
+        return age >= IDENTITY_MIN_AGE;
     }
 
     @Transactional
