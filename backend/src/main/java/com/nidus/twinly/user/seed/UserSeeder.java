@@ -15,7 +15,6 @@ import com.nidus.twinly.purchase.repository.UserEntitlementRepository;
 import com.nidus.twinly.purchase.writer.PurchaseWriter;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.season.repository.SeasonParticipationRepository;
-import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.simulation.dto.command.SimulationsCommand;
 import com.nidus.twinly.simulation.dto.request.SimulationsRequest;
 import com.nidus.twinly.simulation.service.SimulationService;
@@ -33,6 +32,7 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 import java.io.IOException;
@@ -45,8 +45,10 @@ import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -55,7 +57,7 @@ import static com.nidus.twinly.common.logging.LogField.field;
 @Slf4j
 @Component
 @Order(2)
-@Profile({"stage", "local"})
+@Profile({"prod", "stage", "local"})
 @RequiredArgsConstructor
 public class UserSeeder implements ApplicationRunner {
 
@@ -66,10 +68,12 @@ public class UserSeeder implements ApplicationRunner {
     private static final int PHONE_START = 9001;
     private static final String EMAIL_LOCAL_PREFIX = "test-seed";
     private static final String SCENARIO_RESOURCE = "seed/showcase-scenarios.json";
+    private static final LocalDate SCENARIO_BASE_DATE = LocalDate.of(2026, 9, 16);
     private static final String PERSONA_RESOURCE = "seed/ai-test-personas.json";
     private static final int PERSONA_DETAILS_PER_USER = 8;
     private static final int SIMULATION_ACCESS_USER_COUNT = 50;
     static final String ANCHOR_DATE = "anchorDate";
+    static final Set<String> USER_REF_FIELDS = Set.of("userId", "partnerId", "with");
     private static final String DAYS = "days";
     static final Pattern DATE = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
     static final Pattern DATE_TIME = Pattern.compile("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}");
@@ -94,6 +98,7 @@ public class UserSeeder implements ApplicationRunner {
     private final PurchaseWriter purchaseWriter;
     private final SimulationService simulationService;
     private final SceneRepository sceneRepository;
+    private final SeedProperties seedProperties;
     private final ObjectMapper objectMapper;
 
     enum SeedOrganization {
@@ -202,12 +207,16 @@ public class UserSeeder implements ApplicationRunner {
             personaElementRepository.saveAll(elements);
         }
 
-        seedScenarios();
+        seedScenarios(users.subList(0, SHOWCASE_USERS.size()));
 
         InfoLog.log(log, "시드 유저를 채웠습니다.", field("userCount", users.size()), field("elementCount", elements.size()));
     }
 
     private void revokeSimulationAccess(List<User> users) {
+        if (users.isEmpty()) {
+            return;
+        }
+
         List<UserEntitlement> granted = userEntitlementRepository.findAllByUserIdInAndEntitlement(
                 users.stream().map(User::getId).toList(), EntitlementReader.SIMULATION_ACCESS);
 
@@ -217,6 +226,10 @@ public class UserSeeder implements ApplicationRunner {
     }
 
     private void grantSimulationAccess(List<User> users, Instant now) {
+        if (users.isEmpty()) {
+            return;
+        }
+
         List<Long> userIds = users.stream().map(User::getId).toList();
         Map<Long, UserEntitlement> existing = userEntitlementRepository
                 .findAllByUserIdInAndEntitlement(userIds, EntitlementReader.SIMULATION_ACCESS)
@@ -242,17 +255,19 @@ public class UserSeeder implements ApplicationRunner {
         userIds.forEach(purchaseWriter::assignPool);
     }
 
-    private void seedScenarios() throws IOException {
+    private void seedScenarios(List<User> showcaseUsers) throws IOException {
         JsonNode root;
         try (InputStream in = new ClassPathResource(SCENARIO_RESOURCE).getInputStream()) {
             root = objectMapper.readTree(in);
         }
 
-        long shift = ChronoUnit.DAYS.between(LocalDate.parse(root.get(ANCHOR_DATE).asString()), KstTimes.today());
+        long shift = ChronoUnit.DAYS.between(LocalDate.parse(root.get(ANCHOR_DATE).asString()), SCENARIO_BASE_DATE);
+        Map<String, String> userIdByRef = userIdByRef(showcaseUsers);
 
         List<SimulationsRequest> requests = new ArrayList<>();
         for (JsonNode day : root.get(DAYS)) {
             shiftDates(day, shift);
+            remapUserRefs(day, userIdByRef);
             requests.add(objectMapper.treeToValue(day, SimulationsRequest.class));
         }
 
@@ -294,6 +309,53 @@ public class UserSeeder implements ApplicationRunner {
         }
     }
 
+    private static Map<String, String> userIdByRef(List<User> showcaseUsers) {
+        Map<String, String> userIdByRef = new HashMap<>();
+        for (int index = 0; index < showcaseUsers.size(); index++) {
+            userIdByRef.put(String.valueOf(index + 1), String.valueOf(showcaseUsers.get(index).getId()));
+        }
+
+        return Map.copyOf(userIdByRef);
+    }
+
+    static void remapUserRefs(JsonNode node, Map<String, String> userIdByRef) {
+        if (node.isArray()) {
+            node.forEach(child -> remapUserRefs(child, userIdByRef));
+            return;
+        }
+        if (!node.isObject()) {
+            return;
+        }
+
+        ObjectNode object = (ObjectNode) node;
+        for (Map.Entry<String, JsonNode> field : object.properties()) {
+            JsonNode value = field.getValue();
+
+            if (!USER_REF_FIELDS.contains(field.getKey())) {
+                remapUserRefs(value, userIdByRef);
+                continue;
+            }
+
+            if (value.isString()) {
+                object.put(field.getKey(), toUserId(value.asString(), userIdByRef));
+            } else if (value.isArray()) {
+                List<String> userIds = new ArrayList<>();
+                value.forEach(ref -> userIds.add(toUserId(ref.asString(), userIdByRef)));
+                ArrayNode array = object.putArray(field.getKey());
+                userIds.forEach(array::add);
+            }
+        }
+    }
+
+    private static String toUserId(String ref, Map<String, String> userIdByRef) {
+        String userId = userIdByRef.get(ref);
+        if (userId == null) {
+            throw new IllegalStateException("시나리오에 쇼케이스 유저가 아닌 번호가 있습니다. ref=" + ref);
+        }
+
+        return userId;
+    }
+
     private static String shiftTemporal(String value, long shift) {
         if (DATE.matcher(value).matches()) {
             return LocalDate.parse(value).plusDays(shift).toString();
@@ -313,6 +375,10 @@ public class UserSeeder implements ApplicationRunner {
         List<SeedUser> seedUsers = new ArrayList<>();
         for (int index = 0; index < SHOWCASE_USERS.size(); index++) {
             seedUsers.add(SHOWCASE_USERS.get(index).withPersona(details(index), PersonaSeedElements.SUMMARY.get(index)));
+        }
+
+        if (!seedProperties.aiTestUsers()) {
+            return List.copyOf(seedUsers);
         }
 
         List<AiTestPersona> personas;

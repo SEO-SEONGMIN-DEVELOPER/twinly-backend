@@ -21,6 +21,7 @@ import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.notification.writer.AppNotificationFeedWriter;
 import com.nidus.twinly.people.repository.EncounterRepository;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
+import com.nidus.twinly.purchase.service.PurchaseService;
 import com.nidus.twinly.relationship.domain.RelationshipType;
 import com.nidus.twinly.relationship.entity.Relationship;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
@@ -34,6 +35,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
@@ -56,6 +58,8 @@ public class SimulationService {
 
     private static final String VERSION_PREFIX = "v";
     private static final String FIRST_VERSION = "v1";
+    private static final String PLACE_SEPARATOR = ":";
+    private static final String PLACE_SEPARATOR_REPLACEMENT = " ";
 
     private final SceneRepository sceneRepository;
     private final ScenePartnerRepository scenePartnerRepository;
@@ -69,6 +73,7 @@ public class SimulationService {
     private final UserRepository userRepository;
     private final PersonaElementRepository personaElementRepository;
     private final EntitlementReader entitlementReader;
+    private final PurchaseService purchaseService;
     private final ObjectMapper objectMapper;
 
     public void simulations(Long userId, SimulationsCommand command) {
@@ -144,7 +149,7 @@ public class SimulationService {
                     userId,
                     date,
                     version,
-                    action.place(),
+                    normalizePlace(action.place()),
                     action.start(),
                     action.end(),
                     action.narration(),
@@ -154,12 +159,20 @@ public class SimulationService {
                     userId,
                     date,
                     version,
-                    dialogue.place(),
+                    normalizePlace(dialogue.place()),
                     dialogue.start(),
                     dialogue.end(),
                     writeLines(dialogue.lines())
             );
         };
+    }
+
+    private String normalizePlace(String place) {
+        if (place == null) {
+            return null;
+        }
+
+        return place.replace(PLACE_SEPARATOR, PLACE_SEPARATOR_REPLACEMENT);
     }
 
     private String writeLines(List<SimulationsLineCommand> commands) {
@@ -271,13 +284,15 @@ public class SimulationService {
         return userIds.stream().distinct().toList();
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public SimulationPersonaResult persona(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
         if (user.isWithdrawn()) {
             throw new BusinessException(ErrorCode.USER_NOT_FOUND);
         }
+
+        purchaseService.syncQuietly(user);
 
         if (!entitlementReader.hasSimulationAccess(userId)) {
             throw new BusinessException(ErrorCode.SIMULATION_ACCESS_REQUIRED);

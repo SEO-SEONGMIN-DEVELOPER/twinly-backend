@@ -22,7 +22,7 @@ import com.nidus.twinly.chat.event.ChatReadAdvancedEvent;
 import com.nidus.twinly.chat.repository.ChatRepository;
 import com.nidus.twinly.chat.repository.ChatRoomParticipationRepository;
 import com.nidus.twinly.chat.repository.ChatRoomRepository;
-import com.nidus.twinly.common.aws.bedrock.BedrockService;
+import com.nidus.twinly.chat.generator.CommonPointGenerator;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
 import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.common.domain.Gender;
@@ -84,7 +84,7 @@ class ChatServiceUnitTest {
     CloudFrontService cloudFrontService;
 
     @Mock
-    BedrockService bedrockService;
+    CommonPointGenerator commonPointGenerator;
 
     @Mock
     UserRepository userRepository;
@@ -1005,52 +1005,43 @@ class ChatServiceUnitTest {
     }
 
     @Test
-    @DisplayName("공통점 조회 정상: 두 사람의 페르소나로 프롬프트를 만들어 Bedrock 응답을 고정 문장 틀에 끼워 반환한다")
-    void commonPoint_builds_prompt_and_wraps_ai_response() {
-        // given: 아직 공통점이 없는 양쪽 입장 완료 방과 두 사람의 페르소나, Bedrock 은 앞뒤 공백이 섞인 명사구를 반환
+    @DisplayName("공통점 조회 정상: 두 사람의 페르소나를 생성기에 넘겨 받은 문단을 방에 저장하고 그대로 반환한다")
+    void commonPoint_delegates_to_generator_and_stores_result() {
+        // given: 아직 공통점이 없는 양쪽 입장 완료 방과 두 사람의 페르소나
         ChatRoom room = room(ROOM_ID, MATCH_ID);
         given(chatRoomRepository.findById(ROOM_ID)).willReturn(Optional.of(room));
         given(matchRepository.findById(MATCH_ID)).willReturn(Optional.of(match(MATCH_ID, ME, PARTNER, CURRENT_SEASON_ID)));
         given(userRepository.findById(PARTNER)).willReturn(Optional.of(user(PARTNER, "partnerNick")));
         given(chatRoomParticipationRepository.findAllByRoomId(ROOM_ID))
                 .willReturn(List.of(participation(ROOM_ID, ME), participation(ROOM_ID, PARTNER)));
-        given(personaElementRepository.findAllByUserIdOrderByIdAsc(ME)).willReturn(List.of(
+        List<PersonaElement> myPersona = List.of(
                 personaElement(ME, PersonaDimension.INTEREST, "등산"),
-                personaElement(ME, PersonaDimension.OPENNESS, "새로운 것을 좋아한다"),
                 personaElement(ME, PersonaDimension.DETAIL, "주말에 뭐 해?: 북한산에 자주 가")
-        ));
-        given(personaElementRepository.findAllByUserIdOrderByIdAsc(PARTNER)).willReturn(List.of(
+        );
+        List<PersonaElement> partnerPersona = List.of(
                 personaElement(PARTNER, PersonaDimension.INTEREST, "사진"),
                 personaElement(PARTNER, PersonaDimension.DETAIL, "취미가 뭐야?: 산에서 사진 찍는 걸 좋아해")
-        ));
-        given(bedrockService.converse(any())).willReturn("  산을 즐긴다는 점\n");
+        );
+        given(personaElementRepository.findAllByUserIdOrderByIdAsc(ME)).willReturn(myPersona);
+        given(personaElementRepository.findAllByUserIdOrderByIdAsc(PARTNER)).willReturn(partnerPersona);
+        given(commonPointGenerator.generate(myPersona, partnerPersona))
+                .willReturn("두 사람은 산을 즐기고, 주말이면 산에서 시간을 보내요.");
 
         // when: 공통점 조회
         ChatCommonPointResult result = chatService.commonPoint(ME, ROOM_ID);
 
-        // then: 공백을 정리한 응답이 고정 문장 틀에 들어가고, 방에 명사구 그대로 저장됨
-        assertThat(result.message()).isEqualTo("두 사람의 공통점은 산을 즐긴다는 점이에요.");
-        assertThat(room.getCommonPoint()).isEqualTo("산을 즐긴다는 점");
-
-        // then: 프롬프트에 두 사람의 관심사·성격 특성·나눈 대화가 모두 실리고, 대화를 먼저 보라는 지시가 포함됨
-        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-        then(bedrockService).should().converse(captor.capture());
-        String prompt = captor.getValue();
-        assertThat(prompt)
-                .contains("[A의 관심사]", "등산")
-                .contains("[A의 성격 특성]", "OPENNESS: 새로운 것을 좋아한다")
-                .contains("[A의 나눈 대화]", "주말에 뭐 해?: 북한산에 자주 가")
-                .contains("[B의 관심사]", "사진")
-                .contains("[B의 나눈 대화]", "취미가 뭐야?: 산에서 사진 찍는 걸 좋아해")
-                .contains("[나눈 대화]에서 드러난 구체적인 경험이나 모습에서 먼저 찾으세요");
+        // then: 생성기 결과가 그대로 반환되고 방에도 저장됨 (내 페르소나가 A, 상대 페르소나가 B 순서로 전달)
+        assertThat(result.message()).isEqualTo("두 사람은 산을 즐기고, 주말이면 산에서 시간을 보내요.");
+        assertThat(room.getCommonPoint()).isEqualTo("두 사람은 산을 즐기고, 주말이면 산에서 시간을 보내요.");
+        then(commonPointGenerator).should().generate(myPersona, partnerPersona);
     }
 
     @Test
-    @DisplayName("공통점 조회 시 방에 이미 저장된 공통점이 있으면 그것을 반환하고 페르소나 조회·Bedrock 호출을 하지 않는다")
+    @DisplayName("공통점 조회 시 방에 이미 저장된 공통점이 있으면 그것을 반환하고 페르소나 조회·생성기 호출을 하지 않는다")
     void commonPoint_returns_stored_one_without_ai_call() {
         // given: 이미 공통점이 저장된 양쪽 입장 완료 방
         ChatRoom room = room(ROOM_ID, MATCH_ID);
-        room.assignCommonPoint("산을 즐긴다는 점");
+        room.assignCommonPoint("두 사람은 산을 즐기고, 주말이면 산에서 시간을 보내요.");
         given(chatRoomRepository.findById(ROOM_ID)).willReturn(Optional.of(room));
         given(matchRepository.findById(MATCH_ID)).willReturn(Optional.of(match(MATCH_ID, ME, PARTNER, CURRENT_SEASON_ID)));
         given(userRepository.findById(PARTNER)).willReturn(Optional.of(user(PARTNER, "partnerNick")));
@@ -1060,14 +1051,14 @@ class ChatServiceUnitTest {
         // when: 공통점 조회
         ChatCommonPointResult result = chatService.commonPoint(ME, ROOM_ID);
 
-        // then: 저장된 명사구로 문장을 만들고, 페르소나 조회와 Bedrock 호출은 없음
-        assertThat(result.message()).isEqualTo("두 사람의 공통점은 산을 즐긴다는 점이에요.");
+        // then: 저장된 설명을 그대로 반환하고, 페르소나 조회와 생성기 호출은 없음
+        assertThat(result.message()).isEqualTo("두 사람은 산을 즐기고, 주말이면 산에서 시간을 보내요.");
         then(personaElementRepository).should(never()).findAllByUserIdOrderByIdAsc(anyLong());
-        then(bedrockService).should(never()).converse(any());
+        then(commonPointGenerator).should(never()).generate(any(), any());
     }
 
     @Test
-    @DisplayName("공통점 조회 시 상대가 아직 입장하지 않았으면 ROOM_ENTRY_NOT_AGREED 예외가 발생하고 Bedrock 을 호출하지 않는다")
+    @DisplayName("공통점 조회 시 상대가 아직 입장하지 않았으면 ROOM_ENTRY_NOT_AGREED 예외가 발생하고 생성기를 호출하지 않는다")
     void commonPoint_partner_entry_not_agreed_throws() {
         // given: 나는 입장했지만 상대는 아직 입장하지 않은 방
         given(chatRoomRepository.findById(ROOM_ID)).willReturn(Optional.of(room(ROOM_ID, MATCH_ID)));
@@ -1076,18 +1067,18 @@ class ChatServiceUnitTest {
         given(chatRoomParticipationRepository.findAllByRoomId(ROOM_ID))
                 .willReturn(List.of(participation(ROOM_ID, ME), notAgreedParticipation(ROOM_ID, PARTNER)));
 
-        // when & then: 양쪽 입장 전에는 ROOM_ENTRY_NOT_AGREED + 페르소나 조회·Bedrock 호출 없음
+        // when & then: 양쪽 입장 전에는 ROOM_ENTRY_NOT_AGREED + 페르소나 조회·생성기 호출 없음
         assertThatThrownBy(() -> chatService.commonPoint(ME, ROOM_ID))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.ROOM_ENTRY_NOT_AGREED);
 
         then(personaElementRepository).should(never()).findAllByUserIdOrderByIdAsc(anyLong());
-        then(bedrockService).should(never()).converse(any());
+        then(commonPointGenerator).should(never()).generate(any(), any());
     }
 
     @Test
-    @DisplayName("공통점 조회 시 상대의 페르소나가 없으면 PERSONA_NOT_FOUND 예외가 발생하고 Bedrock 을 호출하지 않는다")
+    @DisplayName("공통점 조회 시 상대의 페르소나가 없으면 PERSONA_NOT_FOUND 예외가 발생하고 생성기를 호출하지 않는다")
     void commonPoint_without_partner_persona_throws() {
         // given: 양쪽 모두 입장했지만 상대의 페르소나가 비어 있음
         given(chatRoomRepository.findById(ROOM_ID)).willReturn(Optional.of(room(ROOM_ID, MATCH_ID)));
@@ -1099,13 +1090,13 @@ class ChatServiceUnitTest {
                 .willReturn(List.of(personaElement(ME, PersonaDimension.INTEREST, "등산")));
         given(personaElementRepository.findAllByUserIdOrderByIdAsc(PARTNER)).willReturn(List.of());
 
-        // when & then: 한쪽 페르소나가 없으면 PERSONA_NOT_FOUND + Bedrock 호출 없음
+        // when & then: 한쪽 페르소나가 없으면 PERSONA_NOT_FOUND + 생성기 호출 없음
         assertThatThrownBy(() -> chatService.commonPoint(ME, ROOM_ID))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.PERSONA_NOT_FOUND);
 
-        then(bedrockService).should(never()).converse(any());
+        then(commonPointGenerator).should(never()).generate(any(), any());
     }
 
     @Test
@@ -1115,13 +1106,13 @@ class ChatServiceUnitTest {
         given(chatRoomRepository.findById(ROOM_ID)).willReturn(Optional.of(room(ROOM_ID, MATCH_ID)));
         given(matchRepository.findById(MATCH_ID)).willReturn(Optional.of(match(MATCH_ID, 7L, 8L, CURRENT_SEASON_ID)));
 
-        // when & then: 참여자가 아니면 NOT_MATCH_PARTICIPANT + Bedrock 호출 없음
+        // when & then: 참여자가 아니면 NOT_MATCH_PARTICIPANT + 생성기 호출 없음
         assertThatThrownBy(() -> chatService.commonPoint(ME, ROOM_ID))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.NOT_MATCH_PARTICIPANT);
 
-        then(bedrockService).should(never()).converse(any());
+        then(commonPointGenerator).should(never()).generate(any(), any());
     }
 
     private ChatRoom room(Long id, Long matchId) {

@@ -69,7 +69,15 @@ public class PurchaseService {
             return;
         }
 
-        purchaseWriter.markSyncAttempt(user.getId(), now);
+        syncQuietly(user, now);
+    }
+
+    public void syncQuietly(User user) {
+        syncQuietly(user, Instant.now());
+    }
+
+    private void syncQuietly(User user, Instant attemptedAt) {
+        purchaseWriter.markSyncAttempt(user.getId(), attemptedAt);
 
         try {
             sync(user);

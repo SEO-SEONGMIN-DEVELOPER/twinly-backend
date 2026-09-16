@@ -22,6 +22,7 @@ import com.nidus.twinly.auth.dto.result.AuthEmailVerifyResult;
 import com.nidus.twinly.auth.dto.result.AuthSmsSendResult;
 import com.nidus.twinly.auth.dto.result.AuthSmsVerifyResult;
 import com.nidus.twinly.auth.dto.result.AuthTokenResult;
+import com.nidus.twinly.auth.domain.IdentityVerificationResult;
 import com.nidus.twinly.auth.entity.AnonSessionIdentityVerification;
 import com.nidus.twinly.auth.entity.AnonSessionVerificationSession;
 import com.nidus.twinly.auth.entity.RefreshToken;
@@ -140,6 +141,9 @@ class AuthServiceUnitTest {
 
     @Mock
     NiceIdentityService niceIdentityService;
+
+    @Mock
+    IdentityVerificationLogService identityVerificationLogService;
 
     @Mock
     AnonSessionRepository anonSessionRepository;
@@ -778,6 +782,138 @@ class AuthServiceUnitTest {
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.IDENTITY_ALREADY_REGISTERED);
         assertThat(issued.isVerified()).isFalse();
+    }
+
+    // ---------- 본인인증 정산 기록 ----------
+
+    @Test
+    @DisplayName("본인인증 발급: NICE 가 인증 URL 을 주면 같은 request_no·transaction_id 로 ISSUED 기록을 남긴다")
+    void identityPrepare_records_issued_log() {
+        // given
+        given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
+                .willReturn(Optional.empty());
+        givenNiceAuthUrl();
+
+        // when
+        authService.onboardingIdentityPrepare(SNAPSHOT);
+
+        // then: 세션에 저장된 request_no 와 기록된 request_no 가 같아야 NICE 청구 내역과 대조할 수 있다
+        ArgumentCaptor<AnonSessionIdentityVerification> captor =
+                ArgumentCaptor.forClass(AnonSessionIdentityVerification.class);
+        then(anonSessionIdentityVerificationRepository).should().save(captor.capture());
+        then(identityVerificationLogService).should()
+                .issued(ANON_SESSION_ID, captor.getValue().getRequestNo(), IDENTITY_TRANSACTION_ID);
+    }
+
+    @Test
+    @DisplayName("본인인증 발급: NICE 인증 URL 발급이 실패하면 transaction_id 가 없으므로 기록을 남기지 않는다")
+    void identityPrepare_records_nothing_when_nice_fails() {
+        // given
+        given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
+                .willReturn(Optional.empty());
+        given(niceIdentityService.requestAuthUrl(anyString()))
+                .willThrow(new BusinessException(ErrorCode.IDENTITY_VERIFICATION_FAILED));
+
+        // when & then
+        assertThatThrownBy(() -> authService.onboardingIdentityPrepare(SNAPSHOT))
+                .isInstanceOf(BusinessException.class);
+        then(identityVerificationLogService).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("본인인증 검증: 모든 검사를 통과하면 VERIFIED 와 di_hash 를 기록한다")
+    void identityVerify_success_records_verified_log() {
+        // given
+        givenIssuedIdentity(issuedIdentity());
+        givenNiceResult(niceResult(compact(adult())));
+        given(blindIndexHasher.hash(DI)).willReturn("hash:" + DI);
+        given(userRepository.existsByDiHash("hash:" + DI)).willReturn(false);
+
+        // when
+        authService.onboardingIdentityVerify(SNAPSHOT, VERIFY_COMMAND);
+
+        // then
+        then(identityVerificationLogService).should().completed(
+                ANON_SESSION_ID, IDENTITY_REQUEST_NO, IDENTITY_TRANSACTION_ID,
+                IdentityVerificationResult.VERIFIED, "hash:" + DI);
+    }
+
+    @Test
+    @DisplayName("본인인증 검증: 나이 범위 밖이면 예외가 나가더라도 AGE_NOT_ALLOWED 와 di_hash 를 기록한다 (NICE 는 이미 과금)")
+    void identityVerify_age_not_allowed_records_log() {
+        // given
+        givenIssuedIdentity(issuedIdentity());
+        givenNiceResult(niceResult(compact(KstTimes.today().minusYears(29))));
+        given(blindIndexHasher.hash(DI)).willReturn("hash:" + DI);
+
+        // when & then
+        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT, VERIFY_COMMAND))
+                .isInstanceOf(BusinessException.class);
+        then(identityVerificationLogService).should().completed(
+                ANON_SESSION_ID, IDENTITY_REQUEST_NO, IDENTITY_TRANSACTION_ID,
+                IdentityVerificationResult.AGE_NOT_ALLOWED, "hash:" + DI);
+    }
+
+    @Test
+    @DisplayName("본인인증 검증: 같은 DI 로 이미 가입한 계정이 있으면 ALREADY_REGISTERED 와 di_hash 를 기록한다")
+    void identityVerify_duplicated_di_records_log() {
+        // given
+        givenIssuedIdentity(issuedIdentity());
+        givenNiceResult(niceResult(compact(adult())));
+        given(blindIndexHasher.hash(DI)).willReturn("hash:" + DI);
+        given(userRepository.existsByDiHash("hash:" + DI)).willReturn(true);
+
+        // when & then
+        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT, VERIFY_COMMAND))
+                .isInstanceOf(BusinessException.class);
+        then(identityVerificationLogService).should().completed(
+                ANON_SESSION_ID, IDENTITY_REQUEST_NO, IDENTITY_TRANSACTION_ID,
+                IdentityVerificationResult.ALREADY_REGISTERED, "hash:" + DI);
+    }
+
+    @Test
+    @DisplayName("본인인증 검증: 결과에 DI 가 없으면 INVALID_RESULT 를 di_hash 없이 기록한다")
+    void identityVerify_missing_di_records_invalid_result_without_di_hash() {
+        // given
+        givenIssuedIdentity(issuedIdentity());
+        givenNiceResult(niceResult(compact(adult()), "1", "0", null, "1", IDENTITY_PHONE));
+
+        // when & then
+        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT, VERIFY_COMMAND))
+                .isInstanceOf(BusinessException.class);
+        then(identityVerificationLogService).should().completed(
+                ANON_SESSION_ID, IDENTITY_REQUEST_NO, IDENTITY_TRANSACTION_ID,
+                IdentityVerificationResult.INVALID_RESULT, null);
+    }
+
+    @Test
+    @DisplayName("본인인증 검증: 생년월일 형식이 잘못되면 INVALID_RESULT 를 di_hash 와 함께 기록한다")
+    void identityVerify_invalid_birthdate_records_invalid_result_with_di_hash() {
+        // given
+        givenIssuedIdentity(issuedIdentity());
+        givenNiceResult(niceResult("1999-03-14"));
+        given(blindIndexHasher.hash(DI)).willReturn("hash:" + DI);
+
+        // when & then
+        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT, VERIFY_COMMAND))
+                .isInstanceOf(BusinessException.class);
+        then(identityVerificationLogService).should().completed(
+                ANON_SESSION_ID, IDENTITY_REQUEST_NO, IDENTITY_TRANSACTION_ID,
+                IdentityVerificationResult.INVALID_RESULT, "hash:" + DI);
+    }
+
+    @Test
+    @DisplayName("본인인증 검증: NICE 결과 조회가 실패하면 결과를 받은 것이 아니므로 기록을 갱신하지 않는다 (ISSUED 유지)")
+    void identityVerify_records_nothing_when_result_unavailable() {
+        // given
+        givenIssuedIdentity(issuedIdentity());
+        given(niceIdentityService.fetchResult(IDENTITY_REQUEST_NO, IDENTITY_TRANSACTION_ID, WEB_TRANSACTION_ID))
+                .willThrow(new BusinessException(ErrorCode.IDENTITY_VERIFICATION_FAILED));
+
+        // when & then
+        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT, VERIFY_COMMAND))
+                .isInstanceOf(BusinessException.class);
+        then(identityVerificationLogService).shouldHaveNoInteractions();
     }
 
     // ---------- 회원가입 ----------
