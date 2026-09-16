@@ -35,6 +35,10 @@ public interface AppNotificationFeedRepository extends JpaRepository<AppNotifica
                                                        @Param("limit") Integer limit);
 
     @Modifying
+    @Query("DELETE FROM AppNotificationFeed f WHERE f.userId IN :userIds AND f.type = :type")
+    void deleteAllByUserIdInAndType(@Param("userIds") List<Long> userIds, @Param("type") AppNotificationFeedType type);
+
+    @Modifying
     @Query(value = """
             UPDATE app_notification_feeds
             SET read_at = UTC_TIMESTAMP(6)

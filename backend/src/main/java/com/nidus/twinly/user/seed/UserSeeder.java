@@ -68,7 +68,7 @@ public class UserSeeder implements ApplicationRunner {
     private static final int PHONE_START = 9001;
     private static final String EMAIL_LOCAL_PREFIX = "test-seed";
     private static final String SCENARIO_RESOURCE = "seed/showcase-scenarios.json";
-    private static final LocalDate SCENARIO_BASE_DATE = LocalDate.of(2026, 9, 16);
+    static final LocalDate SCENARIO_BASE_DATE = LocalDate.of(2026, 9, 16);
     private static final String PERSONA_RESOURCE = "seed/ai-test-personas.json";
     private static final int PERSONA_DETAILS_PER_USER = 8;
     private static final int SIMULATION_ACCESS_USER_COUNT = 50;
@@ -98,6 +98,7 @@ public class UserSeeder implements ApplicationRunner {
     private final PurchaseWriter purchaseWriter;
     private final SimulationService simulationService;
     private final SceneRepository sceneRepository;
+    private final ScenarioCleaner scenarioCleaner;
     private final SeedProperties seedProperties;
     private final ObjectMapper objectMapper;
 
@@ -271,13 +272,31 @@ public class UserSeeder implements ApplicationRunner {
             requests.add(objectMapper.treeToValue(day, SimulationsRequest.class));
         }
 
+        List<Long> showcaseUserIds = showcaseUsers.stream().map(User::getId).toList();
+        Set<SceneDay> expected = requests.stream()
+                .map(request -> new SceneDay(request.userId(), request.date()))
+                .collect(Collectors.toSet());
+        Set<SceneDay> existing = sceneRepository.findAllDaysByUserIdIn(showcaseUserIds).stream()
+                .map(day -> new SceneDay(day.getUserId(), day.getDate()))
+                .collect(Collectors.toSet());
+
+        boolean stale = !expected.containsAll(existing);
+        if (stale) {
+            scenarioCleaner.clear(showcaseUserIds);
+            existing = Set.of();
+        }
+
+        Set<SceneDay> present = existing;
         List<SimulationsRequest> missing = requests.stream()
-                .filter(request -> !sceneRepository.existsByUserIdAndDate(request.userId(), request.date()))
+                .filter(request -> !present.contains(new SceneDay(request.userId(), request.date())))
                 .toList();
 
         missing.forEach(request -> simulationService.simulations(request.userId(), SimulationsCommand.from(request)));
 
-        InfoLog.log(log, "쇼케이스 시나리오를 채웠습니다.", field("dayCount", requests.size()), field("insertedCount", missing.size()), field("shiftDays", shift));
+        InfoLog.log(log, "쇼케이스 시나리오를 채웠습니다.", field("dayCount", requests.size()), field("insertedCount", missing.size()), field("reloaded", stale), field("shiftDays", shift));
+    }
+
+    private record SceneDay(Long userId, LocalDate date) {
     }
 
     /**

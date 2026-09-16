@@ -11,7 +11,8 @@ import java.util.List;
 
 public interface SceneRepository extends JpaRepository<Scene, Long> {
 
-    boolean existsByUserIdAndDate(Long userId, LocalDate date);
+    @Query("SELECT s.userId AS userId, s.date AS date FROM Scene s WHERE s.userId IN :userIds GROUP BY s.userId, s.date")
+    List<SceneDayProjection> findAllDaysByUserIdIn(@Param("userIds") List<Long> userIds);
 
     List<Scene> findAllByUserIdAndDate(Long userId, LocalDate date);
 
@@ -48,4 +49,9 @@ public interface SceneRepository extends JpaRepository<Scene, Long> {
     @Modifying
     @Query("DELETE FROM Scene s WHERE s.userId IN :userIds")
     void deleteAllByUserIdIn(@Param("userIds") List<Long> userIds);
+
+    interface SceneDayProjection {
+        Long getUserId();
+        LocalDate getDate();
+    }
 }
