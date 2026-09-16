@@ -71,10 +71,10 @@ crypto:
 
 aws:
   s3:
-    access-key-id: ${AWS_ACCESS_KEY_ID}
-    secret-access-key: ${AWS_SECRET_ACCESS_KEY}
-    region: ${AWS_REGION}
-    bucket: ${AWS_S3_BUCKET}
+    access-key-id: ${S3_ACCESS_KEY_ID}
+    secret-access-key: ${S3_SECRET_ACCESS_KEY}
+    region: ${S3_REGION}
+    bucket: ${S3_BUCKET}
   bedrock:
     access-key-id: ${BEDROCK_ACCESS_KEY_ID}
     secret-access-key: ${BEDROCK_SECRET_ACCESS_KEY}
