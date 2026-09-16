@@ -13,5 +13,11 @@ logging:
     root: INFO
     com.nidus.twinly: INFO
 
+verification:
+  test:
+    code: "000000"
+    phone-prefix: "0100000"
+    email-prefix: "test"
+
 revenue-cat:
   environment: PRODUCTION
