@@ -2,6 +2,7 @@ package com.nidus.twinly.match.repository;
 
 import com.nidus.twinly.match.entity.Match;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -22,4 +23,12 @@ public interface MatchRepository extends JpaRepository<Match, Long> {
             """, nativeQuery = true)
     List<Match> findAllByUserIdAndPartnerUserIdIn(@Param("userId") Long userId,
                                                   @Param("partnerUserIds") List<Long> partnerUserIds);
+
+    @Modifying
+    @Query(value = """
+            DELETE FROM matches
+            WHERE user_a_id IN (:userIds)
+              AND user_b_id IN (:userIds)
+            """, nativeQuery = true)
+    void deleteAllBetweenUserIdsIn(@Param("userIds") List<Long> userIds);
 }

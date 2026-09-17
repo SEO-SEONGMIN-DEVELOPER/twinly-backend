@@ -36,4 +36,12 @@ public interface EncounterRepository extends JpaRepository<Encounter, Long> {
             WHERE e.user_a_id = :userId OR e.user_b_id = :userId
             """, nativeQuery = true)
     List<Long> findAllPartnerUserIdsByUserId(@Param("userId") Long userId);
+
+    @Modifying
+    @Query(value = """
+            DELETE FROM encounters
+            WHERE user_a_id IN (:userIds)
+              AND user_b_id IN (:userIds)
+            """, nativeQuery = true)
+    void deleteAllBetweenUserIdsIn(@Param("userIds") List<Long> userIds);
 }
