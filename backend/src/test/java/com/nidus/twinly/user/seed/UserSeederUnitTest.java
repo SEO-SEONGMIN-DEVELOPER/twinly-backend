@@ -26,11 +26,14 @@ import com.nidus.twinly.user.entity.PersonaElement;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.PersonaElementRepository;
 import com.nidus.twinly.user.repository.UserRepository;
+import com.nidus.twinly.user.seed.entity.SeedResourceHash;
+import com.nidus.twinly.user.seed.repository.SeedResourceHashRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -42,6 +45,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -62,6 +66,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 
@@ -115,6 +120,9 @@ class UserSeederUnitTest {
 
     @Mock
     ScenarioCleaner scenarioCleaner;
+
+    @Mock
+    SeedResourceHashRepository seedResourceHashRepository;
 
     UserSeeder userSeeder;
 
@@ -610,7 +618,7 @@ class UserSeederUnitTest {
     private UserSeeder seederWith(SeedProperties seedProperties) {
         return new UserSeeder(userRepository, personaElementRepository, blindIndexHasher, surveyLoader,
                 interestLoader, currentSeasonReader, seasonParticipationRepository, userEntitlementRepository,
-                policyCatalog, agreementRepository, purchaseWriter, simulationService, sceneRepository, scenarioCleaner, seedProperties, new ObjectMapper());
+                policyCatalog, agreementRepository, purchaseWriter, simulationService, sceneRepository, scenarioCleaner, seedResourceHashRepository, seedProperties, new ObjectMapper());
     }
 
     @Test
@@ -685,6 +693,7 @@ class UserSeederUnitTest {
         // given: 1번 유저의 날짜는 현재 기준일로 이미 적재된 상태
         given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
         given(sceneRepository.findAllDaysByUserIdIn(any())).willReturn(expectedDaysOf(1L));
+        givenStoredHash(currentScenarioHash());
 
         // when: 시더 실행
         userSeeder.run(null);
@@ -698,8 +707,9 @@ class UserSeederUnitTest {
     @Test
     @DisplayName("현재 기준일에 없는 날짜의 시나리오가 남아 있으면 쇼케이스 유저 시나리오를 지우고 전부 다시 적재한다")
     void run_reloads_all_scenario_days_when_stale_day_exists() throws IOException {
-        // given: 1번 유저는 현재 날짜대로 있고, 예전 기준일로 적재된 날짜 하나가 섞여 있는 상태
+        // given: 시드 파일은 그대로인데, 1번 유저는 현재 날짜대로 있고 예전 기준일로 적재된 날짜 하나가 섞여 있는 상태
         given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
+        givenStoredHash(currentScenarioHash());
         List<SceneDayProjection> existing = new ArrayList<>(expectedDaysOf(1L));
         existing.add(day(1L, LocalDate.of(2000, 1, 1)));
         given(sceneRepository.findAllDaysByUserIdIn(any())).willReturn(existing);
@@ -715,9 +725,10 @@ class UserSeederUnitTest {
     @Test
     @DisplayName("모든 날짜가 현재 기준일대로 있으면 지우지도 넣지도 않는다")
     void run_leaves_scenarios_when_every_day_is_current() throws IOException {
-        // given: 390일치가 전부 현재 기준일대로 적재된 상태
+        // given: 390일치가 전부 현재 기준일대로 적재됐고, 시드 파일도 마지막 적재 때와 같은 상태
         given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
         given(sceneRepository.findAllDaysByUserIdIn(any())).willReturn(expectedDays());
+        givenStoredHash(currentScenarioHash());
 
         // when: 시더 실행
         userSeeder.run(null);
@@ -725,6 +736,71 @@ class UserSeederUnitTest {
         // then: 아무것도 지우지도 넣지도 않는다
         then(scenarioCleaner).should(never()).clear(any());
         then(simulationService).should(never()).simulations(any(), any());
+    }
+
+    @Test
+    @DisplayName("날짜는 모두 그대로여도 시드 파일 내용이 마지막 적재 때와 다르면 지우고 전부 다시 적재한 뒤 새 해시를 저장한다")
+    void run_reloads_all_scenario_days_when_resource_content_changed() throws IOException {
+        // given: 390일치가 현재 기준일대로 있지만, 저장된 해시는 이전 시드 파일의 것
+        given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
+        given(sceneRepository.findAllDaysByUserIdIn(any())).willReturn(expectedDays());
+        SeedResourceHash stored = givenStoredHash("0".repeat(64));
+
+        // when: 시더 실행
+        userSeeder.run(null);
+
+        // then: 쇼케이스 유저 시나리오를 지우고 하루도 빠짐없이 다시 넣은 뒤, 저장된 해시를 현재 파일 기준으로 바꾼다
+        InOrder inOrder = inOrder(scenarioCleaner, simulationService, seedResourceHashRepository);
+        inOrder.verify(scenarioCleaner).clear(LongStream.rangeClosed(1, SHOWCASE_USER_COUNT).boxed().toList());
+        inOrder.verify(simulationService, times(SCENARIO_DAY_COUNT)).simulations(any(), any());
+        inOrder.verify(seedResourceHashRepository).save(stored);
+        assertThat(stored.getHash()).isEqualTo(currentScenarioHash());
+    }
+
+    @Test
+    @DisplayName("저장된 해시가 없으면 전부 적재하고 현재 시드 파일의 해시를 새로 저장한다")
+    void run_saves_scenario_hash_when_none_stored() throws IOException {
+        // given: 해시를 저장한 적이 없는 상태 (해시 도입 전에 적재된 DB 포함)
+        given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
+        given(sceneRepository.findAllDaysByUserIdIn(any())).willReturn(expectedDays());
+
+        // when: 시더 실행
+        userSeeder.run(null);
+
+        // then: 기존 시나리오를 지우고 다시 적재한 뒤, 현재 파일의 해시를 시드 파일 이름으로 저장한다
+        then(scenarioCleaner).should().clear(any());
+        then(simulationService).should(times(SCENARIO_DAY_COUNT)).simulations(any(), any());
+        ArgumentCaptor<SeedResourceHash> captor = ArgumentCaptor.forClass(SeedResourceHash.class);
+        then(seedResourceHashRepository).should().save(captor.capture());
+        assertThat(captor.getValue().getResource()).isEqualTo("seed/showcase-scenarios.json");
+        assertThat(captor.getValue().getHash()).isEqualTo(currentScenarioHash()).hasSize(64);
+    }
+
+    @Test
+    @DisplayName("시나리오 해시는 같은 내용이면 같고, 한 바이트만 달라도 달라진다")
+    void scenarioHash_changes_with_content() {
+        // given: 한 글자만 다른 두 내용
+        byte[] original = "{\"anchorDate\":\"2026-09-09\"}".getBytes(StandardCharsets.UTF_8);
+        byte[] edited = "{\"anchorDate\":\"2026-09-10\"}".getBytes(StandardCharsets.UTF_8);
+
+        // when & then: 같은 내용은 같은 해시, 다른 내용은 다른 해시
+        assertThat(UserSeeder.scenarioHash(original)).isEqualTo(UserSeeder.scenarioHash(original.clone()));
+        assertThat(UserSeeder.scenarioHash(original)).isNotEqualTo(UserSeeder.scenarioHash(edited));
+    }
+
+    private SeedResourceHash givenStoredHash(String hash) {
+        SeedResourceHash stored = SeedResourceHash.create("seed/showcase-scenarios.json", hash, Instant.now());
+        given(seedResourceHashRepository.findByResource("seed/showcase-scenarios.json")).willReturn(Optional.of(stored));
+
+        return stored;
+    }
+
+    private String currentScenarioHash() {
+        try (InputStream in = new ClassPathResource("seed/showcase-scenarios.json").getInputStream()) {
+            return UserSeeder.scenarioHash(in.readAllBytes());
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     private List<SceneDayProjection> expectedDaysOf(Long userId) {
