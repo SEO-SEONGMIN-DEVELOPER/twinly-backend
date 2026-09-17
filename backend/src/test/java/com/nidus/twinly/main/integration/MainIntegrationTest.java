@@ -13,6 +13,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -42,7 +43,8 @@ class MainIntegrationTest extends AbstractIntegrationTest {
         User me = saveUser();
         User target = saveUser();
         Instant now = Instant.now();
-        insertSeason(CURRENT_SEASON_ID, now.minus(Duration.ofDays(101)), now.plus(Duration.ofDays(99)));
+        Instant endedAt = now.plus(Duration.ofDays(99)).truncatedTo(ChronoUnit.SECONDS);
+        insertSeason(CURRENT_SEASON_ID, now.minus(Duration.ofDays(101)), endedAt);
         insertUnreadNotification(me.getId(), target.getId());
         insertReadNotification(me.getId(), target.getId(), now.minus(Duration.ofHours(1)));
 
@@ -50,11 +52,12 @@ class MainIntegrationTest extends AbstractIntegrationTest {
         var result = mockMvc.perform(get("/api/v1/main")
                 .header("Authorization", bearer(me.getId())));
 
-        // then: 200 반환 + 시즌 진행률·미읽음 개수가 실제 DB 상태를 반영한 JSON으로 내려온다
+        // then: 200 반환 + 시즌 진행률·종료 시각(KST)·미읽음 개수가 실제 DB 상태를 반영한 JSON으로 내려온다
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.season.seasonId").value(String.valueOf(CURRENT_SEASON_ID)))
                 .andExpect(jsonPath("$.season.serverNow").isString())
                 .andExpect(jsonPath("$.season.progress").value("50%"))
+                .andExpect(jsonPath("$.season.endedAt").value(endedAt.atOffset(ZoneOffset.ofHours(9)).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)))
                 .andExpect(jsonPath("$.unreadChatRoomCount").value(0))
                 .andExpect(jsonPath("$.unreadNotificationCount").value(1));
 

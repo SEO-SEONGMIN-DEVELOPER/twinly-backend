@@ -30,7 +30,7 @@ public class MainService {
         long elapsedMillis = Duration.between(season.getStartedAt(), now).toMillis();
         long progressPercent = Math.min(100, Math.max(0, elapsedMillis * 100 / totalMillis));
 
-        MainTabSeasonResult seasonResult = new MainTabSeasonResult(season.getId(), now, progressPercent + "%");
+        MainTabSeasonResult seasonResult = new MainTabSeasonResult(season.getId(), now, progressPercent + "%", season.getEndedAt());
 
         return new MainTabResult(
                 seasonResult,

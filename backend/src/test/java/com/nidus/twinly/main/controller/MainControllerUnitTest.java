@@ -55,7 +55,7 @@ class MainControllerUnitTest {
     void mainTab_success() throws Exception {
         // given: 서비스가 진행률 42%인 시즌과 미읽음 개수를 반환
         given(mainService.mainTab(1L)).willReturn(new MainTabResult(
-                new MainTabSeasonResult(7L, Instant.parse("2026-07-26T03:00:00Z"), "42%"),
+                new MainTabSeasonResult(7L, Instant.parse("2026-07-26T03:00:00Z"), "42%", Instant.parse("2026-09-30T14:59:59Z")),
                 3,
                 5
         ));
@@ -64,11 +64,12 @@ class MainControllerUnitTest {
         var result = mockMvc.perform(get("/api/v1/main")
                 .header("Authorization", "Bearer access-token"));
 
-        // then: 200 반환 + seasonId는 문자열, serverNow는 date-time 문자열, 나머지 필드가 그대로 매핑됨
+        // then: 200 반환 + seasonId는 문자열, serverNow는 date-time 문자열, endedAt은 date-time 문자열, 나머지 필드가 그대로 매핑됨
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.season.seasonId").value("7"))
                 .andExpect(jsonPath("$.season.serverNow").isString())
                 .andExpect(jsonPath("$.season.progress").value("42%"))
+                .andExpect(jsonPath("$.season.endedAt").isString())
                 .andExpect(jsonPath("$.unreadChatRoomCount").value(3))
                 .andExpect(jsonPath("$.unreadNotificationCount").value(5));
 

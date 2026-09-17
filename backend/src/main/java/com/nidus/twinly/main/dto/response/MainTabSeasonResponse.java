@@ -9,10 +9,11 @@ public record MainTabSeasonResponse(
         @JsonFormat(shape = JsonFormat.Shape.STRING)
         Long seasonId,
         Instant serverNow,
-        String progress
+        String progress,
+        Instant endedAt
 ) {
 
     public static MainTabSeasonResponse from(MainTabSeasonResult result) {
-        return new MainTabSeasonResponse(result.seasonId(), result.serverNow(), result.progress());
+        return new MainTabSeasonResponse(result.seasonId(), result.serverNow(), result.progress(), result.endedAt());
     }
 }

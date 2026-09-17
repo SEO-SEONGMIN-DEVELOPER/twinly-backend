@@ -5,6 +5,7 @@ import java.time.Instant;
 public record MainTabSeasonResult(
         Long seasonId,
         Instant serverNow,
-        String progress
+        String progress,
+        Instant endedAt
 ) {
 }
