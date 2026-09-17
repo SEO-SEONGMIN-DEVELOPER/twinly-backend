@@ -45,8 +45,9 @@ class MainServiceUnitTest {
     void mainTab_returns_progress_and_unread_counts() {
         // given: 총 100일 중 25일이 지난 시즌 + 안읽은 채팅방 3개 / 알림 5건
         Instant now = Instant.now();
+        Instant endedAt = now.plus(Duration.ofDays(75));
         given(currentSeasonReader.read()).willReturn(
-                season(CURRENT_SEASON_ID, now.minus(Duration.ofDays(25)), now.plus(Duration.ofDays(75))));
+                season(CURRENT_SEASON_ID, now.minus(Duration.ofDays(25)), endedAt));
         given(chatRepository.countUnreadRoomsByUserId(USER_ID)).willReturn(3);
         given(appNotificationFeedRepository.countByUserIdAndReadAtIsNull(USER_ID)).willReturn(5);
 
@@ -57,6 +58,7 @@ class MainServiceUnitTest {
         assertThat(result.season().seasonId()).isEqualTo(CURRENT_SEASON_ID);
         assertThat(result.season().progress()).isEqualTo("25%");
         assertThat(result.season().serverNow()).isBetween(now, Instant.now());
+        assertThat(result.season().endedAt()).isEqualTo(endedAt);
         assertThat(result.unreadChatRoomCount()).isEqualTo(3);
         assertThat(result.unreadNotificationCount()).isEqualTo(5);
 
