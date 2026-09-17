@@ -49,6 +49,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -655,14 +656,12 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("AI 채팅 마지막 턴: 7번 턴에 답하면 대화 요약이 SUMMARY 요소로 실제 DB ENUM 컬럼에 저장되고 isEnd=true로 끝난다")
-    void aiChatMessage_last_turn_persists_summary() throws Exception {
-        // given: 7번 턴 AI 질문과 이전 대화 요소가 저장된 상태 + 요약 문장은 Bedrock 목으로 스텁
+    @DisplayName("AI 채팅 마지막 턴: 7번 턴에 답하면 답변과 DETAIL만 저장하고 요약은 만들지 않은 채 isEnd=true로 끝난다")
+    void aiChatMessage_last_turn_ends_without_summary() throws Exception {
+        // given: 7번 턴 AI 질문과 이전 대화 요소가 저장된 상태
         AnonSession session = saveAnonSession();
         anonSessionAiChatRepository.save(AnonSessionAiChat.create(session.getId(), AiChatSender.AI, "마지막으로 요즘 제일 행복한 순간은?", 7));
         anonSessionPersonaElementRepository.save(AnonSessionPersonaElement.create(session.getId(), PersonaDimension.INTEREST, "등산"));
-        anonSessionPersonaElementRepository.save(AnonSessionPersonaElement.create(session.getId(), PersonaDimension.DETAIL, "요즘 뭐에 빠져 있어?: 요즘 등산에 빠졌어"));
-        given(bedrockService.converse(anyString())).willReturn("주말마다 산에 오르며 작은 순간에서 행복을 찾는 사람");
         flushAndClear();
 
         // when: 익명 세션 토큰으로 7번 턴 답변 API 호출
@@ -676,18 +675,14 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.turnIndex").value(7))
                 .andExpect(jsonPath("$.isEnd").value(true));
 
-        // then: 다음 AI 질문(8턴)은 만들지 않고, 요약이 SUMMARY 차원으로 저장되며 모델은 요약 1회만 호출됨
+        // then: 다음 AI 질문(8턴)과 SUMMARY 는 만들지 않고 DETAIL 만 저장되며, 모델은 호출되지 않음 (요약은 회원가입 시 생성)
         flushAndClear();
         assertThat(anonSessionAiChatRepository.findByAnonSessionIdAndTurnIndexAndSender(session.getId(), 8, AiChatSender.AI)).isEmpty();
-        List<AnonSessionPersonaElement> summaries = anonSessionPersonaElementRepository.findAllByAnonSessionId(session.getId()).stream()
-                .filter(element -> element.getDimension() == PersonaDimension.SUMMARY)
-                .toList();
-        assertThat(summaries).hasSize(1);
-        assertThat(summaries.getFirst().getExplanation()).isEqualTo("주말마다 산에 오르며 작은 순간에서 행복을 찾는 사람");
-        assertThat(jdbcTemplate.queryForObject(
-                "SELECT dimension FROM anon_session_persona_elements WHERE id = ?", String.class, summaries.getFirst().getId()))
-                .isEqualTo("SUMMARY");
-        then(bedrockService).should(times(1)).converse(anyString());
+        assertThat(anonSessionPersonaElementRepository.findAllByAnonSessionId(session.getId()))
+                .extracting(AnonSessionPersonaElement::getDimension)
+                .contains(PersonaDimension.DETAIL)
+                .doesNotContain(PersonaDimension.SUMMARY);
+        then(bedrockService).should(never()).converse(anyString());
     }
 
     @Test
