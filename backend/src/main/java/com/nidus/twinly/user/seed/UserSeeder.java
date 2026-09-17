@@ -26,6 +26,8 @@ import com.nidus.twinly.user.entity.PersonaElement;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.PersonaElementRepository;
 import com.nidus.twinly.user.repository.UserRepository;
+import com.nidus.twinly.user.seed.entity.SeedResourceHash;
+import com.nidus.twinly.user.seed.repository.SeedResourceHashRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
@@ -41,15 +43,20 @@ import tools.jackson.databind.node.ObjectNode;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Pattern;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
@@ -105,6 +112,7 @@ public class UserSeeder implements ApplicationRunner {
     private final SimulationService simulationService;
     private final SceneRepository sceneRepository;
     private final ScenarioCleaner scenarioCleaner;
+    private final SeedResourceHashRepository seedResourceHashRepository;
     private final SeedProperties seedProperties;
     private final ObjectMapper objectMapper;
 
@@ -286,10 +294,13 @@ public class UserSeeder implements ApplicationRunner {
     }
 
     private void seedScenarios(List<User> showcaseUsers) throws IOException {
-        JsonNode root;
+        byte[] resource;
         try (InputStream in = new ClassPathResource(SCENARIO_RESOURCE).getInputStream()) {
-            root = objectMapper.readTree(in);
+            resource = in.readAllBytes();
         }
+        JsonNode root = objectMapper.readTree(resource);
+        String hash = scenarioHash(resource);
+        Optional<SeedResourceHash> storedHash = seedResourceHashRepository.findByResource(SCENARIO_RESOURCE);
 
         long shift = ChronoUnit.DAYS.between(LocalDate.parse(root.get(ANCHOR_DATE).asString()), SCENARIO_BASE_DATE);
         Map<String, String> userIdByRef = userIdByRef(showcaseUsers);
@@ -309,7 +320,8 @@ public class UserSeeder implements ApplicationRunner {
                 .map(day -> new SceneDay(day.getUserId(), day.getDate()))
                 .collect(Collectors.toSet());
 
-        boolean stale = !expected.containsAll(existing);
+        boolean contentChanged = storedHash.map(stored -> !stored.getHash().equals(hash)).orElse(true);
+        boolean stale = contentChanged || !expected.containsAll(existing);
         if (stale) {
             scenarioCleaner.clear(showcaseUserIds);
             existing = Set.of();
@@ -322,7 +334,24 @@ public class UserSeeder implements ApplicationRunner {
 
         missing.forEach(request -> simulationService.simulations(request.userId(), SimulationsCommand.from(request)));
 
-        InfoLog.log(log, "쇼케이스 시나리오를 채웠습니다.", field("dayCount", requests.size()), field("insertedCount", missing.size()), field("reloaded", stale), field("shiftDays", shift));
+        Instant now = Instant.now();
+        SeedResourceHash current = storedHash.orElseGet(() -> SeedResourceHash.create(SCENARIO_RESOURCE, hash, now));
+        current.change(hash, now);
+        seedResourceHashRepository.save(current);
+
+        InfoLog.log(log, "쇼케이스 시나리오를 채웠습니다.", field("dayCount", requests.size()), field("insertedCount", missing.size()), field("reloaded", stale), field("contentChanged", contentChanged), field("shiftDays", shift));
+    }
+
+    static String scenarioHash(byte[] resource) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            digest.update(resource);
+            digest.update(SCENARIO_BASE_DATE.toString().getBytes(StandardCharsets.UTF_8));
+
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 을 사용할 수 없습니다.", e);
+        }
     }
 
     private record SceneDay(Long userId, LocalDate date) {

@@ -21,6 +21,10 @@ public final class KstTimes {
         return LocalDate.now(ZONE);
     }
 
+    public static LocalDateTime now() {
+        return LocalDateTime.now(ZONE);
+    }
+
     public static Instant toInstant(LocalDateTime kstLocalDateTime) {
         return kstLocalDateTime.atZone(ZONE).toInstant();
     }

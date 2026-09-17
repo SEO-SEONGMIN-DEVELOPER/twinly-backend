@@ -536,7 +536,7 @@ public class MeService {
             return 0;
         }
 
-        return (int) relationshipRepository.findLatestByUserIdAndPartnerUserIdIn(userId, partnerUserIds).stream()
+        return (int) relationshipRepository.findLatestUntilByUserIdAndPartnerUserIdIn(userId, partnerUserIds, KstTimes.now()).stream()
                 .filter(relationship -> RelationshipType.fromIntimacy(relationship.getIntimacy()) != RelationshipType.ACQUAINTANCE)
                 .count();
     }

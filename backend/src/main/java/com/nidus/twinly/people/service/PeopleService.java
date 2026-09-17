@@ -49,6 +49,7 @@ import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -92,8 +93,9 @@ public class PeopleService {
 
     public PeopleResult people(Long userId, Long cursor, Integer limit) {
         int effectiveLimit = (limit != null && limit > 0) ? limit : DEFAULT_PEOPLE_LIMIT;
+        LocalDateTime now = KstTimes.now();
 
-        List<Long> fetched = relationshipRepository.findPartnerUserIdsByUserId(userId, cursor, effectiveLimit + 1);
+        List<Long> fetched = relationshipRepository.findPartnerUserIdsByUserId(userId, cursor, effectiveLimit + 1, now);
 
         boolean hasMore = fetched.size() > effectiveLimit;
         List<Long> partnerUserIds = hasMore ? fetched.subList(0, effectiveLimit) : fetched;
@@ -112,7 +114,7 @@ public class PeopleService {
         Map<Long, ProfilePhotoInfo> profilePhotoByPartnerUserId = photoRepository.findAllByUserIdInAndType(visiblePartnerUserIds, PhotoType.PROFILE).stream()
                 .collect(Collectors.toMap(Photo::getUserId, photo -> new ProfilePhotoInfo(photo.getKey(), cloudFrontService.getSignedUrl(photo.getKey()), photo.position())));
 
-        Map<Long, Integer> intimacyByPartnerUserId = relationshipRepository.findLatestByUserIdAndPartnerUserIdIn(userId, partnerUserIds).stream()
+        Map<Long, Integer> intimacyByPartnerUserId = relationshipRepository.findLatestUntilByUserIdAndPartnerUserIdIn(userId, partnerUserIds, now).stream()
                 .collect(Collectors.toMap(Relationship::getPartnerUserId, Relationship::getIntimacy));
 
         List<Match> matches = matchRepository.findAllByUserIdAndPartnerUserIdIn(userId, partnerUserIds);
@@ -122,7 +124,7 @@ public class PeopleService {
                 .filter(room -> room.getClosedAt() == null)
                 .collect(Collectors.toMap(ChatRoom::getMatchId, ChatRoom::getId));
 
-        Map<Long, Integer> sceneCountByPartnerUserId = scenePartnerRepository.countScenesByUserIdAndPartnerUserIdIn(userId, partnerUserIds).stream()
+        Map<Long, Integer> sceneCountByPartnerUserId = scenePartnerRepository.countScenesByUserIdAndPartnerUserIdIn(userId, partnerUserIds, now).stream()
                 .collect(Collectors.toMap(ScenePartnerRepository.SceneCountProjection::getPartnerUserId, projection -> projection.getCount().intValue()));
 
         List<Encounter> encounters = encounterRepository.findAllByUserIdAndPartnerUserIdIn(userId, partnerUserIds);
@@ -172,7 +174,7 @@ public class PeopleService {
 
         twinViewWriter.write(partnerUserId, userId, TwinViewKind.PROFILE);
 
-        int intimacy = relationshipRepository.findLatestByUserIdAndPartnerUserId(userId, partnerUserId)
+        int intimacy = relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(userId, partnerUserId, KstTimes.now())
                 .map(Relationship::getIntimacy)
                 .orElse(0);
 
@@ -234,7 +236,7 @@ public class PeopleService {
 
     public PeopleIntimacySeriesResult intimacySeries(Long userId, Long partnerUserId) {
         List<Relationship> relationships = relationshipRepository
-                .findAllByUserIdAndPartnerUserIdOrderByDateAsc(userId, partnerUserId);
+                .findAllByUserIdAndPartnerUserIdAndUpdateTimeLessThanEqualOrderByDateAsc(userId, partnerUserId, KstTimes.now());
 
         if (relationships.isEmpty()) {
             throw new BusinessException(ErrorCode.RELATIONSHIP_NOT_FOUND);
@@ -268,7 +270,8 @@ public class PeopleService {
 
         twinViewWriter.write(partnerUserId, userId, TwinViewKind.EVENT);
 
-        int intimacy = relationshipRepository.findLatestByUserIdAndPartnerUserId(userId, partnerUserId)
+        LocalDateTime now = KstTimes.now();
+        int intimacy = relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(userId, partnerUserId, now)
                 .map(Relationship::getIntimacy)
                 .orElse(0);
 
@@ -287,19 +290,19 @@ public class PeopleService {
 
         int effectiveLimit = (limit != null && limit > 0) ? limit : DEFAULT_EVENTS_LIMIT;
 
-        List<LocalDate> fetchedDates = sceneRepository.findDistinctDatesFromCursorByUserIdAndWithPartnerUserId(userId, partnerUserId, cursor, effectiveLimit + 1);
+        List<LocalDate> fetchedDates = sceneRepository.findDistinctDatesFromCursorByUserIdAndWithPartnerUserId(userId, partnerUserId, cursor, effectiveLimit + 1, now);
         boolean hasMore = fetchedDates.size() > effectiveLimit;
         List<LocalDate> pageDates = hasMore ? fetchedDates.subList(0, effectiveLimit) : fetchedDates;
 
         Map<LocalDate, List<Scene>> scenesByDate = pageDates.isEmpty()
                 ? Map.of()
-                : sceneRepository.findAllByUserIdAndWithPartnerUserIdAndDateIn(userId, partnerUserId, pageDates).stream()
+                : sceneRepository.findAllByUserIdAndWithPartnerUserIdAndDateIn(userId, partnerUserId, pageDates, now).stream()
                         .collect(Collectors.groupingBy(Scene::getDate, LinkedHashMap::new, Collectors.toList()));
 
         Map<LocalDate, Integer> deltaByDate = new HashMap<>();
         Map<LocalDate, RelationshipSpecificType> changeByDate = new HashMap<>();
         Relationship previous = null;
-        for (Relationship current : relationshipsForDelta(userId, partnerUserId, pageDates)) {
+        for (Relationship current : relationshipsForDelta(userId, partnerUserId, pageDates, now)) {
             if (previous != null) {
                 deltaByDate.put(current.getDate(), current.getIntimacy() - previous.getIntimacy());
 
@@ -335,13 +338,13 @@ public class PeopleService {
         return new PeopleEventsResult(partnerResult, events, new PeopleEventsPageResult(nextCursor, hasMore));
     }
 
-    private List<Relationship> relationshipsForDelta(Long userId, Long partnerUserId, List<LocalDate> pageDates) {
+    private List<Relationship> relationshipsForDelta(Long userId, Long partnerUserId, List<LocalDate> pageDates, LocalDateTime now) {
         if (pageDates.isEmpty()) {
             return List.of();
         }
 
         return relationshipRepository.findForDeltaRange(
-                userId, partnerUserId, pageDates.get(pageDates.size() - 1), pageDates.get(0));
+                userId, partnerUserId, pageDates.get(pageDates.size() - 1), pageDates.get(0), now);
     }
 
     private String preview(Scene scene, Map<Long, String> nameByUserId) {
@@ -402,7 +405,7 @@ public class PeopleService {
             throw new BusinessException(ErrorCode.USER_NOT_FOUND);
         }
 
-        List<Scene> scenes = sceneRepository.findAllByUserIdAndWithPartnerUserIdAndDateIn(userId, partnerUserId, List.of(date));
+        List<Scene> scenes = sceneRepository.findAllByUserIdAndWithPartnerUserIdAndDateIn(userId, partnerUserId, List.of(date), KstTimes.now());
 
         List<Long> sceneIds = scenes.stream().map(Scene::getId).toList();
         List<ScenePartner> scenePartners = scenePartnerRepository.findAllBySceneIdIn(sceneIds);
@@ -470,7 +473,7 @@ public class PeopleService {
     }
 
     public PeopleLearnedFactsResult learnedFacts(Long userId, Long partnerUserId) {
-        Relationship relationship = relationshipRepository.findLatestByUserIdAndPartnerUserId(userId, partnerUserId)
+        Relationship relationship = relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(userId, partnerUserId, KstTimes.now())
                 .orElseThrow(() -> new BusinessException(ErrorCode.RELATIONSHIP_NOT_FOUND));
 
         return new PeopleLearnedFactsResult(relationship.getPartnerModel());

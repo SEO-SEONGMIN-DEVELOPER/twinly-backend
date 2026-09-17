@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -15,11 +16,13 @@ public interface RelationshipRepository extends JpaRepository<Relationship, Long
     @Query(value = """
         SELECT r.*
         FROM relationships r
-        WHERE r.user_id = :userId AND r.partner_user_id = :partnerUserId
+        WHERE r.user_id = :userId AND r.partner_user_id = :partnerUserId AND r.update_time <= :now
         ORDER BY r.date DESC
         LIMIT 1
         """, nativeQuery = true)
-    Optional<Relationship> findLatestByUserIdAndPartnerUserId(@Param("userId") Long userId, @Param("partnerUserId") Long partnerUserId);
+    Optional<Relationship> findLatestUntilByUserIdAndPartnerUserId(@Param("userId") Long userId,
+                                                                 @Param("partnerUserId") Long partnerUserId,
+                                                                 @Param("now") LocalDateTime now);
 
     @Query(value = """
         SELECT r.*
@@ -38,18 +41,21 @@ public interface RelationshipRepository extends JpaRepository<Relationship, Long
             INNER JOIN (
                 SELECT partner_user_id, MAX(date) AS max_date
                 FROM relationships
-                WHERE user_id = :userId AND partner_user_id IN (:partnerUserIds)
+                WHERE user_id = :userId AND partner_user_id IN (:partnerUserIds) AND update_time <= :now
                 GROUP BY partner_user_id
             ) latest ON r.user_id = :userId
                          AND r.partner_user_id = latest.partner_user_id
                          AND r.date = latest.max_date
             """, nativeQuery = true)
-    List<Relationship> findLatestByUserIdAndPartnerUserIdIn(@Param("userId") Long userId, @Param("partnerUserIds") List<Long> partnerUserIds);
+    List<Relationship> findLatestUntilByUserIdAndPartnerUserIdIn(@Param("userId") Long userId,
+                                                               @Param("partnerUserIds") List<Long> partnerUserIds,
+                                                               @Param("now") LocalDateTime now);
 
     @Query(value = """
             SELECT DISTINCT r.partner_user_id
             FROM relationships r
             WHERE r.user_id = :userId
+              AND r.update_time <= :now
               AND (:cursor IS NULL OR r.partner_user_id > :cursor)
               AND NOT EXISTS (
                   SELECT 1
@@ -62,9 +68,10 @@ public interface RelationshipRepository extends JpaRepository<Relationship, Long
             """, nativeQuery = true)
     List<Long> findPartnerUserIdsByUserId(@Param("userId") Long userId,
                                           @Param("cursor") Long cursor,
-                                          @Param("limit") Integer limit);
+                                          @Param("limit") Integer limit,
+                                          @Param("now") LocalDateTime now);
 
-    List<Relationship> findAllByUserIdAndPartnerUserIdOrderByDateAsc(Long userId, Long partnerUserId);
+    List<Relationship> findAllByUserIdAndPartnerUserIdAndUpdateTimeLessThanEqualOrderByDateAsc(Long userId, Long partnerUserId, LocalDateTime now);
 
     @Modifying
     @Query("DELETE FROM Relationship r WHERE r.userId IN :userIds")
@@ -76,13 +83,15 @@ public interface RelationshipRepository extends JpaRepository<Relationship, Long
             SELECT r FROM Relationship r
             WHERE r.userId = :userId AND r.partnerUserId = :partnerUserId
               AND r.date <= :to
+              AND r.updateTime <= :now
               AND (r.date >= :from OR r.date = (
                     SELECT MAX(p.date) FROM Relationship p
-                    WHERE p.userId = :userId AND p.partnerUserId = :partnerUserId AND p.date < :from))
+                    WHERE p.userId = :userId AND p.partnerUserId = :partnerUserId AND p.date < :from AND p.updateTime <= :now))
             ORDER BY r.date ASC
             """)
     List<Relationship> findForDeltaRange(@Param("userId") Long userId,
                                          @Param("partnerUserId") Long partnerUserId,
                                          @Param("from") LocalDate from,
-                                         @Param("to") LocalDate to);
+                                         @Param("to") LocalDate to,
+                                         @Param("now") LocalDateTime now);
 }

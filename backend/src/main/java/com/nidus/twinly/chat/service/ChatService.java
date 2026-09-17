@@ -17,6 +17,7 @@ import com.nidus.twinly.chat.generator.CommonPointGenerator;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
 import com.nidus.twinly.common.photo.PhotoType;
 import com.nidus.twinly.common.photo.ProfilePhotoInfo;
+import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.common.persona.PersonaDimension;
@@ -219,7 +220,7 @@ public class ChatService {
                 photoRepository.findAllByUserIdInAndType(partnerIds, PhotoType.PROFILE).stream()
                         .collect(Collectors.toMap(Photo::getUserId, Function.identity())),
 
-                relationshipRepository.findLatestByUserIdAndPartnerUserIdIn(userId, partnerIds).stream()
+                relationshipRepository.findLatestUntilByUserIdAndPartnerUserIdIn(userId, partnerIds, KstTimes.now()).stream()
                         .collect(Collectors.toMap(Relationship::getPartnerUserId, Function.identity())),
 
                 chatRepository.findLatestByRoomIdIn(visibleRoomIds).stream()
@@ -327,7 +328,7 @@ public class ChatService {
                 : photoRepository.findByUserIdAndType(partnerId, PhotoType.PROFILE)
                         .orElse(null);
 
-        Integer intimacy = relationshipRepository.findLatestByUserIdAndPartnerUserId(userId, partnerId)
+        Integer intimacy = relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(userId, partnerId, KstTimes.now())
                 .map(Relationship::getIntimacy)
                 .orElse(0);
 
