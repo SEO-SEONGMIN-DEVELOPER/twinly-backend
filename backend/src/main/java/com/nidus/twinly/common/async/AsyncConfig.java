@@ -90,4 +90,19 @@ public class AsyncConfig implements AsyncConfigurer {
 
         return executor;
     }
+
+    @Bean(defaultCandidate = false)
+    public TaskExecutor personaSummaryTaskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+
+        executor.setCorePoolSize(1);
+        executor.setMaxPoolSize(2);
+        executor.setQueueCapacity(500);
+        executor.setTaskDecorator(MDC_TASK_DECORATOR);
+        executor.setThreadNamePrefix("persona-summary-");
+        executor.setRejectedExecutionHandler((rejected, threadPoolExecutor) ->
+                WarnLog.log(log, "페르소나 요약 생성 큐가 가득 차 생성을 건너뜁니다.", field("queued", threadPoolExecutor.getQueue().size())));
+
+        return executor;
+    }
 }

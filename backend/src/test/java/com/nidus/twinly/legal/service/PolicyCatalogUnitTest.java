@@ -166,7 +166,6 @@ class PolicyCatalogUnitTest {
     }
 
     private TestPolicySummary policy(Long id, Long policyNameId, String version, Instant effectiveAt) {
-        return new TestPolicySummary(id, policyNameId, version,
-                "https://cdn.twinly.app/v" + version + ".html", true, effectiveAt);
+        return new TestPolicySummary(id, policyNameId, version, true, effectiveAt);
     }
 }

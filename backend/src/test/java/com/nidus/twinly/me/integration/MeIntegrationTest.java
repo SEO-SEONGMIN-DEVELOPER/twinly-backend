@@ -159,7 +159,7 @@ class MeIntegrationTest extends AbstractIntegrationTest {
         clearSeededPolicyNames();
         User me = saveUser();
         PolicyName policyName = policyNameRepository.save(policyName("서비스 이용약관", "terms_of_service"));
-        Policy policy = policyRepository.save(policy(policyName.getId(), "1", "legal/tos/v1.html", true));
+        Policy policy = policyRepository.save(policy(policyName.getId(), "1", true));
 
         // when: 약관 동의 API 호출
         mockMvc.perform(post("/api/v1/me/consents")
@@ -383,7 +383,7 @@ class MeIntegrationTest extends AbstractIntegrationTest {
         clearSeededPolicyNames();
         User me = saveUser();
         PolicyName name = policyNameRepository.save(policyName("마케팅 수신 동의", "marketing"));
-        Policy policy = policyRepository.save(policy(name.getId(), "1", "legal/tos/v1.html", false));
+        Policy policy = policyRepository.save(policy(name.getId(), "1", false));
         agreementRepository.save(Agreement.create(me.getId(), policy.getId(), Instant.now()));
         flushAndClear();
 
@@ -411,7 +411,7 @@ class MeIntegrationTest extends AbstractIntegrationTest {
         // given: 필수 정책에 이미 동의한 실제 유저
         User me = saveUser();
         PolicyName name = policyNameRepository.save(policyName("서비스 이용약관", "terms_of_service"));
-        Policy policy = policyRepository.save(policy(name.getId(), "1", "legal/tos/v1.html", true));
+        Policy policy = policyRepository.save(policy(name.getId(), "1", true));
         agreementRepository.save(Agreement.create(me.getId(), policy.getId(), Instant.now()));
         flushAndClear();
 
@@ -768,11 +768,10 @@ class MeIntegrationTest extends AbstractIntegrationTest {
         return policyName;
     }
 
-    private Policy policy(Long policyNameId, String version, String key, Boolean isRequired) {
+    private Policy policy(Long policyNameId, String version, Boolean isRequired) {
         Policy policy = BeanUtils.instantiateClass(Policy.class);
         ReflectionTestUtils.setField(policy, "policyNameId", policyNameId);
         ReflectionTestUtils.setField(policy, "version", version);
-        ReflectionTestUtils.setField(policy, "key", key);
         ReflectionTestUtils.setField(policy, "isRequired", isRequired);
         ReflectionTestUtils.setField(policy, "effectiveAt", Instant.now().minus(Duration.ofDays(1)));
         ReflectionTestUtils.setField(policy, "createdAt", Instant.now());

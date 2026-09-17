@@ -24,6 +24,7 @@ import com.nidus.twinly.legal.repository.AgreementRepository;
 import com.nidus.twinly.legal.repository.PolicyNameRepository;
 import com.nidus.twinly.legal.service.PolicyCatalog;
 import com.nidus.twinly.legal.service.PolicyCatalog.PolicyKey;
+import com.nidus.twinly.legal.service.PolicyUrlResolver;
 import com.nidus.twinly.me.domain.HesitationDuration;
 import com.nidus.twinly.me.domain.HesitationStatus;
 import com.nidus.twinly.me.dto.command.MeAppNotificationsReadAllCommand;
@@ -136,6 +137,7 @@ public class MeService {
     private final RelationshipRepository relationshipRepository;
 
     private final PolicyCatalog policyCatalog;
+    private final PolicyUrlResolver policyUrlResolver;
     private final SeasonParticipationWriter seasonParticipationWriter;
 
     public MeProfilePhotoPresignResult profilePhotoPresign(Long userId, MeProfilePhotoPresignCommand command) {
@@ -258,7 +260,7 @@ public class MeService {
                             policyName.getIdentifier(),
                             policyName.getName(),
                             current != null ? current.getVersion() : null,
-                            current != null ? cloudFrontService.getPublicUrl(current.getKey()) : null,
+                            current != null ? policyUrlResolver.resolve(policyName.getIdentifier()) : null,
                             policyName.getRequiresAgreement(),
                             current != null ? current.getIsRequired() : null,
                             agreement != null,

@@ -26,6 +26,7 @@ import com.nidus.twinly.auth.domain.IdentityVerificationResult;
 import com.nidus.twinly.auth.entity.AnonSessionIdentityVerification;
 import com.nidus.twinly.auth.entity.AnonSessionVerificationSession;
 import com.nidus.twinly.auth.entity.RefreshToken;
+import com.nidus.twinly.auth.event.UserSignedUpEvent;
 import com.nidus.twinly.auth.entity.VerificationSession;
 import com.nidus.twinly.auth.repository.AnonSessionIdentityVerificationRepository;
 import com.nidus.twinly.auth.repository.AnonSessionVerificationSessionRepository;
@@ -64,6 +65,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.beans.BeanUtils;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -144,6 +146,9 @@ class AuthServiceUnitTest {
 
     @Mock
     IdentityVerificationLogService identityVerificationLogService;
+
+    @Mock
+    ApplicationEventPublisher eventPublisher;
 
     @Mock
     AnonSessionRepository anonSessionRepository;
@@ -1116,12 +1121,28 @@ class AuthServiceUnitTest {
         then(anonSessionIdentityVerificationRepository).should().deleteByAnonSessionId(ANON_SESSION_ID);
         then(verificationRepository).should(times(2)).save(any());
 
+        // then: 가입한 유저 id 로 가입 완료 이벤트가 발행된다 (요약 생성은 커밋 이후 리스너가 비동기로 처리)
+        then(eventPublisher).should().publishEvent(new UserSignedUpEvent(USER_ID));
+
         // then: 발급된 토큰이 그대로 반환되고 리프레시 토큰 해시가 저장됨
         assertThat(result).isEqualTo(tokens);
         ArgumentCaptor<RefreshToken> refreshCaptor = ArgumentCaptor.forClass(RefreshToken.class);
         then(refreshTokenRepository).should().save(refreshCaptor.capture());
         assertThat(refreshCaptor.getValue().getUserId()).isEqualTo(USER_ID);
         assertThat(refreshCaptor.getValue().getTokenHash()).isEqualTo("hash:refresh-token");
+    }
+
+    @Test
+    @DisplayName("회원가입: 가입 조건 검사에서 실패하면 가입 완료 이벤트를 발행하지 않는다")
+    void signup_does_not_publish_event_when_validation_fails() {
+        // given: 이메일 인증이 끝나지 않은 세션
+        given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
+                .willReturn(Optional.of(verifiedIdentity()));
+
+        // when & then
+        assertThatThrownBy(() -> authService.signup(SNAPSHOT))
+                .isInstanceOf(BusinessException.class);
+        then(eventPublisher).shouldHaveNoInteractions();
     }
 
     // ---------- 로그인 ----------

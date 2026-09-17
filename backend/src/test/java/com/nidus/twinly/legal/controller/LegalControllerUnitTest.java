@@ -49,7 +49,7 @@ class LegalControllerUnitTest {
                         "terms_of_service",
                         "서비스 이용약관",
                         "2",
-                        "https://cdn.twinly.app/legal/terms/v2.html",
+                        "https://trytwinly.com/legal/terms_of_service/",
                         true,
                         true))));
 
@@ -62,7 +62,7 @@ class LegalControllerUnitTest {
                 .andExpect(jsonPath("$.policies[0].policyId").value("terms_of_service"))
                 .andExpect(jsonPath("$.policies[0].title").value("서비스 이용약관"))
                 .andExpect(jsonPath("$.policies[0].version").value("2"))
-                .andExpect(jsonPath("$.policies[0].url").value("https://cdn.twinly.app/legal/terms/v2.html"))
+                .andExpect(jsonPath("$.policies[0].url").value("https://trytwinly.com/legal/terms_of_service/"))
                 .andExpect(jsonPath("$.policies[0].requiresAgreement").value(true))
                 .andExpect(jsonPath("$.policies[0].isRequired").value(true));
         then(legalService).should().policies(PolicyKind.ONBOARDING);
@@ -113,7 +113,7 @@ class LegalControllerUnitTest {
                         "parallelRelationProvision",
                         "평행우주 관계 제3자 제공 동의",
                         "1",
-                        "https://cdn.twinly.app/legal/parallel/v1.html",
+                        "https://trytwinly.com/legal/parallelRelationProvision/",
                         true,
                         false))));
 

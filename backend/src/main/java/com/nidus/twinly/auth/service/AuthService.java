@@ -14,6 +14,7 @@ import com.nidus.twinly.anon.repository.AnonSessionPersonaElementRepository;
 import com.nidus.twinly.anon.repository.AnonSessionPhotoRepository;
 import com.nidus.twinly.anon.repository.AnonSessionRepository;
 import com.nidus.twinly.auth.entity.RefreshToken;
+import com.nidus.twinly.auth.event.UserSignedUpEvent;
 import com.nidus.twinly.auth.repository.RefreshTokenRepository;
 import com.nidus.twinly.common.logging.WarnLog;
 import com.nidus.twinly.legal.domain.PolicyKind;
@@ -54,6 +55,7 @@ import com.nidus.twinly.user.repository.VerificationRepository;
 import io.jsonwebtoken.JwtException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -109,6 +111,7 @@ public class AuthService {
 
     private final BlindIndexHasher blindIndexHasher;
     private final ProfileThumbnailService profileThumbnailService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public AuthEmailSendResult onboardingEmailSend(AnonSessionSnapshot anonSessionSnapshot, AuthEmailSendCommand command) {
@@ -476,6 +479,8 @@ public class AuthService {
 
         verificationRepository.save(Verification.create(user.getId(), VerificationType.IDENTITY, identityVerification.getVerifiedAt()));
         verificationRepository.save(Verification.create(user.getId(), VerificationType.EMAIL, emailSession.getVerifiedAt()));
+
+        eventPublisher.publishEvent(new UserSignedUpEvent(user.getId()));
 
         return issueAuthToken(user.getId());
     }

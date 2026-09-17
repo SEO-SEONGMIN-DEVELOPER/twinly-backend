@@ -1,6 +1,5 @@
 package com.nidus.twinly.legal.service;
 
-import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
 import com.nidus.twinly.legal.dto.result.LegalPoliciesItemResult;
 import com.nidus.twinly.legal.dto.result.LegalPoliciesResult;
 import com.nidus.twinly.legal.domain.PolicyKind;
@@ -35,7 +34,7 @@ class LegalServiceUnitTest {
     PolicyCatalog policyCatalog;
 
     @Mock
-    CloudFrontService cloudFrontService;
+    PolicyUrlResolver policyUrlResolver;
 
     @InjectMocks
     LegalService legalService;
@@ -48,10 +47,10 @@ class LegalServiceUnitTest {
         PolicyName privacy = policyName(2L, "privacy_policy", "개인정보 처리방침");
         given(policyNameRepository.findAllByKindAndIsDeprecatedFalseOrderByIdAsc(PolicyKind.ONBOARDING)).willReturn(List.of(terms, privacy));
         given(policyCatalog.loadLatestByPolicyNameId(List.of(1L, 2L))).willReturn(Map.of(
-                1L, policy(102L, 1L, "2", "legal/terms/v2.html", true),
-                2L, policy(203L, 2L, "3", "legal/privacy/v3.html", false)));
-        given(cloudFrontService.getPublicUrl("legal/terms/v2.html")).willReturn("https://cdn.twinly.app/legal/terms/v2.html");
-        given(cloudFrontService.getPublicUrl("legal/privacy/v3.html")).willReturn("https://cdn.twinly.app/legal/privacy/v3.html");
+                1L, policy(102L, 1L, "2", true),
+                2L, policy(203L, 2L, "3", false)));
+        given(policyUrlResolver.resolve("terms_of_service")).willReturn("https://trytwinly.com/legal/terms_of_service/");
+        given(policyUrlResolver.resolve("privacy_policy")).willReturn("https://trytwinly.com/legal/privacy_policy/");
 
         // when: 정책 목록 조회
         LegalPoliciesResult result = legalService.policies(PolicyKind.ONBOARDING);
@@ -65,8 +64,8 @@ class LegalServiceUnitTest {
                         LegalPoliciesItemResult::url,
                         LegalPoliciesItemResult::isRequired)
                 .containsExactly(
-                        tuple("terms_of_service", "서비스 이용약관", "2", "https://cdn.twinly.app/legal/terms/v2.html", true),
-                        tuple("privacy_policy", "개인정보 처리방침", "3", "https://cdn.twinly.app/legal/privacy/v3.html", false));
+                        tuple("terms_of_service", "서비스 이용약관", "2", "https://trytwinly.com/legal/terms_of_service/", true),
+                        tuple("privacy_policy", "개인정보 처리방침", "3", "https://trytwinly.com/legal/privacy_policy/", false));
 
         // then: 버전 조회는 정책명 id 목록으로 단 한 번만 위임된다
         then(policyCatalog).should().loadLatestByPolicyNameId(List.of(1L, 2L));
@@ -115,8 +114,8 @@ class LegalServiceUnitTest {
         PolicyName provision = policyName(9L, "parallelRelationProvision", "평행우주 관계 제3자 제공 동의");
         given(policyNameRepository.findAllByKindAndIsDeprecatedFalseOrderByIdAsc(PolicyKind.PARALLEL_ENTRY)).willReturn(List.of(provision));
         given(policyCatalog.loadLatestByPolicyNameId(List.of(9L))).willReturn(Map.of(
-                9L, policy(901L, 9L, "1", "legal/parallel/v1.html", false)));
-        given(cloudFrontService.getPublicUrl("legal/parallel/v1.html")).willReturn("https://cdn.twinly.app/legal/parallel/v1.html");
+                9L, policy(901L, 9L, "1", false)));
+        given(policyUrlResolver.resolve("parallelRelationProvision")).willReturn("https://trytwinly.com/legal/parallelRelationProvision/");
 
         // when: 평행우주 입장 목록 조회
         LegalPoliciesResult result = legalService.policies(PolicyKind.PARALLEL_ENTRY);
@@ -136,8 +135,8 @@ class LegalServiceUnitTest {
         return policyName;
     }
 
-    private TestPolicySummary policy(Long id, Long policyNameId, String version, String key, Boolean isRequired) {
-        return new TestPolicySummary(id, policyNameId, version, key, isRequired,
+    private TestPolicySummary policy(Long id, Long policyNameId, String version, Boolean isRequired) {
+        return new TestPolicySummary(id, policyNameId, version, isRequired,
                 Instant.parse("2025-01-01T00:00:00Z"));
     }
 }

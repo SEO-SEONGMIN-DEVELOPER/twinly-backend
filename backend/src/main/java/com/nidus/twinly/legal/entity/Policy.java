@@ -24,9 +24,6 @@ public class Policy {
     @Column(length = 20)
     private String version;
 
-    @Column(name = "`key`", columnDefinition = "TEXT")
-    private String key;
-
     private Boolean isRequired;
 
     private Instant effectiveAt;

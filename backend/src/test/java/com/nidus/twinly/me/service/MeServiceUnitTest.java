@@ -25,6 +25,7 @@ import com.nidus.twinly.legal.repository.AgreementRepository;
 import com.nidus.twinly.legal.repository.PolicyNameRepository;
 import com.nidus.twinly.legal.service.PolicyCatalog;
 import com.nidus.twinly.legal.service.PolicyCatalog.PolicyKey;
+import com.nidus.twinly.legal.service.PolicyUrlResolver;
 import com.nidus.twinly.me.domain.HesitationDuration;
 import com.nidus.twinly.me.domain.HesitationStatus;
 import com.nidus.twinly.me.dto.command.MeAppNotificationsReadAllCommand;
@@ -158,6 +159,9 @@ class MeServiceUnitTest {
 
     @Mock
     PolicyCatalog policyCatalog;
+
+    @Mock
+    PolicyUrlResolver policyUrlResolver;
 
     @Mock
     SeasonParticipationWriter seasonParticipationWriter;
@@ -491,12 +495,12 @@ class MeServiceUnitTest {
         PolicyName marketing = policyName(2L, "마케팅 수신 동의", "marketing");
         given(policyNameRepository.findAllByIsDeprecatedFalseOrderByIdAsc()).willReturn(List.of(tos, marketing));
 
-        PolicySummary tosV2 = policy(11L, 1L, "2", "legal/tos/v2.html", true, now.minus(Duration.ofDays(1)));
-        PolicySummary marketingV1 = policy(20L, 2L, "1", "legal/marketing/v1.html", false, now.minus(Duration.ofDays(5)));
+        PolicySummary tosV2 = policy(11L, 1L, "2", true, now.minus(Duration.ofDays(1)));
+        PolicySummary marketingV1 = policy(20L, 2L, "1", false, now.minus(Duration.ofDays(5)));
         given(policyCatalog.loadLatestByPolicyNameId(List.of(1L, 2L)))
                 .willReturn(Map.of(1L, tosV2, 2L, marketingV1));
-        given(cloudFrontService.getPublicUrl("legal/tos/v2.html")).willReturn("https://cdn/legal/tos/v2.html");
-        given(cloudFrontService.getPublicUrl("legal/marketing/v1.html")).willReturn("https://cdn/legal/marketing/v1.html");
+        given(policyUrlResolver.resolve("terms_of_service")).willReturn("https://trytwinly.com/legal/terms_of_service/");
+        given(policyUrlResolver.resolve("marketing")).willReturn("https://trytwinly.com/legal/marketing/");
 
         Instant agreedAt = now.minus(Duration.ofHours(3));
         given(agreementRepository.findAllByUserIdAndRevokedAtIsNull(ME))
@@ -510,7 +514,7 @@ class MeServiceUnitTest {
         assertThat(result.consents().get(0).policyId()).isEqualTo("terms_of_service");
         assertThat(result.consents().get(0).title()).isEqualTo("서비스 이용약관");
         assertThat(result.consents().get(0).version()).isEqualTo("2");
-        assertThat(result.consents().get(0).url()).isEqualTo("https://cdn/legal/tos/v2.html");
+        assertThat(result.consents().get(0).url()).isEqualTo("https://trytwinly.com/legal/terms_of_service/");
         assertThat(result.consents().get(0).isRequired()).isTrue();
         assertThat(result.consents().get(0).isGranted()).isTrue();
         assertThat(result.consents().get(0).grantedAt()).isEqualTo(agreedAt);
@@ -541,8 +545,8 @@ class MeServiceUnitTest {
     void grantConsents_skips_already_agreed() {
         // given: 이용약관 v2는 이미 동의, 마케팅 v1은 미동의
         Instant now = Instant.now();
-        PolicySummary tosV2 = policy(11L, 1L, "2", "https://policy/tos/2", true, now.minus(Duration.ofDays(1)));
-        PolicySummary marketingV1 = policy(20L, 2L, "1", "https://policy/marketing/1", false, now.minus(Duration.ofDays(5)));
+        PolicySummary tosV2 = policy(11L, 1L, "2", true, now.minus(Duration.ofDays(1)));
+        PolicySummary marketingV1 = policy(20L, 2L, "1", false, now.minus(Duration.ofDays(5)));
         given(policyCatalog.loadByKey(List.of("terms_of_service", "marketing")))
                 .willReturn(Map.of(new PolicyKey("terms_of_service", "2"), tosV2,
                         new PolicyKey("marketing", "1"), marketingV1));
@@ -566,7 +570,7 @@ class MeServiceUnitTest {
     @DisplayName("약관 동의 후 현재 시즌 참가 조건을 다시 확인한다 (결제 후 늦게 동의한 유저도 참여 중으로 이어진다)")
     void grantConsents_rechecks_season_participation() {
         // given: 실신원 동의 v1.1에 새로 동의
-        PolicySummary disclosureV11 = policy(30L, 3L, "1.1", "https://policy/disclosure/1.1", true, Instant.now().minus(Duration.ofDays(1)));
+        PolicySummary disclosureV11 = policy(30L, 3L, "1.1", true, Instant.now().minus(Duration.ofDays(1)));
         given(policyCatalog.loadByKey(List.of("thirdPartyRealIdentityDisclosure")))
                 .willReturn(Map.of(new PolicyKey("thirdPartyRealIdentityDisclosure", "1.1"), disclosureV11));
         given(agreementRepository.findAllByUserIdAndRevokedAtIsNull(ME)).willReturn(List.of());
@@ -585,7 +589,7 @@ class MeServiceUnitTest {
     @DisplayName("필수 약관을 철회하려 하면 REQUIRED_POLICY_REVOKE_DENIED 예외가 발생하고 철회 쿼리를 실행하지 않는다")
     void revokeConsents_required_policy_throws() {
         // given: 철회 대상에 필수 약관이 포함
-        PolicySummary tosV2 = policy(11L, 1L, "2", "https://policy/tos/2", true, Instant.now().minus(Duration.ofDays(1)));
+        PolicySummary tosV2 = policy(11L, 1L, "2", true, Instant.now().minus(Duration.ofDays(1)));
         given(policyCatalog.loadByKey(List.of("terms_of_service")))
                 .willReturn(Map.of(new PolicyKey("terms_of_service", "2"), tosV2));
 
@@ -602,7 +606,7 @@ class MeServiceUnitTest {
     @DisplayName("선택 약관만 철회하면 해당 정책 id로 이전 버전까지 철회하도록 위임한다")
     void revokeConsents_optional_policy_delegates() {
         // given: 철회 대상이 선택 약관 하나
-        PolicySummary marketingV1 = policy(20L, 2L, "1", "https://policy/marketing/1", false, Instant.now().minus(Duration.ofDays(5)));
+        PolicySummary marketingV1 = policy(20L, 2L, "1", false, Instant.now().minus(Duration.ofDays(5)));
         given(policyCatalog.loadByKey(List.of("marketing")))
                 .willReturn(Map.of(new PolicyKey("marketing", "1"), marketingV1));
 
@@ -1237,8 +1241,8 @@ class MeServiceUnitTest {
         return policyName;
     }
 
-    private TestPolicySummary policy(Long id, Long policyNameId, String version, String key, Boolean isRequired, Instant effectiveAt) {
-        return new TestPolicySummary(id, policyNameId, version, key, isRequired, effectiveAt);
+    private TestPolicySummary policy(Long id, Long policyNameId, String version, Boolean isRequired, Instant effectiveAt) {
+        return new TestPolicySummary(id, policyNameId, version, isRequired, effectiveAt);
     }
 
     private AppNotificationFeed feed(Long id, AppNotificationFeedType type, String title, String body,
