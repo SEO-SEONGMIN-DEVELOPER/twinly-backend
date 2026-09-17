@@ -26,4 +26,15 @@ public interface ChatRoomParticipationRepository extends JpaRepository<ChatRoomP
               AND (last_read_message_id IS NULL OR last_read_message_id < :lastMessageId)
             """, nativeQuery = true)
     int advanceReadPointer(@Param("roomId") Long roomId, @Param("userId") Long userId, @Param("lastMessageId") Long lastMessageId);
+
+    @Modifying
+    @Query(value = """
+            DELETE p
+            FROM chat_room_participations p
+            JOIN chat_rooms r ON r.id = p.room_id
+            JOIN matches m ON m.id = r.match_id
+            WHERE m.user_a_id IN (:userIds)
+              AND m.user_b_id IN (:userIds)
+            """, nativeQuery = true)
+    void deleteAllByRoomBetweenUserIdsIn(@Param("userIds") List<Long> userIds);
 }

@@ -48,4 +48,15 @@ public interface AppNotificationFeedRepository extends JpaRepository<AppNotifica
             """, nativeQuery = true)
     void markAllReadByUserIdAndIdLessThanEqual(@Param("userId") Long userId,
                                                @Param("lastAppNotificationId") Long lastAppNotificationId);
+
+    @Modifying
+    @Query(value = """
+            DELETE f
+            FROM app_notification_feeds f
+            JOIN chat_rooms r ON r.id = f.target_chat_room_id
+            JOIN matches m ON m.id = r.match_id
+            WHERE m.user_a_id IN (:userIds)
+              AND m.user_b_id IN (:userIds)
+            """, nativeQuery = true)
+    void deleteAllByTargetChatRoomBetweenUserIdsIn(@Param("userIds") List<Long> userIds);
 }

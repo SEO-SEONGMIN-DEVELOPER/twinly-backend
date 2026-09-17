@@ -24,4 +24,12 @@ public interface ChatRoomOpeningRepository extends JpaRepository<ChatRoomOpening
     void upsert(@Param("userAId") Long userAId,
                 @Param("userBId") Long userBId,
                 @Param("scheduledAt") Instant scheduledAt);
+
+    @Modifying
+    @Query(value = """
+            DELETE FROM chat_room_openings
+            WHERE user_a_id IN (:userIds)
+              AND user_b_id IN (:userIds)
+            """, nativeQuery = true)
+    void deleteAllBetweenUserIdsIn(@Param("userIds") List<Long> userIds);
 }

@@ -23,4 +23,14 @@ public interface EncounterPreferenceRepository extends JpaRepository<EncounterPr
             """, nativeQuery = true)
     void upsertIsFavorited(@Param("encounterId") Long encounterId, @Param("userId") Long userId,
                            @Param("isFavorited") boolean isFavorited);
+
+    @Modifying
+    @Query(value = """
+            DELETE p
+            FROM encounter_preferences p
+            JOIN encounters e ON e.id = p.encounter_id
+            WHERE e.user_a_id IN (:userIds)
+              AND e.user_b_id IN (:userIds)
+            """, nativeQuery = true)
+    void deleteAllByEncounterBetweenUserIdsIn(@Param("userIds") List<Long> userIds);
 }

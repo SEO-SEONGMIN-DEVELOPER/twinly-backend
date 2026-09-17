@@ -68,4 +68,15 @@ public interface ChatRepository extends JpaRepository<Chat, Long> {
           )
         """, nativeQuery = true)
     int countUnreadRoomsByUserId(@Param("userId") Long userId);
+
+    @Modifying
+    @Query(value = """
+            DELETE c
+            FROM chats c
+            JOIN chat_rooms r ON r.id = c.room_id
+            JOIN matches m ON m.id = r.match_id
+            WHERE m.user_a_id IN (:userIds)
+              AND m.user_b_id IN (:userIds)
+            """, nativeQuery = true)
+    void deleteAllByRoomBetweenUserIdsIn(@Param("userIds") List<Long> userIds);
 }
