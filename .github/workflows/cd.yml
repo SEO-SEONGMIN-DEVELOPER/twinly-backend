@@ -293,18 +293,17 @@ jobs:
           cat > /tmp/prod-params.json <<EOF
           {
             "commands": [
+              "#!/bin/bash",
               "set -e",
               "cd /home/ubuntu/twinly",
               "echo '${BUNDLE_B64}' | base64 -d | tar xzf -",
-              "if [ -f .env ]; then ADMIN_TOKEN=\$(grep '^ADMIN_API_TOKEN=' .env | cut -d= -f2-); curl -fsS -m 5 -X POST localhost:8080/admin/connection/draining -H \"X-Admin-Token: \$ADMIN_TOKEN\" -H 'Content-Type: application/json' -d '{\"reason\":\"deploy\",\"retryAfterMs\":${DRAINING_RETRY_AFTER_MS},\"scope\":\"local\"}' >/dev/null 2>&1 && echo 'draining 통보 완료' || echo 'draining 통보 생략 (앱 미기동 또는 호출 실패)'; sleep 3; fi",
-              "aws ssm get-parameter --region ${AWS_REGION} --name /twinly/prod/api/env --with-decryption --query Parameter.Value --output text > .env.new",
-              "grep -q '^JWT_SECRET_KEY=' .env.new",
-              "chmod 600 .env.new",
-              "mv .env.new .env",
-              "sed -i 's/^IMAGE_TAG=.*/IMAGE_TAG=${IMAGE_TAG}/' .env",
+              "ENV_BLOB=\$(aws ssm get-parameter --region ${AWS_REGION} --name /twinly/prod/api/env --with-decryption --query Parameter.Value --output text)",
+              "while IFS= read -r line; do case \"\$line\" in ''|'#'*) continue ;; esac; export \"\$line\"; done <<< \"\$ENV_BLOB\"",
+              "export IMAGE_TAG=${IMAGE_TAG}",
               "TOKEN=\$(curl -sX PUT http://169.254.169.254/latest/api/token -H 'X-aws-ec2-metadata-token-ttl-seconds: 60')",
-              "IID=\$(curl -s -H X-aws-ec2-metadata-token:\$TOKEN http://169.254.169.254/latest/meta-data/instance-id)",
-              "echo INSTANCE_ID=\$IID >> .env",
+              "export INSTANCE_ID=\$(curl -s -H X-aws-ec2-metadata-token:\$TOKEN http://169.254.169.254/latest/meta-data/instance-id)",
+              "curl -fsS -m 5 -X POST localhost:8080/admin/connection/draining -H \"X-Admin-Token: \$ADMIN_API_TOKEN\" -H 'Content-Type: application/json' -d '{\"reason\":\"deploy\",\"retryAfterMs\":${DRAINING_RETRY_AFTER_MS},\"scope\":\"local\"}' >/dev/null 2>&1 && echo 'draining 통보 완료' || echo 'draining 통보 생략 (앱 미기동 또는 호출 실패)'",
+              "sleep 3",
               "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}",
               "docker compose -f docker-compose.prod.yaml pull",
               "docker compose -f docker-compose.prod.yaml up -d",
@@ -469,13 +468,12 @@ jobs:
           cat > /tmp/prod-monitoring-params.json <<EOF
           {
             "commands": [
+              "#!/bin/bash",
               "set -e",
               "cd /home/ubuntu/twinly",
               "echo '${MONITORING_B64}' | base64 -d | tar xzf -",
-              "aws ssm get-parameter --region ${AWS_REGION} --name /twinly/prod/monitoring/env --with-decryption --query Parameter.Value --output text > .env.new",
-              "grep -q '^GRAFANA_ADMIN_PASSWORD=' .env.new",
-              "chmod 600 .env.new",
-              "mv .env.new .env",
+              "ENV_BLOB=\$(aws ssm get-parameter --region ${AWS_REGION} --name /twinly/prod/monitoring/env --with-decryption --query Parameter.Value --output text)",
+              "while IFS= read -r line; do case \"\$line\" in ''|'#'*) continue ;; esac; export \"\$line\"; done <<< \"\$ENV_BLOB\"",
               "docker compose -p twinly-monitoring -f docker-compose.prod.monitoring.yaml up -d",
               "timeout 120 bash -c 'until curl -fsS localhost:9090/-/ready >/dev/null; do sleep 5; done'",
               "timeout 120 bash -c 'until curl -fsS localhost:3000/api/health >/dev/null; do sleep 5; done'",
