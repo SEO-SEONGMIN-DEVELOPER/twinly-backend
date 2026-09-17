@@ -812,10 +812,10 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
         Long policyNameId = jdbcTemplate.queryForObject(
                 "SELECT id FROM policy_names WHERE identifier = ?", Long.class, identifier);
         jdbcTemplate.update("""
-                        INSERT INTO policies (policy_name_id, version, `key`, is_required, effective_at)
-                        VALUES (?, ?, ?, ?, UTC_TIMESTAMP(6))
+                        INSERT INTO policies (policy_name_id, version, is_required, effective_at)
+                        VALUES (?, ?, ?, UTC_TIMESTAMP(6))
                         """,
-                policyNameId, version, "legal/" + identifier + "/v" + version + ".html", isRequired);
+                policyNameId, version, isRequired);
         return jdbcTemplate.queryForObject(
                 "SELECT id FROM policies WHERE policy_name_id = ? AND version = ?", Long.class, policyNameId, version);
     }

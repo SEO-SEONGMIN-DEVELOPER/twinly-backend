@@ -117,6 +117,9 @@ fcm:
 anon:
   session-ttl: 14d
 
+legal:
+  base-url: https://trytwinly.com
+
 parallel:
   relation-thresholds:
     enemy: 0

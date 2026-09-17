@@ -17,8 +17,6 @@ public interface PolicyRepository extends JpaRepository<Policy, Long> {
 
         String getVersion();
 
-        String getKey();
-
         Boolean getIsRequired();
 
         Instant getEffectiveAt();
