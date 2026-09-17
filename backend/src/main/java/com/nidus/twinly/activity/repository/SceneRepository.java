@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 public interface SceneRepository extends JpaRepository<Scene, Long> {
@@ -24,6 +25,7 @@ public interface SceneRepository extends JpaRepository<Scene, Long> {
             JOIN scene_partners sp ON sp.scene_id = s.id
             WHERE s.user_id = :userId
               AND sp.user_id = :partnerUserId
+              AND s.ends_at <= :now
               AND (:cursor IS NULL OR s.date < :cursor)
             ORDER BY s.date DESC
             LIMIT :limit
@@ -31,7 +33,8 @@ public interface SceneRepository extends JpaRepository<Scene, Long> {
     List<LocalDate> findDistinctDatesFromCursorByUserIdAndWithPartnerUserId(@Param("userId") Long userId,
                                                                             @Param("partnerUserId") Long partnerUserId,
                                                                             @Param("cursor") LocalDate cursor,
-                                                                            @Param("limit") Integer limit);
+                                                                            @Param("limit") Integer limit,
+                                                                            @Param("now") LocalDateTime now);
 
     @Query(value = """
             SELECT s.*
@@ -40,11 +43,13 @@ public interface SceneRepository extends JpaRepository<Scene, Long> {
             WHERE s.user_id = :userId
               AND sp.user_id = :partnerUserId
               AND s.date IN (:dates)
+              AND s.ends_at <= :now
             ORDER BY s.date DESC, s.starts_at ASC, s.id ASC
             """, nativeQuery = true)
     List<Scene> findAllByUserIdAndWithPartnerUserIdAndDateIn(@Param("userId") Long userId,
                                                              @Param("partnerUserId") Long partnerUserId,
-                                                             @Param("dates") List<LocalDate> dates);
+                                                             @Param("dates") List<LocalDate> dates,
+                                                             @Param("now") LocalDateTime now);
 
     @Modifying
     @Query("DELETE FROM Scene s WHERE s.userId IN :userIds")

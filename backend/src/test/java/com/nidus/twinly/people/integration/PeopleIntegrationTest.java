@@ -397,6 +397,92 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.learnedFacts").value("커피를 좋아한다"));
     }
 
+    @Test
+    @DisplayName("사람 목록 조회: 갱신 시각이 아직 오지 않은 관계 기록과 끝나지 않은 씬은 목록·친밀도·씬 수에서 빠진다")
+    void people_excludes_records_after_now() throws Exception {
+        // given: 어제 기록과 두 시간 뒤 기록이 함께 있는 상대, 두 시간 뒤 기록만 있는 상대
+        LocalDateTime now = KstTimes.now();
+        User me = saveUser();
+        User metPartner = saveUser();
+        User futurePartner = saveUser();
+        saveRelationshipAt(me.getId(), metPartner.getId(), now.minusDays(1), 40, "{}");
+        saveRelationshipAt(me.getId(), metPartner.getId(), now.plusHours(2), 90, "{}");
+        saveScenePartner(saveSceneAt(me.getId(), now.minusHours(3), now.minusHours(2), "카페").getId(), metPartner.getId());
+        saveScenePartner(saveSceneAt(me.getId(), now.minusMinutes(30), now.plusMinutes(30), "공원").getId(), metPartner.getId());
+        saveRelationshipAt(me.getId(), futurePartner.getId(), now.plusHours(2), 80, "{}");
+        saveScenePartner(saveSceneAt(me.getId(), now.plusHours(1), now.plusHours(2), "서점").getId(), futurePartner.getId());
+
+        // when: 사람 목록 조회
+        var result = mockMvc.perform(get("/api/v1/people")
+                .header("Authorization", bearer(me.getId())));
+
+        // then: 미래 기록만 있는 상대는 빠지고, 남은 상대는 지난 기록의 친밀도와 끝난 씬 수만 보인다
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.people.length()").value(1))
+                .andExpect(jsonPath("$.people[0].userId").value(metPartner.getId().toString()))
+                .andExpect(jsonPath("$.people[0].intimacy").value(40))
+                .andExpect(jsonPath("$.people[0].sceneElementCount").value(1));
+    }
+
+    @Test
+    @DisplayName("프로필·시계열·알게 된 사실 조회: 갱신 시각이 아직 오지 않은 관계 기록은 최신 기록으로 쓰지 않는다")
+    void profile_series_and_learned_facts_ignore_records_after_now() throws Exception {
+        // given: 어제 기록(20)과 두 시간 뒤 기록(90)
+        LocalDateTime now = KstTimes.now();
+        User me = saveUser();
+        User partner = saveUser();
+        saveRelationshipAt(me.getId(), partner.getId(), now.minusDays(1), 20, "지난 사실");
+        saveRelationshipAt(me.getId(), partner.getId(), now.plusHours(2), 90, "미래 사실");
+
+        // when & then: 프로필의 친밀도는 지난 기록 기준
+        mockMvc.perform(get("/api/v1/people/{userId}/profile", partner.getId().toString())
+                        .header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.intimacy").value(20));
+
+        // when & then: 시계열의 현재 친밀도도 지난 기록 기준
+        mockMvc.perform(get("/api/v1/people/{userId}/intimacy-series", partner.getId().toString())
+                        .header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currentIntimacy").value(20));
+
+        // when & then: 알게 된 사실도 지난 기록 기준
+        mockMvc.perform(get("/api/v1/people/{userId}/learned-facts", partner.getId().toString())
+                        .header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.learnedFacts").value("지난 사실"));
+    }
+
+    @Test
+    @DisplayName("이벤트 목록·상세 조회: 끝나지 않은 씬과 갱신 시각이 오지 않은 관계 기록은 보이지 않는다")
+    void events_exclude_scenes_and_records_after_now() throws Exception {
+        // given: 어제 끝난 씬과 기록, 지금 진행 중인 씬, 두 시간 뒤 기록
+        LocalDateTime now = KstTimes.now();
+        User me = saveUser();
+        User partner = saveUser();
+        LocalDateTime yesterday = now.minusDays(1);
+        saveRelationshipAt(me.getId(), partner.getId(), yesterday, 30, "{}");
+        saveScenePartner(saveSceneAt(me.getId(), yesterday.minusHours(2), yesterday.minusHours(1), "카페").getId(), partner.getId());
+        Scene ongoing = saveSceneAt(me.getId(), now.minusMinutes(10), now.plusMinutes(50), "공원");
+        saveScenePartner(ongoing.getId(), partner.getId());
+        saveRelationshipAt(me.getId(), partner.getId(), now.plusHours(2), 90, "{}");
+
+        // when & then: 목록에는 어제 이벤트만 있고 상대 친밀도는 어제 기록 기준
+        mockMvc.perform(get("/api/v1/people/{userId}/events", partner.getId().toString())
+                        .header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.partner.intimacy").value(30))
+                .andExpect(jsonPath("$.events.length()").value(1))
+                .andExpect(jsonPath("$.events[0].date").value(yesterday.minusHours(2).toLocalDate().toString()))
+                .andExpect(jsonPath("$.events[0].place").value("카페"));
+
+        // when & then: 진행 중인 씬의 날짜로 상세를 조회해도 그 씬은 내려가지 않는다
+        mockMvc.perform(get("/api/v1/people/{userId}/events/{date}", partner.getId().toString(), ongoing.getDate().toString())
+                        .header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.scenes[?(@.sceneId == '" + ongoing.getId() + "')]").isEmpty());
+    }
+
     // ------------------------------------------------------------------ fixtures
 
     private void savePhoto(Long userId) {
@@ -415,6 +501,19 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
         ReflectionTestUtils.setField(relationship, "updateTime", date.atTime(23, 0));
         ReflectionTestUtils.setField(relationship, "createdAt", Instant.now());
         return relationshipRepository.saveAndFlush(relationship);
+    }
+
+    private Relationship saveRelationshipAt(Long userId, Long partnerUserId, LocalDateTime updateTime, int intimacy, String partnerModel) {
+        Relationship relationship = saveRelationship(userId, partnerUserId, updateTime.toLocalDate(), intimacy, partnerModel);
+        ReflectionTestUtils.setField(relationship, "updateTime", updateTime);
+        return relationshipRepository.saveAndFlush(relationship);
+    }
+
+    private Scene saveSceneAt(Long userId, LocalDateTime startsAt, LocalDateTime endsAt, String place) {
+        Scene scene = saveScene(userId, startsAt.toLocalDate(), "v1", place, place + "에서 시간을 보냈다", null);
+        ReflectionTestUtils.setField(scene, "startsAt", startsAt);
+        ReflectionTestUtils.setField(scene, "endsAt", endsAt);
+        return sceneRepository.saveAndFlush(scene);
     }
 
     private Scene saveScene(Long userId, LocalDate date, String version, String place, String narration, String mind) {

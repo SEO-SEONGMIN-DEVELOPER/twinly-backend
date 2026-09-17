@@ -27,6 +27,7 @@ import com.nidus.twinly.people.repository.EncounterRepository;
 import com.nidus.twinly.purchase.entity.UserEntitlement;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.purchase.repository.UserEntitlementRepository;
+import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.relationship.entity.Relationship;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
 import com.nidus.twinly.season.entity.Season;
@@ -54,6 +55,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
@@ -860,6 +862,28 @@ class MeIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("내 프로필 조회: 갱신 시각이 아직 오지 않은 관계 기록은 친구 수 계산에 쓰지 않는다")
+    void myProfile_friend_count_ignores_records_after_now() throws Exception {
+        // given: 만난 상대 1명, 어제는 지인(10)이고 두 시간 뒤 친구(80)로 올라설 예정
+        User me = saveUser();
+        User partner = saveUser();
+        encounterRepository.save(Encounter.create(me.getId(), partner.getId()));
+        LocalDateTime now = KstTimes.now();
+        relationshipRepository.saveAll(List.of(
+                Relationship.create(me.getId(), now.minusDays(1).toLocalDate(), "v1", partner.getId(), 10, "model", now.minusDays(1)),
+                Relationship.create(me.getId(), now.plusHours(2).toLocalDate(), "v1", partner.getId(), 80, "model", now.plusHours(2))));
+
+        // when: 내 프로필 조회
+        var result = mockMvc.perform(get("/api/v1/me/profile")
+                .header("Authorization", bearer(me.getId())));
+
+        // then: 아직 오지 않은 기록은 무시되어 친구 수는 0이다
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.encounteredPeopleCount").value(1))
+                .andExpect(jsonPath("$.encounteredFriendCount").value(0));
+    }
+
+    @Test
     @DisplayName("내 프로필 조회: 인증 헤더가 없으면 401을 반환한다")
     void myProfile_without_auth_returns_401() throws Exception {
         // when & then: 인증 헤더 없이 호출하면 필터 단계에서 막힌다
@@ -868,6 +892,6 @@ class MeIntegrationTest extends AbstractIntegrationTest {
     }
 
     private Relationship relationship(Long userId, Long partnerUserId, LocalDate date, int intimacy) {
-        return Relationship.create(userId, date, "v1", partnerUserId, intimacy, "model", date.atTime(9, 0));
+        return Relationship.create(userId, date, "v1", partnerUserId, intimacy, "model", date.atStartOfDay());
     }
 }

@@ -9,7 +9,10 @@ import com.nidus.twinly.chat.repository.ChatRoomParticipationRepository;
 import com.nidus.twinly.chat.repository.ChatRoomRepository;
 import com.nidus.twinly.block.entity.Block;
 import com.nidus.twinly.block.repository.BlockRepository;
+import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.common.web.ErrorCode;
+import com.nidus.twinly.relationship.entity.Relationship;
+import com.nidus.twinly.relationship.repository.RelationshipRepository;
 import com.nidus.twinly.support.AbstractIntegrationTest;
 import com.nidus.twinly.user.entity.User;
 import jakarta.persistence.EntityManager;
@@ -21,6 +24,8 @@ import org.springframework.http.MediaType;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.nullValue;
@@ -46,6 +51,9 @@ class ChatIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     BlockRepository blockRepository;
+
+    @Autowired
+    RelationshipRepository relationshipRepository;
 
     @PersistenceContext
     EntityManager entityManager;
@@ -217,6 +225,30 @@ class ChatIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.partner.userId").value(fixture.partner().getId().toString()))
                 .andExpect(jsonPath("$.partner.userName").value(fixture.partner().displayGivenName()))
                 .andExpect(jsonPath("$.isCurrentSeason").value(true));
+    }
+
+    @Test
+    @DisplayName("채팅방 목록·상세 조회: 갱신 시각이 아직 오지 않은 관계 기록은 상대 친밀도에 쓰지 않는다")
+    void rooms_and_detail_intimacy_ignore_records_after_now() throws Exception {
+        // given: 채팅방이 있는 상대와 어제 기록(72), 두 시간 뒤 기록(100)
+        Fixture fixture = saveChatRoomFixture();
+        LocalDateTime now = KstTimes.now();
+        relationshipRepository.saveAll(List.of(
+                Relationship.create(fixture.me().getId(), now.minusDays(1).toLocalDate(), "v1", fixture.partner().getId(), 72, "model", now.minusDays(1)),
+                Relationship.create(fixture.me().getId(), now.plusHours(2).toLocalDate(), "v1", fixture.partner().getId(), 100, "model", now.plusHours(2))));
+        flushAndClear();
+
+        // when & then: 목록의 상대 친밀도는 어제 기록 기준
+        mockMvc.perform(get("/api/v1/chat/rooms")
+                        .header("Authorization", bearer(fixture.me().getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rooms[0].partner.intimacy").value(72));
+
+        // when & then: 상세의 상대 친밀도도 어제 기록 기준
+        mockMvc.perform(get("/api/v1/chat/rooms/{roomId}", fixture.roomId().toString())
+                        .header("Authorization", bearer(fixture.me().getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.partner.intimacy").value(72));
     }
 
     @Test

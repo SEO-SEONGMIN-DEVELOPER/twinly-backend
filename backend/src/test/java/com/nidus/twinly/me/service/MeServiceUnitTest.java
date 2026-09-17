@@ -89,6 +89,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.BeanUtils;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.LocalDateTime;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -103,6 +104,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.inOrder;
@@ -1078,7 +1080,7 @@ class MeServiceUnitTest {
                 personaElement(PersonaDimension.SUMMARY, "주말마다 북한산에 오르며 사진으로 순간을 남기는 사람")));
 
         given(encounterRepository.findAllPartnerUserIdsByUserId(ME)).willReturn(List.of(10L, 20L));
-        given(relationshipRepository.findLatestByUserIdAndPartnerUserIdIn(ME, List.of(10L, 20L)))
+        given(relationshipRepository.findLatestUntilByUserIdAndPartnerUserIdIn(eq(ME), eq(List.of(10L, 20L)), any(LocalDateTime.class)))
                 .willReturn(List.of(relationship(10L, 75), relationship(20L, 10)));
 
         // when: 내 프로필 조회
@@ -1167,7 +1169,7 @@ class MeServiceUnitTest {
         // then: 카운트는 0이고 불필요한 관계 조회는 일어나지 않음
         assertThat(result.encounteredPeopleCount()).isZero();
         assertThat(result.encounteredFriendCount()).isZero();
-        then(relationshipRepository).should(never()).findLatestByUserIdAndPartnerUserIdIn(anyLong(), anyList());
+        then(relationshipRepository).should(never()).findLatestUntilByUserIdAndPartnerUserIdIn(anyLong(), anyList(), any(LocalDateTime.class));
     }
 
     @Test

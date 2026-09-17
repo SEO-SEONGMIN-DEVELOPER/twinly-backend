@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 public interface ScenePartnerRepository extends JpaRepository<ScenePartner, Long> {
@@ -27,11 +28,12 @@ public interface ScenePartnerRepository extends JpaRepository<ScenePartner, Long
             FROM scene_partners sp
             JOIN scenes s 
                 ON s.id = sp.scene_id
-            WHERE s.user_id = :userId AND sp.user_id IN (:partnerUserIds)
+            WHERE s.user_id = :userId AND sp.user_id IN (:partnerUserIds) AND s.ends_at <= :now
             GROUP BY sp.user_id
             """, nativeQuery = true)
     List<SceneCountProjection> countScenesByUserIdAndPartnerUserIdIn(@Param("userId") Long userId,
-                                                               @Param("partnerUserIds") List<Long> partnerUserIds);
+                                                               @Param("partnerUserIds") List<Long> partnerUserIds,
+                                                               @Param("now") LocalDateTime now);
 
     interface SceneCountProjection {
         Long getPartnerUserId();
