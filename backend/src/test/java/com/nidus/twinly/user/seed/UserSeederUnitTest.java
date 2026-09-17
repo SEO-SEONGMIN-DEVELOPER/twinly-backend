@@ -527,6 +527,31 @@ class UserSeederUnitTest {
     }
 
     @Test
+    @DisplayName("시뮬레이션 권한과 관계없이 모든 시드 유저는 온보딩 필수 약관 최신 버전에 동의한 상태로 만든다")
+    void run_agrees_onboarding_policies_for_every_seed_user() throws IOException {
+        // given: 온보딩 필수 약관 최신 버전이 2건이고, 첫 번째 유저만 그중 1건에 이미 동의한 상태
+        given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
+        given(userEntitlementRepository.findAllByUserIdInAndEntitlement(any(), eq(EntitlementReader.SIMULATION_ACCESS)))
+                .willReturn(List.of());
+        given(policyCatalog.loadRequiredPolicyIds(PolicyKind.ONBOARDING)).willReturn(Set.of(3L, 4L));
+        given(agreementRepository.findAllByUserIdInAndRevokedAtIsNull(any()))
+                .willReturn(List.of(Agreement.create(1L, 3L, Instant.now())));
+
+        // when: 시더 실행
+        userSeeder.run(null);
+
+        // then: 쇼케이스·권한 대상·권한 밖 유저 전원이 두 약관에 동의가 채워지되, 이미 동의한 건은 다시 만들지 않는다
+        ArgumentCaptor<List<Agreement>> captor = ArgumentCaptor.forClass(List.class);
+        then(agreementRepository).should().saveAll(captor.capture());
+        List<Agreement> saved = captor.getValue();
+
+        assertThat(saved).hasSize(SEED_USER_COUNT * 2 - 1);
+        assertThat(saved).noneMatch(agreement -> agreement.getUserId() == 1L && agreement.getPolicyId() == 3L);
+        assertThat(saved.stream().map(Agreement::getUserId).distinct().toList())
+                .containsExactlyInAnyOrderElementsOf(LongStream.rangeClosed(1, SEED_USER_COUNT).boxed().toList());
+    }
+
+    @Test
     @DisplayName("이미 권한이 있는 시드 유저에게는 다시 부여하지 않는다")
     void run_skips_simulation_access_when_already_granted() throws IOException {
         // given: 유저는 남아 있고 AI 테스트용 유저가 이미 권한을 가진 상태

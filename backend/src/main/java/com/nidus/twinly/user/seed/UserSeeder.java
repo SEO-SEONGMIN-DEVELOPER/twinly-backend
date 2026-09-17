@@ -192,6 +192,8 @@ public class UserSeeder implements ApplicationRunner {
         Long currentSeasonId = currentSeasonReader.read().getId();
         users.forEach(user -> seasonParticipationRepository.upsert(user.getId(), currentSeasonId));
 
+        agreeRequiredPolicies(users.stream().map(User::getId).toList(), PolicyKind.ONBOARDING, now);
+
         int accessEnd = Math.min(SHOWCASE_USERS.size() + SIMULATION_ACCESS_USER_COUNT, users.size());
 
         revokeSimulationAccess(users.subList(0, SHOWCASE_USERS.size()));
@@ -261,11 +263,11 @@ public class UserSeeder implements ApplicationRunner {
 
         userIds.forEach(purchaseWriter::assignPool);
 
-        agreeParallelEntryPolicies(userIds, now);
+        agreeRequiredPolicies(userIds, PolicyKind.PARALLEL_ENTRY, now);
     }
 
-    private void agreeParallelEntryPolicies(List<Long> userIds, Instant now) {
-        Set<Long> requiredPolicyIds = policyCatalog.loadRequiredPolicyIds(PolicyKind.PARALLEL_ENTRY);
+    private void agreeRequiredPolicies(List<Long> userIds, PolicyKind kind, Instant now) {
+        Set<Long> requiredPolicyIds = policyCatalog.loadRequiredPolicyIds(kind);
 
         Map<Long, Set<Long>> agreedPolicyIdsByUserId = agreementRepository.findAllByUserIdInAndRevokedAtIsNull(userIds).stream()
                 .collect(Collectors.groupingBy(Agreement::getUserId, Collectors.mapping(Agreement::getPolicyId, Collectors.toSet())));
