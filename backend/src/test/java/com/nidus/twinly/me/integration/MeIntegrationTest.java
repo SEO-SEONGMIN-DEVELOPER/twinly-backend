@@ -1,10 +1,14 @@
 package com.nidus.twinly.me.integration;
 
+import com.nidus.twinly.aichat.domain.AiChatSender;
+import com.nidus.twinly.aichat.entity.AiChat;
+import com.nidus.twinly.aichat.repository.AiChatRepository;
 import com.nidus.twinly.activity.domain.QuestionType;
 import com.nidus.twinly.activity.entity.Question;
 import com.nidus.twinly.activity.repository.QuestionRepository;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
 import com.nidus.twinly.common.crypto.BlindIndexHasher;
+import com.nidus.twinly.common.survey.SurveyOptionName;
 import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.common.photo.PhotoType;
 import com.nidus.twinly.common.web.ErrorCode;
@@ -40,6 +44,7 @@ import com.nidus.twinly.user.entity.Photo;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.PersonaElementRepository;
 import com.nidus.twinly.user.repository.PhotoRepository;
+import com.nidus.twinly.user.repository.UserSurveyAnswerRepository;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -59,12 +64,17 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
+import com.nidus.twinly.common.survey.SurveyLoader;
+import com.nidus.twinly.common.survey.SurveyQuestion;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.hamcrest.Matchers.startsWith;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.times;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -88,6 +98,15 @@ class MeIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     PersonaElementRepository personaElementRepository;
+
+    @Autowired
+    UserSurveyAnswerRepository userSurveyAnswerRepository;
+
+    @Autowired
+    AiChatRepository aiChatRepository;
+
+    @Autowired
+    SurveyLoader surveyLoader;
 
     @Autowired
     EncounterRepository encounterRepository;
@@ -893,5 +912,258 @@ class MeIntegrationTest extends AbstractIntegrationTest {
 
     private Relationship relationship(Long userId, Long partnerUserId, LocalDate date, int intimacy) {
         return Relationship.create(userId, date, "v1", partnerUserId, intimacy, "model", date.atStartOfDay());
+    }
+
+    /**
+     * 422로 실패한 요청이 롤백되어 마지막 문항 답도 남지 않는지 확인하려면
+     * 요청이 테스트 트랜잭션에 합류하지 않고 스스로 커밋·롤백해야 하므로 베이스 클래스의 @Transactional을 끈다.
+     */
+    @Test
+    @DisplayName("설문 답변: 응답하지 않은 문항이 있는 채로 마지막 문항에 답하면 422이고 롤백되어 마지막 문항 답도 저장되지 않는다")
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void surveyAnswer_last_question_with_missing_answers_rolls_back() throws Exception {
+        // given: 아무 문항에도 답하지 않은 실제 유저
+        User me = saveUser();
+        Integer lastQuestionId = surveyLoader.getAllQuestions().getLast().id();
+
+        try {
+            // when: 마지막 문항에만 답변
+            mockMvc.perform(post("/api/v1/me/survey-answers")
+                            .header("Authorization", bearer(me.getId()))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"answer": {"qId": %d, "optionName": "A"}}
+                                    """.formatted(lastQuestionId)))
+                    .andExpect(status().isUnprocessableEntity())
+                    .andExpect(jsonPath("$.code").value(ErrorCode.SURVEY_ANSWERS_INCOMPLETE.name()));
+
+            // then: 마지막 문항 답과 페르소나 요소 모두 남지 않음
+            assertThat(userSurveyAnswerRepository.findAllByUserId(me.getId())).isEmpty();
+            assertThat(personaElementRepository.findAllByUserIdOrderByIdAsc(me.getId())).isEmpty();
+        } finally {
+            userSurveyAnswerRepository.deleteAll(userSurveyAnswerRepository.findAllByUserId(me.getId()));
+            userRepository.deleteById(me.getId());
+        }
+    }
+
+    @Test
+    @DisplayName("설문 답변: 같은 문항에 다시 답하면 행을 새로 만들지 않고 기존 행의 선택지만 바뀐다")
+    void surveyAnswer_resubmit_updates_existing_row() throws Exception {
+        // given: 실제 유저 + 실제 설문 파일에 존재하는 문항(qId=8)에 A로 답한 상태
+        User me = saveUser();
+        mockMvc.perform(post("/api/v1/me/survey-answers")
+                        .header("Authorization", bearer(me.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"answer": {"qId": 8, "optionName": "A"}}
+                                """))
+                .andExpect(status().isOk());
+
+        // when: 같은 문항에 B로 다시 답변
+        mockMvc.perform(post("/api/v1/me/survey-answers")
+                        .header("Authorization", bearer(me.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"answer": {"qId": 8, "optionName": "B"}}
+                                """))
+                .andExpect(status().isOk());
+
+        // then: 유니크 제약 위반 없이 행은 1개로 유지되고 선택지만 B로 바뀌며, 마지막 문항이 아니므로 페르소나 요소는 없음
+        entityManager.flush();
+        entityManager.clear();
+        assertThat(userSurveyAnswerRepository.findAllByUserId(me.getId()))
+                .singleElement()
+                .satisfies(saved -> {
+                    assertThat(saved.getQuestionId()).isEqualTo(8);
+                    assertThat(saved.getOptionName()).isEqualTo(SurveyOptionName.B);
+                });
+        assertThat(personaElementRepository.findAllByUserIdOrderByIdAsc(me.getId())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("관심사 선택: 실제 유저·JWT 인증·DB까지 관통하여 INTEREST 차원만 새 목록으로 교체되고 다른 차원은 그대로 남는다")
+    void interests_end_to_end() throws Exception {
+        // given: 실제 유저 저장 + 기존 관심사 1개와 설문 차원 요소 1개
+        User me = saveUser();
+        personaElementRepository.saveAll(List.of(
+                PersonaElement.create(me.getId(), PersonaDimension.INTEREST, "등산", Instant.now()),
+                PersonaElement.create(me.getId(), PersonaDimension.OPENNESS, "새로운 걸 좋아한다", Instant.now())));
+        flushAndClear();
+
+        // when: 실제 액세스 토큰으로 관심사 선택 API 호출
+        mockMvc.perform(post("/api/v1/me/interests")
+                        .header("Authorization", bearer(me.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"interests": ["독서", "요리"]}
+                                """))
+                .andExpect(status().isOk());
+
+        // then: INTEREST 차원만 요청 순서대로 교체되고 OPENNESS 차원은 유지됨
+        flushAndClear();
+        assertThat(personaElementRepository.findAllByUserIdAndDimensionOrderByIdAsc(me.getId(), PersonaDimension.INTEREST))
+                .extracting(PersonaElement::getExplanation)
+                .containsExactly("독서", "요리");
+        assertThat(personaElementRepository.findAllByUserIdAndDimensionOrderByIdAsc(me.getId(), PersonaDimension.OPENNESS))
+                .extracting(PersonaElement::getExplanation)
+                .containsExactly("새로운 걸 좋아한다");
+    }
+
+    @Test
+    @DisplayName("AI 대화: 시작 후 0번 턴에 답하면 대화 3건·DETAIL 요소가 저장되고 다음 질문이 응답된다")
+    void aiChat_start_and_message_end_to_end() throws Exception {
+        // given: 실제 유저 + Bedrock이 첫 질문·다음 질문을 차례로 반환
+        User me = saveUser();
+        given(bedrockService.converse(anyString())).willReturn("등산은 어디로 자주 가?", "북한산 어느 코스로 올라가?");
+
+        // when: AI 대화 시작 후 0번 턴에 답변
+        mockMvc.perform(post("/api/v1/me/ai-chat/start")
+                        .header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("등산은 어디로 자주 가?"))
+                .andExpect(jsonPath("$.turnIndex").value(0));
+        mockMvc.perform(post("/api/v1/me/ai-chat/messages")
+                        .header("Authorization", bearer(me.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"message": "북한산", "turnIndex": 0}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("북한산 어느 코스로 올라가?"))
+                .andExpect(jsonPath("$.turnIndex").value(1))
+                .andExpect(jsonPath("$.isEnd").value(false));
+
+        // then: AI(0)·USER(0)·AI(1) 대화 3건과 질문+답변 DETAIL 요소 1건이 저장됨
+        flushAndClear();
+        assertThat(aiChatRepository.findByUserIdOrderByTurnIndexAscSenderDesc(me.getId()))
+                .extracting(AiChat::getSender, AiChat::getTurnIndex, AiChat::getMessage)
+                .containsExactly(
+                        tuple(AiChatSender.AI, 0, "등산은 어디로 자주 가?"),
+                        tuple(AiChatSender.USER, 0, "북한산"),
+                        tuple(AiChatSender.AI, 1, "북한산 어느 코스로 올라가?"));
+        assertThat(personaElementRepository.findAllByUserIdAndDimensionOrderByIdAsc(me.getId(), PersonaDimension.DETAIL))
+                .extracting(PersonaElement::getExplanation)
+                .containsExactly("등산은 어디로 자주 가?: 북한산");
+    }
+
+    @Test
+    @DisplayName("AI 대화 답변 멱등: 같은 턴에 두 번 답해도 이미 생성된 다음 질문을 그대로 돌려주고 모델은 한 번만 불린다")
+    void aiChatMessage_is_idempotent() throws Exception {
+        // given: 실제 유저 + 0번 턴 AI 질문이 저장된 상태
+        User me = saveUser();
+        aiChatRepository.save(AiChat.create(me.getId(), AiChatSender.AI, "요즘 뭐에 빠져 있어?", 0, Instant.now()));
+        given(bedrockService.converse(anyString())).willReturn("그거 언제부터 좋아했어?");
+        flushAndClear();
+
+        // when: 같은 turnIndex로 답변 API를 두 번 호출 (네트워크 재시도 상황)
+        for (int i = 0; i < 2; i++) {
+            mockMvc.perform(post("/api/v1/me/ai-chat/messages")
+                            .header("Authorization", bearer(me.getId()))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"message": "요즘 등산에 빠졌어", "turnIndex": 0}
+                                    """))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.message").value("그거 언제부터 좋아했어?"))
+                    .andExpect(jsonPath("$.turnIndex").value(1));
+        }
+
+        // then: 대화 3건·DETAIL 요소 1건만 남고 모델도 한 번만 불림
+        flushAndClear();
+        assertThat(aiChatRepository.findByUserIdOrderByTurnIndexAscSenderDesc(me.getId())).hasSize(3);
+        assertThat(personaElementRepository.findAllByUserIdAndDimensionOrderByIdAsc(me.getId(), PersonaDimension.DETAIL)).hasSize(1);
+        then(bedrockService).should(times(1)).converse(anyString());
+    }
+
+    @Test
+    @DisplayName("AI 대화 종료: 처음 호출하면 종료 시각이 기록되고, 다시 호출해도 처음 기록한 시각이 유지된다")
+    void aiChatComplete_end_to_end_is_idempotent() throws Exception {
+        // given: 실제 유저 + AI 대화를 한 번 종료한 상태
+        User me = saveUser();
+        mockMvc.perform(post("/api/v1/me/ai-chat/complete")
+                        .header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk());
+        flushAndClear();
+        Instant firstCompletedAt = userRepository.findById(me.getId()).orElseThrow().getAiChatCompletedAt();
+
+        // when: 같은 유저가 다시 종료 API 호출
+        mockMvc.perform(post("/api/v1/me/ai-chat/complete")
+                        .header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk());
+
+        // then: 첫 호출에서 종료 시각이 기록됐고, 재호출 후에도 그 시각이 그대로 유지됨
+        flushAndClear();
+        assertThat(firstCompletedAt).isNotNull();
+        assertThat(userRepository.findById(me.getId()).orElseThrow().getAiChatCompletedAt()).isEqualTo(firstCompletedAt);
+    }
+
+    @Test
+    @DisplayName("내 상태 조회: 아무것도 입력하지 않은 유저는 페르소나 입력 상태가 모두 false다")
+    void status_persona_nothing_completed_end_to_end() throws Exception {
+        // given: 설문·관심사·AI 대화를 하지 않은 실제 유저
+        User me = saveUser();
+
+        // when & then: 페르소나 입력 상태가 모두 false
+        mockMvc.perform(get("/api/v1/me/status")
+                        .header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.persona.isSurveyCompleted").value(false))
+                .andExpect(jsonPath("$.persona.isInterestsCompleted").value(false))
+                .andExpect(jsonPath("$.persona.isAiChatCompleted").value(false));
+    }
+
+    @Test
+    @DisplayName("내 상태 조회: 설문 답변이 한 문항 모자라면 isSurveyCompleted는 false다")
+    void status_survey_incomplete_end_to_end() throws Exception {
+        // given: 실제 설문 파일의 마지막 문항을 뺀 나머지에만 답한 실제 유저
+        User me = saveUser();
+        List<SurveyQuestion> questions = surveyLoader.getAllQuestions();
+        questions.subList(0, questions.size() - 1).forEach(question ->
+                userSurveyAnswerRepository.upsert(me.getId(), question.id(), SurveyOptionName.A.name()));
+        flushAndClear();
+
+        // when & then: 설문 미완료
+        mockMvc.perform(get("/api/v1/me/status")
+                        .header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.persona.isSurveyCompleted").value(false));
+    }
+
+    @Test
+    @DisplayName("내 상태 조회: 설문 전 문항에 답했고 관심사 요소가 있으며 AI 대화 종료 API를 호출했으면 페르소나 입력 상태가 모두 true다")
+    void status_persona_all_completed_end_to_end() throws Exception {
+        // given: 실제 설문 파일의 전 문항에 답했고 관심사 요소가 있는 실제 유저가 AI 대화 종료 API까지 호출
+        User me = saveUser();
+        surveyLoader.getAllQuestions().forEach(question ->
+                userSurveyAnswerRepository.upsert(me.getId(), question.id(), SurveyOptionName.A.name()));
+        personaElementRepository.save(PersonaElement.create(me.getId(), PersonaDimension.INTEREST, "등산", Instant.now()));
+        mockMvc.perform(post("/api/v1/me/ai-chat/complete")
+                        .header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk());
+        flushAndClear();
+
+        // when & then: 페르소나 입력 상태가 모두 true
+        mockMvc.perform(get("/api/v1/me/status")
+                        .header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.persona.isSurveyCompleted").value(true))
+                .andExpect(jsonPath("$.persona.isInterestsCompleted").value(true))
+                .andExpect(jsonPath("$.persona.isAiChatCompleted").value(true));
+    }
+
+    @Test
+    @DisplayName("설문 문항 목록: 로그인 유저에게 실제 설문 파일의 전 문항을 순서대로 내려준다")
+    void surveyQuestions_end_to_end() throws Exception {
+        // given: 실제 유저 + 실제 설문 파일의 문항들
+        User me = saveUser();
+        List<SurveyQuestion> questions = surveyLoader.getAllQuestions();
+
+        // when & then: 문항 수·첫 문항 id가 설문 파일과 일치
+        mockMvc.perform(get("/api/v1/me/survey-questions")
+                        .header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(questions.size()))
+                .andExpect(jsonPath("$[0].id").value(questions.getFirst().id()))
+                .andExpect(jsonPath("$[0].options.A").isNotEmpty());
     }
 }

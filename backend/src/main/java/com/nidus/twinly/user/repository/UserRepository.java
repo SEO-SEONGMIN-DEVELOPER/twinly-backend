@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.Collection;
@@ -36,6 +37,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Modifying
     @Query("UPDATE User u SET u.poolNumber = :poolNumber WHERE u.id = :userId AND u.poolNumber IS NULL")
     int assignPoolNumber(@Param("userId") Long userId, @Param("poolNumber") int poolNumber);
+
+    @Transactional
+    @Modifying
+    @Query("UPDATE User u SET u.aiChatCompletedAt = :completedAt WHERE u.id = :userId AND u.aiChatCompletedAt IS NULL")
+    int markAiChatCompleted(@Param("userId") Long userId, @Param("completedAt") Instant completedAt);
 
     List<User> findAllByDeletedAtIsNullAndWithdrawalScheduledAtLessThanEqual(Instant now, Pageable pageable);
 

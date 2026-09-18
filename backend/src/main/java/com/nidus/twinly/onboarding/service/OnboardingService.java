@@ -35,7 +35,6 @@ import com.nidus.twinly.onboarding.dto.result.OnboardingOrganizationsResult;
 import com.nidus.twinly.onboarding.dto.result.OnboardingProfileNicknameCheckResult;
 import com.nidus.twinly.onboarding.dto.result.OnboardingProfilePhotoCommitResult;
 import com.nidus.twinly.onboarding.dto.result.OnboardingProfilePhotoPresignResult;
-import com.nidus.twinly.onboarding.entity.SurveyAnswer;
 import com.nidus.twinly.onboarding.repository.SurveyAnswerRepository;
 import com.nidus.twinly.organization.entity.Organization;
 import com.nidus.twinly.organization.entity.OrganizationAffiliation;
@@ -154,11 +153,7 @@ public class OnboardingService {
             throw new BusinessException(ErrorCode.SURVEY_QUESTION_NOT_FOUND, "존재하지 않는 질문입니다: " + qId);
         }
 
-        surveyAnswerRepository.findByAnonSessionIdAndQuestionId(anonSessionId, qId)
-                .ifPresentOrElse(
-                        sa -> sa.changeOptionName(answerValue),
-                        () -> surveyAnswerRepository.save(SurveyAnswer.create(anonSessionId, qId, answerValue))
-                );
+        surveyAnswerRepository.upsert(anonSessionId, qId, answerValue.name());
 
         if (surveyLoader.isLastQuestion(qId)) {
             saveAllSurveyAnswer(anonSessionId);
@@ -166,23 +161,23 @@ public class OnboardingService {
     }
 
     private void saveAllSurveyAnswer(Long anonSessionId) {
-        List<SurveyAnswer> answers = surveyAnswerRepository.findAllByAnonSessionId(anonSessionId);
-
-        List<AnonSessionPersonaElement> personaElements = answers.stream()
+        List<AnonSessionPersonaElement> personaElements = surveyAnswerRepository.findAllByAnonSessionId(anonSessionId).stream()
+                .filter(answer -> surveyLoader.getQuestion(answer.getQuestionId()) != null)
                 .map(answer -> {
                     SurveyQuestion question = surveyLoader.getQuestion(answer.getQuestionId());
                     return AnonSessionPersonaElement.create(anonSessionId, question.dimension(), question.traitFor(answer.getOptionName()));
                 })
                 .toList();
 
+        if (personaElements.size() != surveyLoader.getAllQuestions().size()) {
+            throw new BusinessException(ErrorCode.SURVEY_ANSWERS_INCOMPLETE);
+        }
+
         Set<PersonaDimension> dimensions = personaElements.stream()
                 .map(AnonSessionPersonaElement::getDimension)
                 .collect(Collectors.toSet());
 
-        if (!dimensions.isEmpty()) {
-            anonSessionPersonaElementRepository.deleteByAnonSessionIdAndDimensionIn(anonSessionId, dimensions);
-        }
-
+        anonSessionPersonaElementRepository.deleteByAnonSessionIdAndDimensionIn(anonSessionId, dimensions);
         anonSessionPersonaElementRepository.saveAll(personaElements);
     }
 

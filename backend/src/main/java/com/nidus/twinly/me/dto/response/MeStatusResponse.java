@@ -4,13 +4,15 @@ import com.nidus.twinly.me.dto.result.MeStatusResult;
 
 public record MeStatusResponse(
         MeStatusWithdrawalResponse withdrawal,
-        MeStatusReportResponse report
+        MeStatusReportResponse report,
+        MeStatusPersonaResponse persona
 ) {
 
     public static MeStatusResponse from(MeStatusResult result) {
         return new MeStatusResponse(
                 MeStatusWithdrawalResponse.from(result.withdrawal()),
-                MeStatusReportResponse.from(result.report())
+                MeStatusReportResponse.from(result.report()),
+                MeStatusPersonaResponse.from(result.persona())
         );
     }
 }

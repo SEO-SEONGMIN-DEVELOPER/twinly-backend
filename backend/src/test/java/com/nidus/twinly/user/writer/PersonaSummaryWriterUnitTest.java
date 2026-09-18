@@ -1,5 +1,6 @@
 package com.nidus.twinly.user.writer;
 
+import com.nidus.twinly.aichat.event.AiChatCompletedEvent;
 import com.nidus.twinly.auth.event.UserSignedUpEvent;
 import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.common.web.BusinessException;
@@ -70,6 +71,29 @@ class PersonaSummaryWriterUnitTest {
         assertThat(captor.getValue().getDimension()).isEqualTo(PersonaDimension.SUMMARY);
         assertThat(captor.getValue().getExplanation()).isEqualTo("주말마다 산에 오르는 사람");
         assertThat(captor.getValue().getCreatedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("AI 대화를 종료한 유저의 소속과 페르소나 요소로 요약을 만들어 SUMMARY 요소로 저장한다")
+    void onAiChatCompleted_saves_summary() {
+        // given: 소속이 있는 유저와 설문·관심사·대화 요소, 생성기가 요약을 반환
+        givenUser("트윈리대학교");
+        List<PersonaElement> elements = List.of(
+                PersonaElement.create(USER_ID, PersonaDimension.OPENNESS, "새로운 걸 좋아함", NOW),
+                PersonaElement.create(USER_ID, PersonaDimension.INTEREST, "등산", NOW),
+                PersonaElement.create(USER_ID, PersonaDimension.DETAIL, "요즘 뭐에 빠져 있어?: 등산", NOW));
+        given(personaElementRepository.findAllByUserIdOrderByIdAsc(USER_ID)).willReturn(elements);
+        given(personaSummaryGenerator.generate("트윈리대학교", elements)).willReturn("주말마다 산에 오르는 사람");
+
+        // when: AI 대화 종료 이벤트 수신
+        personaSummaryWriter.onAiChatCompleted(new AiChatCompletedEvent(USER_ID));
+
+        // then: 유저 소유의 SUMMARY 요소로 저장됨
+        ArgumentCaptor<PersonaElement> captor = ArgumentCaptor.forClass(PersonaElement.class);
+        then(personaElementRepository).should().save(captor.capture());
+        assertThat(captor.getValue().getUserId()).isEqualTo(USER_ID);
+        assertThat(captor.getValue().getDimension()).isEqualTo(PersonaDimension.SUMMARY);
+        assertThat(captor.getValue().getExplanation()).isEqualTo("주말마다 산에 오르는 사람");
     }
 
     @Test

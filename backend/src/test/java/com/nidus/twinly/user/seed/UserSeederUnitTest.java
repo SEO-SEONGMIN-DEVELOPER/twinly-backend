@@ -2,6 +2,9 @@ package com.nidus.twinly.user.seed;
 
 import com.nidus.twinly.activity.repository.SceneRepository;
 import com.nidus.twinly.activity.repository.SceneRepository.SceneDayProjection;
+import com.nidus.twinly.aichat.domain.AiChatSender;
+import com.nidus.twinly.aichat.entity.AiChat;
+import com.nidus.twinly.aichat.repository.AiChatRepository;
 import com.nidus.twinly.common.crypto.BlindIndexHasher;
 import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.interest.InterestLoader;
@@ -24,8 +27,10 @@ import com.nidus.twinly.simulation.dto.command.SimulationsCommand;
 import com.nidus.twinly.simulation.service.SimulationService;
 import com.nidus.twinly.user.entity.PersonaElement;
 import com.nidus.twinly.user.entity.User;
+import com.nidus.twinly.user.entity.UserSurveyAnswer;
 import com.nidus.twinly.user.repository.PersonaElementRepository;
 import com.nidus.twinly.user.repository.UserRepository;
+import com.nidus.twinly.user.repository.UserSurveyAnswerRepository;
 import com.nidus.twinly.user.seed.entity.SeedResourceHash;
 import com.nidus.twinly.user.seed.repository.SeedResourceHashRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -61,6 +66,7 @@ import java.util.stream.LongStream;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -90,6 +96,12 @@ class UserSeederUnitTest {
 
     @Mock
     PersonaElementRepository personaElementRepository;
+
+    @Mock
+    UserSurveyAnswerRepository userSurveyAnswerRepository;
+
+    @Mock
+    AiChatRepository aiChatRepository;
 
     @Mock
     BlindIndexHasher blindIndexHasher;
@@ -313,12 +325,18 @@ class UserSeederUnitTest {
     }
 
     @Test
-    @DisplayName("유저와 페르소나가 모두 있으면 아무것도 저장하지 않는다")
+    @DisplayName("유저·페르소나·설문 답·AI 대화·대화 종료 시각이 모두 있으면 아무것도 저장하지 않는다")
     void run_is_idempotent() throws IOException {
-        // given: 시드 유저도 페르소나도 이미 존재하는 상태
-        given(userRepository.findByEmailHash(any())).willAnswer(invocation -> Optional.of(existingUser()));
+        // given: 시드 유저·페르소나·설문 답·AI 대화가 이미 있고 대화 종료 시각도 기록된 상태
+        given(userRepository.findByEmailHash(any())).willAnswer(invocation -> {
+            User user = existingUser();
+            ReflectionTestUtils.setField(user, "aiChatCompletedAt", Instant.now());
+            return Optional.of(user);
+        });
         given(personaElementRepository.existsByUserId(any())).willReturn(true);
         given(personaElementRepository.existsByUserIdAndDimension(any(), eq(PersonaDimension.SUMMARY))).willReturn(true);
+        given(userSurveyAnswerRepository.existsByUserId(any())).willReturn(true);
+        given(aiChatRepository.existsByUserId(any())).willReturn(true);
 
         // when: 시더 실행
         userSeeder.run(null);
@@ -326,6 +344,9 @@ class UserSeederUnitTest {
         // then: 아무것도 저장하지 않음
         then(userRepository).should(never()).save(any(User.class));
         then(personaElementRepository).should(never()).saveAll(any());
+        then(userSurveyAnswerRepository).should(never()).saveAll(any());
+        then(aiChatRepository).should(never()).saveAll(any());
+        then(userRepository).should(never()).markAiChatCompleted(any(), any());
     }
 
     @Test
@@ -392,6 +413,111 @@ class UserSeederUnitTest {
                 .map(PersonaElement::getUserId)
                 .collect(Collectors.toSet());
         assertThat(userIds).hasSize(SEED_USER_COUNT);
+    }
+
+    @Test
+    @DisplayName("시드 유저마다 설문 전 문항의 답을 저장하고, 그 답을 변환하면 저장된 설문 차원 페르소나와 정확히 같다")
+    void run_seeds_survey_answers_consistent_with_persona() throws IOException {
+        // given: 아직 시드 유저가 없는 상태
+        given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
+
+        // when: 시더 실행
+        userSeeder.run(null);
+
+        // then: 유저마다 설문 문항 수만큼 답이 저장됨
+        List<SurveyQuestion> questions = surveyLoader.getAllQuestions();
+        Map<Long, List<UserSurveyAnswer>> answersByUser = savedSurveyAnswers().stream()
+                .collect(Collectors.groupingBy(UserSurveyAnswer::getUserId));
+        assertThat(answersByUser).hasSize(SEED_USER_COUNT);
+
+        // then: 답을 문항 순서대로 특성 문장으로 바꾸면, 같은 유저의 설문 차원 페르소나와 순서까지 일치
+        Set<PersonaDimension> surveyDimensions = questions.stream().map(SurveyQuestion::dimension).collect(Collectors.toSet());
+        Map<Long, List<String>> surveyTraitsByUser = savedElements().stream()
+                .filter(element -> surveyDimensions.contains(element.getDimension()))
+                .collect(Collectors.groupingBy(PersonaElement::getUserId,
+                        Collectors.mapping(PersonaElement::getExplanation, Collectors.toList())));
+
+        assertThat(answersByUser).allSatisfy((userId, answers) -> {
+            assertThat(answers).extracting(UserSurveyAnswer::getQuestionId)
+                    .containsExactlyElementsOf(questions.stream().map(SurveyQuestion::id).toList());
+            List<String> traitsFromAnswers = answers.stream()
+                    .map(answer -> surveyLoader.getQuestion(answer.getQuestionId()).traitFor(answer.getOptionName()))
+                    .toList();
+            assertThat(traitsFromAnswers).isEqualTo(surveyTraitsByUser.get(userId));
+        });
+    }
+
+    @Test
+    @DisplayName("시드 유저마다 대화 요소를 \"질문: 답\"으로 나눠 턴 0부터 AI 질문·유저 답을 한 쌍씩 저장한다")
+    void run_seeds_ai_chats_from_details() throws IOException {
+        // given: 아직 시드 유저가 없는 상태
+        given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
+
+        // when: 시더 실행
+        userSeeder.run(null);
+
+        // then: 유저마다 대화 요소 수 × 2(AI·USER)만큼 저장됨
+        Map<Long, List<AiChat>> chatsByUser = savedAiChats().stream()
+                .collect(Collectors.groupingBy(AiChat::getUserId));
+        assertThat(chatsByUser).hasSize(SEED_USER_COUNT);
+        assertThat(chatsByUser).allSatisfy((userId, chats) -> assertThat(chats).hasSize((int) detailsFor(userId) * 2));
+
+        // then: 첫 쇼케이스 유저의 대화는 첫 대화 요소를 나눈 AI 질문·유저 답으로 시작
+        String firstDetail = PersonaSeedElements.DETAIL.getFirst();
+        int separator = firstDetail.indexOf(": ");
+        assertThat(chatsByUser.get(1L).subList(0, 2))
+                .extracting(AiChat::getSender, AiChat::getTurnIndex, AiChat::getMessage)
+                .containsExactly(
+                        tuple(AiChatSender.AI, 0, firstDetail.substring(0, separator)),
+                        tuple(AiChatSender.USER, 0, firstDetail.substring(separator + 2)));
+        assertThat(chatsByUser.get(1L).getLast().getTurnIndex()).isEqualTo(DETAIL_ELEMENTS_PER_USER - 1);
+    }
+
+    @Test
+    @DisplayName("대화 종료 시각이 없는 시드 유저마다 대화 종료 시각을 기록한다")
+    void run_marks_ai_chat_completed() throws IOException {
+        // given: 아직 시드 유저가 없는 상태
+        given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
+
+        // when: 시더 실행
+        userSeeder.run(null);
+
+        // then: 유저마다 한 번씩 대화 종료 시각 기록을 요청
+        then(userRepository).should(org.mockito.Mockito.times(SEED_USER_COUNT)).markAiChatCompleted(any(), any());
+    }
+
+    @Test
+    @DisplayName("페르소나는 있지만 설문 답·AI 대화가 없는 기존 시드 유저에게는 설문 답·AI 대화만 채우고 페르소나는 건드리지 않는다")
+    void run_backfills_survey_answers_and_ai_chats_for_existing_users() throws IOException {
+        // given: 이번 기능 전에 시드된 유저라 페르소나는 모두 있고 설문 답·AI 대화만 없는 상태
+        given(userRepository.findByEmailHash(any())).willAnswer(invocation -> Optional.of(existingUser()));
+        given(personaElementRepository.existsByUserId(any())).willReturn(true);
+        given(personaElementRepository.existsByUserIdAndDimension(any(), eq(PersonaDimension.SUMMARY))).willReturn(true);
+
+        // when: 시더 실행
+        userSeeder.run(null);
+
+        // then: 페르소나는 저장하지 않고, 유저마다 설문 답·AI 대화를 채우고 대화 종료 시각을 기록
+        then(personaElementRepository).should(never()).saveAll(any());
+        assertThat(savedSurveyAnswers()).hasSize(SEED_USER_COUNT * surveyLoader.getAllQuestions().size());
+        assertThat(savedAiChats()).extracting(AiChat::getUserId).doesNotContainNull();
+        then(userRepository).should(org.mockito.Mockito.times(SEED_USER_COUNT)).markAiChatCompleted(any(), any());
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<UserSurveyAnswer> savedSurveyAnswers() {
+        ArgumentCaptor<List<UserSurveyAnswer>> captor = ArgumentCaptor.forClass(List.class);
+        then(userSurveyAnswerRepository).should(org.mockito.Mockito.atLeastOnce()).saveAll(captor.capture());
+
+        return captor.getAllValues().stream().flatMap(List::stream).toList();
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<AiChat> savedAiChats() {
+        ArgumentCaptor<List<AiChat>> captor = ArgumentCaptor.forClass(List.class);
+        then(aiChatRepository).should(org.mockito.Mockito.atLeastOnce()).saveAll(captor.capture());
+
+        return captor.getAllValues().stream().flatMap(List::stream).toList();
     }
 
     private int totalElements() {
@@ -616,7 +742,7 @@ class UserSeederUnitTest {
     }
 
     private UserSeeder seederWith(SeedProperties seedProperties) {
-        return new UserSeeder(userRepository, personaElementRepository, blindIndexHasher, surveyLoader,
+        return new UserSeeder(userRepository, personaElementRepository, userSurveyAnswerRepository, aiChatRepository, blindIndexHasher, surveyLoader,
                 interestLoader, currentSeasonReader, seasonParticipationRepository, userEntitlementRepository,
                 policyCatalog, agreementRepository, purchaseWriter, simulationService, sceneRepository, scenarioCleaner, seedResourceHashRepository, seedProperties, new ObjectMapper());
     }

@@ -1,6 +1,9 @@
 package com.nidus.twinly.user.seed;
 
 import com.nidus.twinly.activity.repository.SceneRepository;
+import com.nidus.twinly.aichat.domain.AiChatSender;
+import com.nidus.twinly.aichat.entity.AiChat;
+import com.nidus.twinly.aichat.repository.AiChatRepository;
 import com.nidus.twinly.common.crypto.BlindIndexHasher;
 import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.interest.InterestLoader;
@@ -24,8 +27,10 @@ import com.nidus.twinly.simulation.dto.request.SimulationsRequest;
 import com.nidus.twinly.simulation.service.SimulationService;
 import com.nidus.twinly.user.entity.PersonaElement;
 import com.nidus.twinly.user.entity.User;
+import com.nidus.twinly.user.entity.UserSurveyAnswer;
 import com.nidus.twinly.user.repository.PersonaElementRepository;
 import com.nidus.twinly.user.repository.UserRepository;
+import com.nidus.twinly.user.repository.UserSurveyAnswerRepository;
 import com.nidus.twinly.user.seed.entity.SeedResourceHash;
 import com.nidus.twinly.user.seed.repository.SeedResourceHashRepository;
 import lombok.RequiredArgsConstructor;
@@ -75,6 +80,7 @@ public class UserSeeder implements ApplicationRunner {
     private static final int DETAIL_ELEMENTS_PER_USER = 5;
     private static final int INTERESTS_PER_USER = 5;
     private static final long ANSWER_SEED = 20260817L;
+    private static final String DETAIL_SEPARATOR = ": ";
     static final String PHONE_PREFIX = "0100000";
     private static final int PHONE_START = 9001;
     static final String EMAIL_LOCAL_PREFIX = "test-seed";
@@ -100,6 +106,8 @@ public class UserSeeder implements ApplicationRunner {
 
     private final UserRepository userRepository;
     private final PersonaElementRepository personaElementRepository;
+    private final UserSurveyAnswerRepository userSurveyAnswerRepository;
+    private final AiChatRepository aiChatRepository;
     private final BlindIndexHasher blindIndexHasher;
     private final SurveyLoader surveyLoader;
     private final InterestLoader interestLoader;
@@ -222,6 +230,16 @@ public class UserSeeder implements ApplicationRunner {
 
         if (!elements.isEmpty()) {
             personaElementRepository.saveAll(elements);
+        }
+
+        for (int index = 0; index < users.size(); index++) {
+            User user = users.get(index);
+
+            seedSurveyAnswers(user.getId(), index);
+            seedAiChats(user.getId(), seedUsers.get(index), now);
+            if (user.getAiChatCompletedAt() == null) {
+                userRepository.markAiChatCompleted(user.getId(), now);
+            }
         }
 
         seedScenarios(users.subList(0, SHOWCASE_USERS.size()));
@@ -533,10 +551,11 @@ public class UserSeeder implements ApplicationRunner {
         Random random = new Random(ANSWER_SEED + index);
         List<PersonaElement> elements = new ArrayList<>();
 
-        for (SurveyQuestion question : surveyLoader.getAllQuestions()) {
-            SurveyOptionName answer = random.nextBoolean() ? SurveyOptionName.A : SurveyOptionName.B;
-
-            elements.add(PersonaElement.create(userId, question.dimension(), question.traitFor(answer), createdAt));
+        List<SurveyQuestion> questions = surveyLoader.getAllQuestions();
+        List<SurveyOptionName> answers = surveyAnswers(random);
+        for (int i = 0; i < questions.size(); i++) {
+            SurveyQuestion question = questions.get(i);
+            elements.add(PersonaElement.create(userId, question.dimension(), question.traitFor(answers.get(i)), createdAt));
         }
 
         for (String interest : interests(random)) {
@@ -550,6 +569,45 @@ public class UserSeeder implements ApplicationRunner {
         elements.add(summaryElement(userId, seed, createdAt));
 
         return List.copyOf(elements);
+    }
+
+    private List<SurveyOptionName> surveyAnswers(Random random) {
+        return surveyLoader.getAllQuestions().stream()
+                .map(question -> random.nextBoolean() ? SurveyOptionName.A : SurveyOptionName.B)
+                .toList();
+    }
+
+    private void seedSurveyAnswers(Long userId, int index) {
+        if (userSurveyAnswerRepository.existsByUserId(userId)) {
+            return;
+        }
+
+        List<SurveyQuestion> questions = surveyLoader.getAllQuestions();
+        List<SurveyOptionName> answers = surveyAnswers(new Random(ANSWER_SEED + index));
+
+        List<UserSurveyAnswer> surveyAnswers = new ArrayList<>();
+        for (int i = 0; i < questions.size(); i++) {
+            surveyAnswers.add(UserSurveyAnswer.create(userId, questions.get(i).id(), answers.get(i)));
+        }
+
+        userSurveyAnswerRepository.saveAll(surveyAnswers);
+    }
+
+    private void seedAiChats(Long userId, SeedUser seed, Instant createdAt) {
+        if (aiChatRepository.existsByUserId(userId)) {
+            return;
+        }
+
+        List<AiChat> aiChats = new ArrayList<>();
+        for (int turnIndex = 0; turnIndex < seed.details().size(); turnIndex++) {
+            String detail = seed.details().get(turnIndex);
+            int separator = detail.indexOf(DETAIL_SEPARATOR);
+
+            aiChats.add(AiChat.create(userId, AiChatSender.AI, detail.substring(0, separator), turnIndex, createdAt));
+            aiChats.add(AiChat.create(userId, AiChatSender.USER, detail.substring(separator + DETAIL_SEPARATOR.length()), turnIndex, createdAt));
+        }
+
+        aiChatRepository.saveAll(aiChats);
     }
 
     private PersonaElement summaryElement(Long userId, SeedUser seed, Instant createdAt) {
