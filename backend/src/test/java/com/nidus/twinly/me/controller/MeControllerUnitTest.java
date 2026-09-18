@@ -1,22 +1,32 @@
 package com.nidus.twinly.me.controller;
 
+import com.nidus.twinly.aichat.service.UserAiChatService;
 import com.nidus.twinly.anon.service.AnonService;
 import com.nidus.twinly.common.photo.PhotoPosInfo;
 import com.nidus.twinly.common.photo.ProfilePhotoInfo;
 import com.nidus.twinly.common.presign.RequiredHeaders;
+import com.nidus.twinly.common.survey.SurveyAnswerInput;
+import com.nidus.twinly.common.survey.SurveyOptionName;
+import com.nidus.twinly.common.web.BusinessException;
+import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.me.domain.HesitationDuration;
 import com.nidus.twinly.me.domain.HesitationStatus;
+import com.nidus.twinly.me.dto.command.MeAiChatMessageCommand;
 import com.nidus.twinly.me.dto.command.MeAppNotificationsReadAllCommand;
 import com.nidus.twinly.me.dto.command.MeChangeProfileVisibilitySettingCommand;
 import com.nidus.twinly.me.dto.command.MeChangePushNotificationsCommand;
 import com.nidus.twinly.me.dto.command.MeGrantConsentsCommand;
 import com.nidus.twinly.me.dto.command.MeGrantConsentsItemCommand;
 import com.nidus.twinly.me.dto.command.MeHesitationsAnswerCommand;
+import com.nidus.twinly.me.dto.command.MeInterestsCommand;
 import com.nidus.twinly.me.dto.command.MeProfileCommand;
 import com.nidus.twinly.me.dto.command.MeProfilePhotoCommitCommand;
 import com.nidus.twinly.me.dto.command.MeProfilePhotoPresignCommand;
 import com.nidus.twinly.me.dto.command.MeRevokeConsentsCommand;
 import com.nidus.twinly.me.dto.command.MeRevokeConsentsItemCommand;
+import com.nidus.twinly.me.dto.result.MeAiChatMessageResult;
+import com.nidus.twinly.me.dto.result.MeAiChatStartResult;
+import com.nidus.twinly.me.dto.command.MeSurveyAnswerCommand;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsItemResult;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsProfileTargetResult;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsResult;
@@ -32,6 +42,7 @@ import com.nidus.twinly.me.dto.result.MeProfileVisibilitySettingsResult;
 import com.nidus.twinly.me.dto.result.MePurchasesResult;
 import com.nidus.twinly.me.dto.result.MePushNotificationsResult;
 import com.nidus.twinly.me.dto.result.MePushNotificationsSettingsResult;
+import com.nidus.twinly.me.dto.result.MeStatusPersonaResult;
 import com.nidus.twinly.me.dto.result.MeStatusReportResult;
 import com.nidus.twinly.me.dto.result.MeStatusResult;
 import com.nidus.twinly.me.dto.result.MeStatusWithdrawalResult;
@@ -57,6 +68,10 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import com.nidus.twinly.common.persona.PersonaDimension;
+import com.nidus.twinly.common.survey.SurveyOption;
+import com.nidus.twinly.common.survey.SurveyQuestion;
+import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -64,6 +79,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -84,6 +100,9 @@ class MeControllerUnitTest {
 
     @MockitoBean
     MeService meService;
+
+    @MockitoBean
+    UserAiChatService userAiChatService;
 
     // SecurityConfig가 JWT·익명 세션 필터를 함께 만들고 각 필터가 이 서비스에 의존하므로 슬라이스 기동에 둘 다 필수.
     @MockitoBean
@@ -610,25 +629,29 @@ class MeControllerUnitTest {
     // ---------------------------------------------------------------- 상태
 
     @Test
-    @DisplayName("내 상태 조회 시 탈퇴·신고 상태를 담은 JSON을 반환한다")
+    @DisplayName("내 상태 조회 시 탈퇴·신고·페르소나 입력 상태를 담은 JSON을 반환한다")
     void status_success() throws Exception {
-        // given: 서비스가 탈퇴 신청·신고 처리 상태를 반환
+        // given: 서비스가 탈퇴 신청·신고 처리·페르소나 입력 상태를 반환
         given(meService.status(ME))
                 .willReturn(new MeStatusResult(
                         new MeStatusWithdrawalResult(true, Instant.parse("2026-08-10T00:00:00Z")),
-                        new MeStatusReportResult(true, List.of("SPAM", "HARASSMENT"))));
+                        new MeStatusReportResult(true, List.of("SPAM", "HARASSMENT")),
+                        new MeStatusPersonaResult(true, true, false)));
 
         // when: 내 상태 조회 API 호출
         var result = mockMvc.perform(get("/api/v1/me/status")
                 .header("Authorization", BEARER));
 
-        // then: 200 반환 + 탈퇴·신고 상태 JSON
+        // then: 200 반환 + 탈퇴·신고·페르소나 입력 상태 JSON
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.withdrawal.isDeleted").value(true))
                 .andExpect(jsonPath("$.withdrawal.recoverableUntil").value("2026-08-10T00:00:00Z"))
                 .andExpect(jsonPath("$.report.isReported").value(true))
                 .andExpect(jsonPath("$.report.reasons[0]").value("SPAM"))
-                .andExpect(jsonPath("$.report.reasons[1]").value("HARASSMENT"));
+                .andExpect(jsonPath("$.report.reasons[1]").value("HARASSMENT"))
+                .andExpect(jsonPath("$.persona.isSurveyCompleted").value(true))
+                .andExpect(jsonPath("$.persona.isInterestsCompleted").value(true))
+                .andExpect(jsonPath("$.persona.isAiChatCompleted").value(false));
     }
 
     // ---------------------------------------------------------------- 망설임
@@ -843,5 +866,261 @@ class MeControllerUnitTest {
         // then: 401 반환 + 서비스는 호출되지 않음
         result.andExpect(status().isUnauthorized());
         then(meService).should(never()).purchases(anyLong());
+    }
+
+    // ---------------------------------------------------------------- 설문
+
+    @Test
+    @DisplayName("설문 응답 제출 성공 시 200을 반환하고 인증 유저 id와 응답 커맨드로 서비스를 호출한다")
+    void surveyAnswer_success() throws Exception {
+        // when: 인증 상태로 설문 응답 제출 API 호출
+        var result = mockMvc.perform(post("/api/v1/me/survey-answers")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"answer":{"qId":1,"optionName":"A"}}
+                        """));
+
+        // then: 200 반환 + 인증 유저 id·응답 커맨드로 위임
+        result.andExpect(status().isOk());
+        then(meService).should().surveyAnswer(ME, new MeSurveyAnswerCommand(new SurveyAnswerInput(1, SurveyOptionName.A)));
+    }
+
+    @Test
+    @DisplayName("설문 응답 제출 요청에 optionName이 없으면 400을 반환하고 서비스를 호출하지 않는다")
+    void surveyAnswer_without_optionName_returns_400() throws Exception {
+        // when: optionName 없이 설문 응답 제출 API 호출
+        var result = mockMvc.perform(post("/api/v1/me/survey-answers")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"answer":{"qId":1}}
+                        """));
+
+        // then: 400 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest());
+        then(meService).should(never()).surveyAnswer(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("응답하지 않은 문항이 있어 서비스가 SURVEY_ANSWERS_INCOMPLETE를 던지면 422를 반환한다")
+    void surveyAnswer_incomplete_returns_422() throws Exception {
+        // given: 서비스가 SURVEY_ANSWERS_INCOMPLETE 예외를 던짐
+        willThrow(new BusinessException(ErrorCode.SURVEY_ANSWERS_INCOMPLETE))
+                .given(meService).surveyAnswer(anyLong(), any());
+
+        // when: 마지막 문항으로 설문 응답 제출 API 호출
+        var result = mockMvc.perform(post("/api/v1/me/survey-answers")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"answer":{"qId":2,"optionName":"B"}}
+                        """));
+
+        // then: 422 SURVEY_ANSWERS_INCOMPLETE 반환
+        result.andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("SURVEY_ANSWERS_INCOMPLETE"));
+    }
+
+    @Test
+    @DisplayName("설문 응답 제출 시 인증 헤더가 없으면 401을 반환하고 서비스를 호출하지 않는다")
+    void surveyAnswer_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 설문 응답 제출 API 호출
+        var result = mockMvc.perform(post("/api/v1/me/survey-answers")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"answer":{"qId":1,"optionName":"A"}}
+                        """));
+
+        // then: 401 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isUnauthorized());
+        then(meService).should(never()).surveyAnswer(anyLong(), any());
+    }
+
+    // ---------------------------------------------------------------- 관심사
+
+    @Test
+    @DisplayName("관심사 선택 성공 시 200을 반환하고 인증 유저 id와 관심사 커맨드로 서비스를 호출한다")
+    void interests_success() throws Exception {
+        // when: 인증 상태로 관심사 선택 API 호출
+        var result = mockMvc.perform(post("/api/v1/me/interests")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"interests":["등산","영화"]}
+                        """));
+
+        // then: 200 반환 + 인증 유저 id·관심사 커맨드로 위임
+        result.andExpect(status().isOk());
+        then(meService).should().interests(ME, new MeInterestsCommand(List.of("등산", "영화")));
+    }
+
+    @Test
+    @DisplayName("관심사 선택 요청에 interests가 없으면 400을 반환하고 서비스를 호출하지 않는다")
+    void interests_without_interests_returns_400() throws Exception {
+        // when: interests 없이 관심사 선택 API 호출
+        var result = mockMvc.perform(post("/api/v1/me/interests")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"));
+
+        // then: 400 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest());
+        then(meService).should(never()).interests(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("관심사 선택 요청에 공백뿐인 관심사가 있으면 400을 반환하고 서비스를 호출하지 않는다")
+    void interests_with_blank_interest_returns_400() throws Exception {
+        // when: 공백만 있는 관심사를 포함해 관심사 선택 API 호출
+        var result = mockMvc.perform(post("/api/v1/me/interests")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"interests":["등산","   "]}
+                        """));
+
+        // then: 400 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest());
+        then(meService).should(never()).interests(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("관심사 선택 시 인증 헤더가 없으면 401을 반환하고 서비스를 호출하지 않는다")
+    void interests_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 관심사 선택 API 호출
+        var result = mockMvc.perform(post("/api/v1/me/interests")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"interests":["등산"]}
+                        """));
+
+        // then: 401 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isUnauthorized());
+        then(meService).should(never()).interests(anyLong(), any());
+    }
+
+    // ---------------------------------------------------------------- AI 대화
+
+    @Test
+    @DisplayName("AI 대화 시작 성공 시 200과 첫 질문·턴·종료 여부를 반환하고 인증 유저 id로 서비스를 호출한다")
+    void aiChatStart_success() throws Exception {
+        // given: 서비스가 0번 턴 첫 질문을 반환
+        given(userAiChatService.aiChatStart(ME)).willReturn(new MeAiChatStartResult("등산은 어디로 자주 가?", 0, false));
+
+        // when: 인증 상태로 AI 대화 시작 API 호출
+        var result = mockMvc.perform(post("/api/v1/me/ai-chat/start")
+                .header("Authorization", BEARER));
+
+        // then: 200 + 첫 질문·턴·종료 여부 JSON 반환
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("등산은 어디로 자주 가?"))
+                .andExpect(jsonPath("$.turnIndex").value(0))
+                .andExpect(jsonPath("$.isEnd").value(false));
+        then(userAiChatService).should().aiChatStart(ME);
+    }
+
+    @Test
+    @DisplayName("AI 대화 메시지 전송 성공 시 200과 다음 질문을 반환하고 인증 유저 id와 메시지 커맨드로 서비스를 호출한다")
+    void aiChatMessage_success() throws Exception {
+        // given: 서비스가 1번 턴 다음 질문을 반환
+        given(userAiChatService.aiChatMessage(ME, new MeAiChatMessageCommand("북한산", 0)))
+                .willReturn(new MeAiChatMessageResult("북한산 어느 코스로 올라가?", 1, false));
+
+        // when: 인증 상태로 0번 턴 답변 전송 API 호출
+        var result = mockMvc.perform(post("/api/v1/me/ai-chat/messages")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"message":"북한산","turnIndex":0}
+                        """));
+
+        // then: 200 + 다음 질문·턴·종료 여부 JSON 반환
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("북한산 어느 코스로 올라가?"))
+                .andExpect(jsonPath("$.turnIndex").value(1))
+                .andExpect(jsonPath("$.isEnd").value(false));
+    }
+
+    @Test
+    @DisplayName("AI 대화 메시지 전송 요청에 turnIndex가 없으면 400을 반환하고 서비스를 호출하지 않는다")
+    void aiChatMessage_without_turnIndex_returns_400() throws Exception {
+        // when: turnIndex 없이 답변 전송 API 호출
+        var result = mockMvc.perform(post("/api/v1/me/ai-chat/messages")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"message":"북한산"}
+                        """));
+
+        // then: 400 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest());
+        then(userAiChatService).should(never()).aiChatMessage(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("AI 대화 시작 시 인증 헤더가 없으면 401을 반환하고 서비스를 호출하지 않는다")
+    void aiChatStart_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 AI 대화 시작 API 호출
+        var result = mockMvc.perform(post("/api/v1/me/ai-chat/start"));
+
+        // then: 401 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isUnauthorized());
+        then(userAiChatService).should(never()).aiChatStart(anyLong());
+    }
+
+    @Test
+    @DisplayName("AI 대화 종료 성공 시 200을 반환하고 인증 유저 id로 서비스를 호출한다")
+    void aiChatComplete_success() throws Exception {
+        // when: 인증 상태로 AI 대화 종료 API 호출
+        var result = mockMvc.perform(post("/api/v1/me/ai-chat/complete")
+                .header("Authorization", BEARER));
+
+        // then: 200 반환 + 인증 유저 id로 위임
+        result.andExpect(status().isOk());
+        then(userAiChatService).should().aiChatComplete(ME);
+    }
+
+    @Test
+    @DisplayName("AI 대화 종료 시 인증 헤더가 없으면 401을 반환하고 서비스를 호출하지 않는다")
+    void aiChatComplete_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 AI 대화 종료 API 호출
+        var result = mockMvc.perform(post("/api/v1/me/ai-chat/complete"));
+
+        // then: 401 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isUnauthorized());
+        then(userAiChatService).should(never()).aiChatComplete(anyLong());
+    }
+
+    @Test
+    @DisplayName("설문 문항 목록 조회 시 200과 id·dimension·scenario·선택지 라벨만 담긴 JSON을 반환한다")
+    void surveyQuestions_success() throws Exception {
+        // given: 서비스가 문항 1개를 반환
+        given(meService.surveyQuestions()).willReturn(List.of(new SurveyQuestion(8, PersonaDimension.OPENNESS, "다음 주 일정을 정리하고 있어요.", Map.of(
+                SurveyOptionName.A, new SurveyOption("A 선택지 라벨", "A 특성"),
+                SurveyOptionName.B, new SurveyOption("B 선택지 라벨", "B 특성")))));
+
+        // when: 인증 상태로 설문 문항 목록 API 호출
+        var result = mockMvc.perform(get("/api/v1/me/survey-questions")
+                .header("Authorization", BEARER));
+
+        // then: 200 반환 + 선택지의 특성(trait)은 빠지고 라벨만 내려감
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(8))
+                .andExpect(jsonPath("$[0].dimension").value("openness"))
+                .andExpect(jsonPath("$[0].scenario").value("다음 주 일정을 정리하고 있어요."))
+                .andExpect(jsonPath("$[0].options.A").value("A 선택지 라벨"))
+                .andExpect(jsonPath("$[0].options.B").value("B 선택지 라벨"));
+    }
+
+    @Test
+    @DisplayName("설문 문항 목록 조회 시 인증 헤더가 없으면 401을 반환하고 서비스를 호출하지 않는다")
+    void surveyQuestions_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 설문 문항 목록 API 호출
+        var result = mockMvc.perform(get("/api/v1/me/survey-questions"));
+
+        // then: 401 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isUnauthorized());
+        then(meService).should(never()).surveyQuestions();
     }
 }

@@ -24,6 +24,9 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 class PersonaSummaryIntegrationTest extends AbstractIntegrationTest {
 
@@ -97,6 +100,43 @@ class PersonaSummaryIntegrationTest extends AbstractIntegrationTest {
                 assertThat(personaElementRepository
                         .findAllByUserIdAndDimensionOrderByIdAsc(user.getId(), PersonaDimension.SUMMARY)).isEmpty();
             });
+        } finally {
+            TestTransaction.start();
+            personaElementRepository.deleteAll(personaElementRepository.findAllByUserIdOrderByIdAsc(user.getId()));
+            userRepository.deleteById(user.getId());
+            TestTransaction.flagForCommit();
+            TestTransaction.end();
+        }
+    }
+
+    @Test
+    @DisplayName("AI 대화 종료 API가 커밋되면 비동기 스레드가 요약을 SUMMARY 요소로 저장하고, 종료를 다시 요청해도 요약은 한 번만 만든다")
+    void summary_is_saved_once_after_ai_chat_complete() throws Exception {
+        // given: 비동기 스레드가 읽을 수 있도록 유저와 페르소나 요소를 먼저 커밋해 둔다
+        User user = saveUser();
+        personaElementRepository.save(PersonaElement.create(user.getId(), PersonaDimension.INTEREST, "등산", Instant.now()));
+        personaElementRepository.save(PersonaElement.create(user.getId(), PersonaDimension.DETAIL, "요즘 뭐에 빠져 있어?: 등산", Instant.now()));
+        TestTransaction.flagForCommit();
+        TestTransaction.end();
+        given(bedrockService.converse(anyString())).willReturn("주말마다 산에 오르며 작은 순간에서 행복을 찾는 사람");
+
+        try {
+            // when: AI 대화 종료 API를 두 번 호출 (앱 재시도 상황)
+            for (int i = 0; i < 2; i++) {
+                mockMvc.perform(post("/api/v1/me/ai-chat/complete")
+                                .header("Authorization", bearer(user.getId())))
+                        .andExpect(status().isOk());
+            }
+
+            // then: 커밋 이후 별도 스레드에서 SUMMARY 가 1건 저장됨
+            await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> assertThat(personaElementRepository
+                    .findAllByUserIdAndDimensionOrderByIdAsc(user.getId(), PersonaDimension.SUMMARY))
+                    .extracting(PersonaElement::getExplanation)
+                    .containsExactly("주말마다 산에 오르며 작은 순간에서 행복을 찾는 사람"));
+
+            // then: 두 번째 종료 요청은 이벤트를 내지 않아 모델은 한 번만 호출됨
+            await().during(Duration.ofSeconds(1)).atMost(Duration.ofSeconds(2)).untilAsserted(() ->
+                    then(bedrockService).should(times(1)).converse(anyString()));
         } finally {
             TestTransaction.start();
             personaElementRepository.deleteAll(personaElementRepository.findAllByUserIdOrderByIdAsc(user.getId()));

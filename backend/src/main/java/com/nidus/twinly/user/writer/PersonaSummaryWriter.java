@@ -1,5 +1,6 @@
 package com.nidus.twinly.user.writer;
 
+import com.nidus.twinly.aichat.event.AiChatCompletedEvent;
 import com.nidus.twinly.auth.event.UserSignedUpEvent;
 import com.nidus.twinly.common.logging.WarnLog;
 import com.nidus.twinly.common.persona.PersonaDimension;
@@ -34,8 +35,16 @@ public class PersonaSummaryWriter {
     @Async("personaSummaryTaskExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onUserSignedUp(UserSignedUpEvent event) {
-        Long userId = event.userId();
+        writeSummary(event.userId(), "가입 후 페르소나 요약을 생성하지 못했습니다.");
+    }
 
+    @Async("personaSummaryTaskExecutor")
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onAiChatCompleted(AiChatCompletedEvent event) {
+        writeSummary(event.userId(), "AI 대화 종료 후 페르소나 요약을 생성하지 못했습니다.");
+    }
+
+    private void writeSummary(Long userId, String failureMessage) {
         User user = userRepository.findById(userId).orElse(null);
         if (user == null) {
             return;
@@ -51,7 +60,7 @@ public class PersonaSummaryWriter {
         try {
             summary = personaSummaryGenerator.generate(user.getAffiliation(), personaElements);
         } catch (BusinessException e) {
-            WarnLog.log(log, "가입 후 페르소나 요약을 생성하지 못했습니다.", e, field("userId", userId));
+            WarnLog.log(log, failureMessage, e, field("userId", userId));
             return;
         }
 

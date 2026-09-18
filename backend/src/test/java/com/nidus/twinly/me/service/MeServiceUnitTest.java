@@ -15,6 +15,11 @@ import com.nidus.twinly.common.presign.PhotoCommitService;
 import com.nidus.twinly.common.presign.PhotoPresignResult;
 import com.nidus.twinly.common.presign.PresignService;
 import com.nidus.twinly.common.presign.RequiredHeaders;
+import com.nidus.twinly.common.survey.SurveyAnswerInput;
+import com.nidus.twinly.common.survey.SurveyLoader;
+import com.nidus.twinly.common.survey.SurveyOption;
+import com.nidus.twinly.common.survey.SurveyOptionName;
+import com.nidus.twinly.common.survey.SurveyQuestion;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.legal.entity.Agreement;
@@ -34,11 +39,13 @@ import com.nidus.twinly.me.dto.command.MeChangePushNotificationsCommand;
 import com.nidus.twinly.me.dto.command.MeGrantConsentsCommand;
 import com.nidus.twinly.me.dto.command.MeGrantConsentsItemCommand;
 import com.nidus.twinly.me.dto.command.MeHesitationsAnswerCommand;
+import com.nidus.twinly.me.dto.command.MeInterestsCommand;
 import com.nidus.twinly.me.dto.command.MeProfileCommand;
 import com.nidus.twinly.me.dto.command.MeProfilePhotoCommitCommand;
 import com.nidus.twinly.me.dto.command.MeProfilePhotoPresignCommand;
 import com.nidus.twinly.me.dto.command.MeRevokeConsentsCommand;
 import com.nidus.twinly.me.dto.command.MeRevokeConsentsItemCommand;
+import com.nidus.twinly.me.dto.command.MeSurveyAnswerCommand;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsChatTargetResult;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsProfileTargetResult;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsResult;
@@ -51,6 +58,7 @@ import com.nidus.twinly.me.dto.result.MeProfilePhotoPresignResult;
 import com.nidus.twinly.me.dto.result.MeProfileVisibilitySettingsResult;
 import com.nidus.twinly.me.dto.result.MePurchasesResult;
 import com.nidus.twinly.me.dto.result.MePushNotificationsResult;
+import com.nidus.twinly.me.dto.result.MeStatusPersonaResult;
 import com.nidus.twinly.me.dto.result.MeStatusResult;
 import com.nidus.twinly.me.dto.result.MeWithdrawResult;
 import com.nidus.twinly.notification.domain.AppNotificationFeedTargetType;
@@ -74,10 +82,12 @@ import com.nidus.twinly.user.entity.DisclosureAgreement;
 import com.nidus.twinly.user.entity.PersonaElement;
 import com.nidus.twinly.user.entity.Photo;
 import com.nidus.twinly.user.entity.User;
+import com.nidus.twinly.user.entity.UserSurveyAnswer;
 import com.nidus.twinly.user.repository.DisclosureAgreementRepository;
 import com.nidus.twinly.user.repository.PersonaElementRepository;
 import com.nidus.twinly.user.repository.PhotoRepository;
 import com.nidus.twinly.user.repository.UserRepository;
+import com.nidus.twinly.user.repository.UserSurveyAnswerRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -97,13 +107,16 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
@@ -176,6 +189,12 @@ class MeServiceUnitTest {
 
     @Mock
     RelationshipRepository relationshipRepository;
+
+    @Mock
+    UserSurveyAnswerRepository userSurveyAnswerRepository;
+
+    @Mock
+    SurveyLoader surveyLoader;
 
     @InjectMocks
     MeService meService;
@@ -873,6 +892,72 @@ class MeServiceUnitTest {
         assertThat(result.report().reasons()).isEmpty();
     }
 
+    @Test
+    @DisplayName("내 상태 조회 시 현재 설문 전 문항에 답했고 관심사 요소와 AI 대화 종료 시각이 있으면 페르소나 입력 상태가 모두 true다")
+    void status_persona_all_completed() {
+        // given: AI 대화 종료 시각이 있는 유저, 문항 2개 설문에 모두 답함, 관심사 요소 존재
+        User user = user();
+        ReflectionTestUtils.setField(user, "aiChatCompletedAt", Instant.now());
+        given(userRepository.findById(ME)).willReturn(Optional.of(user));
+        given(reportRepository.findAllByReportedUserIdAndStatus(ME, ReportStatus.RESOLVED)).willReturn(List.of());
+        given(userSurveyAnswerRepository.findAllByUserId(ME)).willReturn(List.of(
+                UserSurveyAnswer.create(ME, 1, SurveyOptionName.A),
+                UserSurveyAnswer.create(ME, 2, SurveyOptionName.B)));
+        given(surveyLoader.getQuestion(1)).willReturn(surveyQuestion(1, PersonaDimension.OPENNESS));
+        given(surveyLoader.getQuestion(2)).willReturn(surveyQuestion(2, PersonaDimension.EXTRAVERSION));
+        given(surveyLoader.getAllQuestions()).willReturn(List.of(
+                surveyQuestion(1, PersonaDimension.OPENNESS),
+                surveyQuestion(2, PersonaDimension.EXTRAVERSION)));
+        given(personaElementRepository.existsByUserIdAndDimension(ME, PersonaDimension.INTEREST)).willReturn(true);
+
+        // when: 내 상태 조회
+        MeStatusResult result = meService.status(ME);
+
+        // then: 설문·관심사·AI 대화 모두 완료
+        assertThat(result.persona()).isEqualTo(new MeStatusPersonaResult(true, true, true));
+    }
+
+    @Test
+    @DisplayName("내 상태 조회 시 설문 답변·관심사 요소·AI 대화 종료 시각이 모두 없으면 페르소나 입력 상태가 모두 false다")
+    void status_persona_nothing_completed() {
+        // given: AI 대화 종료 시각이 없는 유저, 설문 답변·관심사 요소 없음
+        given(userRepository.findById(ME)).willReturn(Optional.of(user()));
+        given(reportRepository.findAllByReportedUserIdAndStatus(ME, ReportStatus.RESOLVED)).willReturn(List.of());
+        given(userSurveyAnswerRepository.findAllByUserId(ME)).willReturn(List.of());
+        given(surveyLoader.getAllQuestions()).willReturn(List.of(
+                surveyQuestion(1, PersonaDimension.OPENNESS),
+                surveyQuestion(2, PersonaDimension.EXTRAVERSION)));
+        given(personaElementRepository.existsByUserIdAndDimension(ME, PersonaDimension.INTEREST)).willReturn(false);
+
+        // when: 내 상태 조회
+        MeStatusResult result = meService.status(ME);
+
+        // then: 설문·관심사·AI 대화 모두 미완료
+        assertThat(result.persona()).isEqualTo(new MeStatusPersonaResult(false, false, false));
+    }
+
+    @Test
+    @DisplayName("내 상태 조회 시 설문 완료는 SURVEY_ANSWERS_INCOMPLETE와 같은 기준이라, 현재 설문에 없는 문항의 답변은 세지 않는다")
+    void status_survey_ignores_answers_to_unknown_questions() {
+        // given: 문항 2개 설문인데 답변은 마지막 문항(2)과 설문에서 빠진 문항(99)
+        given(userRepository.findById(ME)).willReturn(Optional.of(user()));
+        given(reportRepository.findAllByReportedUserIdAndStatus(ME, ReportStatus.RESOLVED)).willReturn(List.of());
+        given(userSurveyAnswerRepository.findAllByUserId(ME)).willReturn(List.of(
+                UserSurveyAnswer.create(ME, 99, SurveyOptionName.A),
+                UserSurveyAnswer.create(ME, 2, SurveyOptionName.B)));
+        given(surveyLoader.getQuestion(99)).willReturn(null);
+        given(surveyLoader.getQuestion(2)).willReturn(surveyQuestion(2, PersonaDimension.EXTRAVERSION));
+        given(surveyLoader.getAllQuestions()).willReturn(List.of(
+                surveyQuestion(1, PersonaDimension.OPENNESS),
+                surveyQuestion(2, PersonaDimension.EXTRAVERSION)));
+
+        // when: 내 상태 조회
+        MeStatusResult result = meService.status(ME);
+
+        // then: 답변 행은 2개지만 유효 응답은 1개라 설문 미완료
+        assertThat(result.persona().isSurveyCompleted()).isFalse();
+    }
+
     // ---------------------------------------------------------------- 망설임
 
     @Test
@@ -1277,5 +1362,152 @@ class MeServiceUnitTest {
         ReflectionTestUtils.setField(question, "isSkipped", isSkipped);
         ReflectionTestUtils.setField(question, "createdAt", Instant.now());
         return question;
+    }
+
+    // ---------------------------------------------------------------- 설문
+
+    @Test
+    @DisplayName("존재하지 않는 설문 문항에 답하면 SURVEY_QUESTION_NOT_FOUND 예외가 발생하고 저장하지 않는다")
+    void surveyAnswer_when_question_not_found_throws() {
+        // given: 로더에 해당 qId 문항이 없음
+        given(surveyLoader.getQuestion(999)).willReturn(null);
+
+        // when & then: SURVEY_QUESTION_NOT_FOUND 예외 발생 + 저장 안 함
+        assertThatThrownBy(() -> meService.surveyAnswer(ME,
+                new MeSurveyAnswerCommand(new SurveyAnswerInput(999, SurveyOptionName.A))))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.SURVEY_QUESTION_NOT_FOUND);
+
+        then(userSurveyAnswerRepository).should(never()).upsert(anyLong(), anyInt(), anyString());
+    }
+
+    @Test
+    @DisplayName("마지막 문항이 아니면 유저/문항/선택지로 답변을 upsert하고 페르소나 요소는 만들지 않는다")
+    void surveyAnswer_upserts_answer() {
+        // given: 존재하는 문항이고 마지막 문항은 아님
+        given(surveyLoader.getQuestion(1)).willReturn(surveyQuestion(1, PersonaDimension.OPENNESS));
+        given(surveyLoader.isLastQuestion(1)).willReturn(false);
+
+        // when: 설문 답변 저장
+        meService.surveyAnswer(ME, new MeSurveyAnswerCommand(new SurveyAnswerInput(1, SurveyOptionName.A)));
+
+        // then: 유저/문항/선택지 이름으로 upsert가 호출되고 페르소나 요소는 저장되지 않음
+        then(userSurveyAnswerRepository).should().upsert(ME, 1, "A");
+        then(personaElementRepository).should(never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("마지막 문항에 답했고 전 문항 응답이 모였으면 설문 차원을 지운 뒤 페르소나 요소로 변환해 저장한다")
+    void surveyAnswer_on_last_question_with_all_answers_creates_persona_elements() {
+        // given: 문항 2개 설문의 마지막 문항(2)에 답하고, 두 문항 답변이 모두 저장되어 있음
+        SurveyQuestion first = surveyQuestion(1, PersonaDimension.OPENNESS);
+        SurveyQuestion last = surveyQuestion(2, PersonaDimension.EXTRAVERSION);
+        given(surveyLoader.getQuestion(1)).willReturn(first);
+        given(surveyLoader.getQuestion(2)).willReturn(last);
+        given(surveyLoader.isLastQuestion(2)).willReturn(true);
+        given(userSurveyAnswerRepository.findAllByUserId(ME)).willReturn(List.of(
+                UserSurveyAnswer.create(ME, 1, SurveyOptionName.A),
+                UserSurveyAnswer.create(ME, 2, SurveyOptionName.B)));
+        given(surveyLoader.getAllQuestions()).willReturn(List.of(first, last));
+
+        // when: 마지막 문항에 답변
+        meService.surveyAnswer(ME, new MeSurveyAnswerCommand(new SurveyAnswerInput(2, SurveyOptionName.B)));
+
+        // then: 설문이 만드는 차원을 먼저 지우고(재답변 시 중복 누적 방지) 변환 결과를 저장한다
+        then(personaElementRepository).should()
+                .deleteByUserIdAndDimensionIn(ME, Set.of(PersonaDimension.OPENNESS, PersonaDimension.EXTRAVERSION));
+
+        ArgumentCaptor<List<PersonaElement>> captor = ArgumentCaptor.forClass(List.class);
+        then(personaElementRepository).should().saveAll(captor.capture());
+        assertThat(captor.getValue())
+                .extracting(PersonaElement::getUserId, PersonaElement::getDimension, PersonaElement::getExplanation)
+                .containsExactly(
+                        tuple(ME, PersonaDimension.OPENNESS, "A 특성"),
+                        tuple(ME, PersonaDimension.EXTRAVERSION, "B 특성"));
+    }
+
+    @Test
+    @DisplayName("마지막 문항에 답했는데 응답하지 않은 문항이 있으면 SURVEY_ANSWERS_INCOMPLETE 예외가 발생하고 페르소나를 건드리지 않는다")
+    void surveyAnswer_on_last_question_with_missing_answers_throws() {
+        // given: 문항 2개 설문에서 마지막 문항(2) 답변만 저장되어 있음
+        SurveyQuestion first = surveyQuestion(1, PersonaDimension.OPENNESS);
+        SurveyQuestion last = surveyQuestion(2, PersonaDimension.EXTRAVERSION);
+        given(surveyLoader.getQuestion(2)).willReturn(last);
+        given(surveyLoader.isLastQuestion(2)).willReturn(true);
+        given(userSurveyAnswerRepository.findAllByUserId(ME))
+                .willReturn(List.of(UserSurveyAnswer.create(ME, 2, SurveyOptionName.B)));
+        given(surveyLoader.getAllQuestions()).willReturn(List.of(first, last));
+
+        // when & then: SURVEY_ANSWERS_INCOMPLETE 예외 발생 + 페르소나 요소 삭제/저장 안 함
+        assertThatThrownBy(() -> meService.surveyAnswer(ME,
+                new MeSurveyAnswerCommand(new SurveyAnswerInput(2, SurveyOptionName.B))))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.SURVEY_ANSWERS_INCOMPLETE);
+
+        then(personaElementRepository).should(never()).deleteByUserIdAndDimensionIn(anyLong(), any());
+        then(personaElementRepository).should(never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("현재 설문에 없는 문항의 답변은 응답 수에 세지 않는다")
+    void surveyAnswer_on_last_question_ignores_answers_to_unknown_questions() {
+        // given: 문항 2개 설문인데 저장된 답변은 마지막 문항(2)과 설문에서 빠진 문항(99)
+        SurveyQuestion first = surveyQuestion(1, PersonaDimension.OPENNESS);
+        SurveyQuestion last = surveyQuestion(2, PersonaDimension.EXTRAVERSION);
+        given(surveyLoader.getQuestion(2)).willReturn(last);
+        given(surveyLoader.getQuestion(99)).willReturn(null);
+        given(surveyLoader.isLastQuestion(2)).willReturn(true);
+        given(userSurveyAnswerRepository.findAllByUserId(ME)).willReturn(List.of(
+                UserSurveyAnswer.create(ME, 99, SurveyOptionName.A),
+                UserSurveyAnswer.create(ME, 2, SurveyOptionName.B)));
+        given(surveyLoader.getAllQuestions()).willReturn(List.of(first, last));
+
+        // when & then: 답변 행은 2개지만 유효 응답은 1개라 SURVEY_ANSWERS_INCOMPLETE 예외 발생
+        assertThatThrownBy(() -> meService.surveyAnswer(ME,
+                new MeSurveyAnswerCommand(new SurveyAnswerInput(2, SurveyOptionName.B))))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.SURVEY_ANSWERS_INCOMPLETE);
+
+        then(personaElementRepository).should(never()).saveAll(any());
+    }
+
+    private SurveyQuestion surveyQuestion(Integer id, PersonaDimension dimension) {
+        return new SurveyQuestion(id, dimension, "시나리오", Map.of(
+                SurveyOptionName.A, new SurveyOption("A 라벨", "A 특성"),
+                SurveyOptionName.B, new SurveyOption("B 라벨", "B 특성")));
+    }
+
+    // ---------------------------------------------------------------- 관심사
+
+    @Test
+    @DisplayName("관심사 선택 시 기존 관심사를 모두 지우고 요청한 관심사를 순서대로 저장한다")
+    void interests_replaces_interests() {
+        // when: 관심사 2개 선택
+        meService.interests(ME, new MeInterestsCommand(List.of("등산", "영화")));
+
+        // then: INTEREST 차원 삭제 후 요청 순서대로 저장
+        InOrder inOrder = inOrder(personaElementRepository);
+        inOrder.verify(personaElementRepository).deleteByUserIdAndDimension(ME, PersonaDimension.INTEREST);
+        ArgumentCaptor<PersonaElement> captor = ArgumentCaptor.forClass(PersonaElement.class);
+        inOrder.verify(personaElementRepository, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues())
+                .extracting(PersonaElement::getUserId, PersonaElement::getDimension, PersonaElement::getExplanation)
+                .containsExactly(
+                        tuple(ME, PersonaDimension.INTEREST, "등산"),
+                        tuple(ME, PersonaDimension.INTEREST, "영화"));
+    }
+
+    @Test
+    @DisplayName("관심사 선택 시 빈 배열이면 기존 관심사만 지우고 아무것도 저장하지 않는다")
+    void interests_with_empty_list_only_deletes() {
+        // when: 빈 관심사 목록으로 선택
+        meService.interests(ME, new MeInterestsCommand(List.of()));
+
+        // then: INTEREST 차원만 삭제되고 저장은 호출되지 않음
+        then(personaElementRepository).should().deleteByUserIdAndDimension(ME, PersonaDimension.INTEREST);
+        then(personaElementRepository).should(never()).save(any());
     }
 }

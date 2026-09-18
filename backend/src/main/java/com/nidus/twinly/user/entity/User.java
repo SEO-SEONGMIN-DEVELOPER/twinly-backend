@@ -110,6 +110,8 @@ public class User {
 
     private Integer poolNumber;
 
+    private Instant aiChatCompletedAt;
+
     private Instant withdrawalRequestedAt;
 
     private Instant withdrawalScheduledAt;

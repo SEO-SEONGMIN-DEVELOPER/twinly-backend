@@ -14,6 +14,9 @@ import com.nidus.twinly.common.presign.PhotoCommitResult;
 import com.nidus.twinly.common.presign.PhotoCommitService;
 import com.nidus.twinly.common.presign.PhotoPresignResult;
 import com.nidus.twinly.common.presign.PresignService;
+import com.nidus.twinly.common.survey.SurveyLoader;
+import com.nidus.twinly.common.survey.SurveyOptionName;
+import com.nidus.twinly.common.survey.SurveyQuestion;
 import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
@@ -32,10 +35,12 @@ import com.nidus.twinly.me.dto.command.MeChangeProfileVisibilitySettingCommand;
 import com.nidus.twinly.me.dto.command.MeChangePushNotificationsCommand;
 import com.nidus.twinly.me.dto.command.MeGrantConsentsCommand;
 import com.nidus.twinly.me.dto.command.MeHesitationsAnswerCommand;
+import com.nidus.twinly.me.dto.command.MeInterestsCommand;
 import com.nidus.twinly.me.dto.command.MeProfileCommand;
 import com.nidus.twinly.me.dto.command.MeProfilePhotoCommitCommand;
 import com.nidus.twinly.me.dto.command.MeProfilePhotoPresignCommand;
 import com.nidus.twinly.me.dto.command.MeRevokeConsentsCommand;
+import com.nidus.twinly.me.dto.command.MeSurveyAnswerCommand;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsChatTargetResult;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsItemResult;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsProfileTargetResult;
@@ -53,6 +58,7 @@ import com.nidus.twinly.me.dto.result.MeProfilePhotoCommitResult;
 import com.nidus.twinly.me.dto.result.MeProfilePhotoPresignResult;
 import com.nidus.twinly.me.dto.result.MeProfileVisibilitySettingsResult;
 import com.nidus.twinly.me.dto.result.MePurchasesResult;
+import com.nidus.twinly.me.dto.result.MeStatusPersonaResult;
 import com.nidus.twinly.me.dto.result.MeStatusReportResult;
 import com.nidus.twinly.me.dto.result.MeStatusResult;
 import com.nidus.twinly.me.dto.result.MeStatusWithdrawalResult;
@@ -76,10 +82,12 @@ import com.nidus.twinly.user.entity.DisclosureAgreement;
 import com.nidus.twinly.user.entity.PersonaElement;
 import com.nidus.twinly.user.entity.Photo;
 import com.nidus.twinly.user.entity.User;
+import com.nidus.twinly.user.entity.UserSurveyAnswer;
 import com.nidus.twinly.user.repository.DisclosureAgreementRepository;
 import com.nidus.twinly.user.repository.PersonaElementRepository;
 import com.nidus.twinly.user.repository.PhotoRepository;
 import com.nidus.twinly.user.repository.UserRepository;
+import com.nidus.twinly.user.repository.UserSurveyAnswerRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -135,10 +143,12 @@ public class MeService {
     private final PersonaElementRepository personaElementRepository;
     private final EncounterRepository encounterRepository;
     private final RelationshipRepository relationshipRepository;
+    private final UserSurveyAnswerRepository userSurveyAnswerRepository;
 
     private final PolicyCatalog policyCatalog;
     private final PolicyUrlResolver policyUrlResolver;
     private final SeasonParticipationWriter seasonParticipationWriter;
+    private final SurveyLoader surveyLoader;
 
     public MeProfilePhotoPresignResult profilePhotoPresign(Long userId, MeProfilePhotoPresignCommand command) {
         PhotoPresignResult presign = presignService.presignPhoto(userId, command.contentType(), PhotoType.PROFILE);
@@ -216,12 +226,76 @@ public class MeService {
 
         user.changeAffiliation(command.affiliation(), blindIndexHasher.hash(command.affiliation()));
 
+        replaceInterests(userId, command.interests());
+    }
+
+    @Transactional
+    public void interests(Long userId, MeInterestsCommand command) {
+        replaceInterests(userId, command.interests());
+    }
+
+    private void replaceInterests(Long userId, List<String> interests) {
         personaElementRepository.deleteByUserIdAndDimension(userId, PersonaDimension.INTEREST);
 
         Instant now = Instant.now();
-        for (String interest : command.interests()) {
+        for (String interest : interests) {
             personaElementRepository.save(PersonaElement.create(userId, PersonaDimension.INTEREST, interest, now));
         }
+    }
+
+    public List<SurveyQuestion> surveyQuestions() {
+        return surveyLoader.getAllQuestions();
+    }
+
+    @Transactional
+    public void surveyAnswer(Long userId, MeSurveyAnswerCommand command) {
+        Integer qId = command.answer().qId();
+        SurveyOptionName answerValue = command.answer().optionName();
+
+        SurveyQuestion question = surveyLoader.getQuestion(qId);
+
+        if (question == null) {
+            throw new BusinessException(ErrorCode.SURVEY_QUESTION_NOT_FOUND, "존재하지 않는 질문입니다: " + qId);
+        }
+
+        userSurveyAnswerRepository.upsert(userId, qId, answerValue.name());
+
+        if (surveyLoader.isLastQuestion(qId)) {
+            saveAllSurveyAnswer(userId);
+        }
+    }
+
+    private void saveAllSurveyAnswer(Long userId) {
+        List<UserSurveyAnswer> answers = answersToCurrentQuestions(userId);
+
+        if (!isSurveyCompleted(answers)) {
+            throw new BusinessException(ErrorCode.SURVEY_ANSWERS_INCOMPLETE);
+        }
+
+        Instant now = Instant.now();
+        List<PersonaElement> personaElements = answers.stream()
+                .map(answer -> {
+                    SurveyQuestion question = surveyLoader.getQuestion(answer.getQuestionId());
+                    return PersonaElement.create(userId, question.dimension(), question.traitFor(answer.getOptionName()), now);
+                })
+                .toList();
+
+        Set<PersonaDimension> dimensions = personaElements.stream()
+                .map(PersonaElement::getDimension)
+                .collect(Collectors.toSet());
+
+        personaElementRepository.deleteByUserIdAndDimensionIn(userId, dimensions);
+        personaElementRepository.saveAll(personaElements);
+    }
+
+    private List<UserSurveyAnswer> answersToCurrentQuestions(Long userId) {
+        return userSurveyAnswerRepository.findAllByUserId(userId).stream()
+                .filter(answer -> surveyLoader.getQuestion(answer.getQuestionId()) != null)
+                .toList();
+    }
+
+    private boolean isSurveyCompleted(List<UserSurveyAnswer> answersToCurrentQuestions) {
+        return answersToCurrentQuestions.size() == surveyLoader.getAllQuestions().size();
     }
 
     @Transactional
@@ -428,7 +502,16 @@ public class MeService {
 
         return new MeStatusResult(
                 withdrawal,
-                new MeStatusReportResult(!reports.isEmpty(), reasons)
+                new MeStatusReportResult(!reports.isEmpty(), reasons),
+                personaStatus(userId, user)
+        );
+    }
+
+    private MeStatusPersonaResult personaStatus(Long userId, User user) {
+        return new MeStatusPersonaResult(
+                isSurveyCompleted(answersToCurrentQuestions(userId)),
+                personaElementRepository.existsByUserIdAndDimension(userId, PersonaDimension.INTEREST),
+                user.getAiChatCompletedAt() != null
         );
     }
 

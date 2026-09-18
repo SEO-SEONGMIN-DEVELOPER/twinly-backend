@@ -1,26 +1,35 @@
 package com.nidus.twinly.me.controller;
 
+import com.nidus.twinly.aichat.service.UserAiChatService;
 import com.nidus.twinly.common.web.RequestId;
 import com.nidus.twinly.me.domain.HesitationDuration;
 import com.nidus.twinly.me.domain.HesitationStatus;
+import com.nidus.twinly.me.dto.command.MeAiChatMessageCommand;
 import com.nidus.twinly.me.dto.command.MeAppNotificationsReadAllCommand;
 import com.nidus.twinly.me.dto.command.MeChangeProfileVisibilitySettingCommand;
 import com.nidus.twinly.me.dto.command.MeChangePushNotificationsCommand;
 import com.nidus.twinly.me.dto.command.MeGrantConsentsCommand;
 import com.nidus.twinly.me.dto.command.MeHesitationsAnswerCommand;
+import com.nidus.twinly.me.dto.command.MeInterestsCommand;
 import com.nidus.twinly.me.dto.command.MeProfileCommand;
 import com.nidus.twinly.me.dto.command.MeProfilePhotoCommitCommand;
 import com.nidus.twinly.me.dto.command.MeProfilePhotoPresignCommand;
 import com.nidus.twinly.me.dto.command.MeRevokeConsentsCommand;
+import com.nidus.twinly.me.dto.command.MeSurveyAnswerCommand;
+import com.nidus.twinly.me.dto.request.MeAiChatMessageRequest;
 import com.nidus.twinly.me.dto.request.MeAppNotificationsReadAllRequest;
 import com.nidus.twinly.me.dto.request.MeChangeProfileVisibilitySettingRequest;
 import com.nidus.twinly.me.dto.request.MeChangePushNotificationsRequest;
 import com.nidus.twinly.me.dto.request.MeGrantConsentsRequest;
 import com.nidus.twinly.me.dto.request.MeHesitationsAnswerRequest;
+import com.nidus.twinly.me.dto.request.MeInterestsRequest;
 import com.nidus.twinly.me.dto.request.MeProfileRequest;
 import com.nidus.twinly.me.dto.request.MeProfilePhotoCommitRequest;
 import com.nidus.twinly.me.dto.request.MeProfilePhotoPresignRequest;
 import com.nidus.twinly.me.dto.request.MeRevokeConsentsRequest;
+import com.nidus.twinly.me.dto.request.MeSurveyAnswerRequest;
+import com.nidus.twinly.me.dto.response.MeAiChatMessageResponse;
+import com.nidus.twinly.me.dto.response.MeAiChatStartResponse;
 import com.nidus.twinly.me.dto.response.MeAppNotificationsFeedsResponse;
 import com.nidus.twinly.me.dto.response.MeAppNotificationsUnreadCountResponse;
 import com.nidus.twinly.me.dto.response.MeConsentsResponse;
@@ -33,6 +42,7 @@ import com.nidus.twinly.me.dto.response.MeProfilePhotoCommitResponse;
 import com.nidus.twinly.me.dto.response.MeProfilePhotoPresignResponse;
 import com.nidus.twinly.me.dto.response.MeProfileVisibilitySettingsResponse;
 import com.nidus.twinly.me.dto.response.MeStatusResponse;
+import com.nidus.twinly.me.dto.response.MeSurveyQuestionResponse;
 import com.nidus.twinly.me.dto.response.MeWithdrawResponse;
 import com.nidus.twinly.me.service.MeService;
 import com.nidus.twinly.notification.domain.AppNotificationFeedType;
@@ -57,12 +67,15 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @Tag(name = "내 정보")
 @RestController
 @RequiredArgsConstructor
 public class MeController {
 
     private final MeService meService;
+    private final UserAiChatService userAiChatService;
 
     @Operation(summary = "프로필 사진 업로드 URL 발급")
     @ApiResponse(responseCode = "415", description = "UNSUPPORTED_IMAGE_TYPE")
@@ -103,6 +116,53 @@ public class MeController {
     public void profile(@AuthenticationPrincipal UserInfo userInfo,
                         @Valid @RequestBody MeProfileRequest request) {
         meService.profile(userInfo.id(), MeProfileCommand.from(request));
+    }
+
+    @Operation(summary = "설문 문항 목록 조회")
+    @GetMapping("/api/v1/me/survey-questions")
+    public List<MeSurveyQuestionResponse> surveyQuestions() {
+        return meService.surveyQuestions().stream()
+                .map(MeSurveyQuestionResponse::from)
+                .toList();
+    }
+
+    @Operation(summary = "설문 응답 제출")
+    @ApiResponses({
+            @ApiResponse(responseCode = "404", description = "SURVEY_QUESTION_NOT_FOUND"),
+            @ApiResponse(responseCode = "422", description = "SURVEY_ANSWERS_INCOMPLETE")
+    })
+    @PostMapping("/api/v1/me/survey-answers")
+    public void surveyAnswer(@AuthenticationPrincipal UserInfo userInfo,
+                             @Valid @RequestBody MeSurveyAnswerRequest request) {
+        meService.surveyAnswer(userInfo.id(), MeSurveyAnswerCommand.from(request));
+    }
+
+    @Operation(summary = "관심사 선택")
+    @PostMapping("/api/v1/me/interests")
+    public void interests(@AuthenticationPrincipal UserInfo userInfo,
+                          @Valid @RequestBody MeInterestsRequest request) {
+        meService.interests(userInfo.id(), MeInterestsCommand.from(request));
+    }
+
+    @Operation(summary = "AI 대화 시작")
+    @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND")
+    @PostMapping("/api/v1/me/ai-chat/start")
+    public MeAiChatStartResponse aiChatStart(@AuthenticationPrincipal UserInfo userInfo) {
+        return MeAiChatStartResponse.from(userAiChatService.aiChatStart(userInfo.id()));
+    }
+
+    @Operation(summary = "AI 대화 메시지 전송")
+    @ApiResponse(responseCode = "404", description = "AI_QUESTION_NOT_FOUND, USER_NOT_FOUND")
+    @PostMapping("/api/v1/me/ai-chat/messages")
+    public MeAiChatMessageResponse aiChatMessage(@AuthenticationPrincipal UserInfo userInfo,
+                                                 @Valid @RequestBody MeAiChatMessageRequest request) {
+        return MeAiChatMessageResponse.from(userAiChatService.aiChatMessage(userInfo.id(), MeAiChatMessageCommand.from(request)));
+    }
+
+    @Operation(summary = "AI 대화 종료")
+    @PostMapping("/api/v1/me/ai-chat/complete")
+    public void aiChatComplete(@AuthenticationPrincipal UserInfo userInfo) {
+        userAiChatService.aiChatComplete(userInfo.id());
     }
 
     @Operation(summary = "탈퇴 철회")
