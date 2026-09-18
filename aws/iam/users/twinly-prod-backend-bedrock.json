@@ -1,7 +1,7 @@
 {
   "name": "twinly-prod-backend-bedrock",
   "managedPolicies": [
-    "TwinlyBedrockInvokePolicy"
+    "TwinlyProdBedrockInvoke"
   ],
   "inlinePolicies": [],
   "accessKeys": [

@@ -1,7 +1,7 @@
 {
     "name": "twinly-stage-backend-bedrock",
     "managedPolicies": [
-        "TwinlyBedrockInvokePolicy"
+        "TwinlyStageBedrockInvoke"
     ],
     "inlinePolicies": [],
     "accessKeys": [
