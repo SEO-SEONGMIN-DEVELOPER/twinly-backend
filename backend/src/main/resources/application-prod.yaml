@@ -15,7 +15,7 @@ logging:
 
 verification:
   test:
-    code: "000000"
+    code: ${VERIFICATION_TEST_CODE:}
     phone-prefix: "0100000"
     email-prefix: "test"
 
