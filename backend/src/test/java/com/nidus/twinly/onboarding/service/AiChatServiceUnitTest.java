@@ -2,6 +2,7 @@ package com.nidus.twinly.onboarding.service;
 
 import com.nidus.twinly.aichat.domain.AiChatSender;
 import com.nidus.twinly.aichat.entity.AnonSessionAiChat;
+import com.nidus.twinly.aichat.prompt.AiChatPromptBuilder;
 import com.nidus.twinly.aichat.repository.AnonSessionAiChatRepository;
 import com.nidus.twinly.aichat.service.AiChatService;
 import com.nidus.twinly.anon.dto.snapshot.AnonSessionSnapshot;
@@ -21,6 +22,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
@@ -57,6 +59,9 @@ class AiChatServiceUnitTest {
 
     @Mock
     BedrockService bedrockService;
+
+    @Spy
+    AiChatPromptBuilder aiChatPromptBuilder = new AiChatPromptBuilder();
 
     @Mock
     AnonSessionAiChatRepository anonSessionAiChatRepository;
@@ -243,5 +248,138 @@ class AiChatServiceUnitTest {
         then(bedrockService).should(never()).converse(anyString());
         then(anonSessionAiChatRepository).should(never()).save(any());
         then(anonSessionPersonaElementRepository).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("AI 채팅 시작 프롬프트는 소속·관심사·성격 특성과 관심사 질문 지시로 정확히 구성된다")
+    void aiChatStart_prompt_exact() {
+        // given: 세션에 관심사 1건과 성격 특성 1건이 있음
+        given(anonSessionPersonaElementRepository.findAllByAnonSessionId(ANON_SESSION_ID))
+                .willReturn(List.of(
+                        AnonSessionPersonaElement.create(ANON_SESSION_ID, PersonaDimension.INTEREST, "등산"),
+                        AnonSessionPersonaElement.create(ANON_SESSION_ID, PersonaDimension.OPENNESS, "새로운 걸 좋아함")));
+        given(bedrockService.converse(anyString())).willReturn("등산은 어디로 자주 가?");
+
+        // when: AI 채팅 시작
+        aiChatService.aiChatStart(ANON_SESSION);
+
+        // then: 프롬프트 전체 문자열이 기대값과 일치
+        ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
+        then(bedrockService).should().converse(promptCaptor.capture());
+        assertThat(promptCaptor.getValue()).isEqualTo("""
+                당신은 사용자와 대화를 나누며 그 사람을 더 깊이 이해하려는 인터뷰어입니다.
+                아래는 지금까지 파악한 사용자의 정보입니다.
+
+                [소속 정보]
+                - 소속: 트윈리대학교
+
+                [관심사]
+                - 등산
+
+                [성격 특성]
+                - OPENNESS: 새로운 걸 좋아함
+
+                위 관심사 중 하나를 골라, 그 관심사에 대한 질문을 한국어로 하나만 물어보세요.
+                공식적인 인터뷰어같지 않은 친근한 말투와 반말을 사용하세요.
+                질문 외에 다른 설명은 하지 마세요.
+                """);
+    }
+
+    @Test
+    @DisplayName("후속 질문 프롬프트는 컨텍스트와 방금 나눈 질문·답변, 후속 질문 지시로 정확히 구성된다")
+    void aiChatMessage_follow_up_prompt_exact() {
+        // given: 0번 턴 AI 질문이 존재하고, 세션에 관심사 1건과 DETAIL 1건이 있음
+        given(anonSessionAiChatRepository.findByAnonSessionIdAndTurnIndexAndSender(ANON_SESSION_ID, 0, AiChatSender.AI))
+                .willReturn(Optional.of(AnonSessionAiChat.create(ANON_SESSION_ID, AiChatSender.AI, "등산은 어디로 자주 가?", 0)));
+        given(anonSessionPersonaElementRepository.findAllByAnonSessionId(ANON_SESSION_ID))
+                .willReturn(List.of(
+                        AnonSessionPersonaElement.create(ANON_SESSION_ID, PersonaDimension.INTEREST, "등산"),
+                        AnonSessionPersonaElement.create(ANON_SESSION_ID, PersonaDimension.DETAIL, "등산은 어디로 자주 가?: 북한산")));
+        given(bedrockService.converse(anyString())).willReturn("북한산 어느 코스로 올라가?");
+
+        // when: 0번 턴에 답변 전송
+        aiChatService.aiChatMessage(ANON_SESSION, new OnboardingAiChatMessageCommand("북한산", 0));
+
+        // then: 프롬프트 전체 문자열이 기대값과 일치
+        ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
+        then(bedrockService).should().converse(promptCaptor.capture());
+        assertThat(promptCaptor.getValue()).isEqualTo("""
+                당신은 사용자와 대화를 나누며 그 사람을 더 깊이 이해하려는 인터뷰어입니다.
+                아래는 지금까지 파악한 사용자의 정보입니다.
+
+                [소속 정보]
+                - 소속: 트윈리대학교
+
+                [관심사]
+                - 등산
+
+                [성격 특성]
+                - DETAIL: 등산은 어디로 자주 가?: 북한산
+
+                [방금 나눈 대화]
+                나의 질문: 등산은 어디로 자주 가?
+                사용자의 답변: 북한산
+
+                위 정보와 사용자의 방금 답변을 참고해서, 사용자를 더 깊이 이해할 수 있는 자연스러운 후속 질문을 한국어로 하나만 물어보세요.
+                공식적인 인터뷰어같지 않은 친근한 말투와 반말을 사용하세요.
+                질문 외에 다른 설명은 하지 마세요.
+                """);
+    }
+
+    @Test
+    @DisplayName("소속·관심사가 없을 때 주제 전환 프롬프트는 이미 물어본 질문과 일반 질문 지시로 정확히 구성된다")
+    void aiChatMessage_restart_prompt_without_affiliation_and_interest_exact() {
+        // given: 소속이 없는 세션, 3번 턴 AI 질문과 이미 물어본 질문 2건, 관심사 없이 DETAIL 1건
+        AnonSessionSnapshot sessionWithoutAffiliation = new AnonSessionSnapshot(
+                ANON_SESSION_ID,
+                UUID.fromString("11111111-1111-1111-1111-111111111111"),
+                Instant.parse("2999-01-01T00:00:00Z"),
+                "닉네임",
+                "홍",
+                "길동",
+                null,
+                "2024001",
+                "test@test.com",
+                "emailHash",
+                Instant.parse("2026-01-01T00:00:00Z")
+        );
+        given(anonSessionAiChatRepository.findByAnonSessionIdAndTurnIndexAndSender(ANON_SESSION_ID, 3, AiChatSender.AI))
+                .willReturn(Optional.of(AnonSessionAiChat.create(ANON_SESSION_ID, AiChatSender.AI, "요즘 뭐 해?", 3)));
+        given(anonSessionAiChatRepository.findByAnonSessionIdOrderByTurnIndexAscSenderDesc(ANON_SESSION_ID))
+                .willReturn(List.of(
+                        AnonSessionAiChat.create(ANON_SESSION_ID, AiChatSender.AI, "주말엔 뭐 해?", 0),
+                        AnonSessionAiChat.create(ANON_SESSION_ID, AiChatSender.USER, "잠", 0),
+                        AnonSessionAiChat.create(ANON_SESSION_ID, AiChatSender.AI, "요즘 뭐 해?", 3)));
+        given(anonSessionPersonaElementRepository.findAllByAnonSessionId(ANON_SESSION_ID))
+                .willReturn(List.of(
+                        AnonSessionPersonaElement.create(ANON_SESSION_ID, PersonaDimension.DETAIL, "주말엔 뭐 해?: 잠")));
+        given(bedrockService.converse(anyString())).willReturn("최근에 본 영화 있어?");
+
+        // when: 3번 턴에 답변 전송
+        aiChatService.aiChatMessage(sessionWithoutAffiliation, new OnboardingAiChatMessageCommand("공부", 3));
+
+        // then: 프롬프트 전체 문자열이 기대값과 일치
+        ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
+        then(bedrockService).should().converse(promptCaptor.capture());
+        assertThat(promptCaptor.getValue()).isEqualTo("""
+                당신은 사용자와 대화를 나누며 그 사람을 더 깊이 이해하려는 인터뷰어입니다.
+                아래는 지금까지 파악한 사용자의 정보입니다.
+
+                [소속 정보]
+
+                [관심사]
+
+                [성격 특성]
+                - DETAIL: 주말엔 뭐 해?: 잠
+
+                [이미 물어본 질문]
+                - 주말엔 뭐 해?
+                - 요즘 뭐 해?
+
+                위 정보를 참고해서, 사용자를 더 깊이 이해할 수 있는 자연스러운 질문을 한국어로 하나만 물어보세요.
+                이미 물어본 질문과 이어지지 않는, 완전히 새로운 주제로 대화를 다시 시작하는 질문이어야 합니다.
+                공식적인 인터뷰어같지 않은 친근한 말투와 반말을 사용하세요.
+                질문 외에 다른 설명은 하지 마세요.
+                """);
     }
 }
