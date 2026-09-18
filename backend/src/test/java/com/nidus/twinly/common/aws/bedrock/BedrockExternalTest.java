@@ -40,7 +40,7 @@ class BedrockExternalTest {
         //        AWS가 요청 단계에서 거부하므로 추론이 일어나지 않아 과금이 없다.
         BedrockService broken = new BedrockService(
                 bedrockRuntimeClient,
-                new BedrockProperties(null, null, null, "external-test-invalid-model"));
+                new BedrockProperties("unused", "unused", "unused", "external-test-invalid-model"));
 
         // when & then: catch(SdkException)가 실제 예외 타입과 맞아야 502 도메인 오류가 된다.
         //              안 맞으면 AWS SDK 예외가 그대로 새어나가 500이 나간다.
