@@ -57,6 +57,7 @@ public enum ErrorCode {
     INVALID_NICKNAME(HttpStatus.UNPROCESSABLE_CONTENT, "사용할 수 없는 닉네임입니다."),
     INVALID_AFFILIATION_NUMBER(HttpStatus.UNPROCESSABLE_CONTENT, "사용할 수 없는 학번입니다."),
     SURVEY_QUESTION_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 질문입니다."),
+    SURVEY_ANSWERS_INCOMPLETE(HttpStatus.UNPROCESSABLE_CONTENT, "응답하지 않은 설문 문항이 있습니다."),
 
     // 동의(정책)
     POLICY_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 정책 또는 버전입니다."),

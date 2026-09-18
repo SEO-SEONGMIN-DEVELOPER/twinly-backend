@@ -63,7 +63,10 @@ public class OnboardingController {
     }
 
     @Operation(summary = "설문 응답 제출")
-    @ApiResponse(responseCode = "404", description = "SURVEY_QUESTION_NOT_FOUND")
+    @ApiResponses({
+            @ApiResponse(responseCode = "404", description = "SURVEY_QUESTION_NOT_FOUND"),
+            @ApiResponse(responseCode = "422", description = "SURVEY_ANSWERS_INCOMPLETE")
+    })
     @PostMapping("/api/v1/onboarding/survey-answers")
     public void surveyAnswer(@AuthenticationPrincipal AnonSessionSnapshot anonSessionSnapshot,
                               @Valid @RequestBody OnboardingSurveyAnswerRequest request) {

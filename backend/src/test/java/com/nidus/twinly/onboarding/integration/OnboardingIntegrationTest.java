@@ -23,7 +23,6 @@ import com.nidus.twinly.common.photo.PhotoType;
 import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.common.survey.SurveyOptionName;
 import com.nidus.twinly.common.web.ErrorCode;
-import com.nidus.twinly.onboarding.entity.SurveyAnswer;
 import com.nidus.twinly.onboarding.repository.SurveyAnswerRepository;
 import com.nidus.twinly.support.AbstractIntegrationTest;
 import jakarta.persistence.EntityManager;
@@ -41,6 +40,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import com.nidus.twinly.common.survey.SurveyLoader;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.greaterThan;
@@ -61,6 +63,9 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     AnonSessionRepository anonSessionRepository;
+
+    @Autowired
+    SurveyLoader surveyLoader;
 
     @Autowired
     AnonSessionAgreementRepository anonSessionAgreementRepository;
@@ -318,9 +323,77 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
 
         // then: DB에 답변이 저장되고, 마지막 문항이 아니므로 페르소나 요소는 아직 생성되지 않음
         flushAndClear();
-        SurveyAnswer saved = surveyAnswerRepository.findByAnonSessionIdAndQuestionId(session.getId(), 8).orElseThrow();
-        assertThat(saved.getOptionName()).isEqualTo(SurveyOptionName.A);
+        assertThat(surveyAnswerRepository.findAllByAnonSessionId(session.getId()))
+                .singleElement()
+                .satisfies(saved -> {
+                    assertThat(saved.getQuestionId()).isEqualTo(8);
+                    assertThat(saved.getOptionName()).isEqualTo(SurveyOptionName.A);
+                });
         assertThat(anonSessionPersonaElementRepository.findAllByAnonSessionId(session.getId())).isEmpty();
+    }
+
+    /**
+     * 422로 실패한 요청이 롤백되어 마지막 문항 답도 남지 않는지 확인하려면
+     * 요청이 테스트 트랜잭션에 합류하지 않고 스스로 커밋·롤백해야 하므로 베이스 클래스의 @Transactional을 끈다.
+     */
+    @Test
+    @DisplayName("설문 답변: 응답하지 않은 문항이 있는 채로 마지막 문항에 답하면 422이고 롤백되어 마지막 문항 답도 저장되지 않는다")
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void surveyAnswer_last_question_with_missing_answers_rolls_back() throws Exception {
+        // given: 아무 문항에도 답하지 않은 실제 익명 세션
+        AnonSession session = saveAnonSession();
+        Integer lastQuestionId = surveyLoader.getAllQuestions().getLast().id();
+
+        try {
+            // when: 마지막 문항에만 답변
+            mockMvc.perform(post("/api/v1/onboarding/survey-answers")
+                            .header("Authorization", anonBearer(session))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"answer": {"qId": %d, "optionName": "A"}}
+                                    """.formatted(lastQuestionId)))
+                    .andExpect(status().isUnprocessableEntity())
+                    .andExpect(jsonPath("$.code").value(ErrorCode.SURVEY_ANSWERS_INCOMPLETE.name()));
+
+            // then: 마지막 문항 답과 페르소나 요소 모두 남지 않음
+            assertThat(surveyAnswerRepository.findAllByAnonSessionId(session.getId())).isEmpty();
+            assertThat(anonSessionPersonaElementRepository.findAllByAnonSessionId(session.getId())).isEmpty();
+        } finally {
+            surveyAnswerRepository.deleteAll(surveyAnswerRepository.findAllByAnonSessionId(session.getId()));
+            anonSessionRepository.deleteById(session.getId());
+        }
+    }
+
+    @Test
+    @DisplayName("설문 답변: 같은 문항에 다시 답하면 행을 새로 만들지 않고 기존 행의 선택지만 바뀐다")
+    void surveyAnswer_resubmit_updates_existing_row() throws Exception {
+        // given: 실제 익명 세션 + 문항(qId=8)에 A로 답한 상태
+        AnonSession session = saveAnonSession();
+        mockMvc.perform(post("/api/v1/onboarding/survey-answers")
+                        .header("Authorization", anonBearer(session))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"answer": {"qId": 8, "optionName": "A"}}
+                                """))
+                .andExpect(status().isOk());
+
+        // when: 같은 문항에 B로 다시 답변
+        mockMvc.perform(post("/api/v1/onboarding/survey-answers")
+                        .header("Authorization", anonBearer(session))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"answer": {"qId": 8, "optionName": "B"}}
+                                """))
+                .andExpect(status().isOk());
+
+        // then: 유니크 제약 위반 없이 행은 1개로 유지되고 선택지만 B로 바뀜
+        flushAndClear();
+        assertThat(surveyAnswerRepository.findAllByAnonSessionId(session.getId()))
+                .singleElement()
+                .satisfies(saved -> {
+                    assertThat(saved.getQuestionId()).isEqualTo(8);
+                    assertThat(saved.getOptionName()).isEqualTo(SurveyOptionName.B);
+                });
     }
 
     @Test

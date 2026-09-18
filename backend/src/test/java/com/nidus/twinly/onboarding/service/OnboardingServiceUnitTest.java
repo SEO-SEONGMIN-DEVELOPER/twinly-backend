@@ -87,7 +87,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.mock;
@@ -460,57 +462,34 @@ class OnboardingServiceUnitTest {
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.SURVEY_QUESTION_NOT_FOUND);
 
-        then(surveyAnswerRepository).should(never()).save(any());
+        then(surveyAnswerRepository).should(never()).upsert(anyLong(), anyInt(), anyString());
     }
 
     @Test
-    @DisplayName("처음 답한 문항이면 새 SurveyAnswer를 저장하고 페르소나 요소는 만들지 않는다")
-    void surveyAnswer_first_time_saves_new_answer() {
-        // given: 존재하는 문항이고 기존 답변이 없으며 마지막 문항도 아님
+    @DisplayName("마지막 문항이 아니면 세션/문항/선택지로 답변을 upsert하고 페르소나 요소는 만들지 않는다")
+    void surveyAnswer_upserts_answer() {
+        // given: 존재하는 문항이고 마지막 문항은 아님
         given(surveyLoader.getQuestion(8)).willReturn(question(8));
-        given(surveyAnswerRepository.findByAnonSessionIdAndQuestionId(ANON_SESSION_ID, 8)).willReturn(Optional.empty());
         given(surveyLoader.isLastQuestion(8)).willReturn(false);
 
         // when: 설문 답변 저장
         onboardingService.surveyAnswer(ANON_SESSION,
                 new OnboardingSurveyAnswerCommand(new SurveyAnswerInput(8, SurveyOptionName.A)));
 
-        // then: 세션/문항/선택지로 새 답변이 저장되고 페르소나 요소는 저장되지 않음
-        ArgumentCaptor<SurveyAnswer> captor = ArgumentCaptor.forClass(SurveyAnswer.class);
-        then(surveyAnswerRepository).should().save(captor.capture());
-        assertThat(captor.getValue().getAnonSessionId()).isEqualTo(ANON_SESSION_ID);
-        assertThat(captor.getValue().getQuestionId()).isEqualTo(8);
-        assertThat(captor.getValue().getOptionName()).isEqualTo(SurveyOptionName.A);
-        then(anonSessionPersonaElementRepository).should(never()).save(any());
-    }
-
-    @Test
-    @DisplayName("이미 답한 문항이면 기존 답변의 선택지만 바꾸고 새로 저장하지 않는다")
-    void surveyAnswer_existing_answer_is_updated() {
-        // given: 같은 문항에 대한 기존 답변(A)이 존재하고 마지막 문항은 아님
-        SurveyAnswer existing = SurveyAnswer.create(ANON_SESSION_ID, 8, SurveyOptionName.A);
-        given(surveyLoader.getQuestion(8)).willReturn(question(8));
-        given(surveyAnswerRepository.findByAnonSessionIdAndQuestionId(ANON_SESSION_ID, 8)).willReturn(Optional.of(existing));
-        given(surveyLoader.isLastQuestion(8)).willReturn(false);
-
-        // when: 같은 문항에 B로 다시 답변
-        onboardingService.surveyAnswer(ANON_SESSION,
-                new OnboardingSurveyAnswerCommand(new SurveyAnswerInput(8, SurveyOptionName.B)));
-
-        // then: 기존 답변만 갱신되고 저장은 호출되지 않음
-        assertThat(existing.getOptionName()).isEqualTo(SurveyOptionName.B);
-        then(surveyAnswerRepository).should(never()).save(any());
+        // then: 세션/문항/선택지 이름으로 upsert가 호출되고 페르소나 요소는 저장되지 않음
+        then(surveyAnswerRepository).should().upsert(ANON_SESSION_ID, 8, "A");
+        then(anonSessionPersonaElementRepository).should(never()).saveAll(any());
     }
 
     @Test
     @DisplayName("마지막 문항에 답하면 저장된 모든 답변을 페르소나 요소(차원+특성)로 변환해 저장한다")
     void surveyAnswer_on_last_question_creates_persona_elements() {
-        // given: 마지막 문항(23)에 답하고, 세션에 답변 1건이 저장되어 있음
+        // given: 문항 1개 설문의 마지막 문항(23)에 답하고, 세션에 그 답변이 저장되어 있음
         given(surveyLoader.getQuestion(23)).willReturn(question(23));
-        given(surveyAnswerRepository.findByAnonSessionIdAndQuestionId(ANON_SESSION_ID, 23)).willReturn(Optional.empty());
         given(surveyLoader.isLastQuestion(23)).willReturn(true);
         given(surveyAnswerRepository.findAllByAnonSessionId(ANON_SESSION_ID))
                 .willReturn(List.of(SurveyAnswer.create(ANON_SESSION_ID, 23, SurveyOptionName.B)));
+        given(surveyLoader.getAllQuestions()).willReturn(List.of(question(23)));
 
         // when: 마지막 문항에 답변
         onboardingService.surveyAnswer(ANON_SESSION,
@@ -881,6 +860,49 @@ class OnboardingServiceUnitTest {
 
         then(anonSessionAgreementRepository).should(never())
                 .revokeWithPreviousVersionsByAnonSessionIdAndPolicyIdIn(anyLong(), anyList());
+    }
+
+    @Test
+    @DisplayName("마지막 문항에 답했는데 응답하지 않은 문항이 있으면 SURVEY_ANSWERS_INCOMPLETE 예외가 발생하고 페르소나를 건드리지 않는다")
+    void surveyAnswer_on_last_question_with_missing_answers_throws() {
+        // given: 문항 2개(8, 23) 설문에서 마지막 문항(23) 답변만 저장되어 있음
+        given(surveyLoader.getQuestion(23)).willReturn(question(23));
+        given(surveyLoader.isLastQuestion(23)).willReturn(true);
+        given(surveyAnswerRepository.findAllByAnonSessionId(ANON_SESSION_ID))
+                .willReturn(List.of(SurveyAnswer.create(ANON_SESSION_ID, 23, SurveyOptionName.B)));
+        given(surveyLoader.getAllQuestions()).willReturn(List.of(question(8), question(23)));
+
+        // when & then: SURVEY_ANSWERS_INCOMPLETE 예외 발생 + 페르소나 요소 삭제/저장 안 함
+        assertThatThrownBy(() -> onboardingService.surveyAnswer(ANON_SESSION,
+                new OnboardingSurveyAnswerCommand(new SurveyAnswerInput(23, SurveyOptionName.B))))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.SURVEY_ANSWERS_INCOMPLETE);
+
+        then(anonSessionPersonaElementRepository).should(never()).deleteByAnonSessionIdAndDimensionIn(anyLong(), any());
+        then(anonSessionPersonaElementRepository).should(never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("현재 설문에 없는 문항의 답변은 응답 수에 세지 않는다")
+    void surveyAnswer_on_last_question_ignores_answers_to_unknown_questions() {
+        // given: 문항 2개(8, 23) 설문인데 저장된 답변은 마지막 문항(23)과 설문에서 빠진 문항(99)
+        given(surveyLoader.getQuestion(23)).willReturn(question(23));
+        given(surveyLoader.getQuestion(99)).willReturn(null);
+        given(surveyLoader.isLastQuestion(23)).willReturn(true);
+        given(surveyAnswerRepository.findAllByAnonSessionId(ANON_SESSION_ID)).willReturn(List.of(
+                SurveyAnswer.create(ANON_SESSION_ID, 99, SurveyOptionName.A),
+                SurveyAnswer.create(ANON_SESSION_ID, 23, SurveyOptionName.B)));
+        given(surveyLoader.getAllQuestions()).willReturn(List.of(question(8), question(23)));
+
+        // when & then: 답변 행은 2개지만 유효 응답은 1개라 SURVEY_ANSWERS_INCOMPLETE 예외 발생
+        assertThatThrownBy(() -> onboardingService.surveyAnswer(ANON_SESSION,
+                new OnboardingSurveyAnswerCommand(new SurveyAnswerInput(23, SurveyOptionName.B))))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.SURVEY_ANSWERS_INCOMPLETE);
+
+        then(anonSessionPersonaElementRepository).should(never()).saveAll(any());
     }
 
     private SurveyQuestion question(Integer id) {

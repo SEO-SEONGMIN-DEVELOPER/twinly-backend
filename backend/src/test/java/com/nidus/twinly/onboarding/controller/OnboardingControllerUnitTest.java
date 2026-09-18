@@ -356,6 +356,26 @@ class OnboardingControllerUnitTest {
     }
 
     @Test
+    @DisplayName("응답하지 않은 문항이 있어 서비스가 SURVEY_ANSWERS_INCOMPLETE를 던지면 422로 매핑된다")
+    void surveyAnswer_incomplete_returns_422() throws Exception {
+        // given: 서비스가 SURVEY_ANSWERS_INCOMPLETE 예외를 던짐
+        willThrow(new BusinessException(ErrorCode.SURVEY_ANSWERS_INCOMPLETE))
+                .given(onboardingService).surveyAnswer(any(), any());
+
+        // when: 마지막 문항으로 설문 답변 API 호출
+        var result = mockMvc.perform(post("/api/v1/onboarding/survey-answers")
+                .header("Authorization", ANON_BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"answer": {"qId": 23, "optionName": "B"}}
+                        """));
+
+        // then: 422 반환 + 에러 코드 JSON
+        result.andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value(ErrorCode.SURVEY_ANSWERS_INCOMPLETE.name()));
+    }
+
+    @Test
     @DisplayName("관심사 저장 성공 시 200을 반환하고 관심사 목록 커맨드로 서비스를 호출한다")
     void interests_success() throws Exception {
         // when: 익명 세션 인증 상태로 관심사 저장 API 호출
