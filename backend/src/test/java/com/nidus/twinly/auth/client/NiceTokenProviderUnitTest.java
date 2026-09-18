@@ -1,5 +1,6 @@
 package com.nidus.twinly.auth.client;
 
+import com.nidus.twinly.auth.config.NiceProperties;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,6 +25,9 @@ import static org.mockito.Mockito.when;
 class NiceTokenProviderUnitTest {
 
     private static final Instant NOW = Instant.parse("2026-09-15T10:00:00Z");
+    private static final NiceProperties NICE_PROPERTIES = new NiceProperties(
+            "client-id", "client-secret", "return-url", "close-url",
+            Duration.ofSeconds(3), Duration.ofSeconds(7), Duration.ofMinutes(1));
 
     @Mock
     NiceAuthClient niceAuthClient;
@@ -32,7 +36,7 @@ class NiceTokenProviderUnitTest {
 
     @BeforeEach
     void setUp() {
-        provider = new NiceTokenProvider(niceAuthClient, Clock.fixed(NOW, ZoneOffset.UTC));
+        provider = new NiceTokenProvider(niceAuthClient, Clock.fixed(NOW, ZoneOffset.UTC), NICE_PROPERTIES);
     }
 
     @Test

@@ -1,29 +1,30 @@
 package com.nidus.twinly.purchase;
 
+import com.nidus.twinly.common.config.RequiredProperty;
 import com.nidus.twinly.purchase.domain.RevenueCatEnvironment;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import java.time.Duration;
 
 @ConfigurationProperties(prefix = "revenue-cat")
 public record RevenueCatProperties(
         String webhookSecret,
         String secretApiKey,
-        RevenueCatEnvironment environment
+        RevenueCatEnvironment environment,
+        Duration connectTimeout,
+        Duration readTimeout,
+        Duration syncInterval
 ) {
 
-    private static final String UNRESOLVED_PLACEHOLDER_PREFIX = "${";
-
     public RevenueCatProperties {
-        requireConfigured("revenue-cat.webhook-secret", webhookSecret);
-        requireConfigured("revenue-cat.secret-api-key", secretApiKey);
+        RequiredProperty.require("revenue-cat.webhook-secret", webhookSecret);
+        RequiredProperty.require("revenue-cat.secret-api-key", secretApiKey);
+        RequiredProperty.requirePositive("revenue-cat.connect-timeout", connectTimeout);
+        RequiredProperty.requirePositive("revenue-cat.read-timeout", readTimeout);
+        RequiredProperty.requirePositive("revenue-cat.sync-interval", syncInterval);
 
         if (environment == null) {
             throw new IllegalStateException("revenue-cat.environment 가 설정되지 않았습니다.");
-        }
-    }
-
-    private static void requireConfigured(String key, String value) {
-        if (value == null || value.isBlank() || value.startsWith(UNRESOLVED_PLACEHOLDER_PREFIX)) {
-            throw new IllegalStateException(key + " 가 설정되지 않았습니다.");
         }
     }
 }

@@ -25,6 +25,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -73,7 +74,8 @@ class PurchaseServiceUnitTest {
 
     @BeforeEach
     void setUp() {
-        RevenueCatProperties properties = new RevenueCatProperties("secret", "sk_test", RevenueCatEnvironment.SANDBOX);
+        RevenueCatProperties properties = new RevenueCatProperties("secret", "sk_test", RevenueCatEnvironment.SANDBOX,
+                Duration.ofSeconds(3), Duration.ofSeconds(5), Duration.ofSeconds(30));
         purchaseService = new PurchaseService(
                 properties, revenueCatClient, userRepository, purchaseWriter, entitlementReader,
                 seasonParticipationWriter, eventPublisher);

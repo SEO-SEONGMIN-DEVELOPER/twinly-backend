@@ -21,7 +21,6 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -33,8 +32,6 @@ import static com.nidus.twinly.common.logging.LogField.field;
 @Service
 @RequiredArgsConstructor
 public class PurchaseService {
-
-    private static final Duration SYNC_INTERVAL = Duration.ofSeconds(30);
 
     private final RevenueCatProperties revenueCatProperties;
     private final RevenueCatClient revenueCatClient;
@@ -65,7 +62,7 @@ public class PurchaseService {
     public void syncIfStale(User user) {
         Instant now = Instant.now();
 
-        if (!user.needsPurchasesSync(now.minus(SYNC_INTERVAL))) {
+        if (!user.needsPurchasesSync(now.minus(revenueCatProperties.syncInterval()))) {
             return;
         }
 

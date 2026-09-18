@@ -87,7 +87,8 @@ class RevenueCatExternalTest {
     @DisplayName("자격증명이 잘못되면 RestClient 예외를 REVENUE_CAT_SYNC_FAILED 로 감싼다")
     void invalid_credential_is_wrapped() {
         // given: 형식만 그럴듯한 가짜 키로 만든 클라이언트 (요청이 거부되므로 구독자가 생기지 않는다)
-        RevenueCatProperties invalid = new RevenueCatProperties("secret", "sk_invalid_external_test", RevenueCatEnvironment.SANDBOX);
+        RevenueCatProperties invalid = new RevenueCatProperties("secret", "sk_invalid_external_test", RevenueCatEnvironment.SANDBOX,
+                revenueCatProperties.connectTimeout(), revenueCatProperties.readTimeout(), revenueCatProperties.syncInterval());
         RevenueCatClient invalidClient = new RevenueCatClient(jsonMapper, invalid);
 
         // when & then: 401 이 우리 도메인 예외로 변환되어 올라온다

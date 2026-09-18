@@ -11,7 +11,6 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import tools.jackson.databind.json.JsonMapper;
 
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -19,15 +18,12 @@ import java.util.List;
 @Component
 public class SimulationPreloadClient {
 
-    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(2);
-    private static final Duration READ_TIMEOUT = Duration.ofSeconds(3);
-
     private final RestClient restClient;
 
     public SimulationPreloadClient(JsonMapper jsonMapper, AiServerProperties aiServerProperties) {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(CONNECT_TIMEOUT);
-        requestFactory.setReadTimeout(READ_TIMEOUT);
+        requestFactory.setConnectTimeout(aiServerProperties.connectTimeout());
+        requestFactory.setReadTimeout(aiServerProperties.readTimeout());
         this.restClient = RestClient.builder()
                 .baseUrl(aiServerProperties.baseUrl())
                 .requestFactory(requestFactory)

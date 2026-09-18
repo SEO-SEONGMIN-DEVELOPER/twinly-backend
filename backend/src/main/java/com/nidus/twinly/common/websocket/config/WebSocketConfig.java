@@ -32,7 +32,6 @@ import java.util.List;
 @RequiredArgsConstructor
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
-    private static final long HEARTBEAT_INTERVAL_MS = 25_000L;
     private static final int MAX_MESSAGE_BYTES = 64 * 1024;
 
     private final ConnectionService connectionService;
@@ -40,6 +39,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     private final WebSocketErrorInterceptor errorInterceptor;
     private final WebSocketTraceIdInterceptor traceIdInterceptor;
     private final JsonMapper jsonMapper;
+    private final WebSocketProperties webSocketProperties;
 
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
@@ -90,11 +90,16 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
         registry.enableSimpleBroker("/queue")
-                .setHeartbeatValue(new long[]{HEARTBEAT_INTERVAL_MS, HEARTBEAT_INTERVAL_MS})
+                .setHeartbeatValue(heartbeatValue())
                 .setTaskScheduler(webSocketHeartbeatTaskScheduler());
 
         registry.setApplicationDestinationPrefixes("/app");
         registry.setPreservePublishOrder(true);
+    }
+
+    private long[] heartbeatValue() {
+        long intervalMs = webSocketProperties.heartbeatInterval().toMillis();
+        return new long[]{intervalMs, intervalMs};
     }
 
     @Bean

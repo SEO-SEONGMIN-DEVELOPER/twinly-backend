@@ -1,5 +1,6 @@
 package com.nidus.twinly.app.store;
 
+import com.nidus.twinly.app.config.AppBlockProperties;
 import com.nidus.twinly.app.domain.AppBlockPolicy;
 import com.nidus.twinly.app.domain.AppPlatform;
 import com.nidus.twinly.app.domain.AppVersion;
@@ -31,6 +32,8 @@ import static org.mockito.Mockito.times;
 @ExtendWith(MockitoExtension.class)
 class AppBlockPolicyStoreUnitTest {
 
+    private static final Duration CACHE_TTL = Duration.ofSeconds(5);
+
     private static final String IOS_KEY = AppBlockPolicyStore.VERSION_POLICY_KEY_PREFIX + "ios";
     private static final String ANDROID_KEY = AppBlockPolicyStore.VERSION_POLICY_KEY_PREFIX + "android";
 
@@ -46,7 +49,7 @@ class AppBlockPolicyStoreUnitTest {
     @BeforeEach
     void setUp() {
         given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        store = new AppBlockPolicyStore(redisTemplate, JsonMapper.builder().build(), clock);
+        store = new AppBlockPolicyStore(redisTemplate, JsonMapper.builder().build(), clock, new AppBlockProperties(CACHE_TTL));
     }
 
     @Test
@@ -92,7 +95,7 @@ class AppBlockPolicyStoreUnitTest {
         store.current();
 
         // when: TTL 직전까지 시간이 흐른 뒤 다시 조회
-        clock.advance(AppBlockPolicyStore.CACHE_TTL.minusMillis(1));
+        clock.advance(CACHE_TTL.minusMillis(1));
         store.current();
 
         // then: 점검 1회 + 플랫폼 2회 = 최초 로드의 3회뿐
@@ -107,7 +110,7 @@ class AppBlockPolicyStoreUnitTest {
         store.current();
 
         // when
-        clock.advance(AppBlockPolicyStore.CACHE_TTL);
+        clock.advance(CACHE_TTL);
         store.current();
 
         // then
@@ -139,7 +142,7 @@ class AppBlockPolicyStoreUnitTest {
         store.current();
 
         // when: 만료 후 Redis 장애
-        clock.advance(AppBlockPolicyStore.CACHE_TTL);
+        clock.advance(CACHE_TTL);
         AppBlockPolicy policy = store.current();
 
         // then

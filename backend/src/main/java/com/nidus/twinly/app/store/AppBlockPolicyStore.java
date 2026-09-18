@@ -1,5 +1,6 @@
 package com.nidus.twinly.app.store;
 
+import com.nidus.twinly.app.config.AppBlockProperties;
 import com.nidus.twinly.app.domain.AppBlockPolicy;
 import com.nidus.twinly.app.domain.AppPlatform;
 import com.nidus.twinly.app.domain.AppVersionPolicy;
@@ -13,7 +14,6 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.EnumMap;
 import java.util.Map;
@@ -28,11 +28,11 @@ public class AppBlockPolicyStore {
 
     static final String MAINTENANCE_KEY = "app:maintenance";
     static final String VERSION_POLICY_KEY_PREFIX = "app:version-policy:";
-    static final Duration CACHE_TTL = Duration.ofSeconds(5);
 
     private final StringRedisTemplate redisTemplate;
     private final JsonMapper jsonMapper;
     private final Clock clock;
+    private final AppBlockProperties appBlockProperties;
     private final AtomicReference<CachedSnapshot> cache = new AtomicReference<>();
 
     public AppBlockPolicy current() {
@@ -51,7 +51,7 @@ public class AppBlockPolicyStore {
             WarnLog.log(log, "앱 차단 정책을 Redis에서 읽지 못해 대체 값으로 동작합니다.", e, field("fallback", snapshot != null ? "마지막 값" : "차단 없음"));
         }
 
-        cache.set(new CachedSnapshot(policy, now.plus(CACHE_TTL)));
+        cache.set(new CachedSnapshot(policy, now.plus(appBlockProperties.cacheTtl())));
         return policy;
     }
 

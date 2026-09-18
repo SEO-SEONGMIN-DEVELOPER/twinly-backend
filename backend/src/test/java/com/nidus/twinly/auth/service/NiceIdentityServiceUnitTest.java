@@ -20,6 +20,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Duration;
 import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -56,7 +57,8 @@ class NiceIdentityServiceUnitTest {
     @BeforeEach
     void setUp() {
         niceIdentityService = new NiceIdentityService(niceTokenProvider, niceAuthClient, niceResultDecryptor,
-                new NiceProperties("client-id", "client-secret", RETURN_URL, CLOSE_URL));
+                new NiceProperties("client-id", "client-secret", RETURN_URL, CLOSE_URL,
+                        Duration.ofSeconds(3), Duration.ofSeconds(7), Duration.ofMinutes(1)));
     }
 
     @Test

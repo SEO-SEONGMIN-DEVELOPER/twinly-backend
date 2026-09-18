@@ -4,13 +4,15 @@ import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.purchase.event.SimulationAccessGrantedEvent;
 import com.nidus.twinly.simulation.client.SimulationPreloadClient;
+import com.nidus.twinly.simulation.config.SimulationPreloadProperties;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -33,8 +35,13 @@ class SimulationPreloadNotifierUnitTest {
     @Mock
     SimulationPreloadClient simulationPreloadClient;
 
-    @InjectMocks
     SimulationPreloadNotifier notifier;
+
+    @BeforeEach
+    void setUp() {
+        notifier = new SimulationPreloadNotifier(
+                simulationPreloadClient, new SimulationPreloadProperties(2, 3, Duration.ofMillis(1)));
+    }
 
     @Test
     @DisplayName("권한 반영 시각을 KST 초 단위로 바꾸고, 그 날짜부터 이틀을 요청한다")

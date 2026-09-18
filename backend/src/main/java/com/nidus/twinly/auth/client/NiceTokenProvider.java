@@ -1,5 +1,6 @@
 package com.nidus.twinly.auth.client;
 
+import com.nidus.twinly.auth.config.NiceProperties;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
@@ -9,23 +10,23 @@ import java.time.Instant;
 @Component
 public class NiceTokenProvider {
 
-    private static final Duration REFRESH_MARGIN = Duration.ofMinutes(1);
-
     private final NiceAuthClient niceAuthClient;
     private final Clock clock;
+    private final Duration refreshMargin;
 
     private volatile NiceToken cached;
 
-    public NiceTokenProvider(NiceAuthClient niceAuthClient, Clock clock) {
+    public NiceTokenProvider(NiceAuthClient niceAuthClient, Clock clock, NiceProperties niceProperties) {
         this.niceAuthClient = niceAuthClient;
         this.clock = clock;
+        this.refreshMargin = niceProperties.tokenRefreshMargin();
     }
 
     public NiceToken getToken() {
         NiceToken token = cached;
         Instant now = clock.instant();
 
-        if (token != null && token.isUsableAt(now, REFRESH_MARGIN)) {
+        if (token != null && token.isUsableAt(now, refreshMargin)) {
             return token;
         }
 
@@ -39,7 +40,7 @@ public class NiceTokenProvider {
     private synchronized NiceToken refresh(Instant now) {
         NiceToken token = cached;
 
-        if (token != null && token.isUsableAt(now, REFRESH_MARGIN)) {
+        if (token != null && token.isUsableAt(now, refreshMargin)) {
             return token;
         }
 
