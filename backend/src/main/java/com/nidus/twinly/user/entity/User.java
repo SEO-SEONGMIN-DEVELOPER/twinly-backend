@@ -165,7 +165,7 @@ public class User {
     }
 
     public boolean isWithdrawn() {
-        return deletedAt != null;
+        return withdrawalRequestedAt != null || deletedAt != null;
     }
 
     public String displayFullName() {

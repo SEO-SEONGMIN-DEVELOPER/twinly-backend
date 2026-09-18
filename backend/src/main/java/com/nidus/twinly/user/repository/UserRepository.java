@@ -39,14 +39,15 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     List<User> findAllByDeletedAtIsNullAndWithdrawalScheduledAtLessThanEqual(Instant now, Pageable pageable);
 
-    int countByDeletedAtIsNull();
+    int countByWithdrawalRequestedAtIsNullAndDeletedAtIsNull();
 
-    int countByDeletedAtIsNullAndOrganizationHash(String organizationHash);
+    int countByWithdrawalRequestedAtIsNullAndDeletedAtIsNullAndOrganizationHash(String organizationHash);
 
     @Query(value = """
             SELECT u.id
             FROM users u
-            WHERE u.deleted_at IS NULL
+            WHERE u.withdrawal_requested_at IS NULL
+              AND u.deleted_at IS NULL
               AND (:cursor IS NULL OR u.id > :cursor)
               AND EXISTS (
                   SELECT 1

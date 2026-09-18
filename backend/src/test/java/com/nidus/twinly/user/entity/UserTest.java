@@ -5,6 +5,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.Duration;
 import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -31,6 +32,31 @@ class UserTest {
         // then: 표기 형식과 무관하게 실명이 노출되지 않는다
         assertThat(user.displayFullName()).isEqualTo(User.WITHDRAWN_NAME);
         assertThat(user.displayGivenName()).isEqualTo(User.WITHDRAWN_NAME);
+    }
+
+    @Test
+    @DisplayName("탈퇴 유예 기간 중인 유저도 파기 전부터 탈퇴한 유저로 간주된다")
+    void withdrawal_requested_user_is_withdrawn() {
+        // given: 탈퇴를 신청했지만 아직 파기되지 않은 유저
+        User user = user(null);
+        user.requestWithdrawal(Duration.ofDays(15));
+
+        // then: 탈퇴로 판정되고 실명이 노출되지 않는다
+        assertThat(user.isWithdrawn()).isTrue();
+        assertThat(user.displayGivenName()).isEqualTo(User.WITHDRAWN_NAME);
+    }
+
+    @Test
+    @DisplayName("탈퇴를 철회하면 다시 탈퇴하지 않은 유저로 간주된다")
+    void cancelled_withdrawal_user_is_not_withdrawn() {
+        // given: 탈퇴 신청 후 철회한 유저
+        User user = user(null);
+        user.requestWithdrawal(Duration.ofDays(15));
+        user.cancelWithdrawal();
+
+        // then: 탈퇴 판정이 풀리고 실명이 다시 표시된다
+        assertThat(user.isWithdrawn()).isFalse();
+        assertThat(user.displayGivenName()).isEqualTo("길동");
     }
 
     private User user(Instant deletedAt) {

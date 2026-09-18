@@ -304,8 +304,8 @@ public class ShowcaseService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
         return new ShowcaseUserCountsResult(
-                userRepository.countByDeletedAtIsNull(),
-                userRepository.countByDeletedAtIsNullAndOrganizationHash(viewer.getOrganizationHash()),
+                userRepository.countByWithdrawalRequestedAtIsNullAndDeletedAtIsNull(),
+                userRepository.countByWithdrawalRequestedAtIsNullAndDeletedAtIsNullAndOrganizationHash(viewer.getOrganizationHash()),
                 toDisplayOrganization(viewer.getOrganization())
         );
     }

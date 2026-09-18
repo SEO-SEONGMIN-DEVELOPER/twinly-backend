@@ -262,8 +262,8 @@ class ShowcaseServiceUnitTest {
         given(scenePartnerRepository.findAllBySceneIdIn(anyList())).willReturn(List.of());
         given(userRepository.findAllById(any())).willReturn(List.of(user(TARGET_ID, "김", "민수", "고려대학교")));
         given(userRepository.findById(VIEWER_ID)).willReturn(Optional.of(user(VIEWER_ID, "이", "서연", "성신여자대학교")));
-        given(userRepository.countByDeletedAtIsNull()).willReturn(12840);
-        given(userRepository.countByDeletedAtIsNullAndOrganizationHash(any())).willReturn(320);
+        given(userRepository.countByWithdrawalRequestedAtIsNullAndDeletedAtIsNull()).willReturn(12840);
+        given(userRepository.countByWithdrawalRequestedAtIsNullAndDeletedAtIsNullAndOrganizationHash(any())).willReturn(320);
 
         // when: 오늘 관람 조회
         ShowcaseTodayResult result = showcaseService.today(VIEWER_ID);
@@ -284,8 +284,8 @@ class ShowcaseServiceUnitTest {
 
     private void givenViewerCounts() {
         given(userRepository.findById(VIEWER_ID)).willReturn(Optional.of(user(VIEWER_ID, "이", "서연")));
-        given(userRepository.countByDeletedAtIsNull()).willReturn(12840);
-        given(userRepository.countByDeletedAtIsNullAndOrganizationHash(any())).willReturn(320);
+        given(userRepository.countByWithdrawalRequestedAtIsNullAndDeletedAtIsNull()).willReturn(12840);
+        given(userRepository.countByWithdrawalRequestedAtIsNullAndDeletedAtIsNullAndOrganizationHash(any())).willReturn(320);
     }
 
     private Showcase showcase() {

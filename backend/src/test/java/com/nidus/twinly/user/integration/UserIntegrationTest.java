@@ -111,6 +111,27 @@ class UserIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("유저 목록 조회: 탈퇴 유예 기간 중인 유저도 목록에서 제외된다")
+    void users_excludes_withdrawal_requested_end_to_end() throws Exception {
+        // given: 유저 3명 중 가운데 유저가 탈퇴를 신청해 복구 가능 기간에 있다
+        User first = saveSubscribedUser();
+        User pending = saveSubscribedUser();
+        User alive = saveSubscribedUser();
+        pending.requestWithdrawal(Duration.ofDays(15));
+        userRepository.flush();
+
+        // when: 첫 번째 유저의 id를 커서로 유저 목록 API 호출
+        var result = mockMvc.perform(get("/internal/v1/users")
+                .param("cursor", first.getId().toString())
+                .param("limit", "10"));
+
+        // then: 파기 전이어도 탈퇴 신청한 유저는 AI 서버에 넘기지 않는다
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.userIds", hasSize(1)))
+                .andExpect(jsonPath("$.userIds", contains(alive.getId().toString())));
+    }
+
+    @Test
     @DisplayName("유저 목록 조회: 인증 없이 호출해도 200을 반환한다 (내부 API)")
     void users_without_auth_end_to_end() throws Exception {
         // given: 실제 유저 1명 저장
