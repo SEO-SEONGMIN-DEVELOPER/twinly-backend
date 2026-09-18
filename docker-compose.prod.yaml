@@ -47,6 +47,8 @@ services:
       NICE_RETURN_URL: ${NICE_RETURN_URL:?NICE_RETURN_URL is not set}
       NICE_CLOSE_URL: ${NICE_CLOSE_URL:?NICE_CLOSE_URL is not set}
       AI_SERVER_BASE_URL: ${AI_SERVER_BASE_URL:?AI_SERVER_BASE_URL is not set}
+      SLACK_REPORT_WEBHOOK_URL: ${SLACK_REPORT_WEBHOOK_URL:?SLACK_REPORT_WEBHOOK_URL is not set}
+      VERIFICATION_TEST_CODE: ${VERIFICATION_TEST_CODE:-}
     mem_limit: 900m
     restart: unless-stopped
     logging:

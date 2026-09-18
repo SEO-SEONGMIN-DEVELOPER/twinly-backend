@@ -1,17 +1,20 @@
 package com.nidus.twinly.simulation.config;
 
+import com.nidus.twinly.common.config.RequiredProperty;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import java.time.Duration;
 
 @ConfigurationProperties(prefix = "ai-server")
 public record AiServerProperties(
-        String baseUrl
+        String baseUrl,
+        Duration connectTimeout,
+        Duration readTimeout
 ) {
 
-    private static final String UNRESOLVED_PLACEHOLDER_PREFIX = "${";
-
     public AiServerProperties {
-        if (baseUrl == null || baseUrl.isBlank() || baseUrl.startsWith(UNRESOLVED_PLACEHOLDER_PREFIX)) {
-            throw new IllegalStateException("ai-server.base-url 가 설정되지 않았습니다.");
-        }
+        RequiredProperty.require("ai-server.base-url", baseUrl);
+        RequiredProperty.requirePositive("ai-server.connect-timeout", connectTimeout);
+        RequiredProperty.requirePositive("ai-server.read-timeout", readTimeout);
     }
 }

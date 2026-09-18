@@ -101,15 +101,44 @@ jwt:
 revenue-cat:
   webhook-secret: ${REVENUECAT_WEBHOOK_SECRET}
   secret-api-key: ${REVENUECAT_SECRET_API_KEY}
+  connect-timeout: 3s
+  read-timeout: 5s
+  sync-interval: 30s
 
 nice:
   client-id: ${NICE_CLIENT_ID}
   client-secret: ${NICE_CLIENT_SECRET}
   return-url: ${NICE_RETURN_URL}
   close-url: ${NICE_CLOSE_URL}
+  connect-timeout: 3s
+  read-timeout: 7s
+  token-refresh-margin: 1m
 
 ai-server:
   base-url: ${AI_SERVER_BASE_URL}
+  connect-timeout: 2s
+  read-timeout: 3s
+
+slack:
+  report-webhook-url: ${SLACK_REPORT_WEBHOOK_URL}
+  connect-timeout: 2s
+  read-timeout: 3s
+
+simulation:
+  preload:
+    days: 2
+    max-attempts: 3
+    retry-delay: 2s
+
+app-block:
+  cache-ttl: 5s
+
+withdrawn-user-deletion:
+  chunk-size: 500
+  max-chunks: 100
+
+websocket:
+  heartbeat-interval: 25s
 
 fcm:
   service-account-base64: ${FCM_SERVICE_ACCOUNT_BASE64}

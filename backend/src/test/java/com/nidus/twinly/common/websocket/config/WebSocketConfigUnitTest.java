@@ -28,7 +28,7 @@ class WebSocketConfigUnitTest {
     void outbound_channel_carries_trace_id() {
         // given: 실제 설정
         WebSocketConfig config = new WebSocketConfig(
-                null, frameValidationInterceptor, errorInterceptor, traceIdInterceptor, null);
+                null, frameValidationInterceptor, errorInterceptor, traceIdInterceptor, null, null);
 
         ChannelRegistration registration = mock(ChannelRegistration.class);
 
@@ -49,7 +49,7 @@ class WebSocketConfigUnitTest {
     void trace_id_interceptor_comes_first() {
         // given: 실제 설정
         WebSocketConfig config = new WebSocketConfig(
-                null, frameValidationInterceptor, errorInterceptor, traceIdInterceptor, null);
+                null, frameValidationInterceptor, errorInterceptor, traceIdInterceptor, null, null);
 
         ChannelRegistration registration = mock(ChannelRegistration.class);
         TaskExecutorRegistration taskExecutorRegistration = mock(TaskExecutorRegistration.class);

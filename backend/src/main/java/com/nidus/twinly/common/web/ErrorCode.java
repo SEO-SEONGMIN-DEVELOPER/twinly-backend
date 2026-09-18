@@ -126,7 +126,8 @@ public enum ErrorCode {
     AI_RESPONSE_FAILED(HttpStatus.BAD_GATEWAY, "AI 응답 생성에 실패했습니다."),
     REVENUE_CAT_SYNC_FAILED(HttpStatus.BAD_GATEWAY, "구매 상태 동기화에 실패했습니다."),
     IDENTITY_VERIFICATION_FAILED(HttpStatus.BAD_GATEWAY, "본인인증 조회에 실패했습니다."),
-    SIMULATION_PRELOAD_FAILED(HttpStatus.BAD_GATEWAY, "시뮬레이션 선생성 요청에 실패했습니다.");
+    SIMULATION_PRELOAD_FAILED(HttpStatus.BAD_GATEWAY, "시뮬레이션 선생성 요청에 실패했습니다."),
+    SLACK_SEND_FAILED(HttpStatus.BAD_GATEWAY, "Slack 알림 발송에 실패했습니다.");
 
     private final HttpStatus status;
     private final String defaultMessage;

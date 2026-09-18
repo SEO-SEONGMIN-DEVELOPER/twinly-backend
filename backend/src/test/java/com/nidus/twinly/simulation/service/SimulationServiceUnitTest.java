@@ -41,6 +41,7 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.ObjectMapper;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -333,6 +334,24 @@ class SimulationServiceUnitTest {
         User withdrawn = user(USER_ID, "서", "성민", "컴퓨터공학과", "1999-03-21");
         ReflectionTestUtils.setField(withdrawn, "deletedAt", Instant.parse("2026-08-01T00:00:00Z"));
         given(userRepository.findById(USER_ID)).willReturn(Optional.of(withdrawn));
+
+        // when & then: USER_NOT_FOUND 예외 발생 + 성향 조회 안 함
+        assertThatThrownBy(() -> simulationService.persona(USER_ID))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.USER_NOT_FOUND);
+
+        then(purchaseService).should(never()).syncQuietly(any());
+        then(personaElementRepository).should(never()).findAllByUserIdOrderByIdAsc(any());
+    }
+
+    @Test
+    @DisplayName("탈퇴 유예 기간 중인 유저도 탈퇴한 유저와 동일하게 USER_NOT_FOUND 예외가 발생한다")
+    void persona_withdrawal_requested_user_throws() {
+        // given: 탈퇴를 신청했지만 아직 파기되지 않은 유저
+        User pending = user(USER_ID, "서", "성민", "컴퓨터공학과", "1999-03-21");
+        pending.requestWithdrawal(Duration.ofDays(15));
+        given(userRepository.findById(USER_ID)).willReturn(Optional.of(pending));
 
         // when & then: USER_NOT_FOUND 예외 발생 + 성향 조회 안 함
         assertThatThrownBy(() -> simulationService.persona(USER_ID))

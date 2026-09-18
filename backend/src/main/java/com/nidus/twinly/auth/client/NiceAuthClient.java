@@ -16,7 +16,6 @@ import org.springframework.web.client.RestClientException;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -43,8 +42,6 @@ public class NiceAuthClient {
     private static final List<String> SVC_TYPES_MOBILE = List.of("M");
     private static final String METHOD_TYPE_GET = "GET";
     private static final List<String> EXP_MODS_CLOSE_BUTTON = List.of("closeButtonOn");
-    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(3);
-    private static final Duration READ_TIMEOUT = Duration.ofSeconds(7);
 
     private final RestClient restClient;
     private final JsonMapper jsonMapper;
@@ -53,8 +50,8 @@ public class NiceAuthClient {
 
     public NiceAuthClient(JsonMapper jsonMapper, NiceProperties niceProperties) {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(CONNECT_TIMEOUT);
-        requestFactory.setReadTimeout(READ_TIMEOUT);
+        requestFactory.setConnectTimeout(niceProperties.connectTimeout());
+        requestFactory.setReadTimeout(niceProperties.readTimeout());
 
         this.restClient = RestClient.builder()
                 .baseUrl(BASE_URL)

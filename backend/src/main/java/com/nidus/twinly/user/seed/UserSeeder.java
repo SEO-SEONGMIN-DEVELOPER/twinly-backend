@@ -75,9 +75,9 @@ public class UserSeeder implements ApplicationRunner {
     private static final int DETAIL_ELEMENTS_PER_USER = 5;
     private static final int INTERESTS_PER_USER = 5;
     private static final long ANSWER_SEED = 20260817L;
-    private static final String PHONE_PREFIX = "0100000";
+    static final String PHONE_PREFIX = "0100000";
     private static final int PHONE_START = 9001;
-    private static final String EMAIL_LOCAL_PREFIX = "test-seed";
+    static final String EMAIL_LOCAL_PREFIX = "test-seed";
     private static final String SCENARIO_RESOURCE = "seed/showcase-scenarios.json";
     static final LocalDate SCENARIO_BASE_DATE = LocalDate.of(2026, 9, 16);
     private static final String PERSONA_RESOURCE = "seed/ai-test-personas.json";

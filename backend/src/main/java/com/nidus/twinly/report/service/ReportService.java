@@ -12,11 +12,14 @@ import com.nidus.twinly.report.dto.command.ReportUserCommand;
 import com.nidus.twinly.report.dto.result.ReportUserResult;
 import com.nidus.twinly.report.entity.AiUtteranceReport;
 import com.nidus.twinly.report.entity.Report;
+import com.nidus.twinly.report.event.AiUtteranceReportedEvent;
+import com.nidus.twinly.report.event.UserReportedEvent;
 import com.nidus.twinly.report.repository.AiUtteranceReportRepository;
 import com.nidus.twinly.report.repository.ReportRepository;
 import lombok.RequiredArgsConstructor;
 
 import java.util.Objects;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +32,7 @@ public class ReportService {
     private final AiUtteranceReportRepository aiUtteranceReportRepository;
     private final SceneRepository sceneRepository;
     private final ScenePartnerRepository scenePartnerRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public ReportUserResult reportUser(Long userId, ReportUserCommand command) {
@@ -43,7 +47,9 @@ public class ReportService {
                         && Objects.equals(report.getDetail(), command.detail()));
 
         if (!alreadyReported) {
-            reportRepository.save(Report.create(userId, reportedUserId, command.reason(), command.detail()));
+            Report report = reportRepository.save(Report.create(userId, reportedUserId, command.reason(), command.detail()));
+            eventPublisher.publishEvent(new UserReportedEvent(
+                    report.getId(), userId, reportedUserId, report.getReason(), report.getDetail()));
         }
 
         if (!blockRepository.existsByUserIdAndBlockedUserId(userId, reportedUserId)) {
@@ -77,7 +83,9 @@ public class ReportService {
             return;
         }
 
-        aiUtteranceReportRepository.save(
+        AiUtteranceReport report = aiUtteranceReportRepository.save(
                 AiUtteranceReport.create(userId, reportedUserId, sceneId, command.utteranceText(), command.reason()));
+        eventPublisher.publishEvent(new AiUtteranceReportedEvent(
+                report.getId(), userId, reportedUserId, sceneId, report.getUtteranceText(), report.getReason()));
     }
 }

@@ -11,7 +11,6 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import tools.jackson.databind.json.JsonMapper;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -20,15 +19,13 @@ public class RevenueCatClient {
 
     private static final String BASE_URL = "https://api.revenuecat.com/v1";
     private static final String BEARER_PREFIX = "Bearer ";
-    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(3);
-    private static final Duration READ_TIMEOUT = Duration.ofSeconds(5);
 
     private final RestClient restClient;
 
     public RevenueCatClient(JsonMapper jsonMapper, RevenueCatProperties revenueCatProperties) {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(CONNECT_TIMEOUT);
-        requestFactory.setReadTimeout(READ_TIMEOUT);
+        requestFactory.setConnectTimeout(revenueCatProperties.connectTimeout());
+        requestFactory.setReadTimeout(revenueCatProperties.readTimeout());
 
         this.restClient = RestClient.builder()
                 .baseUrl(BASE_URL)

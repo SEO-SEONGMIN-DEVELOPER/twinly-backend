@@ -75,7 +75,8 @@ class NiceAuthExternalTest {
         // given: 시크릿만 틀린 클라이언트
         NiceAuthClient invalidClient = new NiceAuthClient(jsonMapper, new NiceProperties(
                 niceProperties.clientId(), "invalid-client-secret",
-                niceProperties.returnUrl(), niceProperties.closeUrl()));
+                niceProperties.returnUrl(), niceProperties.closeUrl(),
+                niceProperties.connectTimeout(), niceProperties.readTimeout(), niceProperties.tokenRefreshMargin()));
 
         // when & then: HTTP 4xx 든 result_code 실패든 같은 에러코드로 나간다
         assertThatThrownBy(invalidClient::issueToken)

@@ -209,7 +209,7 @@ public class PeopleService {
                 RelationshipSpecificType.fromIntimacy(intimacy),
                 isFavorited,
                 disclosed,
-                partner.getDeletedAt() != null,
+                partner.isWithdrawn(),
                 isBlocked
         );
     }

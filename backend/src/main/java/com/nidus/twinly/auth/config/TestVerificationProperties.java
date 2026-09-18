@@ -10,7 +10,7 @@ public record TestVerificationProperties(
 ) {
 
     public boolean matches(String contact) {
-        if (code == null || contact == null) {
+        if (code == null || code.isBlank() || contact == null) {
             return false;
         }
 

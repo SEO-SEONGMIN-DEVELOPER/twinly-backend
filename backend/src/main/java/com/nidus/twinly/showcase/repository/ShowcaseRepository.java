@@ -18,7 +18,7 @@ public interface ShowcaseRepository extends JpaRepository<Showcase, Long> {
             SELECT DISTINCT s.user_id
             FROM scenes s
             JOIN season_participations p ON p.user_id = s.user_id AND p.season_id = :seasonId
-            JOIN users u ON u.id = s.user_id AND u.deleted_at IS NULL
+            JOIN users u ON u.id = s.user_id AND u.withdrawal_requested_at IS NULL AND u.deleted_at IS NULL
             WHERE s.date = :date
               AND s.user_id <> :viewerUserId
               AND NOT EXISTS (

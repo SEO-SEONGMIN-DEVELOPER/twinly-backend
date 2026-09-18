@@ -7,6 +7,7 @@ import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.purchase.event.SimulationAccessGrantedEvent;
 import com.nidus.twinly.simulation.client.SimulationPreloadClient;
+import com.nidus.twinly.simulation.config.SimulationPreloadProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -27,31 +28,28 @@ import static com.nidus.twinly.common.logging.LogField.field;
 @RequiredArgsConstructor
 public class SimulationPreloadNotifier {
 
-    private static final int PRELOAD_DAYS = 2;
-    private static final int MAX_ATTEMPTS = 3;
-    private static final Duration RETRY_DELAY = Duration.ofSeconds(2);
-
     private final SimulationPreloadClient simulationPreloadClient;
+    private final SimulationPreloadProperties simulationPreloadProperties;
 
     @Async("simulationPreloadTaskExecutor")
     @EventListener
     public void onSimulationAccessGranted(SimulationAccessGrantedEvent event) {
         LocalDateTime grantedAt = LocalDateTime.ofInstant(event.grantedAt(), KstTimes.ZONE).truncatedTo(ChronoUnit.SECONDS);
-        List<LocalDate> dates = Stream.iterate(grantedAt.toLocalDate(), date -> date.plusDays(1)).limit(PRELOAD_DAYS).toList();
+        List<LocalDate> dates = Stream.iterate(grantedAt.toLocalDate(), date -> date.plusDays(1)).limit(simulationPreloadProperties.days()).toList();
 
-        for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        for (int attempt = 1; attempt <= simulationPreloadProperties.maxAttempts(); attempt++) {
             try {
                 simulationPreloadClient.preload(event.userId(), grantedAt, dates);
                 InfoLog.log(log, "시뮬레이션 선생성 요청을 접수했습니다.", field("userId", event.userId()), field("grantedAt", grantedAt), field("dates", dates), field("attempt", attempt));
                 return;
             } catch (BusinessException e) {
-                if (attempt == MAX_ATTEMPTS) {
+                if (attempt == simulationPreloadProperties.maxAttempts()) {
                     ErrorLog.error(log, ErrorCode.SIMULATION_PRELOAD_FAILED.name(), String.valueOf(event.userId()), e)
                             .log("시뮬레이션 선생성 요청이 재시도 후에도 실패했습니다. dates={}", dates);
                     return;
                 }
 
-                sleep(RETRY_DELAY);
+                sleep(simulationPreloadProperties.retryDelay());
             }
         }
     }

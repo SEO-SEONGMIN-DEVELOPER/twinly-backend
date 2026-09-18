@@ -6,6 +6,7 @@ import com.nidus.twinly.common.aws.s3.S3Service;
 import com.nidus.twinly.common.aws.ses.SesService;
 import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.jwt.JwtService;
+import com.nidus.twinly.common.slack.SlackClient;
 import com.nidus.twinly.common.solapi.SolapiService;
 import com.nidus.twinly.legal.domain.PolicyKind;
 import com.nidus.twinly.legal.entity.Agreement;
@@ -74,12 +75,13 @@ public abstract class AbstractIntegrationTest {
     @Autowired
     protected AgreementRepository agreementRepository;
 
-    // 실제 외부 호출 차단 (메시지 발송·S3·Bedrock)
+    // 실제 외부 호출 차단 (메시지 발송·S3·Bedrock·Slack)
     @MockitoBean protected SesService sesService;
     @MockitoBean protected SolapiService solapiService;
     @MockitoBean protected S3Service s3Service;
     @MockitoBean protected BedrockService bedrockService;
     @MockitoBean protected FirebaseMessaging firebaseMessaging;
+    @MockitoBean protected SlackClient slackClient;
 
     private final AtomicInteger seq = new AtomicInteger();
 

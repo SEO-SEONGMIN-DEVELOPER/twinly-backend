@@ -2,6 +2,8 @@ package com.nidus.twinly.auth.config;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.context.properties.source.MapConfigurationPropertySource;
 
@@ -34,6 +36,20 @@ class TestVerificationPropertiesTest {
         assertThat(properties.matches("test1@skku.edu")).isTrue();
         assertThat(properties.matches("01098765432")).isFalse();
         assertThat(properties.matches("real@skku.edu")).isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", " "})
+    @DisplayName("코드가 빈 값이면 접두사가 일치해도 매칭되지 않는다")
+    void 코드가_빈_값이면_매칭되지_않는다(String code) {
+        TestVerificationProperties properties = bind(Map.of(
+                "verification.test.code", code,
+                "verification.test.phone-prefix", "0100000",
+                "verification.test.email-prefix", "test"
+        ));
+
+        assertThat(properties.matches("01000001234")).isFalse();
+        assertThat(properties.matches("test1@skku.edu")).isFalse();
     }
 
     private TestVerificationProperties bind(Map<String, Object> source) {
