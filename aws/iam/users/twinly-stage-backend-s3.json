@@ -1,7 +1,7 @@
 {
     "name": "twinly-stage-backend-s3",
     "managedPolicies": [
-        "TwinlyS3TwinlyMediaAccessPolicy"
+        "TwinlyStageS3MediaAccess"
     ],
     "inlinePolicies": [],
     "accessKeys": [
