@@ -36,6 +36,9 @@ nice:
 ai-server:
   base-url: http://localhost:8000
 
+slack:
+  report-webhook-url: http://localhost:0/slack-test
+
 aws:
   s3:
     access-key-id: test

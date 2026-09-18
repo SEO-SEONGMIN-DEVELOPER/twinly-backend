@@ -119,6 +119,11 @@ ai-server:
   connect-timeout: 2s
   read-timeout: 3s
 
+slack:
+  report-webhook-url: ${SLACK_REPORT_WEBHOOK_URL}
+  connect-timeout: 2s
+  read-timeout: 3s
+
 simulation:
   preload:
     days: 2

@@ -77,6 +77,21 @@ public class AsyncConfig implements AsyncConfigurer {
     }
 
     @Bean(defaultCandidate = false)
+    public TaskExecutor slackTaskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+
+        executor.setCorePoolSize(1);
+        executor.setMaxPoolSize(2);
+        executor.setQueueCapacity(200);
+        executor.setTaskDecorator(MDC_TASK_DECORATOR);
+        executor.setThreadNamePrefix("slack-");
+        executor.setRejectedExecutionHandler((rejected, threadPoolExecutor) ->
+                WarnLog.log(log, "Slack 알림 큐가 가득 차 발송을 건너뜁니다.", field("queued", threadPoolExecutor.getQueue().size())));
+
+        return executor;
+    }
+
+    @Bean(defaultCandidate = false)
     public TaskExecutor simulationPreloadTaskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
 
