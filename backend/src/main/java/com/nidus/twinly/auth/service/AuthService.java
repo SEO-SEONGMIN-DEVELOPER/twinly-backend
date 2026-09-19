@@ -16,6 +16,7 @@ import com.nidus.twinly.anon.repository.AnonSessionRepository;
 import com.nidus.twinly.auth.entity.RefreshToken;
 import com.nidus.twinly.auth.event.UserSignedUpEvent;
 import com.nidus.twinly.auth.repository.RefreshTokenRepository;
+import com.nidus.twinly.common.logging.InfoLog;
 import com.nidus.twinly.common.logging.WarnLog;
 import com.nidus.twinly.legal.domain.PolicyKind;
 import com.nidus.twinly.legal.entity.Agreement;
@@ -55,7 +56,9 @@ import com.nidus.twinly.user.repository.VerificationRepository;
 import io.jsonwebtoken.JwtException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -374,16 +377,18 @@ public class AuthService {
         String emailHash = blindIndexHasher.hash(email);
         String diHash = identityVerification.getDiHash();
 
+        if (userRepository.existsByDiHash(diHash)) {
+            throw new BusinessException(ErrorCode.IDENTITY_ALREADY_REGISTERED);
+        }
+
         if (userRepository.existsByPhoneNumberHash(phoneNumberHash)) {
-            throw new BusinessException(ErrorCode.PHONE_ALREADY_REGISTERED);
+            userRepository.releasePhoneNumber(phoneNumberHash);
+            InfoLog.log(log, "다른 본인이 가입하며 기존 계정의 전화번호를 해제했습니다.", field("anonSessionId", anonSessionId));
         }
 
         if (userRepository.existsByEmailHash(emailHash)) {
-            throw new BusinessException(ErrorCode.EMAIL_ALREADY_REGISTERED);
-        }
-
-        if (userRepository.existsByDiHash(diHash)) {
-            throw new BusinessException(ErrorCode.IDENTITY_ALREADY_REGISTERED);
+            userRepository.releaseEmail(emailHash);
+            InfoLog.log(log, "다른 본인이 가입하며 기존 계정의 이메일을 해제했습니다.", field("anonSessionId", anonSessionId));
         }
 
         String familyNameHash = blindIndexHasher.hash(anonSession.getFamilyName());
@@ -393,7 +398,7 @@ public class AuthService {
         String affiliationNumberHash = blindIndexHasher.hash(anonSession.getAffiliationNumber());
         String birthDateHash = blindIndexHasher.hash(identityVerification.getBirthDate());
 
-        User user = userRepository.save(
+        User user = saveSignupUser(
                 User.create(
                         anonSession.getNickname(),
                         anonSession.getFamilyName(), familyNameHash,
@@ -483,6 +488,37 @@ public class AuthService {
         eventPublisher.publishEvent(new UserSignedUpEvent(user.getId()));
 
         return issueAuthToken(user.getId());
+    }
+
+    private User saveSignupUser(User user) {
+        try {
+            return userRepository.save(user);
+        } catch (DataIntegrityViolationException e) {
+            ErrorCode errorCode = resolveSignupConflict(e);
+            if (errorCode == null) {
+                throw e;
+            }
+            throw new BusinessException(errorCode, e);
+        }
+    }
+
+    private ErrorCode resolveSignupConflict(DataIntegrityViolationException e) {
+        if (!(e.getCause() instanceof ConstraintViolationException violation) || violation.getConstraintName() == null) {
+            return null;
+        }
+
+        String constraintName = violation.getConstraintName().toLowerCase();
+
+        if (constraintName.contains("uk_users_nickname")) {
+            return ErrorCode.NICKNAME_ALREADY_USED;
+        }
+        if (constraintName.contains("uk_users_di_hash")
+                || constraintName.contains("uk_users_phone_number_hash")
+                || constraintName.contains("uk_users_email_hash")) {
+            return ErrorCode.IDENTITY_ALREADY_REGISTERED;
+        }
+
+        return null;
     }
 
     private VerificationSession verifySession(VerificationType type, UUID verifiedToken) {

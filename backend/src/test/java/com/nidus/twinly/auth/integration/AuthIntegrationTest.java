@@ -365,6 +365,58 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("회원가입: DI 가 다른 기존 유저가 같은 전화번호·이메일을 갖고 있으면 기존 유저에게서 해제되고 새 유저가 가입된다")
+    void signup_takes_over_phone_and_email_from_other_identity() throws Exception {
+        // given: 번호·메일을 먼저 쓰던 기존 유저(DI 없음) + 같은 번호·메일로 본인인증·이메일 인증을 마친 새 익명 세션
+        String phone = "01077776666";
+        String email = "recycled@test.com";
+        User previousOwner = saveUserWith(phone, email);
+
+        UUID anonToken = UUID.randomUUID();
+        AnonSession anonSession = onboardedAnonSession(anonToken, "takeover-nick");
+        anonSessionIdentityVerificationRepository.save(verifiedIdentity(anonSession.getId(), phone, "di-takeover"));
+        anonSessionVerificationSessionRepository.save(verifiedAnonSession(anonSession.getId(), VerificationType.EMAIL, email));
+        agreeRequiredPolicies(anonSession.getId());
+
+        // when
+        mockMvc.perform(post("/api/v1/auth/signup")
+                        .header("Authorization", "Bearer " + anonToken))
+                .andExpect(status().isCreated());
+
+        // then: 기존 유저 행은 남아 있지만 전화번호·이메일·통신사가 비워진다 (벌크 UPDATE 라 영속성 컨텍스트 대신 DB 를 직접 확인)
+        var previousRow = jdbcTemplate.queryForMap(
+                "SELECT phone_number_hash, email_hash, mobile_carrier FROM users WHERE id = ?", previousOwner.getId());
+        assertThat(previousRow.get("phone_number_hash")).isNull();
+        assertThat(previousRow.get("email_hash")).isNull();
+        assertThat(previousRow.get("mobile_carrier")).isNull();
+
+        // then: 번호·메일의 현재 주인은 새 유저 한 명이다
+        Long newOwnerId = jdbcTemplate.queryForObject(
+                "SELECT id FROM users WHERE phone_number_hash = ? AND email_hash = ?", Long.class,
+                blindIndexHasher.hash(phone), blindIndexHasher.hash(email));
+        assertThat(newOwnerId).isNotEqualTo(previousOwner.getId());
+    }
+
+    @Test
+    @DisplayName("회원가입 실패: 저장 시점에 닉네임 유니크 제약을 위반하면 500 이 아니라 409 NICKNAME_ALREADY_USED를 반환한다")
+    void signup_with_nickname_taken_on_save_returns_409() throws Exception {
+        // given: 사전 확인이 없는 닉네임을 다른 유저가 이미 쓰고 있는 상태 (실제 MySQL 제약 이름 해석을 검증)
+        User nicknameOwner = saveUserWith("01055554444", "owner@test.com");
+
+        UUID anonToken = UUID.randomUUID();
+        AnonSession anonSession = onboardedAnonSession(anonToken, nicknameOwner.getNickname());
+        anonSessionIdentityVerificationRepository.save(verifiedIdentity(anonSession.getId(), "01033332222", "di-nick-conflict"));
+        anonSessionVerificationSessionRepository.save(verifiedAnonSession(anonSession.getId(), VerificationType.EMAIL, "nick-conflict@test.com"));
+        agreeRequiredPolicies(anonSession.getId());
+
+        // when & then
+        mockMvc.perform(post("/api/v1/auth/signup")
+                        .header("Authorization", "Bearer " + anonToken))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("NICKNAME_ALREADY_USED"));
+    }
+
+    @Test
     @DisplayName("회원가입 실패: 필수 약관에 동의하지 않으면 422 REQUIRED_POLICY_NOT_AGREED를 반환하고 유저를 만들지 않는다")
     void signup_without_required_policy_agreement_returns_422() throws Exception {
         // given: 인증·프로필은 모두 끝났지만 약관 동의만 하지 않은 익명 세션
@@ -872,6 +924,17 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
         String encData = NiceTestCrypto.encrypt(plain, NiceTestCrypto.TICKET, transactionId, NiceTestCrypto.ITERATORS);
         String integrity = NiceTestCrypto.integrityValue(encData, NiceTestCrypto.TICKET, transactionId, NiceTestCrypto.ITERATORS);
         return new NiceAuthResultBody("0000", "응답성공", encData, integrity);
+    }
+
+    private AnonSession onboardedAnonSession(UUID anonToken, String nickname) {
+        AnonSession anonSession = AnonSession.create(anonToken, Instant.now().plus(Duration.ofDays(1)));
+        anonSession.changeNickname(nickname);
+        anonSession.changeFamilyName("홍");
+        anonSession.changeGivenName("길동");
+        anonSession.changeOrganization("트윈리대학교");
+        anonSession.changeAffiliation("트윈리대학교");
+        anonSession.changeAffiliationNumber("20250001");
+        return anonSessionRepository.save(anonSession);
     }
 
     private AnonSession savedAnonSession(UUID anonToken) {
