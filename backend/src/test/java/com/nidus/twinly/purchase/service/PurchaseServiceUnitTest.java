@@ -119,6 +119,41 @@ class PurchaseServiceUnitTest {
     }
 
     @Test
+    @DisplayName("prod 서버는 샌드박스 이벤트도 동기화한다 (App Store 심사·TestFlight 결제)")
+    void receiveWebhook_on_production_accepts_sandbox_event() {
+        // given: prod 서버
+        PurchaseService productionService = new PurchaseService(
+                new RevenueCatProperties("secret", "sk_test", RevenueCatEnvironment.PRODUCTION,
+                        Duration.ofSeconds(3), Duration.ofSeconds(5), Duration.ofSeconds(30)),
+                revenueCatClient, userRepository, purchaseWriter, entitlementReader,
+                seasonParticipationWriter, eventPublisher);
+        given(userRepository.findByRevenueCatUserId(REVENUE_CAT_USER_ID)).willReturn(Optional.of(user()));
+        given(revenueCatClient.entitlements(APP_USER_ID)).willReturn(List.of());
+        given(purchaseWriter.beginEvent(anyString(), anyString(), any(), any(), any())).willReturn(true);
+
+        // when: SANDBOX 이벤트 수신
+        productionService.receiveWebhook(command("RENEWAL", "SANDBOX", List.of(APP_USER_ID)));
+
+        // then: 동기화가 수행됨
+        then(purchaseWriter).should().replaceEntitlements(anyLong(), anyList(), any());
+    }
+
+    @Test
+    @DisplayName("알 수 없는 환경 값의 이벤트는 거르지 않고 동기화한다")
+    void receiveWebhook_with_unknown_environment_is_processed() {
+        // given
+        given(userRepository.findByRevenueCatUserId(REVENUE_CAT_USER_ID)).willReturn(Optional.of(user()));
+        given(revenueCatClient.entitlements(APP_USER_ID)).willReturn(List.of());
+        given(purchaseWriter.beginEvent(anyString(), anyString(), any(), any(), any())).willReturn(true);
+
+        // when: RevenueCat 이 새 환경 값을 보냄
+        purchaseService.receiveWebhook(command("RENEWAL", "STAGING", List.of(APP_USER_ID)));
+
+        // then: 예외 없이 동기화가 수행됨
+        then(purchaseWriter).should().replaceEntitlements(anyLong(), anyList(), any());
+    }
+
+    @Test
     @DisplayName("환경 값이 없는 이벤트는 거르지 않고 동기화한다")
     void receiveWebhook_without_environment_is_processed() {
         // given: 우리 유저이고 권한이 비어 있음
