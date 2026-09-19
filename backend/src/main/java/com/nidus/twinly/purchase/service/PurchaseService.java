@@ -3,6 +3,7 @@ package com.nidus.twinly.purchase.service;
 import com.nidus.twinly.common.logging.ErrorLog;
 import com.nidus.twinly.common.logging.InfoLog;
 import com.nidus.twinly.common.logging.WarnLog;
+import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.purchase.RevenueCatProperties;
 import com.nidus.twinly.purchase.client.RevenueCatClient;
@@ -18,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -79,9 +81,19 @@ public class PurchaseService {
         try {
             sync(user);
         } catch (RuntimeException e) {
+            if (isConcurrentSync(e)) {
+                InfoLog.log(log, "같은 유저를 다른 요청이 동기화하고 있어 이번 동기화를 건너뜁니다.", field("userId", user.getId()), field("cause", e.getClass().getSimpleName()));
+                return;
+            }
+
             ErrorLog.warn(log, ErrorCode.REVENUE_CAT_SYNC_FAILED.name(), String.valueOf(user.getId()), e)
                     .log("RevenueCat 동기화 실패. 저장된 구매 상태를 유지합니다.");
         }
+    }
+
+    private boolean isConcurrentSync(RuntimeException e) {
+        return e instanceof OptimisticLockingFailureException
+                || e instanceof BusinessException businessException && businessException.getErrorCode() == ErrorCode.REVENUE_CAT_SYNC_CONFLICT;
     }
 
     public void sync(User user) {
