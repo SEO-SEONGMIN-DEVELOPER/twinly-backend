@@ -31,6 +31,14 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByRevenueCatUserId(UUID revenueCatUserId);
 
     @Modifying
+    @Query("UPDATE User u SET u.phoneNumber = NULL, u.phoneNumberHash = NULL, u.mobileCarrier = NULL WHERE u.phoneNumberHash = :phoneNumberHash")
+    int releasePhoneNumber(@Param("phoneNumberHash") String phoneNumberHash);
+
+    @Modifying
+    @Query("UPDATE User u SET u.email = NULL, u.emailHash = NULL WHERE u.emailHash = :emailHash")
+    int releaseEmail(@Param("emailHash") String emailHash);
+
+    @Modifying
     @Query("UPDATE User u SET u.purchasesSyncedAt = :syncedAt WHERE u.id = :userId")
     void markPurchasesSynced(@Param("userId") Long userId, @Param("syncedAt") Instant syncedAt);
 

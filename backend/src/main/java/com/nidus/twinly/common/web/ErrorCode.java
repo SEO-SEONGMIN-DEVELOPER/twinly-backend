@@ -28,8 +28,6 @@ public enum ErrorCode {
     // 인증(회원가입/인증번호)
     EMAIL_NOT_REGISTERED(HttpStatus.NOT_FOUND, "가입되지 않은 이메일입니다."),
     PHONE_NOT_REGISTERED(HttpStatus.NOT_FOUND, "가입되지 않은 전화번호입니다."),
-    EMAIL_ALREADY_REGISTERED(HttpStatus.CONFLICT, "이미 가입된 이메일입니다."),
-    PHONE_ALREADY_REGISTERED(HttpStatus.CONFLICT, "이미 가입된 전화번호입니다."),
     VERIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "유효하지 않은 인증 요청입니다."),
     SIGNUP_SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "회원가입에 사용할 세션을 찾을 수 없습니다."),
     VERIFICATION_CODE_EXPIRED(HttpStatus.GONE, "인증번호가 만료되었습니다."),

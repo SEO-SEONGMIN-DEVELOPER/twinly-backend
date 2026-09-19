@@ -16,6 +16,7 @@ import com.nidus.twinly.anon.repository.AnonSessionRepository;
 import com.nidus.twinly.auth.entity.RefreshToken;
 import com.nidus.twinly.auth.event.UserSignedUpEvent;
 import com.nidus.twinly.auth.repository.RefreshTokenRepository;
+import com.nidus.twinly.common.logging.InfoLog;
 import com.nidus.twinly.common.logging.WarnLog;
 import com.nidus.twinly.legal.domain.PolicyKind;
 import com.nidus.twinly.legal.entity.Agreement;
@@ -374,16 +375,18 @@ public class AuthService {
         String emailHash = blindIndexHasher.hash(email);
         String diHash = identityVerification.getDiHash();
 
+        if (userRepository.existsByDiHash(diHash)) {
+            throw new BusinessException(ErrorCode.IDENTITY_ALREADY_REGISTERED);
+        }
+
         if (userRepository.existsByPhoneNumberHash(phoneNumberHash)) {
-            throw new BusinessException(ErrorCode.PHONE_ALREADY_REGISTERED);
+            userRepository.releasePhoneNumber(phoneNumberHash);
+            InfoLog.log(log, "다른 본인이 가입하며 기존 계정의 전화번호를 해제했습니다.", field("anonSessionId", anonSessionId));
         }
 
         if (userRepository.existsByEmailHash(emailHash)) {
-            throw new BusinessException(ErrorCode.EMAIL_ALREADY_REGISTERED);
-        }
-
-        if (userRepository.existsByDiHash(diHash)) {
-            throw new BusinessException(ErrorCode.IDENTITY_ALREADY_REGISTERED);
+            userRepository.releaseEmail(emailHash);
+            InfoLog.log(log, "다른 본인이 가입하며 기존 계정의 이메일을 해제했습니다.", field("anonSessionId", anonSessionId));
         }
 
         String familyNameHash = blindIndexHasher.hash(anonSession.getFamilyName());

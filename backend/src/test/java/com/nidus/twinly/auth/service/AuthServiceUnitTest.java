@@ -61,6 +61,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -87,6 +88,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willReturn;
 import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 
@@ -1037,32 +1039,44 @@ class AuthServiceUnitTest {
     }
 
     @Test
-    @DisplayName("회원가입: 이미 가입된 전화번호면 PHONE_ALREADY_REGISTERED 예외가 발생하고 유저를 만들지 않는다")
-    void signup_with_already_registered_phone_throws() {
-        // given: 인증이 모두 완료됐지만 본인인증으로 확인된 전화번호가 이미 가입되어 있음
-        givenVerifiedIdentityAndEmail();
-        given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(onboardedAnonSession()));
-        given(blindIndexHasher.hash(anyString())).willAnswer(invocation -> "hash:" + invocation.getArgument(0));
+    @DisplayName("회원가입: 다른 DI 의 기존 유저가 같은 전화번호·이메일을 갖고 있으면 기존 유저에게서 해제한 뒤 가입시킨다")
+    void signup_releases_phone_and_email_held_by_other_identity() {
+        // given: 인증이 모두 끝났고, 본인인증 전화번호와 인증 이메일을 DI 가 다른 기존 유저가 갖고 있음
+        givenSignupReady();
         given(userRepository.existsByPhoneNumberHash("hash:" + IDENTITY_PHONE)).willReturn(true);
+        given(userRepository.existsByEmailHash("hash:" + EMAIL)).willReturn(true);
 
-        // when & then: PHONE_ALREADY_REGISTERED 예외 발생 + 유저 저장 없음
-        assertThatThrownBy(() -> authService.signup(SNAPSHOT))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(ErrorCode.PHONE_ALREADY_REGISTERED);
+        // when: 회원가입
+        authService.signup(SNAPSHOT);
 
-        then(userRepository).should(never()).save(any());
+        // then: 기존 유저에게서 전화번호·이메일을 먼저 해제한 뒤 새 유저를 저장한다
+        InOrder inOrder = inOrder(userRepository);
+        inOrder.verify(userRepository).releasePhoneNumber("hash:" + IDENTITY_PHONE);
+        inOrder.verify(userRepository).releaseEmail("hash:" + EMAIL);
+        inOrder.verify(userRepository).save(any(User.class));
     }
 
     @Test
-    @DisplayName("회원가입: 검증 시점 이후에 같은 CI가 가입됐으면 IDENTITY_ALREADY_REGISTERED 예외가 발생하고 유저를 만들지 않는다")
-    void signup_with_already_registered_ci_throws() {
-        // given: 인증은 모두 끝났지만 그 사이 같은 CI로 다른 계정이 생성됨
+    @DisplayName("회원가입: 전화번호·이메일을 가진 기존 유저가 없으면 해제하지 않는다")
+    void signup_does_not_release_when_phone_and_email_are_free() {
+        // given: 인증이 모두 끝났고 전화번호·이메일이 비어 있음
+        givenSignupReady();
+
+        // when: 회원가입
+        authService.signup(SNAPSHOT);
+
+        // then: 해제 쿼리를 날리지 않는다 (없는 행을 UPDATE 하면 갭 락으로 동시 가입끼리 데드락이 날 수 있다)
+        then(userRepository).should(never()).releasePhoneNumber(anyString());
+        then(userRepository).should(never()).releaseEmail(anyString());
+    }
+
+    @Test
+    @DisplayName("회원가입: 검증 시점 이후에 같은 DI가 가입됐으면 IDENTITY_ALREADY_REGISTERED 예외가 발생하고 기존 유저의 연락처를 건드리지 않는다")
+    void signup_with_already_registered_di_throws() {
+        // given: 인증은 모두 끝났지만 그 사이 같은 DI로 다른 계정이 생성됨
         givenVerifiedIdentityAndEmail();
         given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(onboardedAnonSession()));
         given(blindIndexHasher.hash(anyString())).willAnswer(invocation -> "hash:" + invocation.getArgument(0));
-        given(userRepository.existsByPhoneNumberHash("hash:" + IDENTITY_PHONE)).willReturn(false);
-        given(userRepository.existsByEmailHash("hash:" + EMAIL)).willReturn(false);
         given(userRepository.existsByDiHash("hash:" + DI)).willReturn(true);
 
         // when & then: verify와 signup 사이의 경합을 가입 직전에 다시 막는다
@@ -1071,6 +1085,8 @@ class AuthServiceUnitTest {
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.IDENTITY_ALREADY_REGISTERED);
 
+        then(userRepository).should(never()).releasePhoneNumber(anyString());
+        then(userRepository).should(never()).releaseEmail(anyString());
         then(userRepository).should(never()).save(any());
     }
 
@@ -1336,6 +1352,20 @@ class AuthServiceUnitTest {
                 .willReturn(Optional.of(verifiedIdentity()));
         given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.EMAIL))
                 .willReturn(Optional.of(emailSession));
+    }
+
+    private void givenSignupReady() {
+        givenVerifiedIdentityAndEmail();
+        given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(onboardedAnonSession()));
+        given(blindIndexHasher.hash(anyString())).willAnswer(invocation -> "hash:" + invocation.getArgument(0));
+        given(userRepository.save(any(User.class))).willAnswer(invocation -> {
+            User user = invocation.getArgument(0);
+            ReflectionTestUtils.setField(user, "id", USER_ID);
+            return user;
+        });
+        given(jwtService.generateAuthTokenResult(USER_ID)).willReturn(new AuthTokenResult(
+                "access-token", Instant.parse("2030-01-01T00:00:00Z"),
+                "refresh-token", Instant.parse("2030-01-15T00:00:00Z")));
     }
 
     private void givenIssuedIdentity(AnonSessionIdentityVerification issued) {
