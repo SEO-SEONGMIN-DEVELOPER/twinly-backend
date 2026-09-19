@@ -8,6 +8,7 @@ import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.purchase.RevenueCatProperties;
 import com.nidus.twinly.purchase.client.RevenueCatClient;
 import com.nidus.twinly.purchase.client.RevenueCatEntitlement;
+import com.nidus.twinly.purchase.domain.RevenueCatEnvironment;
 import com.nidus.twinly.purchase.dto.command.RevenueCatWebhookCommand;
 import com.nidus.twinly.purchase.event.SimulationAccessGrantedEvent;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
@@ -140,7 +141,15 @@ public class PurchaseService {
     }
 
     private boolean matchesEnvironment(String environment) {
-        return environment == null || revenueCatProperties.environment().name().equalsIgnoreCase(environment);
+        if (environment == null) {
+            return true;
+        }
+
+        try {
+            return revenueCatProperties.environment().accepts(RevenueCatEnvironment.valueOf(environment.toUpperCase()));
+        } catch (IllegalArgumentException e) {
+            return true;
+        }
     }
 
     private void sync(String appUserId) {

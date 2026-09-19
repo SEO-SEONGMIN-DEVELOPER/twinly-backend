@@ -3,6 +3,7 @@ package com.nidus.twinly.purchase.client;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.purchase.RevenueCatProperties;
+import com.nidus.twinly.purchase.domain.RevenueCatEnvironment;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
@@ -14,7 +15,6 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.util.List;
-import java.util.Map;
 
 @Component
 public class RevenueCatClient {
@@ -25,6 +25,7 @@ public class RevenueCatClient {
 
     private final JsonMapper jsonMapper;
     private final RestClient restClient;
+    private final RevenueCatEnvironment environment;
 
     public RevenueCatClient(JsonMapper jsonMapper, RevenueCatProperties revenueCatProperties) {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
@@ -32,6 +33,7 @@ public class RevenueCatClient {
         requestFactory.setReadTimeout(revenueCatProperties.readTimeout());
 
         this.jsonMapper = jsonMapper;
+        this.environment = revenueCatProperties.environment();
         this.restClient = RestClient.builder()
                 .baseUrl(BASE_URL)
                 .requestFactory(requestFactory)
@@ -54,11 +56,7 @@ public class RevenueCatClient {
             throw new BusinessException(ErrorCode.REVENUE_CAT_SYNC_FAILED, e);
         }
 
-        Map<String, RevenueCatSubscriberBody.Entitlement> entitlements = entitlementsOf(body);
-
-        return entitlements.entrySet().stream()
-                .map(entry -> new RevenueCatEntitlement(entry.getKey(), entry.getValue().expiresDate()))
-                .toList();
+        return body == null ? List.of() : body.entitlementsIn(environment);
     }
 
     private boolean isConcurrentRequest(HttpClientErrorException e) {
@@ -67,13 +65,5 @@ public class RevenueCatClient {
         } catch (JacksonException parseFailure) {
             return false;
         }
-    }
-
-    private Map<String, RevenueCatSubscriberBody.Entitlement> entitlementsOf(RevenueCatSubscriberBody body) {
-        if (body == null || body.subscriber() == null || body.subscriber().entitlements() == null) {
-            return Map.of();
-        }
-
-        return body.subscriber().entitlements();
     }
 }
