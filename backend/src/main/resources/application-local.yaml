@@ -30,3 +30,4 @@ ai-server:
 
 seed:
   ai-test-users: true
+  simulation-access-user-count: 50

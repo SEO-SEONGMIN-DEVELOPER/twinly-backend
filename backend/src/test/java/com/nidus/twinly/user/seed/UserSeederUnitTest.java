@@ -158,7 +158,7 @@ class UserSeederUnitTest {
         ReflectionTestUtils.setField(season, "id", 7L);
         given(currentSeasonReader.read()).willReturn(season);
 
-        userSeeder = seederWith(new SeedProperties(true));
+        userSeeder = seederWith(new SeedProperties(true, SIMULATION_ACCESS_USER_COUNT));
 
         given(userRepository.save(any(User.class))).willAnswer(invocation -> {
             User user = invocation.getArgument(0);
@@ -752,7 +752,7 @@ class UserSeederUnitTest {
     void run_seeds_only_showcase_users_when_ai_test_users_disabled() throws IOException {
         // given: 아직 시드 유저가 없고 AI 테스트 유저 시드가 꺼진 상태
         given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
-        userSeeder = seederWith(new SeedProperties(false));
+        userSeeder = seederWith(new SeedProperties(false, SIMULATION_ACCESS_USER_COUNT));
 
         // when: 시더 실행
         userSeeder.run(null);

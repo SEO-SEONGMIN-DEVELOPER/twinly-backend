@@ -5,6 +5,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 
 @ConfigurationProperties(prefix = "seed")
 public record SeedProperties(
-        @DefaultValue("false") boolean aiTestUsers
+        @DefaultValue("false") boolean aiTestUsers,
+        int simulationAccessUserCount
 ) {
 }
