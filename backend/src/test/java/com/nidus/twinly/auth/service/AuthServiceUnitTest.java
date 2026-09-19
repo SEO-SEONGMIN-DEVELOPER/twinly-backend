@@ -60,6 +60,9 @@ import com.nidus.twinly.common.domain.NationalInfo;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.hibernate.exception.ConstraintViolationException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.InjectMocks;
@@ -67,9 +70,11 @@ import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.beans.BeanUtils;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.sql.SQLException;
 import java.time.Duration;
 import java.time.format.DateTimeFormatter;
 import java.time.Instant;
@@ -1090,6 +1095,43 @@ class AuthServiceUnitTest {
         then(userRepository).should(never()).save(any());
     }
 
+    @ParameterizedTest(name = "{0} 위반 → {1}")
+    @CsvSource({
+            "users.uk_users_di_hash, IDENTITY_ALREADY_REGISTERED",
+            "users.uk_users_phone_number_hash, IDENTITY_ALREADY_REGISTERED",
+            "users.uk_users_email_hash, IDENTITY_ALREADY_REGISTERED",
+            "users.uk_users_nickname, NICKNAME_ALREADY_USED"
+    })
+    @DisplayName("회원가입: 동시 요청으로 저장 시점에 유니크 제약을 위반하면 제약에 맞는 409 예외로 바꾼다")
+    void signup_translates_unique_violation_on_save(String constraintName, ErrorCode expected) {
+        // given: 사전 확인은 통과했지만 저장 시점에 다른 요청이 먼저 같은 값을 가져감
+        givenVerifiedIdentityAndEmail();
+        given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(onboardedAnonSession()));
+        given(blindIndexHasher.hash(anyString())).willAnswer(invocation -> "hash:" + invocation.getArgument(0));
+        given(userRepository.save(any(User.class))).willThrow(uniqueViolation(constraintName));
+
+        // when & then
+        assertThatThrownBy(() -> authService.signup(SNAPSHOT))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(expected);
+    }
+
+    @Test
+    @DisplayName("회원가입: 가입 판정과 무관한 제약을 위반하면 원래 예외를 그대로 던진다")
+    void signup_rethrows_unrelated_integrity_violation() {
+        // given: 저장 시점에 예상하지 못한 제약 위반
+        givenVerifiedIdentityAndEmail();
+        given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(onboardedAnonSession()));
+        given(blindIndexHasher.hash(anyString())).willAnswer(invocation -> "hash:" + invocation.getArgument(0));
+        DataIntegrityViolationException violation = uniqueViolation("users.fk_unknown");
+        given(userRepository.save(any(User.class))).willThrow(violation);
+
+        // when & then: 409 로 덮지 않고 500 으로 드러나게 둔다
+        assertThatThrownBy(() -> authService.signup(SNAPSHOT))
+                .isSameAs(violation);
+    }
+
     @Test
     @DisplayName("회원가입: 인증이 모두 끝나면 본인인증 값과 익명 세션 프로필로 유저를 만들고 익명 데이터를 정리한 뒤 토큰을 발급한다")
     void signup_success() {
@@ -1366,6 +1408,11 @@ class AuthServiceUnitTest {
         given(jwtService.generateAuthTokenResult(USER_ID)).willReturn(new AuthTokenResult(
                 "access-token", Instant.parse("2030-01-01T00:00:00Z"),
                 "refresh-token", Instant.parse("2030-01-15T00:00:00Z")));
+    }
+
+    private DataIntegrityViolationException uniqueViolation(String constraintName) {
+        return new DataIntegrityViolationException("duplicate",
+                new ConstraintViolationException("duplicate", new SQLException("duplicate"), constraintName));
     }
 
     private void givenIssuedIdentity(AnonSessionIdentityVerification issued) {

@@ -398,6 +398,25 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("회원가입 실패: 저장 시점에 닉네임 유니크 제약을 위반하면 500 이 아니라 409 NICKNAME_ALREADY_USED를 반환한다")
+    void signup_with_nickname_taken_on_save_returns_409() throws Exception {
+        // given: 사전 확인이 없는 닉네임을 다른 유저가 이미 쓰고 있는 상태 (실제 MySQL 제약 이름 해석을 검증)
+        User nicknameOwner = saveUserWith("01055554444", "owner@test.com");
+
+        UUID anonToken = UUID.randomUUID();
+        AnonSession anonSession = onboardedAnonSession(anonToken, nicknameOwner.getNickname());
+        anonSessionIdentityVerificationRepository.save(verifiedIdentity(anonSession.getId(), "01033332222", "di-nick-conflict"));
+        anonSessionVerificationSessionRepository.save(verifiedAnonSession(anonSession.getId(), VerificationType.EMAIL, "nick-conflict@test.com"));
+        agreeRequiredPolicies(anonSession.getId());
+
+        // when & then
+        mockMvc.perform(post("/api/v1/auth/signup")
+                        .header("Authorization", "Bearer " + anonToken))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("NICKNAME_ALREADY_USED"));
+    }
+
+    @Test
     @DisplayName("회원가입 실패: 필수 약관에 동의하지 않으면 422 REQUIRED_POLICY_NOT_AGREED를 반환하고 유저를 만들지 않는다")
     void signup_without_required_policy_agreement_returns_422() throws Exception {
         // given: 인증·프로필은 모두 끝났지만 약관 동의만 하지 않은 익명 세션

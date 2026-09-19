@@ -56,7 +56,9 @@ import com.nidus.twinly.user.repository.VerificationRepository;
 import io.jsonwebtoken.JwtException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -396,7 +398,7 @@ public class AuthService {
         String affiliationNumberHash = blindIndexHasher.hash(anonSession.getAffiliationNumber());
         String birthDateHash = blindIndexHasher.hash(identityVerification.getBirthDate());
 
-        User user = userRepository.save(
+        User user = saveSignupUser(
                 User.create(
                         anonSession.getNickname(),
                         anonSession.getFamilyName(), familyNameHash,
@@ -486,6 +488,37 @@ public class AuthService {
         eventPublisher.publishEvent(new UserSignedUpEvent(user.getId()));
 
         return issueAuthToken(user.getId());
+    }
+
+    private User saveSignupUser(User user) {
+        try {
+            return userRepository.save(user);
+        } catch (DataIntegrityViolationException e) {
+            ErrorCode errorCode = resolveSignupConflict(e);
+            if (errorCode == null) {
+                throw e;
+            }
+            throw new BusinessException(errorCode, e);
+        }
+    }
+
+    private ErrorCode resolveSignupConflict(DataIntegrityViolationException e) {
+        if (!(e.getCause() instanceof ConstraintViolationException violation) || violation.getConstraintName() == null) {
+            return null;
+        }
+
+        String constraintName = violation.getConstraintName().toLowerCase();
+
+        if (constraintName.contains("uk_users_nickname")) {
+            return ErrorCode.NICKNAME_ALREADY_USED;
+        }
+        if (constraintName.contains("uk_users_di_hash")
+                || constraintName.contains("uk_users_phone_number_hash")
+                || constraintName.contains("uk_users_email_hash")) {
+            return ErrorCode.IDENTITY_ALREADY_REGISTERED;
+        }
+
+        return null;
     }
 
     private VerificationSession verifySession(VerificationType type, UUID verifiedToken) {
