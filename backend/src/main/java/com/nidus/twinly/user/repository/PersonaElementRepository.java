@@ -20,6 +20,10 @@ public interface PersonaElementRepository extends JpaRepository<PersonaElement, 
 
     boolean existsByUserIdAndDimension(Long userId, PersonaDimension dimension);
 
+    @Modifying
+    @Query("DELETE FROM PersonaElement e WHERE e.userId = :userId")
+    void deleteAllByUserId(@Param("userId") Long userId);
+
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("""
             DELETE FROM PersonaElement e

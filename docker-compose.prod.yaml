@@ -49,7 +49,7 @@ services:
       AI_SERVER_BASE_URL: ${AI_SERVER_BASE_URL:?AI_SERVER_BASE_URL is not set}
       SLACK_REPORT_WEBHOOK_URL: ${SLACK_REPORT_WEBHOOK_URL:?SLACK_REPORT_WEBHOOK_URL is not set}
       VERIFICATION_TEST_CODE: ${VERIFICATION_TEST_CODE:-}
-    mem_limit: 900m
+    mem_limit: 2560m
     restart: unless-stopped
     logging:
       driver: awslogs
