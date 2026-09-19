@@ -15,6 +15,10 @@ public interface UserSurveyAnswerRepository extends JpaRepository<UserSurveyAnsw
     boolean existsByUserId(Long userId);
 
     @Modifying
+    @Query("DELETE FROM UserSurveyAnswer a WHERE a.userId = :userId")
+    void deleteAllByUserId(@Param("userId") Long userId);
+
+    @Modifying
     @Query(value = """
             INSERT INTO user_survey_answers (user_id, question_id, option_name, created_at)
             VALUES (:userId, :questionId, :optionName, UTC_TIMESTAMP(6))

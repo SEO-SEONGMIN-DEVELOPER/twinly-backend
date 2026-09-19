@@ -3,6 +3,7 @@ package com.nidus.twinly.aichat.repository;
 import com.nidus.twinly.aichat.domain.AiChatSender;
 import com.nidus.twinly.aichat.entity.AiChat;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -14,6 +15,10 @@ public interface AiChatRepository extends JpaRepository<AiChat, Long> {
     List<AiChat> findAllByUserId(Long userId);
 
     boolean existsByUserId(Long userId);
+
+    @Modifying
+    @Query("DELETE FROM AiChat c WHERE c.userId = :userId")
+    void deleteAllByUserId(@Param("userId") Long userId);
 
     Optional<AiChat> findByUserIdAndTurnIndexAndSender(Long userId, Integer turnIndex, AiChatSender sender);
 
