@@ -88,7 +88,6 @@ public class UserSeeder implements ApplicationRunner {
     static final LocalDate SCENARIO_BASE_DATE = LocalDate.of(2026, 9, 16);
     private static final String PERSONA_RESOURCE = "seed/ai-test-personas.json";
     private static final int PERSONA_DETAILS_PER_USER = 8;
-    private static final int SIMULATION_ACCESS_USER_COUNT = 50;
     static final String ANCHOR_DATE = "anchorDate";
     static final Set<String> USER_REF_FIELDS = Set.of("userId", "partnerId", "with");
     private static final String DAYS = "days";
@@ -210,7 +209,7 @@ public class UserSeeder implements ApplicationRunner {
 
         agreeRequiredPolicies(users.stream().map(User::getId).toList(), PolicyKind.ONBOARDING, now);
 
-        int accessEnd = Math.min(SHOWCASE_USERS.size() + SIMULATION_ACCESS_USER_COUNT, users.size());
+        int accessEnd = Math.min(SHOWCASE_USERS.size() + seedProperties.simulationAccessUserCount(), users.size());
 
         revokeSimulationAccess(users.subList(0, SHOWCASE_USERS.size()));
         grantSimulationAccess(users.subList(SHOWCASE_USERS.size(), accessEnd), now);

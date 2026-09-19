@@ -1,5 +1,8 @@
 package com.nidus.twinly.purchase.service;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
@@ -8,6 +11,7 @@ import com.nidus.twinly.purchase.client.RevenueCatClient;
 import com.nidus.twinly.purchase.client.RevenueCatEntitlement;
 import com.nidus.twinly.purchase.domain.RevenueCatEnvironment;
 import com.nidus.twinly.purchase.dto.command.RevenueCatWebhookCommand;
+import com.nidus.twinly.purchase.entity.UserEntitlement;
 import com.nidus.twinly.purchase.event.SimulationAccessGrantedEvent;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.purchase.writer.PurchaseWriter;
@@ -21,8 +25,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Duration;
@@ -252,6 +258,52 @@ class PurchaseServiceUnitTest {
     }
 
     @Test
+    @DisplayName("syncQuietly 는 RevenueCat 이 동시 요청 충돌로 거절하면 동기화 실패 코드를 남기지 않는다")
+    void syncQuietly_does_not_log_failure_code_on_revenue_cat_conflict() {
+        // given: 같은 유저에 대한 다른 요청이 RevenueCat 에서 진행 중
+        User user = user();
+        given(revenueCatClient.entitlements(APP_USER_ID))
+                .willThrow(new BusinessException(ErrorCode.REVENUE_CAT_SYNC_CONFLICT));
+
+        // when: 조용히 동기화
+        List<String> errorCodes = loggedErrorCodes(() -> purchaseService.syncQuietly(user));
+
+        // then: 장애 알람 대상인 REVENUE_CAT_SYNC_FAILED 를 남기지 않는다
+        assertThat(errorCodes).doesNotContain(ErrorCode.REVENUE_CAT_SYNC_FAILED.name());
+    }
+
+    @Test
+    @DisplayName("syncQuietly 는 다른 요청이 먼저 엔타이틀먼트를 바꿔 낙관적 락이 실패하면 동기화 실패 코드를 남기지 않는다")
+    void syncQuietly_does_not_log_failure_code_on_optimistic_lock_failure() {
+        // given: RevenueCat 조회는 성공했지만 저장 중 다른 요청이 같은 행을 먼저 지움
+        User user = user();
+        given(revenueCatClient.entitlements(APP_USER_ID)).willReturn(List.of());
+        willThrow(new ObjectOptimisticLockingFailureException(UserEntitlement.class, 229L))
+                .given(purchaseWriter).replaceEntitlements(eq(USER_ID), anyList(), any());
+
+        // when: 조용히 동기화
+        List<String> errorCodes = loggedErrorCodes(() -> assertThatCode(() -> purchaseService.syncQuietly(user)).doesNotThrowAnyException());
+
+        // then: 먼저 끝난 요청이 최신 상태를 반영했으므로 장애로 기록하지 않는다
+        assertThat(errorCodes).doesNotContain(ErrorCode.REVENUE_CAT_SYNC_FAILED.name());
+    }
+
+    @Test
+    @DisplayName("syncQuietly 는 충돌이 아닌 연동 실패면 동기화 실패 코드를 남긴다")
+    void syncQuietly_logs_failure_code_on_sync_failure() {
+        // given: RevenueCat 연동 자체가 실패
+        User user = user();
+        given(revenueCatClient.entitlements(APP_USER_ID))
+                .willThrow(new BusinessException(ErrorCode.REVENUE_CAT_SYNC_FAILED));
+
+        // when: 조용히 동기화
+        List<String> errorCodes = loggedErrorCodes(() -> purchaseService.syncQuietly(user));
+
+        // then: 알람이 잡을 수 있게 REVENUE_CAT_SYNC_FAILED 를 남긴다
+        assertThat(errorCodes).containsExactly(ErrorCode.REVENUE_CAT_SYNC_FAILED.name());
+    }
+
+    @Test
     @DisplayName("동기화 결과 simulation_access 가 살아 있으면 현재 시즌에 자동 참가시킨다")
     void sync_participates_in_current_season_when_access_granted() {
         // given: 결제로 simulation_access 를 갖게 된 유저
@@ -442,5 +494,25 @@ class PurchaseServiceUnitTest {
         ReflectionTestUtils.setField(user, "id", id);
         ReflectionTestUtils.setField(user, "revenueCatUserId", revenueCatUserId);
         return user;
+    }
+
+    private List<String> loggedErrorCodes(Runnable action) {
+        Logger logger = (Logger) LoggerFactory.getLogger(PurchaseService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+
+        try {
+            action.run();
+        } finally {
+            logger.detachAppender(appender);
+        }
+
+        return appender.list.stream()
+                .filter(event -> event.getKeyValuePairs() != null)
+                .flatMap(event -> event.getKeyValuePairs().stream())
+                .filter(pair -> pair.key.equals("errorCode"))
+                .map(pair -> String.valueOf(pair.value))
+                .toList();
     }
 }

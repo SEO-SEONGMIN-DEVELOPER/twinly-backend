@@ -126,6 +126,7 @@ public enum ErrorCode {
     SMS_SEND_FAILED(HttpStatus.BAD_GATEWAY, "SMS 발송에 실패했습니다."),
     AI_RESPONSE_FAILED(HttpStatus.BAD_GATEWAY, "AI 응답 생성에 실패했습니다."),
     REVENUE_CAT_SYNC_FAILED(HttpStatus.BAD_GATEWAY, "구매 상태 동기화에 실패했습니다."),
+    REVENUE_CAT_SYNC_CONFLICT(HttpStatus.CONFLICT, "같은 유저의 구매 상태를 다른 요청이 동기화하고 있습니다."),
     IDENTITY_VERIFICATION_FAILED(HttpStatus.BAD_GATEWAY, "본인인증 조회에 실패했습니다."),
     SIMULATION_PRELOAD_FAILED(HttpStatus.BAD_GATEWAY, "시뮬레이션 선생성 요청에 실패했습니다."),
     SLACK_SEND_FAILED(HttpStatus.BAD_GATEWAY, "Slack 알림 발송에 실패했습니다.");
