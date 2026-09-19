@@ -1,5 +1,8 @@
 package com.nidus.twinly.common.fcm;
 
+import com.google.firebase.messaging.BatchResponse;
+import com.google.firebase.messaging.FirebaseMessaging;
+import com.google.firebase.messaging.FirebaseMessagingException;
 import com.google.firebase.messaging.Message;
 import com.google.firebase.messaging.Notification;
 import org.junit.jupiter.api.DisplayName;
@@ -23,6 +26,9 @@ class FcmExternalTest {
 
     @Autowired
     FcmSender fcmSender;
+
+    @Autowired
+    FirebaseMessaging firebaseMessaging;
 
     // 죽은 토큰 폐기는 DB 관심사라 대체한다. FCM 연동 검증과 무관하다.
     @MockitoBean
@@ -63,6 +69,33 @@ class FcmExternalTest {
         System.out.println("\n===== FcmSender 실제 발송 =====\n" + result + "\n");
 
         assertThat(result.succeeded()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("FCM 이 성공 응답을 돌려주면 SDK 가 응답을 읽어 성공으로 집계한다")
+    void success_response_is_readable() throws FirebaseMessagingException {
+        // given: 토픽 메시지를 dry-run 으로 보낸다. FCM 이 검증만 하고 실제로 발송하지 않지만 성공 응답은 그대로 돌려준다.
+        //        httpclient5 5.6 은 gzip 응답을 스스로 풀기 때문에, SDK 가 한 번 더 풀려고 하면 여기서 Not in GZIP format 으로 실패한다.
+        Message message = Message.builder()
+                .setTopic("external-test-dry-run")
+                .setNotification(Notification.builder()
+                        .setTitle("twinly")
+                        .setBody("external test dry run")
+                        .build())
+                .build();
+
+        // when
+        BatchResponse response = firebaseMessaging.sendEach(List.of(message), true);
+
+        // then: 발송은 성공이고, 실패 원인이 있다면 그대로 드러나게 출력한다
+        System.out.println("\n===== FCM dry-run 결과 =====\nsuccess=" + response.getSuccessCount()
+                + " failure=" + response.getFailureCount()
+                + response.getResponses().stream()
+                        .filter(each -> !each.isSuccessful())
+                        .map(each -> " cause=" + each.getException().getMessage())
+                        .findFirst().orElse("") + "\n");
+
+        assertThat(response.getSuccessCount()).isEqualTo(1);
     }
 
     private PushMessage pushMessage(String token) {
