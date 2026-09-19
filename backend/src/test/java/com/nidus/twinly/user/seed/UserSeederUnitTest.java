@@ -599,6 +599,7 @@ class UserSeederUnitTest {
         assertThat(granted).allSatisfy(entitlement -> {
             assertThat(entitlement.getEntitlement()).isEqualTo(EntitlementReader.SIMULATION_ACCESS);
             assertThat(entitlement.getExpiresAt()).isNull();
+            assertThat(entitlement.getSyncedAt()).isEqualTo(UserSeeder.SYNC_PROTECTED_SYNCED_AT);
         });
         assertThat(granted.stream().map(UserEntitlement::getUserId).toList())
                 .containsExactlyInAnyOrderElementsOf(
@@ -721,6 +722,32 @@ class UserSeederUnitTest {
         assertThat(granted).hasSize(1);
         assertThat(granted.getFirst().getUserId()).isEqualTo(EXPIRED_USER_ID);
         assertThat(granted.getFirst().getExpiresAt()).isNull();
+        assertThat(granted.getFirst().getSyncedAt()).isEqualTo(UserSeeder.SYNC_PROTECTED_SYNCED_AT);
+    }
+
+    @Test
+    @DisplayName("RevenueCat 동기화가 지울 수 있는 시각으로 부여됐던 시드 권한은 동기화가 덮어쓰지 못하는 시각으로 옮긴다")
+    void run_moves_synced_at_out_of_revenue_cat_sync_reach() throws IOException {
+        // given: 유저는 남아 있고 권한 대상 전원이 부팅 시각을 synced_at 으로 가진 권한을 가진 상태
+        given(userRepository.findByEmailHash(any())).willAnswer(invocation -> Optional.of(existingUser()));
+        given(personaElementRepository.existsByUserId(any())).willReturn(true);
+        given(personaElementRepository.existsByUserIdAndDimension(any(), eq(PersonaDimension.SUMMARY))).willReturn(true);
+        given(userEntitlementRepository.findAllByUserIdInAndEntitlement(any(), eq(EntitlementReader.SIMULATION_ACCESS)))
+                .willAnswer(invocation -> ((List<Long>) invocation.getArgument(0)).stream()
+                        .map(userId -> UserEntitlement.create(userId, EntitlementReader.SIMULATION_ACCESS, null, Instant.now()))
+                        .toList());
+
+        // when: 시더 실행
+        userSeeder.run(null);
+
+        // then: 권한 대상 50명 전원의 synced_at 이 보호 시각으로 바뀐다
+        List<UserEntitlement> granted = savedEntitlements();
+
+        assertThat(granted).hasSize(SIMULATION_ACCESS_USER_COUNT);
+        assertThat(granted).allSatisfy(entitlement -> {
+            assertThat(entitlement.getExpiresAt()).isNull();
+            assertThat(entitlement.getSyncedAt()).isEqualTo(UserSeeder.SYNC_PROTECTED_SYNCED_AT);
+        });
     }
 
     private List<UserEntitlement> entitlementsOf(List<Long> userIds, Long expiredUserId) {
@@ -729,7 +756,7 @@ class UserSeederUnitTest {
                         userId,
                         EntitlementReader.SIMULATION_ACCESS,
                         userId.equals(expiredUserId) ? Instant.now().minusSeconds(60) : null,
-                        Instant.now()))
+                        UserSeeder.SYNC_PROTECTED_SYNCED_AT))
                 .toList();
     }
 
