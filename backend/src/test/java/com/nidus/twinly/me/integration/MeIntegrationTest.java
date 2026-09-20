@@ -1152,6 +1152,19 @@ class MeIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("내 정보 조회: 저장된 성별을 소문자 문자열로 내려준다")
+    void info_end_to_end() throws Exception {
+        // given: 성별이 저장된 실제 유저
+        User me = saveUser();
+
+        // when & then: 저장된 성별이 소문자 문자열로 내려감
+        mockMvc.perform(get("/api/v1/me/info")
+                        .header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.gender").value("male"));
+    }
+
+    @Test
     @DisplayName("설문 문항 목록: 로그인 유저에게 실제 설문 파일의 전 문항을 순서대로 내려준다")
     void surveyQuestions_end_to_end() throws Exception {
         // given: 실제 유저 + 실제 설문 파일의 문항들

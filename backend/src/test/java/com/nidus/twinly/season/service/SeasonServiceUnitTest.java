@@ -1,6 +1,9 @@
 package com.nidus.twinly.season.service;
 
 import com.nidus.twinly.common.web.BusinessException;
+import com.nidus.twinly.legal.domain.PolicyKind;
+import com.nidus.twinly.legal.reader.ConsentReader;
+import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.season.dto.command.SeasonChangeCommand;
 import com.nidus.twinly.season.dto.result.SeasonChangeResult;
@@ -20,6 +23,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -37,6 +41,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
@@ -64,10 +69,96 @@ class SeasonServiceUnitTest {
     PurchaseService purchaseService;
 
     @Mock
+    EntitlementReader entitlementReader;
+
+    @Mock
+    ConsentReader consentReader;
+
+    @Mock
     UserRepository userRepository;
 
     @InjectMocks
     SeasonService seasonService;
+
+    @Test
+    @DisplayName("결제 권한과 필수 약관 동의를 모두 갖추면 현재 시즌 참가를 위임한다")
+    void participateIn_participates_when_eligible() {
+        // given: 유저가 있고 권한·필수 약관 동의를 모두 갖춤
+        given(userRepository.findById(USER_ID)).willReturn(Optional.of(user()));
+        given(entitlementReader.hasSimulationAccess(USER_ID)).willReturn(true);
+        given(consentReader.hasAgreedAllRequired(USER_ID, PolicyKind.PARALLEL_ENTRY)).willReturn(true);
+
+        // when: 시즌 참여
+        seasonService.participateIn(USER_ID);
+
+        // then: 현재 시즌 참가를 writer 에 위임 (upsert 라 재호출해도 최초 참가 시각이 유지된다)
+        then(seasonParticipationWriter).should().participateInCurrentSeason(USER_ID);
+    }
+
+    @Test
+    @DisplayName("결제 직후 아직 반영되지 않은 권한을 구제하도록 권한 확인 전에 RevenueCat 과 동기화한다")
+    void participateIn_syncs_purchases_before_checking_access() {
+        // given: 참여 조건을 모두 갖춘 유저
+        User user = user();
+        given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+        given(entitlementReader.hasSimulationAccess(USER_ID)).willReturn(true);
+        given(consentReader.hasAgreedAllRequired(USER_ID, PolicyKind.PARALLEL_ENTRY)).willReturn(true);
+
+        // when: 시즌 참여
+        seasonService.participateIn(USER_ID);
+
+        // then: 동기화가 권한 확인보다 먼저 수행됨 (결제 직후 웹훅이 늦어도 참여가 막히지 않는다)
+        InOrder inOrder = inOrder(purchaseService, entitlementReader);
+        inOrder.verify(purchaseService).syncQuietly(user);
+        inOrder.verify(entitlementReader).hasSimulationAccess(USER_ID);
+    }
+
+    @Test
+    @DisplayName("유저가 없으면 USER_NOT_FOUND 예외가 발생하고 동기화도 참가도 하지 않는다")
+    void participateIn_when_user_missing_throws() {
+        // given: 토큰은 유효하지만 유저가 사라진 상태
+        given(userRepository.findById(USER_ID)).willReturn(Optional.empty());
+
+        // when & then: 없는 유저로 외부 동기화를 부르지 않는다
+        assertThatThrownBy(() -> seasonService.participateIn(USER_ID))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.USER_NOT_FOUND);
+
+        then(purchaseService).should(never()).syncQuietly(any());
+        then(seasonParticipationWriter).should(never()).participateInCurrentSeason(any());
+    }
+
+    @Test
+    @DisplayName("동기화 후에도 결제 권한이 없으면 SIMULATION_ACCESS_REQUIRED 예외가 발생하고 동의 여부를 보지 않는다")
+    void participateIn_without_access_throws() {
+        // given: 동기화해도 권한이 붙지 않는 유저
+        given(userRepository.findById(USER_ID)).willReturn(Optional.of(user()));
+        given(entitlementReader.hasSimulationAccess(USER_ID)).willReturn(false);
+
+        // when & then: 권한 부족으로 거절
+        assertThatThrownBy(() -> seasonService.participateIn(USER_ID))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SIMULATION_ACCESS_REQUIRED);
+
+        then(consentReader).should(never()).hasAgreedAllRequired(any(), any());
+        then(seasonParticipationWriter).should(never()).participateInCurrentSeason(any());
+    }
+
+    @Test
+    @DisplayName("결제했어도 필수 약관에 동의하지 않았으면 SIMULATION_CONSENT_REQUIRED 예외가 발생하고 참가시키지 않는다")
+    void participateIn_without_consent_throws() {
+        // given: 권한은 있지만 평행우주 입장 필수 약관에 동의하지 않은 유저
+        given(userRepository.findById(USER_ID)).willReturn(Optional.of(user()));
+        given(entitlementReader.hasSimulationAccess(USER_ID)).willReturn(true);
+        given(consentReader.hasAgreedAllRequired(USER_ID, PolicyKind.PARALLEL_ENTRY)).willReturn(false);
+
+        // when & then: 시뮬레이션 대상이 아니므로 참가 행을 만들지 않는다
+        assertThatThrownBy(() -> seasonService.participateIn(USER_ID))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SIMULATION_CONSENT_REQUIRED);
+
+        then(seasonParticipationWriter).should(never()).participateInCurrentSeason(any());
+    }
 
     @Test
     @DisplayName("참가 조회 시 구매 상태 동기화를 위임한다")
