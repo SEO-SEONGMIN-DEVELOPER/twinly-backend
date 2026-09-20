@@ -306,6 +306,7 @@ class SimulationServiceUnitTest {
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.SIMULATION_ACCESS_REQUIRED);
 
+        then(purchaseService).should().syncQuietly(any());
         then(consentReader).should(never()).hasAgreedAllRequired(any(), any());
         then(personaElementRepository).should(never()).findAllByUserIdOrderByIdAsc(anyLong());
     }
@@ -364,9 +365,9 @@ class SimulationServiceUnitTest {
     }
 
     @Test
-    @DisplayName("페르소나 조회 전에 RevenueCat 최신 상태를 동기화한 뒤 권한을 확인한다")
-    void persona_syncs_purchases_before_checking_access() {
-        // given: 정상 유저, 권한 있음
+    @DisplayName("DB에 시뮬레이션 권한이 있으면 RevenueCat 동기화 없이 페르소나를 조회한다")
+    void persona_with_entitlement_skips_sync() {
+        // given: 정상 유저, DB에 권한 있음
         User user = user(USER_ID, "서", "성민", "컴퓨터공학과", "1999-03-21");
         given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
         given(entitlementReader.hasSimulationAccess(USER_ID)).willReturn(true);
@@ -376,8 +377,26 @@ class SimulationServiceUnitTest {
         // when: 페르소나 조회
         simulationService.persona(USER_ID);
 
-        // then: 동기화가 권한 확인보다 먼저 수행됨
-        InOrder inOrder = inOrder(purchaseService, entitlementReader);
+        // then: 외부 호출 없이 DB 권한만으로 통과
+        then(purchaseService).should(never()).syncQuietly(any());
+    }
+
+    @Test
+    @DisplayName("DB에 시뮬레이션 권한이 없으면 RevenueCat과 동기화한 뒤 다시 확인한다")
+    void persona_without_entitlement_syncs_then_rechecks() {
+        // given: DB에는 권한이 없지만 동기화 후에는 권한이 반영됨
+        User user = user(USER_ID, "서", "성민", "컴퓨터공학과", "1999-03-21");
+        given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+        given(entitlementReader.hasSimulationAccess(USER_ID)).willReturn(false, true);
+        given(consentReader.hasAgreedAllRequired(USER_ID, PolicyKind.PARALLEL_ENTRY)).willReturn(true);
+        given(personaElementRepository.findAllByUserIdOrderByIdAsc(USER_ID)).willReturn(List.of());
+
+        // when: 페르소나 조회
+        simulationService.persona(USER_ID);
+
+        // then: 동기화가 재확인보다 먼저 수행되고 조회가 성공함
+        InOrder inOrder = inOrder(entitlementReader, purchaseService);
+        inOrder.verify(entitlementReader).hasSimulationAccess(USER_ID);
         inOrder.verify(purchaseService).syncQuietly(user);
         inOrder.verify(entitlementReader).hasSimulationAccess(USER_ID);
     }

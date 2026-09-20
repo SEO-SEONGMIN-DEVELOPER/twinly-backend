@@ -295,10 +295,12 @@ public class SimulationService {
             throw new BusinessException(ErrorCode.USER_NOT_FOUND);
         }
 
-        purchaseService.syncQuietly(user);
-
         if (!entitlementReader.hasSimulationAccess(userId)) {
-            throw new BusinessException(ErrorCode.SIMULATION_ACCESS_REQUIRED);
+            purchaseService.syncQuietly(user);
+
+            if (!entitlementReader.hasSimulationAccess(userId)) {
+                throw new BusinessException(ErrorCode.SIMULATION_ACCESS_REQUIRED);
+            }
         }
         if (!consentReader.hasAgreedAllRequired(userId, PolicyKind.PARALLEL_ENTRY)) {
             throw new BusinessException(ErrorCode.SIMULATION_CONSENT_REQUIRED);
