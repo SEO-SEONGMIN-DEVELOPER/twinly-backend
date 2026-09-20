@@ -13,10 +13,15 @@ import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.season.repository.SeasonParticipationRepository;
 import com.nidus.twinly.season.repository.SeasonRepository;
 import com.nidus.twinly.season.writer.SeasonParticipationWriter;
+import com.nidus.twinly.legal.domain.PolicyKind;
+import com.nidus.twinly.legal.reader.ConsentReader;
+import com.nidus.twinly.purchase.reader.EntitlementReader;
+import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
@@ -32,6 +37,8 @@ public class SeasonService {
     private final SeasonParticipationWriter seasonParticipationWriter;
     private final ApplicationEventPublisher eventPublisher;
     private final PurchaseService purchaseService;
+    private final EntitlementReader entitlementReader;
+    private final ConsentReader consentReader;
     private final UserRepository userRepository;
 
     @Transactional
@@ -49,6 +56,23 @@ public class SeasonService {
         eventPublisher.publishEvent(new SeasonChangedEvent(season.getId()));
 
         return new SeasonChangeResult(season.getId(), season.getStartedAt(), season.getEndedAt());
+    }
+
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public void participateIn(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        purchaseService.syncQuietly(user);
+
+        if (!entitlementReader.hasSimulationAccess(userId)) {
+            throw new BusinessException(ErrorCode.SIMULATION_ACCESS_REQUIRED);
+        }
+        if (!consentReader.hasAgreedAllRequired(userId, PolicyKind.PARALLEL_ENTRY)) {
+            throw new BusinessException(ErrorCode.SIMULATION_CONSENT_REQUIRED);
+        }
+
+        seasonParticipationWriter.participateInCurrentSeason(userId);
     }
 
     public SeasonParticipationResult participation(Long userId) {

@@ -32,6 +32,11 @@ public class SeasonParticipationWriter {
             return;
         }
 
+        participateInCurrentSeason(userId);
+    }
+
+    @Transactional
+    public void participateInCurrentSeason(Long userId) {
         seasonParticipationRepository.upsert(userId, currentSeasonReader.read().getId());
     }
 
