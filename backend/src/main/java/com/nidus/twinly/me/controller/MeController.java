@@ -38,6 +38,7 @@ import com.nidus.twinly.me.dto.response.MePushNotificationsResponse;
 import com.nidus.twinly.me.dto.response.MeProfileEditViewResponse;
 import com.nidus.twinly.me.dto.response.MeProfileResponse;
 import com.nidus.twinly.me.dto.response.MePurchasesResponse;
+import com.nidus.twinly.me.dto.response.MeInfoResponse;
 import com.nidus.twinly.me.dto.response.MeProfilePhotoCommitResponse;
 import com.nidus.twinly.me.dto.response.MeProfilePhotoPresignResponse;
 import com.nidus.twinly.me.dto.response.MeProfileVisibilitySettingsResponse;
@@ -263,6 +264,13 @@ public class MeController {
     @GetMapping("/api/v1/me/status")
     public MeStatusResponse status(@AuthenticationPrincipal UserInfo userInfo) {
         return MeStatusResponse.from(meService.status(userInfo.id()));
+    }
+
+    @Operation(summary = "내 정보 조회")
+    @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND")
+    @GetMapping("/api/v1/me/info")
+    public MeInfoResponse info(@AuthenticationPrincipal UserInfo userInfo) {
+        return MeInfoResponse.from(meService.info(userInfo.id()));
     }
 
     @Operation(summary = "망설임 목록 조회")

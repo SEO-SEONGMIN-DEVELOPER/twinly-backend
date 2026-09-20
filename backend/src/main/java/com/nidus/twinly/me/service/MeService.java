@@ -62,6 +62,7 @@ import com.nidus.twinly.me.dto.result.MeStatusPersonaResult;
 import com.nidus.twinly.me.dto.result.MeStatusReportResult;
 import com.nidus.twinly.me.dto.result.MeStatusResult;
 import com.nidus.twinly.me.dto.result.MeStatusWithdrawalResult;
+import com.nidus.twinly.me.dto.result.MeInfoResult;
 import com.nidus.twinly.me.dto.result.MeWithdrawResult;
 import com.nidus.twinly.notification.domain.AppNotificationFeedType;
 import com.nidus.twinly.notification.domain.NotificationChannel;
@@ -505,6 +506,13 @@ public class MeService {
                 new MeStatusReportResult(!reports.isEmpty(), reasons),
                 personaStatus(userId, user)
         );
+    }
+
+    public MeInfoResult info(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        return new MeInfoResult(user.getGender());
     }
 
     private MeStatusPersonaResult personaStatus(Long userId, User user) {

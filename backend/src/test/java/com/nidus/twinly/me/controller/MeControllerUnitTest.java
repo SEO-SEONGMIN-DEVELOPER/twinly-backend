@@ -2,6 +2,7 @@ package com.nidus.twinly.me.controller;
 
 import com.nidus.twinly.aichat.service.UserAiChatService;
 import com.nidus.twinly.anon.service.AnonService;
+import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.photo.PhotoPosInfo;
 import com.nidus.twinly.common.photo.ProfilePhotoInfo;
 import com.nidus.twinly.common.presign.RequiredHeaders;
@@ -45,6 +46,7 @@ import com.nidus.twinly.me.dto.result.MePushNotificationsSettingsResult;
 import com.nidus.twinly.me.dto.result.MeStatusPersonaResult;
 import com.nidus.twinly.me.dto.result.MeStatusReportResult;
 import com.nidus.twinly.me.dto.result.MeStatusResult;
+import com.nidus.twinly.me.dto.result.MeInfoResult;
 import com.nidus.twinly.me.dto.result.MeStatusWithdrawalResult;
 import com.nidus.twinly.me.dto.result.MeWithdrawResult;
 import com.nidus.twinly.me.service.MeService;
@@ -652,6 +654,23 @@ class MeControllerUnitTest {
                 .andExpect(jsonPath("$.persona.isSurveyCompleted").value(true))
                 .andExpect(jsonPath("$.persona.isInterestsCompleted").value(true))
                 .andExpect(jsonPath("$.persona.isAiChatCompleted").value(false));
+    }
+
+    // ---------------------------------------------------------------- 내 정보
+
+    @Test
+    @DisplayName("내 정보 조회 시 성별을 소문자 문자열로 직렬화한 JSON을 반환한다")
+    void info_success() throws Exception {
+        // given: 서비스가 여성 유저를 반환
+        given(meService.info(ME)).willReturn(new MeInfoResult(Gender.FEMALE));
+
+        // when: 내 정보 조회 API 호출
+        var result = mockMvc.perform(get("/api/v1/me/info")
+                .header("Authorization", BEARER));
+
+        // then: 200 반환 + 성별은 소문자 문자열
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.gender").value("female"));
     }
 
     // ---------------------------------------------------------------- 망설임
