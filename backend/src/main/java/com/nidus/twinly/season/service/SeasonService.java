@@ -58,7 +58,7 @@ public class SeasonService {
         return new SeasonChangeResult(season.getId(), season.getStartedAt(), season.getEndedAt());
     }
 
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    @Transactional(propagation = Propagation.SUPPORTS)
     public void participateIn(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
