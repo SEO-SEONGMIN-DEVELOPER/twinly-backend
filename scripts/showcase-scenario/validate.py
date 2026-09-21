@@ -101,6 +101,9 @@ def run(doc, expected_curves):
                 if spk != {day["userId"]} | set(s["with"]):
                     bad("5.화자불일치", (uid, day["date"], s["place"]))
 
+        partners = [rel["partnerId"] for rel in day["relationships"]]
+        if len(partners) != len(set(partners)):
+            bad("6.호감도상대중복", (uid, day["date"]))
         for rel in day["relationships"]:
             if T(rel["updateTime"]).date().isoformat() != day["date"]:
                 bad("6.호감도시각이탈", (uid, day["date"]))

@@ -19,6 +19,7 @@ import java.time.LocalDateTime;
 import java.util.regex.Pattern;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -334,6 +335,23 @@ class ShowcaseScenarioResourceUnitTest {
             }
         }
         assertThat(broken).isEmpty();
+    }
+
+    @Test
+    @DisplayName("하루 호감도 목록에 같은 상대가 두 번 들어 있지 않다")
+    void relationships_have_one_entry_per_partner_per_day() {
+        List<String> broken = new ArrayList<>();
+
+        for (SimulationsRequest request : requests) {
+            Set<Long> seen = new HashSet<>();
+            for (var relationship : request.relationships()) {
+                if (!seen.add(relationship.partnerId())) {
+                    broken.add("%d-%d %s".formatted(request.userId(), relationship.partnerId(), request.date()));
+                }
+            }
+        }
+
+        assertThat(broken).as("같은 날 같은 상대의 호감도가 중복된 곳").isEmpty();
     }
 
     @Test
