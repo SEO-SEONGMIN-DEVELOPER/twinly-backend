@@ -106,8 +106,11 @@ public class ShowcaseService {
     }
 
     private Long pickTargetUserId(Long viewerUserId, LocalDate date) {
-        List<Long> candidateUserIds = showcaseRepository.findAllTargetCandidateUserIds(
-                viewerUserId, currentSeasonReader.read().getId(), date);
+        Long seasonId = currentSeasonReader.read().getId();
+        List<Long> candidateUserIds = showcaseRepository.findAllTargetCandidateUserIds(viewerUserId, seasonId, date, true);
+        if (candidateUserIds.isEmpty()) {
+            candidateUserIds = showcaseRepository.findAllTargetCandidateUserIds(viewerUserId, seasonId, date, false);
+        }
 
         if (candidateUserIds.isEmpty()) {
             throw new BusinessException(ErrorCode.SHOWCASE_TARGET_NOT_FOUND);
