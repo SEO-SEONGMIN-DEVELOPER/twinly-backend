@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """생성 결과 정합성 검사."""
-import collections, datetime, json, os, sys
+import collections, datetime, json, os, re, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import geo, profiles
@@ -136,123 +136,54 @@ def run(doc, expected_curves):
         if any(y < x for x, y in zip(seq, seq[1:])):
             bad("7.호감도역행", (key, seq))
 
-    dialogue_rules(doc, bad)
+    text_rules(doc, bad)
     return fail, detail
 
 
-def dialogue_rules(doc, bad):
-    """대본에 붙은 조건(관계 단계·시간대·요일·학교·거주·장소 종류)과 유저별 대본 중복을 검사한다."""
-    import dialogue
-    import scripts_place
-    import scripts_talk
-    import build
+RAIN_WORDS = re.compile(r"비가|비를|빗|우산|장마|소나기|폭우")
+SUN_WORDS = re.compile(r"햇살|햇볕|땡볕|쨍|노을")
+NAMES = {n for p in profiles.USERS.values() for n in (p["name"], p["name"][1:])}
 
-    by_lines = {}
-    for kind, scripts in scripts_place.BY_KIND.items():
-        for sc in scripts:
-            by_lines[tuple(t for _, _, t in sc["lines"])] = (kind, sc)
-    for sc in scripts_talk.TALK:
-        by_lines[tuple(t for _, _, t in sc["lines"])] = ("talk", sc)
-    for sc in scripts_place.GROUP:
-        by_lines[tuple(t for _, _, t in sc["lines"])] = ("group", sc)
 
-    seen = collections.defaultdict(collections.Counter)
-    for day in doc["days"]:
-        weekend = datetime.date.fromisoformat(day["date"]).weekday() >= 5
-        for s in day["scenes"]:
-            if s["type"] != "dialogue":
-                continue
-            bubbles = [l for l in s["lines"] if l["t"] == "bubble"]
-            key = tuple(l["text"] for l in bubbles)
-            if key not in by_lines:
-                bad("8.대본아님", (day["userId"], day["date"], s["place"]))
-                continue
-            kind, sc = by_lines[key]
-            seen[day["userId"]][id(sc)] += 1
-            members = [int(day["userId"])] + [int(w) for w in s["with"]]
-            hour = T(s["start"]).hour
-            stage = max(build.stage_between(a, b, day["date"])
-                        for a in members for b in members if a != b)
-            where = (day["userId"], day["date"], s["place"], sc["narr"][0])
-            if stage not in sc["stages"]:
-                bad("8.관계단계", where)
-            if (sc["time"] == "am" and hour >= 11) or (sc["time"] == "ev" and hour < 17):
-                bad("8.시간대", where)
-            if sc["days"] == "weekday" and weekend:
-                bad("8.요일", where)
-            if sc["school"] == "same" and len({profiles.USERS[m]["school"] for m in members}) > 1:
-                bad("8.학교", where)
-            if kind not in ("talk", "group", "outdoor", dialogue.kind_of(s["place"])):
-                bad("8.장소종류", where)
-            if sc["at"] and not any(k in s["place"] for k in sc["at"]):
-                bad("8.세부장소", where)
-            if any(k in s["place"] for k in sc["not_at"]):
-                bad("8.세부장소", where)
-            cast = {who: int(l["userId"]) for (who, _, _), l in zip(sc["lines"], bubbles)}
-            for role, allowed in sc["who"].items():
-                if role in cast and dialogue.home_type(cast[role]) not in allowed:
-                    bad("8.거주", where)
-    # 장면 사이 문맥: 시간순으로 훑으며 만난 적 있는 사이와 각자 밝힌 설정을 쌓는다.
-    events, done = [], set()
-    for day in doc["days"]:
-        for s in day["scenes"]:
-            key = (day["date"], s["start"], s["place"],
-                   frozenset([day["userId"]] + s.get("with", [])))
-            if s["type"] == "dialogue" and key not in done:
-                done.add(key)
-                events.append((day["date"], s["start"], s,
-                               [int(day["userId"])] + [int(w) for w in s["with"]]))
-    events.sort(key=lambda e: (e[0], e[1]))
-    met, said = set(), collections.defaultdict(dict)
-    met_on = collections.defaultdict(set)
-    for date, start, s, members in events:
-        bubbles = [l for l in s["lines"] if l["t"] == "bubble"]
-        found = by_lines.get(tuple(l["text"] for l in bubbles))
-        pairs = [frozenset((a, b)) for a in members for b in members if a < b]
-        if found:
-            sc = found[1]
-            cast = {who: int(l["userId"]) for (who, _, _), l in zip(sc["lines"], bubbles)}
-            if sc["history"] and any(p not in met and "-".join(map(str, sorted(p))) not in build.CURVES
-                                     for p in pairs):
-                bad("9.첫만남인데과거전제", (date, s["place"], sc["narr"][0]))
-            again = any(p in met_on[date] for p in pairs)
-            if sc["opener"] and again:
-                bad("9.재회인데인사", (date, s["place"], sc["narr"][0]))
-            if sc["later"] and not again:
-                bad("9.첫만남인데재회", (date, s["place"], sc["narr"][0]))
-            for role, facts in sc["facts"].items():
-                uid = cast.get(role)
-                for key, value in facts.items():
-                    if uid is not None and said[uid].get(key, value) != value:
-                        bad("9.설정번복", (uid, key, said[uid][key], value, date))
-                    if uid is not None:
-                        said[uid].setdefault(key, value)
-        met.update(pairs)
-        met_on[date].update(pairs)
-
+def text_rules(doc, bad):
+    """장면 문장이 재사용되지 않고, 날씨·학과·이름 규칙을 지키는지 검사한다. 대화는 양쪽 미러를 한 번만 센다."""
     import weather
+
+    used = collections.defaultdict(set)
+    done = set()
     for day in doc["days"]:
         sky = weather.of(day["date"])
-        for s in day["scenes"]:
-            texts = [s.get("narration"), s.get("mind")] + [l["text"] for l in s.get("lines", [])]
-            for text in texts:
-                if text and not weather.text_ok(text, sky):
-                    bad("10.날씨문장", (day["date"], sky, text))
-            if s["type"] == "dialogue":
-                found = by_lines.get(tuple(l["text"] for l in s["lines"] if l["t"] == "bubble"))
-                if found and not weather.tag_ok(found[1]["weather"], sky):
-                    bad("10.날씨대본", (day["date"], sky, found[1]["narr"][0]))
-
-    for day in doc["days"]:
         dept = profiles.USERS[int(day["userId"])]["dept"]
         for s in day["scenes"]:
-            for text in (s.get("narration"), s.get("mind")):
-                if text and "학과" in text and dept not in text:
-                    bad("8.남의학과", (day["userId"], day["date"], text))
-    for uid, counter in seen.items():
-        for count in counter.values():
-            if count > 1:
-                bad("8.대본재등장", uid)
+            if s["type"] == "action":
+                owner = (day["userId"], day["date"], s["start"])
+                texts = [("narration", s["narration"]), ("mind", s.get("mind"))]
+                for text in (s["narration"], s.get("mind")):
+                    if text and "학과" in text and dept not in text:
+                        bad("8.남의학과", (day["userId"], day["date"], text))
+            else:
+                owner = (day["date"], s["start"], frozenset([day["userId"]] + s["with"]))
+                if owner in done:
+                    continue
+                done.add(owner)
+                if not s["lines"] or s["lines"][0]["t"] != "narr":
+                    bad("8.첫줄나레이션아님", (day["date"], s["place"]))
+                if not 5 <= len(s["lines"]) <= 7:
+                    bad("8.대사줄수", (day["date"], s["place"], len(s["lines"])))
+                texts = [(l["t"], l["text"]) for l in s["lines"]]
+            for kind, text in texts:
+                if not text:
+                    continue
+                used[(kind, text)].add(owner)
+                if sky != weather.RAIN and RAIN_WORDS.search(text):
+                    bad("10.비아닌날비", (day["date"], text))
+                if sky != weather.CLEAR and SUN_WORDS.search(text):
+                    bad("10.안맑은날햇살", (day["date"], text))
+                if any(name in text for name in NAMES):
+                    bad("10.이름노출", (day["date"], text))
+    for (kind, text), owners in used.items():
+        if len(owners) > 1:
+            bad("11.문장재사용", (kind, text, len(owners)))
 
 
 def curves_from_assets():

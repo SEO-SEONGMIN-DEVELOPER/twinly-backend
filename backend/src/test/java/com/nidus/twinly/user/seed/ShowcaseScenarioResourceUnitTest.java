@@ -338,6 +338,43 @@ class ShowcaseScenarioResourceUnitTest {
     }
 
     @Test
+    @DisplayName("나레이션·속마음·대사는 다른 장면에서 다시 쓰이지 않는다 (대화는 양쪽 미러를 한 장면으로 본다)")
+    void scene_texts_are_never_reused() {
+        Map<String, Set<String>> ownersByText = new LinkedHashMap<>();
+
+        for (JsonNode day : root.get("days")) {
+            String userId = day.get("userId").asString();
+            String date = day.get("date").asString();
+            for (JsonNode scene : day.get("scenes")) {
+                String start = scene.get("start").asString();
+                List<String> texts = new ArrayList<>();
+                String owner;
+                if ("action".equals(scene.get("type").asString())) {
+                    owner = userId + "|" + start;
+                    texts.add("narration:" + scene.get("narration").asString());
+                    if (scene.hasNonNull("mind")) {
+                        texts.add("mind:" + scene.get("mind").asString());
+                    }
+                } else {
+                    List<String> members = new ArrayList<>(List.of(userId));
+                    scene.get("with").forEach(with -> members.add(with.asString()));
+                    members.sort(Comparator.comparingInt(Integer::parseInt));
+                    owner = start + "|" + String.join("-", members);
+                    scene.get("lines").forEach(line ->
+                            texts.add(line.get("t").asString() + ":" + line.get("text").asString()));
+                }
+                texts.forEach(text -> ownersByText.computeIfAbsent(text, key -> new HashSet<>()).add(owner));
+            }
+        }
+
+        List<String> reused = ownersByText.entrySet().stream()
+                .filter(entry -> entry.getValue().size() > 1)
+                .map(entry -> entry.getKey() + " x" + entry.getValue().size())
+                .toList();
+        assertThat(reused).as("여러 장면에 다시 쓰인 문장").isEmpty();
+    }
+
+    @Test
     @DisplayName("하루 호감도 목록에 같은 상대가 두 번 들어 있지 않다")
     void relationships_have_one_entry_per_partner_per_day() {
         List<String> broken = new ArrayList<>();
