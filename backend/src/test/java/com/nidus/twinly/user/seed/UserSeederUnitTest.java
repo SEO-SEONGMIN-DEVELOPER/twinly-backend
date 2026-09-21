@@ -87,9 +87,25 @@ class UserSeederUnitTest {
     private static final int PERSONA_DETAILS_PER_USER = 8;
     private static final int SIMULATION_ACCESS_USER_COUNT = 50;
     private static final int SUMMARY_ELEMENTS_PER_USER = 1;
-    private static final int SCENARIO_DAY_COUNT = 390;
-    private static final int FIRST_USER_SCENARIO_DAY_COUNT = 19;
+    private static final int SCENARIO_DAY_COUNT = scenarioDayCount(null);
+    private static final int FIRST_USER_SCENARIO_DAY_COUNT = scenarioDayCount("1");
     private static final long EXPIRED_USER_ID = 26L;
+
+    /** 시드 파일이 늘어나도 테스트가 따라오도록 개수는 리소스에서 읽는다. userRef 가 null 이면 전체. */
+    private static int scenarioDayCount(String userRef) {
+        try (InputStream in = new ClassPathResource("seed/showcase-scenarios.json").getInputStream()) {
+            JsonNode days = new ObjectMapper().readTree(in).get("days");
+            int count = 0;
+            for (JsonNode day : days) {
+                if (userRef == null || userRef.equals(day.get("userId").asString())) {
+                    count++;
+                }
+            }
+            return count;
+        } catch (IOException e) {
+            throw new IllegalStateException("시드 시나리오 리소스를 읽지 못했습니다.", e);
+        }
+    }
 
     @Mock
     UserRepository userRepository;
