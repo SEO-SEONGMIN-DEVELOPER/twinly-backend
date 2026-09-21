@@ -21,6 +21,8 @@ public interface ShowcaseRepository extends JpaRepository<Showcase, Long> {
             JOIN users u ON u.id = s.user_id AND u.withdrawal_requested_at IS NULL AND u.deleted_at IS NULL
             WHERE s.date = :date
               AND s.user_id <> :viewerUserId
+              AND (:sameOrganization = FALSE
+                   OR u.organization_hash = (SELECT v.organization_hash FROM users v WHERE v.id = :viewerUserId))
               AND NOT EXISTS (
                   SELECT 1 FROM blocks b
                   WHERE (b.user_id = :viewerUserId AND b.blocked_user_id = s.user_id)
@@ -29,7 +31,8 @@ public interface ShowcaseRepository extends JpaRepository<Showcase, Long> {
             """, nativeQuery = true)
     List<Long> findAllTargetCandidateUserIds(@Param("viewerUserId") Long viewerUserId,
                                              @Param("seasonId") Long seasonId,
-                                             @Param("date") LocalDate date);
+                                             @Param("date") LocalDate date,
+                                             @Param("sameOrganization") boolean sameOrganization);
 
     @Modifying
     @Query("DELETE FROM Showcase s WHERE s.targetUserId IN :userIds")

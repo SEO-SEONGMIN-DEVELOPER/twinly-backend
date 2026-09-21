@@ -78,6 +78,11 @@ public class ShowcaseService {
                 .orElseGet(() -> showcaseRepository.save(Showcase.create(userId, pickTargetUserId(userId, date), date)));
 
         List<Scene> scenes = sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(showcase.getTargetUserId(), date);
+        if (scenes.isEmpty()) {
+            WarnLog.log(log, "관람 대상의 오늘 씬이 없어 대상을 다시 배정합니다.", field("showcaseId", showcase.getId()), field("targetUserId", showcase.getTargetUserId()));
+            showcase.changeTarget(pickTargetUserId(userId, date));
+            scenes = sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(showcase.getTargetUserId(), date);
+        }
         Map<Long, List<Long>> partnerUserIdsBySceneId = partnerUserIdsBySceneId(scenes);
         Map<Long, List<SceneLine>> sceneLinesBySceneId = sceneLinesBySceneId(scenes);
 
@@ -101,8 +106,11 @@ public class ShowcaseService {
     }
 
     private Long pickTargetUserId(Long viewerUserId, LocalDate date) {
-        List<Long> candidateUserIds = showcaseRepository.findAllTargetCandidateUserIds(
-                viewerUserId, currentSeasonReader.read().getId(), date);
+        Long seasonId = currentSeasonReader.read().getId();
+        List<Long> candidateUserIds = showcaseRepository.findAllTargetCandidateUserIds(viewerUserId, seasonId, date, true);
+        if (candidateUserIds.isEmpty()) {
+            candidateUserIds = showcaseRepository.findAllTargetCandidateUserIds(viewerUserId, seasonId, date, false);
+        }
 
         if (candidateUserIds.isEmpty()) {
             throw new BusinessException(ErrorCode.SHOWCASE_TARGET_NOT_FOUND);
