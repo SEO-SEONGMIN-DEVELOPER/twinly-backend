@@ -17,6 +17,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -107,6 +108,26 @@ class ShowcaseIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("배정 규칙: 같은 학교 후보가 있으면 다른 학교 후보가 여럿이어도 같은 학교 유저가 배정된다")
+    void today_prefers_same_organization() throws Exception {
+        // given: 관람자와 같은 학교 후보 한 명, 다른 학교 후보 세 명
+        User viewer = saveUserInOrganization("sameOrganizationHash");
+        User sameSchool = saveUserInOrganization("sameOrganizationHash");
+        seasonParticipationRepository.upsert(sameSchool.getId(), season.getId());
+        saveActionScene(sameSchool, "같은 학교다.");
+        for (int i = 0; i < 3; i++) {
+            saveActionScene(saveParticipant(), "다른 학교다.");
+        }
+
+        // when: 오늘 관람 조회
+        todayShowcaseId(viewer);
+
+        // then: 같은 학교 유저가 대상으로 저장된다
+        assertThat(showcaseRepository.findAll()).singleElement()
+                .satisfies(showcase -> assertThat(showcase.getTargetUserId()).isEqualTo(sameSchool.getId()));
+    }
+
+    @Test
     @DisplayName("배정 규칙: 본인·차단 상대·시즌 미참가자·장면 없는 유저는 후보에서 빠져 404가 난다")
     void today_without_candidate_returns_404() throws Exception {
         // given: 관람자 본인은 오늘 장면이 있는 참가자이고, 나머지 후보는 전부 조건에서 탈락한다
@@ -150,6 +171,13 @@ class ShowcaseIntegrationTest extends AbstractIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
 
         return com.jayway.jsonpath.JsonPath.read(body, "$.showcaseId");
+    }
+
+    private User saveUserInOrganization(String organizationHash) {
+        User user = saveUser();
+        ReflectionTestUtils.setField(user, "organizationHash", organizationHash);
+
+        return userRepository.save(user);
     }
 
     private User saveParticipant() {

@@ -38,4 +38,8 @@ public class Showcase {
 
         return showcase;
     }
+
+    public void changeTarget(Long targetUserId) {
+        this.targetUserId = targetUserId;
+    }
 }
