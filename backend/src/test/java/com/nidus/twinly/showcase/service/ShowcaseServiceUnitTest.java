@@ -107,9 +107,13 @@ class ShowcaseServiceUnitTest {
     @Test
     @DisplayName("오늘 배정이 이미 있으면 후보를 다시 뽑지 않는다 (하루 고정)")
     void today_reuses_existing_assignment() {
-        // given: 오늘 배정이 이미 있다
+        // given: 오늘 배정이 이미 있고 대상에게 오늘 씬이 있다
         given(showcaseRepository.findByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(showcase()));
-        givenEmptyDay();
+        given(sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(anyLong(), any()))
+                .willReturn(List.of(actionScene(88101L, "등교했다.", null)));
+        given(scenePartnerRepository.findAllBySceneIdIn(anyList())).willReturn(List.of());
+        given(userRepository.findAllById(any())).willReturn(List.of(user(TARGET_ID, "김", "민수")));
+        givenViewerCounts();
 
         // when: 같은 날 다시 조회
         ShowcaseTodayResult result = showcaseService.today(VIEWER_ID);
@@ -135,6 +139,47 @@ class ShowcaseServiceUnitTest {
                 .isEqualTo(ErrorCode.SHOWCASE_TARGET_NOT_FOUND);
 
         then(showcaseRepository).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("오늘 배정된 대상에게 오늘 씬이 없으면 씬이 있는 대상으로 다시 배정한다")
+    void today_reassigns_target_without_scenes() {
+        // given: 기존 배정 대상(204)은 오늘 씬이 없고, 후보(311)에게는 있다
+        Showcase existing = showcase();
+        given(showcaseRepository.findByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(existing));
+        given(sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(eq(TARGET_ID), any())).willReturn(List.of());
+        given(currentSeasonReader.read()).willReturn(season());
+        given(showcaseRepository.findAllTargetCandidateUserIds(anyLong(), anyLong(), any())).willReturn(List.of(PARTNER_ID));
+        given(sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(eq(PARTNER_ID), any()))
+                .willReturn(List.of(actionScene(88101L, "등교했다.", null)));
+        given(scenePartnerRepository.findAllBySceneIdIn(anyList())).willReturn(List.of());
+        given(userRepository.findAllById(any())).willReturn(List.of(user(PARTNER_ID, "박", "지훈")));
+        givenViewerCounts();
+
+        // when: 오늘 관람 조회
+        ShowcaseTodayResult result = showcaseService.today(VIEWER_ID);
+
+        // then: 같은 배정 행의 대상이 바뀌고 새 대상의 씬이 내려간다
+        assertThat(existing.getTargetUserId()).isEqualTo(PARTNER_ID);
+        assertThat(result.showcaseId()).isEqualTo(3312L);
+        assertThat(result.scenes()).hasSize(1);
+        then(showcaseRepository).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("다시 배정할 후보도 없으면 빈 화면 대신 SHOWCASE_TARGET_NOT_FOUND 예외가 발생한다")
+    void today_reassign_without_candidate_throws() {
+        // given: 기존 배정 대상은 오늘 씬이 없고 후보도 없다
+        given(showcaseRepository.findByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(showcase()));
+        given(sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(anyLong(), any())).willReturn(List.of());
+        given(currentSeasonReader.read()).willReturn(season());
+        given(showcaseRepository.findAllTargetCandidateUserIds(anyLong(), anyLong(), any())).willReturn(List.of());
+
+        // when & then: 대상 없음 예외
+        assertThatThrownBy(() -> showcaseService.today(VIEWER_ID))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.SHOWCASE_TARGET_NOT_FOUND);
     }
 
     @Test
@@ -258,7 +303,8 @@ class ShowcaseServiceUnitTest {
     void today_user_counts_include_viewer_organization() {
         // given: 관람 대상은 고려대학교, 호출자는 성신여자대학교 소속이다
         given(showcaseRepository.findByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(showcase()));
-        given(sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(anyLong(), any())).willReturn(List.of());
+        given(sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(anyLong(), any()))
+                .willReturn(List.of(actionScene(88101L, "등교했다.", null)));
         given(scenePartnerRepository.findAllBySceneIdIn(anyList())).willReturn(List.of());
         given(userRepository.findAllById(any())).willReturn(List.of(user(TARGET_ID, "김", "민수", "고려대학교")));
         given(userRepository.findById(VIEWER_ID)).willReturn(Optional.of(user(VIEWER_ID, "이", "서연", "성신여자대학교")));
