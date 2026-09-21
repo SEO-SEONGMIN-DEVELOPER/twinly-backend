@@ -101,6 +101,7 @@ tasks.register('unitTest', Test) {
 	testClassesDirs = sourceSets.test.output.classesDirs
 	classpath = sourceSets.test.runtimeClasspath
 	systemProperty 'spring.profiles.active', 'test'
+	maxHeapSize = '2g'
 	testLogging {
 		events "passed", "skipped", "failed"
 	}
