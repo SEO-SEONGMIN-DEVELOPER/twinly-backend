@@ -603,7 +603,7 @@ def build_day(uid, date, plan, meetings):
     scenes = pad_scenes(uid, date, scenes, plan, used, rng, seen)
     scenes = ensure_variety(uid, scenes, used, rng, seen)
 
-    relationships = []
+    by_partner = {}
     for m in meetings:
         if uid not in m["members"]:
             continue
@@ -614,13 +614,17 @@ def build_day(uid, date, plan, meetings):
             entry = CURVES.get(key, {}).get(date_str)
             if not entry:
                 continue
-            relationships.append({
+            update_time = hm(date, slots[m["slot"]][1]).isoformat(timespec="seconds")
+            prev = by_partner.get(str(other))
+            if prev and prev["updateTime"] >= update_time:
+                continue
+            by_partner[str(other)] = {
                 "partnerId": str(other),
-                "updateTime": hm(date, slots[m["slot"]][1]).isoformat(timespec="seconds"),
+                "updateTime": update_time,
                 "rapport": entry["rapport"],
                 "partnerModel": entry["model"],
-            })
-    relationships.sort(key=lambda r: int(r["partnerId"]))
+            }
+    relationships = sorted(by_partner.values(), key=lambda r: int(r["partnerId"]))
     return {"userId": str(uid), "date": date_str, "scenes": scenes,
             "questions": [], "relationships": relationships}
 
