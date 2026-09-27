@@ -243,6 +243,21 @@
         ]
     },
     {
+        "name": "twinly-stage-api-revenue-cat-grant-failure",
+        "description": "선착순 가입 권한 부여가 10분 넘게 계속 실패. 가입 직후 부여와 매분 재시도가 모두 이 코드로 기록되므로, 부여 전인 행이 하나라도 계속 실패하면 걸린다. 일시적 오류는 evaluationPeriods 2 로 걸러진다.\n\n조치:\n1. 원인 구분 (응답 코드와 본문의 code)\n   fields @timestamp, @logStream, log | filter log like /REVENUE_CAT_GRANT_FAILED/ | sort @timestamp desc\n2. 401 이면 RevenueCat 대시보드 API keys 에서 키 상태 확인 후 SSM /twinly/stage/api/env 갱신\n3. 404(code 7259) 면 RevenueCat 에 해당 고객이 아직 없어 거절된 것이다. 부여 전에 고객을 만드는 흐름이 깨졌는지 확인한다.\n4. 5xx·타임아웃이면 RevenueCat 상태 페이지 확인. 부여 전인 행은 매분 재시도되므로 복구되면 자동으로 따라잡는다.\n5. 밀린 대상 확인: SELECT id, user_id, expires_at FROM early_signup_grants WHERE granted_at IS NULL\n\n유저 영향: 선착순 300명 안에 든 가입자가 무료 권한을 받지 못해 참여 화면에서 결제를 요구받는다. 가입과 다른 기능은 정상이다.",
+        "namespace": "twinly/stage/api",
+        "metric": "RevenueCatGrantFailureCount",
+        "statistic": "Sum",
+        "period": 300,
+        "evaluationPeriods": 2,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 1.0,
+        "treatMissingData": "notBreaching",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-stage-alerts"
+        ]
+    },
+    {
         "name": "twinly-stage-api-identity-verification-failure",
         "description": "NICE 본인인증 연동이 10분 넘게 계속 실패. 토큰 발급·인증 URL 발급·결과 조회·복호화 어느 단계든 502(IDENTITY_VERIFICATION_FAILED)로 기록되므로, 지속 실패하면 걸린다. 사용자 사유(미완료·만료·나이·중복)는 4xx 라 이 알람에 잡히지 않는다. 일시적 네트워크 오류는 evaluationPeriods 2 로 걸러진다.\n\n조치:\n1. 바로 앞의 WARN 로그로 단계와 사유 구분\n   fields @timestamp, @logStream, message | filter message like /NICE/ | sort @timestamp desc\n2. resultCode=1006 이면 client_id·secret 확인, 1007 이면 서버 Outbound IP(NAT EIP) 가 NICE 에 등록돼 있는지 확인. 둘 다 SSM /twinly/stage/api/env 또는 NICE 담당자(niceid_support@nice.co.kr) 쪽 조치\n3. 1003·1004·3043 계열이 반복되면 토큰 재발급 재시도가 실패하는 것. NICE 장애 가능성이 크고 우리 조치는 없다\n4. '무결성 검증 실패' 또는 '복호화 실패' 면 키 유도 규칙 불일치. NICE 규격 변경 여부를 담당자에게 확인\n5. 2001~2999 는 NICE 게이트웨이 내부 오류. NICE 에 문의\n\n유저 영향: 신규 회원가입이 본인인증 단계에서 막힌다. 기존 사용자의 로그인·서비스 이용은 NICE 와 무관하므로 영향 없다.",
         "namespace": "twinly/stage/api",
