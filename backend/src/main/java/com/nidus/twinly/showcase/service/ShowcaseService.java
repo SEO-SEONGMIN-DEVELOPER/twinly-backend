@@ -13,6 +13,7 @@ import com.nidus.twinly.common.scene.StoredSceneLine;
 import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
+import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.showcase.dto.result.*;
 import com.nidus.twinly.showcase.entity.Showcase;
@@ -58,6 +59,8 @@ public class ShowcaseService {
     private static final String SCHOOL_SUFFIX = "학교";
     private static final long TARGET_USER_REF = 1L;
     private static final String MASKED_GIVEN_NAME = "OO";
+    private static final int TOTAL_USER_COUNT_OFFSET = 70;
+    private static final int SAME_ORGANIZATION_USER_COUNT_OFFSET = 23;
     private static final List<String> PSEUDONYM_FAMILY_NAMES = List.of(
             "김", "이", "박", "최", "정", "강", "조", "윤", "장", "임",
             "한", "오", "서", "신", "권", "황", "안", "송", "류", "홍"
@@ -320,9 +323,13 @@ public class ShowcaseService {
         User viewer = userRepository.findById(viewerUserId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
+        Instant now = Instant.now();
+
         return new ShowcaseUserCountsResult(
-                userRepository.countByWithdrawalRequestedAtIsNullAndDeletedAtIsNull(),
-                userRepository.countByWithdrawalRequestedAtIsNullAndDeletedAtIsNullAndOrganizationHash(viewer.getOrganizationHash()),
+                userRepository.countActiveWithEntitlement(EntitlementReader.SIMULATION_ACCESS, now)
+                        + TOTAL_USER_COUNT_OFFSET,
+                userRepository.countActiveWithEntitlementByOrganizationHash(viewer.getOrganizationHash(), EntitlementReader.SIMULATION_ACCESS, now)
+                        + SAME_ORGANIZATION_USER_COUNT_OFFSET,
                 toDisplayOrganization(viewer.getOrganization())
         );
     }

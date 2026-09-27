@@ -9,6 +9,7 @@ import com.nidus.twinly.common.scene.SceneNameRenderer;
 import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
+import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.season.entity.Season;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.showcase.dto.result.ShowcaseActionSceneResult;
@@ -394,15 +395,15 @@ class ShowcaseServiceUnitTest {
         given(scenePartnerRepository.findAllBySceneIdIn(anyList())).willReturn(List.of());
         given(userRepository.findAllById(any())).willReturn(List.of(user(TARGET_ID, "김", "민수", "고려대학교")));
         given(userRepository.findById(VIEWER_ID)).willReturn(Optional.of(user(VIEWER_ID, "이", "서연", "성신여자대학교")));
-        given(userRepository.countByWithdrawalRequestedAtIsNullAndDeletedAtIsNull()).willReturn(12840);
-        given(userRepository.countByWithdrawalRequestedAtIsNullAndDeletedAtIsNullAndOrganizationHash(any())).willReturn(320);
+        given(userRepository.countActiveWithEntitlement(eq(EntitlementReader.SIMULATION_ACCESS), any())).willReturn(12840);
+        given(userRepository.countActiveWithEntitlementByOrganizationHash(any(), eq(EntitlementReader.SIMULATION_ACCESS), any())).willReturn(320);
 
         // when: 오늘 관람 조회
         ShowcaseTodayResult result = showcaseService.today(VIEWER_ID);
 
         // then: 호출자 소속(성신여자대학교 → 성신여대)이 userCounts에 실리고, 대상 소속과 섞이지 않는다
-        assertThat(result.userCounts().total()).isEqualTo(12840);
-        assertThat(result.userCounts().sameOrganization()).isEqualTo(320);
+        assertThat(result.userCounts().total()).isEqualTo(12840 + 70);
+        assertThat(result.userCounts().sameOrganization()).isEqualTo(320 + 23);
         assertThat(result.userCounts().organization()).isEqualTo("성신여대");
         assertThat(result.userInfos().get(0).organization()).isEqualTo("고려대");
     }
@@ -416,8 +417,8 @@ class ShowcaseServiceUnitTest {
 
     private void givenViewerCounts() {
         given(userRepository.findById(VIEWER_ID)).willReturn(Optional.of(user(VIEWER_ID, "이", "서연")));
-        given(userRepository.countByWithdrawalRequestedAtIsNullAndDeletedAtIsNull()).willReturn(12840);
-        given(userRepository.countByWithdrawalRequestedAtIsNullAndDeletedAtIsNullAndOrganizationHash(any())).willReturn(320);
+        given(userRepository.countActiveWithEntitlement(eq(EntitlementReader.SIMULATION_ACCESS), any())).willReturn(12840);
+        given(userRepository.countActiveWithEntitlementByOrganizationHash(any(), eq(EntitlementReader.SIMULATION_ACCESS), any())).willReturn(320);
     }
 
     private Showcase showcase() {
