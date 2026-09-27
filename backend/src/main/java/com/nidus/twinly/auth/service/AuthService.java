@@ -45,6 +45,7 @@ import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.onboarding.repository.SurveyAnswerRepository;
 import com.nidus.twinly.organization.entity.Organization;
 import com.nidus.twinly.organization.service.OrganizationCatalog;
+import com.nidus.twinly.purchase.writer.EarlySignupGrantWriter;
 import com.nidus.twinly.user.entity.PersonaElement;
 import com.nidus.twinly.user.entity.Photo;
 import com.nidus.twinly.user.entity.User;
@@ -111,6 +112,8 @@ public class AuthService {
     private final PhotoRepository photoRepository;
     private final PersonaElementRepository personaElementRepository;
     private final VerificationRepository verificationRepository;
+
+    private final EarlySignupGrantWriter earlySignupGrantWriter;
 
     private final BlindIndexHasher blindIndexHasher;
     private final ProfileThumbnailService profileThumbnailService;
@@ -484,6 +487,8 @@ public class AuthService {
 
         verificationRepository.save(Verification.create(user.getId(), VerificationType.IDENTITY, identityVerification.getVerifiedAt()));
         verificationRepository.save(Verification.create(user.getId(), VerificationType.EMAIL, emailSession.getVerifiedAt()));
+
+        earlySignupGrantWriter.assign(user.getId(), diHash, Instant.now());
 
         eventPublisher.publishEvent(new UserSignedUpEvent(user.getId()));
 

@@ -29,6 +29,8 @@ import com.nidus.twinly.onboarding.entity.SurveyAnswer;
 import com.nidus.twinly.onboarding.repository.SurveyAnswerRepository;
 import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.common.web.ErrorCode;
+import com.nidus.twinly.purchase.entity.EarlySignupGrant;
+import com.nidus.twinly.purchase.repository.EarlySignupGrantRepository;
 import com.nidus.twinly.support.AbstractIntegrationTest;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.auth.client.NiceAuthClient;
@@ -84,6 +86,9 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     RefreshTokenRepository refreshTokenRepository;
+
+    @Autowired
+    EarlySignupGrantRepository earlySignupGrantRepository;
 
     @Autowired
     AnonSessionAiChatRepository anonSessionAiChatRepository;
@@ -362,6 +367,12 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
         assertThat(refreshTokenRepository.findAll())
                 .extracting(RefreshToken::getUserId)
                 .contains(created.getId());
+
+        // then: 선착순 자리가 본인인증 DI 해시와 함께 배정된다
+        //       테스트 트랜잭션은 커밋되지 않으므로 커밋 뒤 RevenueCat 부여는 일어나지 않아 부여 전 상태로 남는다
+        EarlySignupGrant grant = earlySignupGrantRepository.findByUserIdAndGrantedAtIsNull(created.getId()).orElseThrow();
+        assertThat(grant.getDiHash()).isEqualTo(created.getDiHash());
+        assertThat(grant.getExpiresAt()).isAfter(Instant.now().plus(Duration.ofDays(58)));
     }
 
     @Test
