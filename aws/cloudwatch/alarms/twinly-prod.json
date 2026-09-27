@@ -1,5 +1,23 @@
 [
     {
+        "name": "twinly-prod-api-a-cpu-surplus-credits",
+        "description": "버스터블 CPU 크레딧이 바닥나 초과 크레딧 과금이 시작됨. prod API 인스턴스는 t4g.medium 이고 unlimited 모드라 크레딧 소진 시 성능이 깎이는 대신 vCPU-시간당 추가 비용이 청구된다.\n\n이 알람이 울리면 기준 성능(vCPU 당 20%)을 넘는 부하가 장시간 지속되고 있다는 뜻이다. 10시 시뮬레이션 배치 같은 짧은 스파이크는 잔여 크레딧과 이후 적립으로 상환되므로 여기까지 오지 않는다. CPUCreditBalance·CPUSurplusCreditBalance 에 알람을 두지 않은 것은 unlimited 모드에서 그 시점에는 할 수 있는 조치가 없기 때문이다.\n\n조치:\n1. CPUUtilization 과 CPUCreditBalance 추이로 언제부터 소진됐는지 확인\n2. 두 대가 함께 올랐는지 한 대만인지 구분 — 한 대만이면 ALB 분배나 해당 인스턴스의 특정 작업을 의심\n3. Grafana 에서 요청량 증가인지, 요청당 CPU 가 늘어난 것인지(직전 배포) 구분\n4. 부하테스트 중이라면 예상된 상황인지 확인\n5. 일상 트래픽이 원인이면 버스터블이 맞지 않는 단계다 — 초과 과금이 계속되면 m7g.large 같은 비버스터블로 전환 검토",
+        "namespace": "AWS/EC2",
+        "metric": "CPUSurplusCreditsCharged",
+        "statistic": "Sum",
+        "period": 300,
+        "evaluationPeriods": 1,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 1.0,
+        "treatMissingData": "notBreaching",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ],
+        "okActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ]
+    },
+    {
         "name": "twinly-prod-api-a-disk-used",
         "description": "루트 볼륨 사용률 80% 초과. 방치하면 앱과 SSM 에이전트가 함께 중단되어 복구가 어려워짐.\n\nprod API 인스턴스의 앱 로그는 awslogs 드라이버로 CloudWatch 에 바로 보내므로 로컬에 쌓이지 않는다. 따라서 이 알람은 대개 배포마다 누적된 ECR 이미지가 원인이다.\n\n조치:\n1. SSM으로 접속해 df -h 로 현황 확인\n2. docker system prune -f 로 미사용 이미지/컨테이너 정리\n3. 그래도 높으면 du -sh /var/lib/docker/containers/*/*.log 로 로컬 로그 크기 확인\n4. 로컬 로그가 크다면 docker-compose.prod.yaml 의 awslogs 설정이 실제 컨테이너에 적용됐는지 확인\n5. prune 후에도 반복되면 정리 주기 자동화를 검토",
         "namespace": "CWAgent",
@@ -19,7 +37,7 @@
     },
     {
         "name": "twinly-prod-api-a-mem-used",
-        "description": "호스트 메모리 사용률 85% 초과. 방치하면 커널 OOM Killer 가 프로세스를 SIGKILL 로 죽이는데, 이 경우 앱 로그가 남지 않아 oom 메트릭 필터가 잡지 못한다.\n\nprod API 인스턴스에는 앱 컨테이너만 올라간다(prometheus·grafana 는 twinly-prod-monitoring 으로 분리). 따라서 이 알람은 사실상 앱 단독의 메모리 증가를 가리킨다.\n\nt4g.small 은 가용 1836MiB 이고 OS·docker·CloudWatch 에이전트가 약 510MiB 를 고정으로 쓴다. 앱 mem_limit 이 900m 이므로 컨테이너가 상한을 다 써도 호스트는 77% 에 그친다. 즉 이 알람이 울린다면 앱 컨테이너 바깥이 늘어난 것이다. 앱 컨테이너 자체의 폭주는 호스트가 아니라 컨테이너 OOM 으로 먼저 끊기고, 그때는 재기동으로 healthy-hosts 알람이 대신 잡는다.\n\n조치:\n1. SSM으로 접속해 free -m 과 docker stats 로 확인\n2. 컨테이너 합계가 평소와 같으면 호스트 쪽이다 — journald 로그, docker 이미지 캐시, CloudWatch 에이전트부터 확인\n3. 앱 컨테이너가 늘었으면 Grafana 힙 사용률 패널로 JVM 힙인지 힙 바깥인지 구분\n4. 힙이면 docker-compose.prod.yaml 의 mem_limit(900m) 또는 MaxRAMPercentage 조정. 비힙이 약 350MiB 로 고정이라 mem_limit 을 875m 아래로 내리면 힙 상한과 겹쳐 컨테이너 OOM 이 난다\n5. 힙 바깥이면 네이티브 메모리 누수 의심 — 스레드 수와 Metaspace 부터 확인\n6. 한 대만 오르면 그 인스턴스를 대상 그룹에서 빼고 재기동, 두 대 모두 오르면 직전 배포 버전을 의심",
+        "description": "호스트 메모리 사용률 85% 초과. 방치하면 커널 OOM Killer 가 프로세스를 SIGKILL 로 죽이는데, 이 경우 앱 로그가 남지 않아 oom 메트릭 필터가 잡지 못한다.\n\nprod API 인스턴스에는 앱 컨테이너만 올라간다(prometheus·grafana 는 twinly-prod-monitoring 으로 분리). 따라서 이 알람은 사실상 앱 단독의 메모리 증가를 가리킨다.\n\nt4g.medium 은 전체 3824MiB 이고 OS·docker·CloudWatch 에이전트가 약 525MiB 를 고정으로 쓴다. 앱 mem_limit 이 2560m 이므로 컨테이너가 상한을 다 써도 호스트는 81% 에 그친다(알람선과 여유 약 4%p). 즉 이 알람이 울린다면 앱 컨테이너 바깥이 늘어난 것이다. 앱 컨테이너 자체의 폭주는 호스트가 아니라 컨테이너 OOM 으로 먼저 끊기고, 그때는 재기동으로 healthy-hosts 알람이 대신 잡는다.\n\n조치:\n1. free -m 과 docker stats 로 확인 — 여유가 좁아 앱이 상한 근처면 바깥이 조금만 늘어도 울린다\n2. 컨테이너 합계가 평소와 같으면 호스트 쪽이다 — journald 로그, docker 이미지 캐시, CloudWatch 에이전트부터 확인\n3. 앱 컨테이너가 늘었으면 Grafana 힙 사용률 패널로 JVM 힙인지 힙 바깥인지 구분\n4. 힙이면 docker-compose.prod.yaml 의 mem_limit(2560m) 또는 MaxRAMPercentage 조정. 올릴 때는 바깥 525MiB 와 합쳐 3250MiB(85%) 이하, 내릴 때는 힙 상한 + 비힙 350MiB 이상을 지킨다\n5. 힙 바깥이면 네이티브 메모리 누수 의심 — 스레드 수와 Metaspace 부터 확인\n6. 한 대만 오르면 그 인스턴스를 대상 그룹에서 빼고 재기동, 두 대 모두 오르면 직전 배포 버전을 의심",
         "namespace": "CWAgent",
         "metric": "mem_used_percent",
         "statistic": "Average",
@@ -54,6 +72,24 @@
         ]
     },
     {
+        "name": "twinly-prod-api-c-cpu-surplus-credits",
+        "description": "버스터블 CPU 크레딧이 바닥나 초과 크레딧 과금이 시작됨. prod API 인스턴스는 t4g.medium 이고 unlimited 모드라 크레딧 소진 시 성능이 깎이는 대신 vCPU-시간당 추가 비용이 청구된다.\n\n이 알람이 울리면 기준 성능(vCPU 당 20%)을 넘는 부하가 장시간 지속되고 있다는 뜻이다. 10시 시뮬레이션 배치 같은 짧은 스파이크는 잔여 크레딧과 이후 적립으로 상환되므로 여기까지 오지 않는다. CPUCreditBalance·CPUSurplusCreditBalance 에 알람을 두지 않은 것은 unlimited 모드에서 그 시점에는 할 수 있는 조치가 없기 때문이다.\n\n조치:\n1. CPUUtilization 과 CPUCreditBalance 추이로 언제부터 소진됐는지 확인\n2. 두 대가 함께 올랐는지 한 대만인지 구분 — 한 대만이면 ALB 분배나 해당 인스턴스의 특정 작업을 의심\n3. Grafana 에서 요청량 증가인지, 요청당 CPU 가 늘어난 것인지(직전 배포) 구분\n4. 부하테스트 중이라면 예상된 상황인지 확인\n5. 일상 트래픽이 원인이면 버스터블이 맞지 않는 단계다 — 초과 과금이 계속되면 m7g.large 같은 비버스터블로 전환 검토",
+        "namespace": "AWS/EC2",
+        "metric": "CPUSurplusCreditsCharged",
+        "statistic": "Sum",
+        "period": 300,
+        "evaluationPeriods": 1,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 1.0,
+        "treatMissingData": "notBreaching",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ],
+        "okActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ]
+    },
+    {
         "name": "twinly-prod-api-c-disk-used",
         "description": "루트 볼륨 사용률 80% 초과. 방치하면 앱과 SSM 에이전트가 함께 중단되어 복구가 어려워짐.\n\nprod API 인스턴스의 앱 로그는 awslogs 드라이버로 CloudWatch 에 바로 보내므로 로컬에 쌓이지 않는다. 따라서 이 알람은 대개 배포마다 누적된 ECR 이미지가 원인이다.\n\n조치:\n1. SSM으로 접속해 df -h 로 현황 확인\n2. docker system prune -f 로 미사용 이미지/컨테이너 정리\n3. 그래도 높으면 du -sh /var/lib/docker/containers/*/*.log 로 로컬 로그 크기 확인\n4. 로컬 로그가 크다면 docker-compose.prod.yaml 의 awslogs 설정이 실제 컨테이너에 적용됐는지 확인\n5. prune 후에도 반복되면 정리 주기 자동화를 검토",
         "namespace": "CWAgent",
@@ -73,7 +109,7 @@
     },
     {
         "name": "twinly-prod-api-c-mem-used",
-        "description": "호스트 메모리 사용률 85% 초과. 방치하면 커널 OOM Killer 가 프로세스를 SIGKILL 로 죽이는데, 이 경우 앱 로그가 남지 않아 oom 메트릭 필터가 잡지 못한다.\n\nprod API 인스턴스에는 앱 컨테이너만 올라간다(prometheus·grafana 는 twinly-prod-monitoring 으로 분리). 따라서 이 알람은 사실상 앱 단독의 메모리 증가를 가리킨다.\n\nt4g.small 은 가용 1836MiB 이고 OS·docker·CloudWatch 에이전트가 약 510MiB 를 고정으로 쓴다. 앱 mem_limit 이 900m 이므로 컨테이너가 상한을 다 써도 호스트는 77% 에 그친다. 즉 이 알람이 울린다면 앱 컨테이너 바깥이 늘어난 것이다. 앱 컨테이너 자체의 폭주는 호스트가 아니라 컨테이너 OOM 으로 먼저 끊기고, 그때는 재기동으로 healthy-hosts 알람이 대신 잡는다.\n\n조치:\n1. SSM으로 접속해 free -m 과 docker stats 로 확인\n2. 컨테이너 합계가 평소와 같으면 호스트 쪽이다 — journald 로그, docker 이미지 캐시, CloudWatch 에이전트부터 확인\n3. 앱 컨테이너가 늘었으면 Grafana 힙 사용률 패널로 JVM 힙인지 힙 바깥인지 구분\n4. 힙이면 docker-compose.prod.yaml 의 mem_limit(900m) 또는 MaxRAMPercentage 조정. 비힙이 약 350MiB 로 고정이라 mem_limit 을 875m 아래로 내리면 힙 상한과 겹쳐 컨테이너 OOM 이 난다\n5. 힙 바깥이면 네이티브 메모리 누수 의심 — 스레드 수와 Metaspace 부터 확인\n6. 한 대만 오르면 그 인스턴스를 대상 그룹에서 빼고 재기동, 두 대 모두 오르면 직전 배포 버전을 의심",
+        "description": "호스트 메모리 사용률 85% 초과. 방치하면 커널 OOM Killer 가 프로세스를 SIGKILL 로 죽이는데, 이 경우 앱 로그가 남지 않아 oom 메트릭 필터가 잡지 못한다.\n\nprod API 인스턴스에는 앱 컨테이너만 올라간다(prometheus·grafana 는 twinly-prod-monitoring 으로 분리). 따라서 이 알람은 사실상 앱 단독의 메모리 증가를 가리킨다.\n\nt4g.medium 은 전체 3824MiB 이고 OS·docker·CloudWatch 에이전트가 약 525MiB 를 고정으로 쓴다. 앱 mem_limit 이 2560m 이므로 컨테이너가 상한을 다 써도 호스트는 81% 에 그친다(알람선과 여유 약 4%p). 즉 이 알람이 울린다면 앱 컨테이너 바깥이 늘어난 것이다. 앱 컨테이너 자체의 폭주는 호스트가 아니라 컨테이너 OOM 으로 먼저 끊기고, 그때는 재기동으로 healthy-hosts 알람이 대신 잡는다.\n\n조치:\n1. free -m 과 docker stats 로 확인 — 여유가 좁아 앱이 상한 근처면 바깥이 조금만 늘어도 울린다\n2. 컨테이너 합계가 평소와 같으면 호스트 쪽이다 — journald 로그, docker 이미지 캐시, CloudWatch 에이전트부터 확인\n3. 앱 컨테이너가 늘었으면 Grafana 힙 사용률 패널로 JVM 힙인지 힙 바깥인지 구분\n4. 힙이면 docker-compose.prod.yaml 의 mem_limit(2560m) 또는 MaxRAMPercentage 조정. 올릴 때는 바깥 525MiB 와 합쳐 3250MiB(85%) 이하, 내릴 때는 힙 상한 + 비힙 350MiB 이상을 지킨다\n5. 힙 바깥이면 네이티브 메모리 누수 의심 — 스레드 수와 Metaspace 부터 확인\n6. 한 대만 오르면 그 인스턴스를 대상 그룹에서 빼고 재기동, 두 대 모두 오르면 직전 배포 버전을 의심",
         "namespace": "CWAgent",
         "metric": "mem_used_percent",
         "statistic": "Average",
@@ -139,14 +175,14 @@
     },
     {
         "name": "twinly-prod-api-rds-connections",
-        "description": "DB 커넥션 수 45 이상. max_connections 는 {DBInstanceClassMemory/12582880} 로 db.t4g.micro 기준 실측 60 이므로 75% 수준이다.\n\n평시 커넥션은 10~20 안팎이다(앱 2대 × HikariCP 풀 5, 유휴 시 2개씩 유지). 45 까지 올랐다면 정상적인 트래픽 증가가 아니라 커넥션 누수나 풀 설정 오류를 의심해야 한다. max_connections 에 도달하면 새 연결이 거부되어 앱 전체가 멈춘다.\n\n조치:\n1. SHOW PROCESSLIST 로 어떤 상태의 커넥션이 쌓였는지 확인 (Sleep 이 많으면 누수 의심)\n2. 앱의 HikariCP maximum-pool-size 와 인스턴스 수를 곱해 이론상 최대치와 비교\n3. 트랜잭션이 길게 열려 있는지 확인\n4. 부하테스트 중이라면 풀 크기를 의도적으로 올렸는지 확인 — 그 경우 DB 클래스도 함께 올려야 한다",
+        "description": "DB 커넥션 수 50 이상. 앱이 정상적으로 쓸 수 있는 이론상 최대치를 넘은 상태다.\n\n이론상 최대치는 앱 2대 × HikariCP 풀 20 = 40 에 Grafana MySQL 데이터소스(maxOpenConns 3)와 수동 관리 접속 몇 개를 더한 45 안팎이다. prod 배포는 docker compose up -d 로 컨테이너를 교체하고 인스턴스를 한 대씩 순차 배포하므로 배포 중에도 풀이 겹치지 않는다. 평시에는 유휴 커넥션 2~3개씩만 유지해 5 안팎이다.\n\nmax_connections 는 {DBInstanceClassMemory/12582880} 로 db.t4g.medium 기준 실측 303 이다. 한도 대비 비율이 아니라 이론상 최대치를 기준으로 삼은 이유는, HikariCP 는 풀 상한을 넘겨 연결하지 않으므로 50 을 넘었다면 앱 풀 바깥의 무언가(추가로 뜬 컨테이너, 수동 스크립트, 풀 설정 변경)가 붙었다는 뜻이기 때문이다. 앱 내부의 커넥션 누수는 DB 커넥션 수가 아니라 hikaricp_connections_pending 증가로 먼저 드러난다.\n\n조치:\n1. SHOW PROCESSLIST 로 user·host 별 커넥션을 묶어 어디서 붙었는지 확인\n2. 앱 호스트에서 docker ps 로 앱 컨테이너가 두 개 떠 있지 않은지 확인\n3. 앱의 maximum-pool-size 가 바뀌었는지 확인 (application-prod.yaml, SSM 환경변수)\n4. 부하테스트·purchase-loop 같은 수동 스크립트가 돌고 있는지 확인",
         "namespace": "AWS/RDS",
         "metric": "DatabaseConnections",
         "statistic": "Maximum",
         "period": 300,
         "evaluationPeriods": 2,
         "comparisonOperator": "GreaterThanOrEqualToThreshold",
-        "threshold": 45.0,
+        "threshold": 50.0,
         "treatMissingData": "missing",
         "alarmActions": [
             "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
@@ -157,7 +193,7 @@
     },
     {
         "name": "twinly-prod-api-rds-cpu",
-        "description": "DB 인스턴스 CPU 사용률 80% 초과. db.t4g.micro 는 버스터블이라 기준 성능은 vCPU 당 10% 이고, 그 이상은 CPU 크레딧을 소모하며 낸다. RDS 의 T 계열은 unlimited 모드로 동작하므로 크레딧이 바닥나도 성능이 깎이는 대신 초과 비용이 청구된다(cpu-surplus-credits 알람이 그 시점을 잡는다).\n\n앱은 readiness 에 DB 상태를 포함하지 않으므로, DB 가 느려져도 ALB 는 계속 트래픽을 보낸다. 즉 이 알람이 울릴 때 healthy-hosts 알람은 조용하다.\n\n조치:\n1. CPUCreditBalance 추이로 크레딧 소진이 임박했는지 확인\n2. 슬로우 쿼리 로그와 SHOW PROCESSLIST 로 특정 쿼리가 튀는지, 전반적으로 오른 것인지 구분 (Performance Insights 는 micro 미지원으로 꺼져 있다)\n3. 특정 쿼리면 실행계획과 인덱스 점검\n4. 전반적이면 커넥션 수·트래픽 증가 여부 확인\n5. 지속적인 고부하면 버스터블이 맞지 않는 단계이므로 인스턴스 클래스 상향 검토",
+        "description": "DB 인스턴스 CPU 사용률 80% 초과. db.t4g.medium 은 버스터블이라 기준 성능은 vCPU 당 20% 이고, 그 이상은 CPU 크레딧을 소모하며 낸다. RDS 의 T 계열은 unlimited 모드로 동작하므로 크레딧이 바닥나도 성능이 깎이는 대신 초과 비용이 청구된다(cpu-surplus-credits 알람이 그 시점을 잡는다).\n\n앱은 readiness 에 DB 상태를 포함하지 않으므로, DB 가 느려져도 ALB 는 계속 트래픽을 보낸다. 즉 이 알람이 울릴 때 healthy-hosts 알람은 조용하다.\n\n조치:\n1. CPUCreditBalance 추이로 크레딧 소진이 임박했는지 확인\n2. 슬로우 쿼리 로그와 SHOW PROCESSLIST 로 특정 쿼리가 튀는지, 전반적으로 오른 것인지 구분 (Performance Insights 는 꺼져 있다)\n3. 특정 쿼리면 실행계획과 인덱스 점검\n4. 전반적이면 커넥션 수·트래픽 증가 여부 확인\n5. 지속적인 고부하면 버스터블이 맞지 않는 단계이므로 인스턴스 클래스 상향 검토",
         "namespace": "AWS/RDS",
         "metric": "CPUUtilization",
         "statistic": "Average",
@@ -175,7 +211,7 @@
     },
     {
         "name": "twinly-prod-api-rds-cpu-surplus-credits",
-        "description": "버스터블 CPU 크레딧이 바닥나 초과 크레딧 과금이 시작됨. db.t4g.micro 는 unlimited 모드라 크레딧 소진 시 성능이 깎이는 대신 vCPU-시간당 추가 비용이 청구된다.\n\n이 알람이 울리면 기준 성능(vCPU 당 10%)을 넘는 부하가 장시간 지속되고 있다는 뜻이다. 짧은 스파이크는 잔여 크레딧으로 흡수되므로 여기까지 오지 않는다.\n\n조치:\n1. CPUUtilization 과 CPUCreditBalance 추이로 언제부터 소진됐는지 확인\n2. 슬로우 쿼리 로그로 원인 쿼리 확인\n3. 부하테스트 중이라면 예상된 상황인지 확인\n4. 일상 트래픽이 원인이면 버스터블이 맞지 않는 단계다 — 초과 과금을 계속 내느니 클래스 상향이 더 쌀 수 있다",
+        "description": "버스터블 CPU 크레딧이 바닥나 초과 크레딧 과금이 시작됨. db.t4g.medium 은 unlimited 모드라 크레딧 소진 시 성능이 깎이는 대신 vCPU-시간당 추가 비용이 청구된다.\n\n이 알람이 울리면 기준 성능(vCPU 당 20%)을 넘는 부하가 장시간 지속되고 있다는 뜻이다. 짧은 스파이크는 잔여 크레딧으로 흡수되므로 여기까지 오지 않는다.\n\n조치:\n1. CPUUtilization 과 CPUCreditBalance 추이로 언제부터 소진됐는지 확인\n2. 슬로우 쿼리 로그로 원인 쿼리 확인\n3. 부하테스트 중이라면 예상된 상황인지 확인\n4. 일상 트래픽이 원인이면 버스터블이 맞지 않는 단계다 — 초과 과금을 계속 내느니 db.m7g.large 같은 비버스터블 클래스가 더 쌀 수 있다",
         "namespace": "AWS/RDS",
         "metric": "CPUSurplusCreditsCharged",
         "statistic": "Sum",
@@ -211,14 +247,14 @@
     },
     {
         "name": "twinly-prod-api-rds-freeable-memory",
-        "description": "사용 가능 메모리 50MiB 미만. db.t4g.micro 전환 직후 실측 평시 값이 100MiB 안팎이므로, 그 절반 아래로 떨어진 상태다.\n\nmicro 는 InnoDB 버퍼 풀이 128MiB 에 불과해 여유가 원래 작다. 더 줄면 스왑이 시작되고, 그때부터 지연이 급격히 커진다. 메모리 부족은 CPU 처럼 완만하게 나빠지지 않고 임계를 넘는 순간 성능이 무너진다.\n\n조치:\n1. Enhanced Monitoring 에서 실제 메모리 분포와 SwapUsage 확인\n2. DatabaseConnections 급증이 동반됐는지 확인 — 커넥션마다 버퍼를 쓴다\n3. 슬로우 쿼리 로그로 대량 정렬·임시 테이블을 쓰는 쿼리 확인 (Performance Insights 는 micro 미지원으로 꺼져 있다)\n4. 지속되면 인스턴스 클래스 상향 검토",
+        "description": "사용 가능 메모리 512MiB 미만. db.t4g.medium 은 4GiB 이고 innodb_dedicated_server=ON 이라 버퍼 풀이 1.5GiB 로 자동 설정된다.\n\n전환 직후 실측 여유는 약 2.9GB 였지만 버퍼 풀은 읽은 만큼만 채워지므로 이 값은 평시 기준이 아니다. 버퍼 풀이 가득 찬 뒤의 여유는 약 1.3GiB 로 예상되고, 커넥션 최대 50 개의 스레드 버퍼를 빼도 1GiB 안팎이 남는다. 임계값은 이 예상 하한의 절반이다. 출시 후 버퍼 풀이 찬 상태의 실측이 쌓이면 재산정한다.\n\nmicro 시절에는 1GiB 에서 상시 약 450MiB 를 스왑으로 쓰고 있었다. 메모리 부족은 CPU 처럼 완만하게 나빠지지 않고 스왑이 시작되는 순간 지연이 급격히 커진다.\n\n조치:\n1. Enhanced Monitoring 에서 실제 메모리 분포와 SwapUsage 확인\n2. DatabaseConnections 급증이 동반됐는지 확인 — 커넥션마다 버퍼를 쓴다\n3. 슬로우 쿼리 로그로 대량 정렬·임시 테이블을 쓰는 쿼리 확인\n4. 지속되면 인스턴스 클래스 상향 검토",
         "namespace": "AWS/RDS",
         "metric": "FreeableMemory",
         "statistic": "Average",
         "period": 300,
         "evaluationPeriods": 2,
         "comparisonOperator": "LessThanThreshold",
-        "threshold": 52428800.0,
+        "threshold": 536870912.0,
         "treatMissingData": "missing",
         "alarmActions": [
             "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
