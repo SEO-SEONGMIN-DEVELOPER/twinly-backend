@@ -60,6 +60,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("UPDATE User u SET u.isShowcaseSeed = TRUE WHERE u.id IN :userIds AND u.isShowcaseSeed = FALSE")
     int markShowcaseSeed(@Param("userIds") List<Long> userIds);
 
+    @Transactional
+    @Modifying
+    @Query("UPDATE User u SET u.isSeed = TRUE WHERE u.id IN :userIds AND u.isSeed = FALSE")
+    int markSeed(@Param("userIds") List<Long> userIds);
+
     List<User> findAllByDeletedAtIsNullAndWithdrawalScheduledAtLessThanEqual(Instant now, Pageable pageable);
 
     @Query(value = """
