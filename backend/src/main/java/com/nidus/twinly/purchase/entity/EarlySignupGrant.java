@@ -13,6 +13,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.Instant;
 import java.time.Period;
+import java.time.temporal.ChronoUnit;
 
 @Entity
 @Table(name = "early_signup_grants")
@@ -41,7 +42,7 @@ public class EarlySignupGrant {
         EarlySignupGrant assigned = new EarlySignupGrant();
         assigned.userId = userId;
         assigned.diHash = diHash;
-        assigned.expiresAt = assignedAt.atZone(KstTimes.ZONE).plus(PERIOD).toInstant();
+        assigned.expiresAt = assignedAt.atZone(KstTimes.ZONE).plus(PERIOD).toInstant().truncatedTo(ChronoUnit.MILLIS);
         assigned.createdAt = assignedAt;
         return assigned;
     }

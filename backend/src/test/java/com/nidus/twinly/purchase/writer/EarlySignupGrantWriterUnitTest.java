@@ -92,6 +92,22 @@ class EarlySignupGrantWriterUnitTest {
     }
 
     @Test
+    @DisplayName("만료 시각은 RevenueCat 이 받는 밀리초 단위로 자른다: 첫 부여와 DB 에서 읽은 재시도가 같은 값을 보낸다")
+    void assign_truncates_expiry_to_millis() {
+        // given: Linux 의 Instant.now() 처럼 나노초까지 있는 배정 시각 (DB 는 마이크로초까지만 저장한다)
+        Instant assignedAt = Instant.parse("2026-09-27T07:00:00.327706361Z");
+        given(earlySignupGrantCounterRepository.findWithLockById(EarlySignupGrantCounter.SINGLETON_ID)).willReturn(Optional.of(counter(0)));
+
+        // when: 배정
+        earlySignupGrantWriter.assign(USER_ID, DI_HASH, assignedAt);
+
+        // then: 밀리초 아래는 버려져, 메모리·DB·RevenueCat end_time_ms 가 모두 같은 시각이 된다
+        ArgumentCaptor<EarlySignupGrant> captor = ArgumentCaptor.forClass(EarlySignupGrant.class);
+        then(earlySignupGrantRepository).should().save(captor.capture());
+        assertThat(captor.getValue().getExpiresAt()).isEqualTo(Instant.parse("2026-11-27T07:00:00.327Z"));
+    }
+
+    @Test
     @DisplayName("300명이 모두 배정됐으면 행을 만들지 않고 카운터도 그대로다")
     void assign_skips_when_full() {
         // given: 한도까지 배정 완료
