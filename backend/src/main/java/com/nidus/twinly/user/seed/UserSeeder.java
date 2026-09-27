@@ -206,6 +206,8 @@ public class UserSeeder implements ApplicationRunner {
             users.add(findOrCreateUser(seedUsers.get(index), index));
         }
 
+        userRepository.markSeed(users.stream().map(User::getId).toList());
+
         Long currentSeasonId = currentSeasonReader.read().getId();
         users.forEach(user -> seasonParticipationRepository.upsert(user.getId(), currentSeasonId));
 

@@ -5,6 +5,7 @@ import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.purchase.RevenueCatProperties;
 import com.nidus.twinly.purchase.domain.RevenueCatEnvironment;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.stereotype.Component;
@@ -14,7 +15,9 @@ import org.springframework.web.client.RestClientException;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 @Component
 public class RevenueCatClient {
@@ -57,6 +60,24 @@ public class RevenueCatClient {
         }
 
         return body == null ? List.of() : body.entitlementsIn(environment);
+    }
+
+    public void grantPromotional(String appUserId, String entitlement, Instant expiresAt) {
+        try {
+            restClient.get()
+                    .uri("/subscribers/{appUserId}", appUserId)
+                    .retrieve()
+                    .toBodilessEntity();
+
+            restClient.post()
+                    .uri("/subscribers/{appUserId}/entitlements/{entitlement}/promotional", appUserId, entitlement)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(Map.of("end_time_ms", expiresAt.toEpochMilli()))
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (RestClientException e) {
+            throw new BusinessException(ErrorCode.REVENUE_CAT_GRANT_FAILED, e);
+        }
     }
 
     private boolean isConcurrentRequest(HttpClientErrorException e) {

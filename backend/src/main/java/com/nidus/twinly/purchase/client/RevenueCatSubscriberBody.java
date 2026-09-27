@@ -31,6 +31,9 @@ public record RevenueCatSubscriberBody(
 
         boolean purchasedIn(String productIdentifier, RevenueCatEnvironment environment) {
             Purchase subscription = subscriptions == null ? null : subscriptions.get(productIdentifier);
+            if (subscription != null && subscription.isPromotional()) {
+                return true;
+            }
             if (subscription != null && subscription.isSandbox() != null) {
                 return environment.accepts(subscription.environment());
             }
@@ -56,8 +59,15 @@ public record RevenueCatSubscriberBody(
 
     public record Purchase(
             @JsonProperty("is_sandbox")
-            Boolean isSandbox
+            Boolean isSandbox,
+            String store
     ) {
+
+        private static final String PROMOTIONAL_STORE = "promotional";
+
+        boolean isPromotional() {
+            return PROMOTIONAL_STORE.equals(store);
+        }
 
         RevenueCatEnvironment environment() {
             return isSandbox ? RevenueCatEnvironment.SANDBOX : RevenueCatEnvironment.PRODUCTION;

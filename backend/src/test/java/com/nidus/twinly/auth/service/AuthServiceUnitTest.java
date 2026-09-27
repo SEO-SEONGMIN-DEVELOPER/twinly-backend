@@ -44,6 +44,7 @@ import com.nidus.twinly.legal.service.PolicyCatalog;
 import com.nidus.twinly.legal.repository.AgreementRepository;
 import com.nidus.twinly.organization.entity.Organization;
 import com.nidus.twinly.onboarding.repository.SurveyAnswerRepository;
+import com.nidus.twinly.purchase.writer.EarlySignupGrantWriter;
 import com.nidus.twinly.organization.service.OrganizationCatalog;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.PersonaElementRepository;
@@ -89,6 +90,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willReturn;
@@ -198,6 +200,9 @@ class AuthServiceUnitTest {
 
     @Mock
     VerificationRepository verificationRepository;
+
+    @Mock
+    EarlySignupGrantWriter earlySignupGrantWriter;
 
     @Mock
     BlindIndexHasher blindIndexHasher;
@@ -1179,6 +1184,9 @@ class AuthServiceUnitTest {
         then(anonSessionIdentityVerificationRepository).should().deleteByAnonSessionId(ANON_SESSION_ID);
         then(verificationRepository).should(times(2)).save(any());
 
+        // then: 선착순 권한 자리 배정을 가입 유저와 본인인증 DI 해시로 요청한다 (한도·중복 판단은 writer 가 잠금 안에서 한다)
+        then(earlySignupGrantWriter).should().assign(eq(USER_ID), eq("hash:" + DI), any(Instant.class));
+
         // then: 가입한 유저 id 로 가입 완료 이벤트가 발행된다 (요약 생성은 커밋 이후 리스너가 비동기로 처리)
         then(eventPublisher).should().publishEvent(new UserSignedUpEvent(USER_ID));
 
@@ -1191,15 +1199,16 @@ class AuthServiceUnitTest {
     }
 
     @Test
-    @DisplayName("회원가입: 가입 조건 검사에서 실패하면 가입 완료 이벤트를 발행하지 않는다")
+    @DisplayName("회원가입: 가입 조건 검사에서 실패하면 선착순 자리를 배정하지 않고 가입 완료 이벤트도 발행하지 않는다")
     void signup_does_not_publish_event_when_validation_fails() {
         // given: 이메일 인증이 끝나지 않은 세션
         given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
                 .willReturn(Optional.of(verifiedIdentity()));
 
-        // when & then
+        // when & then: 가입 조건 검사 예외가 나고 배정·이벤트 발행 모두 일어나지 않는다
         assertThatThrownBy(() -> authService.signup(SNAPSHOT))
                 .isInstanceOf(BusinessException.class);
+        then(earlySignupGrantWriter).shouldHaveNoInteractions();
         then(eventPublisher).shouldHaveNoInteractions();
     }
 

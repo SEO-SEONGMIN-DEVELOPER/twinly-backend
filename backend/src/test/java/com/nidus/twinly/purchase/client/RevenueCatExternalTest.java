@@ -18,6 +18,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -81,6 +83,38 @@ class RevenueCatExternalTest {
         // when & then: 같은 식별자로 다시 조회해도 파싱에 실패하지 않는다 (생성 201 / 조회 200 양쪽 경로 확인)
         assertThatCode(() -> revenueCatClient.entitlements(APP_USER_ID))
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("promotional 권한을 부여하면 stage(SANDBOX) 필터를 거쳐도 유효한 권한으로 조회된다")
+    void grantPromotional_is_visible_in_sandbox() {
+        // given: 1시간 뒤 만료 (정리에 실패해도 RevenueCat 에서 스스로 만료된다)
+        Instant expiresAt = Instant.now().plus(Duration.ofHours(1));
+
+        // when: 실제 자격증명으로 부여 후 조회
+        revenueCatClient.grantPromotional(APP_USER_ID, "simulation_access", expiresAt);
+        List<RevenueCatEntitlement> entitlements = revenueCatClient.entitlements(APP_USER_ID);
+
+        // then: 경로·본문 형식이 맞아 부여가 성립하고, is_sandbox=false 로 오는 부여 권한을 SANDBOX 환경에서도 버리지 않는다
+        //       (만료 시각은 값 대신 "지금 이후"만 본다 — end_time_ms 를 초로 보냈다면 1970년이 되어 여기서 걸린다)
+        assertThat(entitlements).extracting(RevenueCatEntitlement::entitlement).contains("simulation_access");
+        assertThat(entitlements).filteredOn(entitlement -> entitlement.entitlement().equals("simulation_access"))
+                .allSatisfy(entitlement -> assertThat(entitlement.expiresAt()).isAfter(Instant.now()));
+    }
+
+    @Test
+    @DisplayName("부여 요청의 자격증명이 잘못되면 RestClient 예외를 REVENUE_CAT_GRANT_FAILED 로 감싼다")
+    void grantPromotional_with_invalid_credential_is_wrapped() {
+        // given: 형식만 그럴듯한 가짜 키로 만든 클라이언트
+        RevenueCatProperties invalid = new RevenueCatProperties("secret", "sk_invalid_external_test", RevenueCatEnvironment.SANDBOX,
+                revenueCatProperties.connectTimeout(), revenueCatProperties.readTimeout(), revenueCatProperties.syncInterval());
+        RevenueCatClient invalidClient = new RevenueCatClient(jsonMapper, invalid);
+
+        // when & then: 401 이 우리 도메인 예외로 변환되어 올라온다
+        assertThatThrownBy(() -> invalidClient.grantPromotional(APP_USER_ID, "simulation_access", Instant.now().plus(Duration.ofHours(1))))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.REVENUE_CAT_GRANT_FAILED);
     }
 
     @Test

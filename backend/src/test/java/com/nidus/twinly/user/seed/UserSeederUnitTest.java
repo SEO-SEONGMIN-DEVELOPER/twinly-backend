@@ -876,6 +876,33 @@ class UserSeederUnitTest {
     }
 
     @Test
+    @DisplayName("쇼케이스 유저와 AI 테스트 유저 모두에게 시드 표시를 한다")
+    void run_marks_all_seed_users_as_seed() throws IOException {
+        // given: 아직 시드 유저가 없는 상태
+        given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
+
+        // when: 시더 실행
+        userSeeder.run(null);
+
+        // then: 쇼케이스 20명과 AI 테스트 500명의 id 가 모두 표시 대상으로 넘어간다
+        then(userRepository).should().markSeed(LongStream.rangeClosed(1, SEED_USER_COUNT).boxed().toList());
+    }
+
+    @Test
+    @DisplayName("AI 테스트 유저 시드가 꺼져 있으면 쇼케이스 유저 20명에게만 시드 표시를 한다")
+    void run_marks_only_showcase_users_as_seed_when_ai_test_users_disabled() throws IOException {
+        // given: 아직 시드 유저가 없고 AI 테스트 유저 시드가 꺼진 상태
+        given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
+        userSeeder = seederWith(new SeedProperties(false, SIMULATION_ACCESS_USER_COUNT));
+
+        // when: 시더 실행
+        userSeeder.run(null);
+
+        // then: 쇼케이스 유저 20명의 id 만 표시 대상으로 넘어간다
+        then(userRepository).should().markSeed(LongStream.rangeClosed(1, SHOWCASE_USER_COUNT).boxed().toList());
+    }
+
+    @Test
     @DisplayName("시드 시나리오를 하루씩 모두 적재한다")
     void run_seeds_all_scenario_days() throws IOException {
         // given: 아직 시드 유저가 없는 상태

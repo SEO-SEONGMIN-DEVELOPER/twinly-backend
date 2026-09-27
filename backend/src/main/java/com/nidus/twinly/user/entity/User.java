@@ -114,6 +114,8 @@ public class User {
 
     private boolean isShowcaseSeed;
 
+    private boolean isSeed;
+
     private Instant withdrawalRequestedAt;
 
     private Instant withdrawalScheduledAt;
