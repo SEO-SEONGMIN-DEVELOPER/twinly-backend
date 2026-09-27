@@ -22,6 +22,8 @@ import static com.nidus.twinly.common.logging.LogField.field;
 @RequiredArgsConstructor
 public class CommonPointGenerator {
 
+    private static final int MAX_SHARED_POINTS = 3;
+
     private final BedrockService bedrockService;
     private final ObjectMapper objectMapper;
 
@@ -37,9 +39,13 @@ public class CommonPointGenerator {
     public String generate(List<PersonaElement> myPersona, List<PersonaElement> partnerPersona) {
         Extraction extraction = extract(myPersona, partnerPersona);
 
-        List<String> shared = verifiedShared(extraction, myPersona, partnerPersona);
+        List<Shared> shared = prioritized(verifiedShared(extraction, myPersona, partnerPersona), myPersona, partnerPersona);
         if (!shared.isEmpty()) {
-            return bedrockService.converse(buildSharedPrompt(shared)).strip();
+            List<String> contents = shared.stream()
+                    .limit(MAX_SHARED_POINTS)
+                    .map(item -> item.content().strip())
+                    .toList();
+            return bedrockService.converse(buildSharedPrompt(contents)).strip();
         }
 
         Contrast contrast = verifiedContrast(extraction, myPersona, partnerPersona);
@@ -69,8 +75,8 @@ public class CommonPointGenerator {
         }
     }
 
-    private List<String> verifiedShared(Extraction extraction, List<PersonaElement> myPersona, List<PersonaElement> partnerPersona) {
-        List<String> result = new ArrayList<>();
+    private List<Shared> verifiedShared(Extraction extraction, List<PersonaElement> myPersona, List<PersonaElement> partnerPersona) {
+        List<Shared> result = new ArrayList<>();
         if (extraction.shared() == null) {
             return result;
         }
@@ -87,10 +93,21 @@ public class CommonPointGenerator {
                 WarnLog.log(log, "양쪽 근거에 공통 단어가 없는 공통점을 제외합니다.", field("content", item.content()), field("keyword", item.keyword()));
                 continue;
             }
-            result.add(item.content().strip());
+            result.add(item);
         }
 
         return result;
+    }
+
+    private List<Shared> prioritized(List<Shared> shared, List<PersonaElement> myPersona, List<PersonaElement> partnerPersona) {
+        List<PersonaElement> myTopics = topicsOf(myPersona);
+        List<PersonaElement> partnerTopics = topicsOf(partnerPersona);
+
+        List<Shared> topicShared = shared.stream()
+                .filter(item -> isGrounded(myTopics, item.evidenceA()) && isGrounded(partnerTopics, item.evidenceB()))
+                .toList();
+
+        return topicShared.isEmpty() ? shared : topicShared;
     }
 
     private Contrast verifiedContrast(Extraction extraction, List<PersonaElement> myPersona, List<PersonaElement> partnerPersona) {
@@ -106,10 +123,18 @@ public class CommonPointGenerator {
         return new Contrast(contrast.traitA().strip(), contrast.traitB().strip());
     }
 
+    private List<PersonaElement> topicsOf(List<PersonaElement> persona) {
+        return persona.stream()
+                .filter(element -> element.getDimension() == PersonaDimension.INTEREST
+                        || element.getDimension() == PersonaDimension.DETAIL)
+                .toList();
+    }
+
     private List<PersonaElement> traitsOf(List<PersonaElement> persona) {
         return persona.stream()
                 .filter(element -> element.getDimension() != PersonaDimension.INTEREST
-                        && element.getDimension() != PersonaDimension.DETAIL)
+                        && element.getDimension() != PersonaDimension.DETAIL
+                        && element.getDimension() != PersonaDimension.SUMMARY)
                 .toList();
     }
 
@@ -148,13 +173,14 @@ public class CommonPointGenerator {
 
         sb.append("\n두 사람 모두에게 실제로 있는 공통점을 모두 찾아 JSON으로만 답하세요.\n");
         sb.append("형식: {\"shared\":[{\"content\":\"...\",\"keyword\":\"...\",\"evidenceA\":\"...\",\"evidenceB\":\"...\"}],\"contrast\":{\"traitA\":\"...\",\"traitB\":\"...\"}}\n");
-        sb.append("- content: 두 사람이 공유하는 내용을 한 구절로 쓰세요. 세부 내용은 양쪽에 모두 있는 수준까지만 쓰고, 한쪽에만 있는 세부는 넣지 마세요. (예: 공포 영화를 좋아함, 김애란 소설을 읽음, 혼자 있는 시간에 에너지를 회복함)\n");
+        sb.append("- content: 두 사람이 공유하는 내용을 15자 안팎의 짧은 한 구절로 쓰세요. 세부 내용은 양쪽에 모두 있는 수준까지만 쓰고, 한쪽에만 있는 세부는 넣지 마세요. (예: 공포 영화를 좋아함, 김애란 소설을 읽음, 혼자 있는 시간에 에너지를 회복함)\n");
         sb.append("- content는 evidenceA만 봐도 참이고 evidenceB만 봐도 참이어야 합니다. 한쪽 근거로는 참이 아닌 표현이면 양쪽 모두에 맞는 넓은 표현으로 바꾸세요.\n");
         sb.append("- evidenceA, evidenceB: 그 공통점의 근거가 되는 A와 B의 항목을 각각 위 정보에서 한 글자도 바꾸지 말고 그대로 복사하세요. 성격 특성은 이름 뒤의 설명만 복사하세요.\n");
+        sb.append("- evidenceA는 반드시 [A의 ...] 목록에 있는 문장에서, evidenceB는 반드시 [B의 ...] 목록에 있는 문장에서 복사하세요. 두 사람의 문장이 똑같은 항목이 있더라도, 문장이 서로 다른 항목에서 한 사람의 문장을 양쪽에 똑같이 넣지 마세요. (예: A가 \"주말엔 한강에서 자전거를 타요\", B가 \"퇴근하고 한강을 걸어요\"라면 evidenceA에는 A의 문장을, evidenceB에는 B의 문장을 넣으세요)\n");
         sb.append("- keyword: 그 공통점을 나타내면서 evidenceA와 evidenceB 양쪽에 똑같이 들어 있는 단어 하나. 두 글자 이상이어야 합니다. 양쪽에 똑같이 들어 있는 단어가 없으면 그 항목은 공통점이 아니므로 넣지 마세요.\n");
         sb.append("- 양쪽 근거를 댈 수 없는 내용은 shared에 넣지 마세요. 서로 다른 사실을 묶어 만든 공통점도 넣지 마세요. 공통점이 없으면 shared는 빈 배열입니다.\n");
         sb.append("- content는 양쪽 근거에 실제로 있는 사실만 담고, 근거보다 넓게 일반화하지 마세요. (예: 실내 클라이밍과 낚시를 \"야외 활동\"으로 묶지 마세요)\n");
-        sb.append("- [나눈 대화]의 공통점을 먼저, 그다음 [관심사], [성격 특성] 순서로 찾으세요.\n");
+        sb.append("- shared에는 [나눈 대화]에서 찾은 공통점을 먼저, 그다음 [관심사], [성격 특성]에서 찾은 공통점 순서로 나열하세요. 같은 출처 안에서는 더 구체적인 공통점을 앞에 두세요.\n");
         sb.append("- contrast: [성격 특성]에서 서로 가장 반대되는 항목을 A와 B에서 하나씩 골라 설명을 그대로 복사하세요. 반대되는 것이 없으면 각자 가장 두드러진 항목을 고르세요.\n");
         sb.append("- JSON 외에 다른 설명이나 코드 블록 표시는 붙이지 마세요.\n");
 
@@ -173,8 +199,9 @@ public class CommonPointGenerator {
         sb.append("- \"두 사람은\"으로 시작하고, 문장은 \"~해요\"로 끝내세요.\n");
         sb.append("- 모든 문장의 주어는 두 사람 전체여야 합니다. A, B, 한 사람, 다른 사람, 한쪽, 다른 쪽처럼 두 사람을 나누어 말하지 마세요.\n");
         sb.append("- \"다르다\", \"다른\", \"차이\", \"매력\"이라는 말과 \"~해 보세요\" 같은 행동 제안은 쓰지 마세요.\n");
-        sb.append("- 공통점이 적으면 한두 문장으로 짧게 쓰세요. 한 문단, 4문장 이내, 제목·따옴표·줄바꿈·목록 기호 없이 쓰세요.\n");
-        sb.append("- 예시: 두 사람은 영화 보는 걸 좋아하고, 그 중에서도 공포 영화를 제일 좋아해요. 쉬는 날엔 공원 산책을 자주 하며, 잠깐 멈춰서 꽃 구경할 때 행복해해요.\n");
+        sb.append("- 공통점을 부연하거나 꾸미는 말을 덧붙이지 말고, 공통점 자체만 담백하게 쓰세요.\n");
+        sb.append("- 두 문장 이내, 한 문장에는 공통점을 두 개까지만 담고, 전체 80자 안팎으로 짧게 쓰세요. 한 문단, 제목·따옴표·줄바꿈·목록 기호 없이 쓰세요.\n");
+        sb.append("- 예시: 두 사람은 공포 영화를 즐겨 보고, 요즘 김애란 소설을 읽고 있어요. 쉬는 날엔 공원을 산책해요.\n");
 
         return sb.toString();
     }
@@ -205,9 +232,7 @@ public class CommonPointGenerator {
                 .forEach(element -> sb.append("- ").append(element.getExplanation()).append("\n"));
 
         sb.append("\n[").append(label).append("의 성격 특성]\n");
-        personaElements.stream()
-                .filter(element -> element.getDimension() != PersonaDimension.INTEREST
-                        && element.getDimension() != PersonaDimension.DETAIL)
+        traitsOf(personaElements)
                 .forEach(element -> sb.append("- ").append(element.getDimension()).append(": ").append(element.getExplanation()).append("\n"));
 
         sb.append("\n[").append(label).append("의 나눈 대화]\n");
