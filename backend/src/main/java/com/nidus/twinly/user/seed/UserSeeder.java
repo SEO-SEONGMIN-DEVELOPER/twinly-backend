@@ -242,6 +242,7 @@ public class UserSeeder implements ApplicationRunner {
             }
         }
 
+        userRepository.markShowcaseSeed(users.subList(0, SHOWCASE_USERS.size()).stream().map(User::getId).toList());
         seedScenarios(users.subList(0, SHOWCASE_USERS.size()));
 
         InfoLog.log(log, "시드 유저를 채웠습니다.", field("userCount", users.size()), field("elementCount", elements.size()));

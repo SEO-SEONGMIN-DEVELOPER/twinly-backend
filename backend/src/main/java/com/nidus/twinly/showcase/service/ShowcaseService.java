@@ -107,9 +107,9 @@ public class ShowcaseService {
 
     private Long pickTargetUserId(Long viewerUserId, LocalDate date) {
         Long seasonId = currentSeasonReader.read().getId();
-        List<Long> candidateUserIds = showcaseRepository.findAllTargetCandidateUserIds(viewerUserId, seasonId, date, true);
+        List<Long> candidateUserIds = findCandidateUserIds(viewerUserId, seasonId, date, true);
         if (candidateUserIds.isEmpty()) {
-            candidateUserIds = showcaseRepository.findAllTargetCandidateUserIds(viewerUserId, seasonId, date, false);
+            candidateUserIds = findCandidateUserIds(viewerUserId, seasonId, date, false);
         }
 
         if (candidateUserIds.isEmpty()) {
@@ -117,6 +117,15 @@ public class ShowcaseService {
         }
 
         return candidateUserIds.get(ThreadLocalRandom.current().nextInt(candidateUserIds.size()));
+    }
+
+    private List<Long> findCandidateUserIds(Long viewerUserId, Long seasonId, LocalDate date, boolean showcaseSeedOnly) {
+        List<Long> candidateUserIds = showcaseRepository.findAllTargetCandidateUserIds(viewerUserId, seasonId, date, true, showcaseSeedOnly);
+        if (candidateUserIds.isEmpty()) {
+            candidateUserIds = showcaseRepository.findAllTargetCandidateUserIds(viewerUserId, seasonId, date, false, showcaseSeedOnly);
+        }
+
+        return candidateUserIds;
     }
 
     private Map<Long, List<Long>> partnerUserIdsBySceneId(List<Scene> scenes) {

@@ -55,6 +55,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("UPDATE User u SET u.aiChatCompletedAt = NULL WHERE u.id = :userId")
     void clearAiChatCompleted(@Param("userId") Long userId);
 
+    @Transactional
+    @Modifying
+    @Query("UPDATE User u SET u.isShowcaseSeed = TRUE WHERE u.id IN :userIds AND u.isShowcaseSeed = FALSE")
+    int markShowcaseSeed(@Param("userIds") List<Long> userIds);
+
     List<User> findAllByDeletedAtIsNullAndWithdrawalScheduledAtLessThanEqual(Instant now, Pageable pageable);
 
     int countByWithdrawalRequestedAtIsNullAndDeletedAtIsNull();

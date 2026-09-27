@@ -1,0 +1,2 @@
+ALTER TABLE users
+    ADD COLUMN is_showcase_seed BOOLEAN DEFAULT 0 NOT NULL;

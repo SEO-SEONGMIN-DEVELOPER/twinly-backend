@@ -86,7 +86,7 @@ class ShowcaseServiceUnitTest {
         // given: 오늘 배정이 없고 후보가 한 명뿐이다
         given(showcaseRepository.findByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.empty());
         given(currentSeasonReader.read()).willReturn(season());
-        given(showcaseRepository.findAllTargetCandidateUserIds(anyLong(), anyLong(), any(), anyBoolean())).willReturn(List.of(TARGET_ID));
+        given(showcaseRepository.findAllTargetCandidateUserIds(anyLong(), anyLong(), any(), anyBoolean(), anyBoolean())).willReturn(List.of(TARGET_ID));
         given(showcaseRepository.save(any())).willAnswer(invocation -> {
             Showcase saved = invocation.getArgument(0);
             ReflectionTestUtils.setField(saved, "id", 3312L);
@@ -106,12 +106,12 @@ class ShowcaseServiceUnitTest {
     }
 
     @Test
-    @DisplayName("같은 학교 후보가 있으면 그중에서 뽑고 전체 후보는 조회하지 않는다")
+    @DisplayName("같은 학교 시드 후보가 있으면 그중에서 뽑고 전체 후보는 조회하지 않는다")
     void today_prefers_same_organization_candidates() {
         // given: 오늘 배정이 없고 같은 학교 후보가 한 명 있다
         given(showcaseRepository.findByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.empty());
         given(currentSeasonReader.read()).willReturn(season());
-        given(showcaseRepository.findAllTargetCandidateUserIds(anyLong(), anyLong(), any(), eq(true))).willReturn(List.of(TARGET_ID));
+        given(showcaseRepository.findAllTargetCandidateUserIds(anyLong(), anyLong(), any(), eq(true), eq(true))).willReturn(List.of(TARGET_ID));
         given(showcaseRepository.save(any())).willAnswer(invocation -> {
             Showcase saved = invocation.getArgument(0);
             ReflectionTestUtils.setField(saved, "id", 3312L);
@@ -130,17 +130,17 @@ class ShowcaseServiceUnitTest {
         ArgumentCaptor<Showcase> captor = ArgumentCaptor.forClass(Showcase.class);
         then(showcaseRepository).should().save(captor.capture());
         assertThat(captor.getValue().getTargetUserId()).isEqualTo(TARGET_ID);
-        then(showcaseRepository).should(never()).findAllTargetCandidateUserIds(anyLong(), anyLong(), any(), eq(false));
+        then(showcaseRepository).should(never()).findAllTargetCandidateUserIds(anyLong(), anyLong(), any(), eq(false), eq(true));
     }
 
     @Test
-    @DisplayName("같은 학교 후보가 없으면 전체 후보 중에서 뽑는다")
+    @DisplayName("같은 학교 시드 후보가 없으면 전체 시드 후보 중에서 뽑는다")
     void today_falls_back_to_all_candidates() {
         // given: 같은 학교 후보는 없고 전체 후보로는 한 명 있다
         given(showcaseRepository.findByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.empty());
         given(currentSeasonReader.read()).willReturn(season());
-        given(showcaseRepository.findAllTargetCandidateUserIds(anyLong(), anyLong(), any(), eq(true))).willReturn(List.of());
-        given(showcaseRepository.findAllTargetCandidateUserIds(anyLong(), anyLong(), any(), eq(false))).willReturn(List.of(PARTNER_ID));
+        given(showcaseRepository.findAllTargetCandidateUserIds(anyLong(), anyLong(), any(), eq(true), eq(true))).willReturn(List.of());
+        given(showcaseRepository.findAllTargetCandidateUserIds(anyLong(), anyLong(), any(), eq(false), eq(true))).willReturn(List.of(PARTNER_ID));
         given(showcaseRepository.save(any())).willAnswer(invocation -> {
             Showcase saved = invocation.getArgument(0);
             ReflectionTestUtils.setField(saved, "id", 3312L);
@@ -162,6 +162,35 @@ class ShowcaseServiceUnitTest {
     }
 
     @Test
+    @DisplayName("시드 후보가 없으면 실제 유저 중 같은 학교 후보에서 뽑고 실제 유저 전체 후보는 조회하지 않는다")
+    void today_falls_back_to_real_users_preferring_same_organization() {
+        // given: 시드 후보는 같은 학교·전체 모두 없고, 실제 유저 중 같은 학교 후보가 한 명 있다
+        given(showcaseRepository.findByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.empty());
+        given(currentSeasonReader.read()).willReturn(season());
+        given(showcaseRepository.findAllTargetCandidateUserIds(anyLong(), anyLong(), any(), anyBoolean(), eq(true))).willReturn(List.of());
+        given(showcaseRepository.findAllTargetCandidateUserIds(anyLong(), anyLong(), any(), eq(true), eq(false))).willReturn(List.of(PARTNER_ID));
+        given(showcaseRepository.save(any())).willAnswer(invocation -> {
+            Showcase saved = invocation.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", 3312L);
+            return saved;
+        });
+        given(sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(eq(PARTNER_ID), any()))
+                .willReturn(List.of(actionScene(88101L, "등교했다.", null)));
+        given(scenePartnerRepository.findAllBySceneIdIn(anyList())).willReturn(List.of());
+        given(userRepository.findAllById(any())).willReturn(List.of(user(PARTNER_ID, "박", "지훈")));
+        givenViewerCounts();
+
+        // when: 오늘 관람 조회
+        showcaseService.today(VIEWER_ID);
+
+        // then: 같은 학교 실제 유저가 배정되고 실제 유저 전체 후보 조회로 넘어가지 않는다
+        ArgumentCaptor<Showcase> captor = ArgumentCaptor.forClass(Showcase.class);
+        then(showcaseRepository).should().save(captor.capture());
+        assertThat(captor.getValue().getTargetUserId()).isEqualTo(PARTNER_ID);
+        then(showcaseRepository).should(never()).findAllTargetCandidateUserIds(anyLong(), anyLong(), any(), eq(false), eq(false));
+    }
+
+    @Test
     @DisplayName("오늘 배정이 이미 있으면 후보를 다시 뽑지 않는다 (하루 고정)")
     void today_reuses_existing_assignment() {
         // given: 오늘 배정이 이미 있고 대상에게 오늘 씬이 있다
@@ -177,7 +206,7 @@ class ShowcaseServiceUnitTest {
 
         // then: 기존 배정 id 반환 + 후보 조회·저장 없음
         assertThat(result.showcaseId()).isEqualTo(3312L);
-        then(showcaseRepository).should(never()).findAllTargetCandidateUserIds(anyLong(), anyLong(), any(), anyBoolean());
+        then(showcaseRepository).should(never()).findAllTargetCandidateUserIds(anyLong(), anyLong(), any(), anyBoolean(), anyBoolean());
         then(showcaseRepository).should(never()).save(any());
     }
 
@@ -187,7 +216,7 @@ class ShowcaseServiceUnitTest {
         // given: 오늘 배정이 없고 후보도 없다
         given(showcaseRepository.findByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.empty());
         given(currentSeasonReader.read()).willReturn(season());
-        given(showcaseRepository.findAllTargetCandidateUserIds(anyLong(), anyLong(), any(), anyBoolean())).willReturn(List.of());
+        given(showcaseRepository.findAllTargetCandidateUserIds(anyLong(), anyLong(), any(), anyBoolean(), anyBoolean())).willReturn(List.of());
 
         // when & then: 대상 없음 예외 + 배정 저장 안 함
         assertThatThrownBy(() -> showcaseService.today(VIEWER_ID))
@@ -206,7 +235,7 @@ class ShowcaseServiceUnitTest {
         given(showcaseRepository.findByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(existing));
         given(sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(eq(TARGET_ID), any())).willReturn(List.of());
         given(currentSeasonReader.read()).willReturn(season());
-        given(showcaseRepository.findAllTargetCandidateUserIds(anyLong(), anyLong(), any(), anyBoolean())).willReturn(List.of(PARTNER_ID));
+        given(showcaseRepository.findAllTargetCandidateUserIds(anyLong(), anyLong(), any(), anyBoolean(), anyBoolean())).willReturn(List.of(PARTNER_ID));
         given(sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(eq(PARTNER_ID), any()))
                 .willReturn(List.of(actionScene(88101L, "등교했다.", null)));
         given(scenePartnerRepository.findAllBySceneIdIn(anyList())).willReturn(List.of());
@@ -230,7 +259,7 @@ class ShowcaseServiceUnitTest {
         given(showcaseRepository.findByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(showcase()));
         given(sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(anyLong(), any())).willReturn(List.of());
         given(currentSeasonReader.read()).willReturn(season());
-        given(showcaseRepository.findAllTargetCandidateUserIds(anyLong(), anyLong(), any(), anyBoolean())).willReturn(List.of());
+        given(showcaseRepository.findAllTargetCandidateUserIds(anyLong(), anyLong(), any(), anyBoolean(), anyBoolean())).willReturn(List.of());
 
         // when & then: 대상 없음 예외
         assertThatThrownBy(() -> showcaseService.today(VIEWER_ID))

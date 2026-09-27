@@ -844,6 +844,19 @@ class UserSeederUnitTest {
     }
 
     @Test
+    @DisplayName("쇼케이스 유저 20명에게만 쇼케이스 시드 표시를 한다")
+    void run_marks_showcase_users_as_showcase_seed() throws IOException {
+        // given: 아직 시드 유저가 없는 상태
+        given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
+
+        // when: 시더 실행
+        userSeeder.run(null);
+
+        // then: 앞쪽 쇼케이스 유저 20명의 id 만 표시 대상으로 넘어간다
+        then(userRepository).should().markShowcaseSeed(LongStream.rangeClosed(1, SHOWCASE_USER_COUNT).boxed().toList());
+    }
+
+    @Test
     @DisplayName("시드 시나리오를 하루씩 모두 적재한다")
     void run_seeds_all_scenario_days() throws IOException {
         // given: 아직 시드 유저가 없는 상태

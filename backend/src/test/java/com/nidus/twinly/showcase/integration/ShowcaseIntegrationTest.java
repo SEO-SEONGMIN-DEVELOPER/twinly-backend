@@ -62,7 +62,7 @@ class ShowcaseIntegrationTest extends AbstractIntegrationTest {
     void today_end_to_end() throws Exception {
         // given: 오늘 장면이 있는 시즌 참가자와 동행자, 그리고 관람자
         User viewer = saveUser();
-        User target = saveParticipant();
+        User target = saveSeedParticipant();
         User partner = saveUser();
         Scene scene = saveActionScene(target, "{user_" + target.getId() + "}이 뛰어서 등교했다.");
         scenePartnerRepository.save(ScenePartner.create(scene.getId(), partner.getId()));
@@ -95,8 +95,8 @@ class ShowcaseIntegrationTest extends AbstractIntegrationTest {
     void today_is_fixed_per_day() throws Exception {
         // given: 후보가 두 명이라 무작위 선택이 흔들릴 수 있는 상황
         User viewer = saveUser();
-        saveActionScene(saveParticipant(), "등교했다.");
-        saveActionScene(saveParticipant(), "등교했다.");
+        saveActionScene(saveSeedParticipant(), "등교했다.");
+        saveActionScene(saveSeedParticipant(), "등교했다.");
 
         // when: 같은 날 두 번 호출
         String first = todayShowcaseId(viewer);
@@ -112,11 +112,11 @@ class ShowcaseIntegrationTest extends AbstractIntegrationTest {
     void today_prefers_same_organization() throws Exception {
         // given: 관람자와 같은 학교 후보 한 명, 다른 학교 후보 세 명
         User viewer = saveUserInOrganization("sameOrganizationHash");
-        User sameSchool = saveUserInOrganization("sameOrganizationHash");
+        User sameSchool = markShowcaseSeed(saveUserInOrganization("sameOrganizationHash"));
         seasonParticipationRepository.upsert(sameSchool.getId(), season.getId());
         saveActionScene(sameSchool, "같은 학교다.");
         for (int i = 0; i < 3; i++) {
-            saveActionScene(saveParticipant(), "다른 학교다.");
+            saveActionScene(saveSeedParticipant(), "다른 학교다.");
         }
 
         // when: 오늘 관람 조회
@@ -128,20 +128,61 @@ class ShowcaseIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("배정 규칙: 같은 학교 실제 가입자가 있어도 쇼케이스 시드 유저만 배정되고, 같은 학교 시드 유저가 없으면 다른 학교 시드 유저로 넘어간다")
+    void today_picks_only_showcase_seed_users() throws Exception {
+        // given: 관람자와 같은 학교인 실제 가입자(시드 아님)와 다른 학교 시드 유저 한 명
+        User viewer = saveUserInOrganization("sameOrganizationHash");
+        User sameSchoolRealUser = saveUserInOrganization("sameOrganizationHash");
+        seasonParticipationRepository.upsert(sameSchoolRealUser.getId(), season.getId());
+        saveActionScene(sameSchoolRealUser, "같은 학교 실제 가입자다.");
+        User otherSchoolSeed = saveSeedParticipant();
+        saveActionScene(otherSchoolSeed, "다른 학교 시드 유저다.");
+
+        // when: 오늘 관람 조회
+        todayShowcaseId(viewer);
+
+        // then: 실제 가입자는 건너뛰고 다른 학교 시드 유저가 배정된다
+        assertThat(showcaseRepository.findAll()).singleElement()
+                .satisfies(showcase -> assertThat(showcase.getTargetUserId()).isEqualTo(otherSchoolSeed.getId()));
+    }
+
+    @Test
+    @DisplayName("배정 규칙: 시드 후보가 없으면 실제 유저 중에서 뽑고, 다른 학교 후보가 여럿이어도 같은 학교 유저가 배정된다")
+    void today_falls_back_to_real_users_preferring_same_organization() throws Exception {
+        // given: 시드 후보는 없고, 관람자와 같은 학교 실제 유저 한 명과 다른 학교 실제 유저 세 명
+        User viewer = saveUserInOrganization("sameOrganizationHash");
+        User sameSchoolRealUser = saveUserInOrganization("sameOrganizationHash");
+        seasonParticipationRepository.upsert(sameSchoolRealUser.getId(), season.getId());
+        saveActionScene(sameSchoolRealUser, "같은 학교 실제 가입자다.");
+        for (int i = 0; i < 3; i++) {
+            User otherSchoolRealUser = saveUser();
+            seasonParticipationRepository.upsert(otherSchoolRealUser.getId(), season.getId());
+            saveActionScene(otherSchoolRealUser, "다른 학교 실제 가입자다.");
+        }
+
+        // when: 오늘 관람 조회
+        todayShowcaseId(viewer);
+
+        // then: 같은 학교 실제 유저가 배정된다
+        assertThat(showcaseRepository.findAll()).singleElement()
+                .satisfies(showcase -> assertThat(showcase.getTargetUserId()).isEqualTo(sameSchoolRealUser.getId()));
+    }
+
+    @Test
     @DisplayName("배정 규칙: 본인·차단 상대·시즌 미참가자·장면 없는 유저는 후보에서 빠져 404가 난다")
     void today_without_candidate_returns_404() throws Exception {
         // given: 관람자 본인은 오늘 장면이 있는 참가자이고, 나머지 후보는 전부 조건에서 탈락한다
-        User viewer = saveParticipant();
+        User viewer = saveSeedParticipant();
         saveActionScene(viewer, "내 하루다.");
 
-        User blocked = saveParticipant();
+        User blocked = saveSeedParticipant();
         saveActionScene(blocked, "차단한 상대의 하루다.");
         blockRepository.save(Block.create(viewer.getId(), blocked.getId()));
 
         User notParticipant = saveUser();
         saveActionScene(notParticipant, "시즌에 참가하지 않았다.");
 
-        saveParticipant();
+        saveSeedParticipant();
 
         // when & then: 남는 후보가 없어 404와 도메인 코드가 나간다
         mockMvc.perform(get("/api/v1/showcases/today")
@@ -180,11 +221,17 @@ class ShowcaseIntegrationTest extends AbstractIntegrationTest {
         return userRepository.save(user);
     }
 
-    private User saveParticipant() {
-        User user = saveUser();
+    private User saveSeedParticipant() {
+        User user = markShowcaseSeed(saveUser());
         seasonParticipationRepository.upsert(user.getId(), season.getId());
 
         return user;
+    }
+
+    private User markShowcaseSeed(User user) {
+        ReflectionTestUtils.setField(user, "isShowcaseSeed", true);
+
+        return userRepository.save(user);
     }
 
     private Scene saveActionScene(User user, String narration) {
