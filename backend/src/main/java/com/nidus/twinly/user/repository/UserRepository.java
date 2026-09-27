@@ -55,11 +55,46 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("UPDATE User u SET u.aiChatCompletedAt = NULL WHERE u.id = :userId")
     void clearAiChatCompleted(@Param("userId") Long userId);
 
+    @Transactional
+    @Modifying
+    @Query("UPDATE User u SET u.isShowcaseSeed = TRUE WHERE u.id IN :userIds AND u.isShowcaseSeed = FALSE")
+    int markShowcaseSeed(@Param("userIds") List<Long> userIds);
+
     List<User> findAllByDeletedAtIsNullAndWithdrawalScheduledAtLessThanEqual(Instant now, Pageable pageable);
 
-    int countByWithdrawalRequestedAtIsNullAndDeletedAtIsNull();
+    @Query(value = """
+            SELECT COUNT(*)
+            FROM users u
+            WHERE u.withdrawal_requested_at IS NULL
+              AND u.deleted_at IS NULL
+              AND EXISTS (
+                  SELECT 1
+                  FROM user_entitlements e
+                  WHERE e.user_id = u.id
+                    AND e.entitlement = :entitlement
+                    AND (e.expires_at IS NULL OR e.expires_at > :now)
+              )
+            """, nativeQuery = true)
+    int countActiveWithEntitlement(@Param("entitlement") String entitlement,
+                                   @Param("now") Instant now);
 
-    int countByWithdrawalRequestedAtIsNullAndDeletedAtIsNullAndOrganizationHash(String organizationHash);
+    @Query(value = """
+            SELECT COUNT(*)
+            FROM users u
+            WHERE u.withdrawal_requested_at IS NULL
+              AND u.deleted_at IS NULL
+              AND u.organization_hash = :organizationHash
+              AND EXISTS (
+                  SELECT 1
+                  FROM user_entitlements e
+                  WHERE e.user_id = u.id
+                    AND e.entitlement = :entitlement
+                    AND (e.expires_at IS NULL OR e.expires_at > :now)
+              )
+            """, nativeQuery = true)
+    int countActiveWithEntitlementByOrganizationHash(@Param("organizationHash") String organizationHash,
+                                                     @Param("entitlement") String entitlement,
+                                                     @Param("now") Instant now);
 
     @Query(value = """
             SELECT u.id

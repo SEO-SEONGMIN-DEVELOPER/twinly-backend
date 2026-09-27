@@ -120,6 +120,7 @@ public class UserSeeder implements ApplicationRunner {
     private final SimulationService simulationService;
     private final SceneRepository sceneRepository;
     private final ScenarioCleaner scenarioCleaner;
+    private final ShowcasePhotoSeeder showcasePhotoSeeder;
     private final SeedResourceHashRepository seedResourceHashRepository;
     private final SeedProperties seedProperties;
     private final ObjectMapper objectMapper;
@@ -242,6 +243,8 @@ public class UserSeeder implements ApplicationRunner {
             }
         }
 
+        userRepository.markShowcaseSeed(users.subList(0, SHOWCASE_USERS.size()).stream().map(User::getId).toList());
+        showcasePhotoSeeder.seed(users.subList(0, SHOWCASE_USERS.size()));
         seedScenarios(users.subList(0, SHOWCASE_USERS.size()));
 
         InfoLog.log(log, "시드 유저를 채웠습니다.", field("userCount", users.size()), field("elementCount", elements.size()));

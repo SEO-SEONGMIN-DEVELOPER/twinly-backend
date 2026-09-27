@@ -28,6 +28,7 @@ services:
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is not set}
       GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: https://grafana.trytwinly.com
       SLACK_ALERT_WEBHOOK_URL: ${SLACK_ALERT_WEBHOOK_URL:?SLACK_ALERT_WEBHOOK_URL is not set}
       GRAFANA_DB_HOST: ${GRAFANA_DB_HOST:?GRAFANA_DB_HOST is not set}
       GRAFANA_DB_PORT: ${GRAFANA_DB_PORT:?GRAFANA_DB_PORT is not set}
@@ -41,6 +42,27 @@ services:
       - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
       - grafanadata-twinly:/var/lib/grafana
     mem_limit: 300m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  cloudflared:
+    image: cloudflare/cloudflared:2026.9.3
+    container_name: cloudflared-container-twinly
+    restart: unless-stopped
+    depends_on:
+      - grafana
+    command:
+      - tunnel
+      - --metrics=0.0.0.0:20241
+      - run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?CLOUDFLARE_TUNNEL_TOKEN is not set}
+    ports:
+      - "127.0.0.1:20241:20241"
+    mem_limit: 100m
     logging:
       driver: json-file
       options:

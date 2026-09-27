@@ -355,10 +355,10 @@
       "id": 13,
       "type": "stat",
       "title": "유료 유저 (현재)",
-      "description": "유효한 권한을 가진 유저 수. user_entitlements 를 직접 보므로 웹훅이 유실돼도 정확합니다. 시간 범위·환경 필터와 무관합니다.",
+      "description": "유효한 권한을 가진 유저 중 PRODUCTION 결제 이벤트가 있는 유저 수. 시드·부하 테스트가 결제 없이 넣은 권한과 샌드박스 결제는 제외합니다. 시간 범위·환경 필터와 무관합니다.",
       "gridPos": {
         "h": 4,
-        "w": 24,
+        "w": 12,
         "x": 0,
         "y": 14
       },
@@ -400,7 +400,60 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT COUNT(DISTINCT user_id) AS `유료 유저` FROM user_entitlements WHERE expires_at IS NULL OR expires_at > UTC_TIMESTAMP(6)"
+          "rawSql": "SELECT COUNT(DISTINCT e.user_id) AS `유료 유저` FROM user_entitlements e WHERE (e.expires_at IS NULL OR e.expires_at > UTC_TIMESTAMP(6)) AND EXISTS (SELECT 1 FROM revenue_cat_events r WHERE r.user_id = e.user_id AND r.environment = 'PRODUCTION')"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "type": "stat",
+      "title": "결제액 (원)",
+      "description": "유료 유저 (현재) × 5,500원. 스토어 수수료·부가세를 빼기 전 금액이며, 가격이 바뀌면 쿼리의 5500 을 함께 고쳐야 합니다. 유료 유저 조건을 바꿀 때도 두 패널을 같이 고칩니다.",
+      "gridPos": {
+        "h": 4,
+        "w": 12,
+        "x": 12,
+        "y": 14
+      },
+      "datasource": {
+        "type": "mysql",
+        "uid": "mysql"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "locale",
+          "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mysql",
+            "uid": "mysql"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT COUNT(DISTINCT e.user_id) * 5500 AS `결제액` FROM user_entitlements e WHERE (e.expires_at IS NULL OR e.expires_at > UTC_TIMESTAMP(6)) AND EXISTS (SELECT 1 FROM revenue_cat_events r WHERE r.user_id = e.user_id AND r.environment = 'PRODUCTION')"
         }
       ]
     },

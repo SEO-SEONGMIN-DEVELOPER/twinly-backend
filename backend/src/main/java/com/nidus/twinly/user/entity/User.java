@@ -112,6 +112,8 @@ public class User {
 
     private Instant aiChatCompletedAt;
 
+    private boolean isShowcaseSeed;
+
     private Instant withdrawalRequestedAt;
 
     private Instant withdrawalScheduledAt;

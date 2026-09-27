@@ -218,7 +218,8 @@ jobs:
               "while IFS= read -r line; do case \"\$line\" in ''|'#'*) continue ;; esac; export \"\$line\"; done <<< \"\$ENV_BLOB\"",
               "docker compose -p twinly-monitoring -f docker-compose.stage.monitoring.yaml up -d",
               "timeout 120 bash -c 'until curl -fsS localhost:9090/-/ready >/dev/null; do sleep 5; done'",
-              "timeout 120 bash -c 'until curl -fsS localhost:3000/api/health >/dev/null; do sleep 5; done'"
+              "timeout 120 bash -c 'until curl -fsS localhost:3000/api/health >/dev/null; do sleep 5; done'",
+              "timeout 120 bash -c 'until curl -fsS localhost:20241/ready >/dev/null; do sleep 5; done'"
             ]
           }
           EOF
@@ -477,6 +478,7 @@ jobs:
               "docker compose -p twinly-monitoring -f docker-compose.prod.monitoring.yaml up -d",
               "timeout 120 bash -c 'until curl -fsS localhost:9090/-/ready >/dev/null; do sleep 5; done'",
               "timeout 120 bash -c 'until curl -fsS localhost:3000/api/health >/dev/null; do sleep 5; done'",
+              "timeout 120 bash -c 'until curl -fsS localhost:20241/ready >/dev/null; do sleep 5; done'",
               "/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:/home/ubuntu/twinly/monitoring/cloudwatch-agent/config.json"
             ]
           }
