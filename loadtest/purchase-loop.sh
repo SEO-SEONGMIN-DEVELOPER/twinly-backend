@@ -4,6 +4,9 @@
 #
 #   INTERVAL=180 COUNT=480 bash purchase-loop.sh
 #
+# 선생성 날짜는 고정이다. 시작 후 SWITCH_AFTER_SECONDS 까지는 DATES_BEFORE, 그 뒤로는
+# DATES_AFTER 를 보낸다 (22 시 시작 기준 다음 날 10 시 배치에서 갈린다).
+#
 # 권한의 synced_at 을 2099 로 넣는 이유: persona 조회 시 RevenueCat 동기화가 구매 기록 없는
 # 권한을 지우는데, 저장된 synced_at 이 더 최신이면 교체를 건너뛴다.
 # 앱 재배포 시 시더가 AI 시드 유저 권한을 회수하므로, 실행 중에는 배포하지 않는다.
@@ -13,7 +16,9 @@ INTERVAL="${INTERVAL:-180}"
 COUNT="${COUNT:-480}"
 SHOWCASE_COUNT=20
 AI_TEST_COUNT=500
-PRELOAD_DAYS=2
+DATES_BEFORE="${DATES_BEFORE:-2026-09-19,2026-09-20}"
+DATES_AFTER="${DATES_AFTER:-2026-09-20,2026-09-21}"
+SWITCH_AFTER_SECONDS="${SWITCH_AFTER_SECONDS:-43200}"
 PRELOAD_ATTEMPTS=3
 PRELOAD_RETRY_DELAY=2
 
@@ -66,25 +71,31 @@ COMMIT;"
 preload() {
   local uid="$1" granted_at dates body code attempt
   granted_at="$(TZ=Asia/Seoul date '+%Y-%m-%dT%H:%M:%S')"
-  dates="$(for d in $(seq 0 $((PRELOAD_DAYS - 1))); do printf '"%s",' "$(TZ=Asia/Seoul date -d "+$d day" +%F)"; done)"
-  body="{\"userId\":\"$uid\",\"grantedAt\":\"$granted_at\",\"dates\":[${dates%,}]}"
+
+  if [ $(( $(date +%s) - START )) -lt "$SWITCH_AFTER_SECONDS" ]; then
+    dates="$DATES_BEFORE"
+  else
+    dates="$DATES_AFTER"
+  fi
+
+  body="{\"userId\":\"$uid\",\"grantedAt\":\"$granted_at\",\"dates\":[\"$(echo "$dates" | sed 's/,/","/g')\"]}"
 
   for attempt in $(seq 1 "$PRELOAD_ATTEMPTS"); do
     code="$(curl -s -m 10 -o /dev/null -w '%{http_code}' -X POST "$AI_URL/internal/v1/simulations/preload" \
       -H 'Content-Type: application/json' -d "$body")"
     if [[ "$code" == 2* ]]; then
-      echo "preload=$code attempt=$attempt"
+      echo "preload=$code attempt=$attempt dates=$dates"
       return 0
     fi
     [ "$attempt" -lt "$PRELOAD_ATTEMPTS" ] && sleep "$PRELOAD_RETRY_DELAY"
   done
 
-  echo "preload=FAILED($code) attempt=$PRELOAD_ATTEMPTS"
+  echo "preload=FAILED($code) attempt=$PRELOAD_ATTEMPTS dates=$dates"
   return 1
 }
 
 START=$(date +%s)
-echo "$(ts) 시작 interval=${INTERVAL}s count=$COUNT ai=$AI_URL"
+echo "$(ts) 시작 interval=${INTERVAL}s count=$COUNT dates=$DATES_BEFORE -> $DATES_AFTER (전환 ${SWITCH_AFTER_SECONDS}s) ai=$AI_URL"
 
 for i in $(seq 0 $((COUNT - 1))); do
   target=$((START + i * INTERVAL))
