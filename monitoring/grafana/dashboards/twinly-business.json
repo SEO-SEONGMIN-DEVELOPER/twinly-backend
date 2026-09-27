@@ -16,7 +16,7 @@
       "id": 1,
       "type": "stat",
       "title": "누적 가입 (전체 기간)",
-      "description": "탈퇴한 유저를 포함한 전체 가입 건수. 시간 범위와 무관합니다.",
+      "description": "탈퇴한 유저를 포함한 전체 가입 건수. 쇼케이스·AI 테스트 시드 계정은 제외합니다. 시간 범위와 무관합니다.",
       "gridPos": {
         "h": 4,
         "w": 6,
@@ -61,7 +61,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT COUNT(*) AS `누적 가입` FROM users"
+          "rawSql": "SELECT COUNT(*) AS `누적 가입` FROM users WHERE is_seed = 0"
         }
       ]
     },
@@ -69,7 +69,7 @@
       "id": 2,
       "type": "stat",
       "title": "활성 유저 (현재)",
-      "description": "탈퇴 신청과 탈퇴 확정을 모두 제외한 현재 유저 수. 시간 범위와 무관합니다.",
+      "description": "탈퇴 신청과 탈퇴 확정을 모두 제외한 현재 유저 수. 쇼케이스·AI 테스트 시드 계정은 제외합니다. 시간 범위와 무관합니다.",
       "gridPos": {
         "h": 4,
         "w": 6,
@@ -114,7 +114,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT COUNT(*) AS `활성 유저` FROM users WHERE withdrawal_requested_at IS NULL AND deleted_at IS NULL"
+          "rawSql": "SELECT COUNT(*) AS `활성 유저` FROM users WHERE is_seed = 0 AND withdrawal_requested_at IS NULL AND deleted_at IS NULL"
         }
       ]
     },
@@ -122,7 +122,7 @@
       "id": 3,
       "type": "stat",
       "title": "기간 내 가입",
-      "description": "선택한 시간 범위에 가입한 건수.",
+      "description": "선택한 시간 범위에 가입한 건수. 쇼케이스·AI 테스트 시드 계정은 제외합니다.",
       "gridPos": {
         "h": 4,
         "w": 6,
@@ -167,7 +167,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT COUNT(*) AS `기간 내 가입` FROM users WHERE $__timeFilter(created_at)"
+          "rawSql": "SELECT COUNT(*) AS `기간 내 가입` FROM users WHERE is_seed = 0 AND $__timeFilter(created_at)"
         }
       ]
     },
@@ -175,7 +175,7 @@
       "id": 4,
       "type": "stat",
       "title": "기간 내 탈퇴 신청",
-      "description": "선택한 시간 범위에 탈퇴를 신청한 건수. 확정 전 철회가 가능하므로 확정 건수와 다를 수 있습니다.",
+      "description": "선택한 시간 범위에 탈퇴를 신청한 건수. 확정 전 철회가 가능하므로 확정 건수와 다를 수 있습니다. 쇼케이스·AI 테스트 시드 계정은 제외합니다.",
       "gridPos": {
         "h": 4,
         "w": 6,
@@ -220,7 +220,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT COUNT(*) AS `기간 내 탈퇴 신청` FROM users WHERE $__timeFilter(withdrawal_requested_at)"
+          "rawSql": "SELECT COUNT(*) AS `기간 내 탈퇴 신청` FROM users WHERE is_seed = 0 AND $__timeFilter(withdrawal_requested_at)"
         }
       ]
     },
@@ -228,7 +228,7 @@
       "id": 5,
       "type": "timeseries",
       "title": "일별 가입·탈퇴 추이",
-      "description": "한국 시간(KST) 자정을 기준으로 하루를 나눕니다.",
+      "description": "한국 시간(KST) 자정을 기준으로 하루를 나눕니다. 쇼케이스·AI 테스트 시드 계정은 제외합니다.",
       "gridPos": {
         "h": 10,
         "w": 24,
@@ -325,7 +325,7 @@
           "format": "time_series",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT CONVERT_TZ(DATE(CONVERT_TZ(created_at, '+00:00', '+09:00')), '+09:00', '+00:00') AS `time`, COUNT(*) AS `가입` FROM users WHERE $__timeFilter(created_at) GROUP BY `time` ORDER BY `time`"
+          "rawSql": "SELECT CONVERT_TZ(DATE(CONVERT_TZ(created_at, '+00:00', '+09:00')), '+09:00', '+00:00') AS `time`, COUNT(*) AS `가입` FROM users WHERE is_seed = 0 AND $__timeFilter(created_at) GROUP BY `time` ORDER BY `time`"
         },
         {
           "refId": "B",
@@ -336,7 +336,7 @@
           "format": "time_series",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT CONVERT_TZ(DATE(CONVERT_TZ(withdrawal_requested_at, '+00:00', '+09:00')), '+09:00', '+00:00') AS `time`, COUNT(*) AS `탈퇴 신청` FROM users WHERE $__timeFilter(withdrawal_requested_at) GROUP BY `time` ORDER BY `time`"
+          "rawSql": "SELECT CONVERT_TZ(DATE(CONVERT_TZ(withdrawal_requested_at, '+00:00', '+09:00')), '+09:00', '+00:00') AS `time`, COUNT(*) AS `탈퇴 신청` FROM users WHERE is_seed = 0 AND $__timeFilter(withdrawal_requested_at) GROUP BY `time` ORDER BY `time`"
         },
         {
           "refId": "C",
@@ -347,7 +347,7 @@
           "format": "time_series",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT CONVERT_TZ(DATE(CONVERT_TZ(deleted_at, '+00:00', '+09:00')), '+09:00', '+00:00') AS `time`, COUNT(*) AS `탈퇴 확정` FROM users WHERE $__timeFilter(deleted_at) GROUP BY `time` ORDER BY `time`"
+          "rawSql": "SELECT CONVERT_TZ(DATE(CONVERT_TZ(deleted_at, '+00:00', '+09:00')), '+09:00', '+00:00') AS `time`, COUNT(*) AS `탈퇴 확정` FROM users WHERE is_seed = 0 AND $__timeFilter(deleted_at) GROUP BY `time` ORDER BY `time`"
         }
       ]
     },
