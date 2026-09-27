@@ -89,6 +89,34 @@ class RevenueCatSubscriberBodyUnitTest {
     }
 
     @Test
+    @DisplayName("서버·대시보드가 부여한 promotional 권한은 결제 환경과 무관하게 stage 에서도 반영한다")
+    void sandbox_keeps_promotional_entitlement() {
+        // given: RevenueCat 은 부여 권한을 스토어 밖 거래로 보고 is_sandbox=false 로 준다
+        RevenueCatSubscriberBody body = read("""
+                {
+                  "subscriber": {
+                    "entitlements": {
+                      "simulation_access": {
+                        "expires_date": "2026-11-27T07:00:00Z",
+                        "product_identifier": "rc_promo_simulation_access_custom"
+                      }
+                    },
+                    "subscriptions": {
+                      "rc_promo_simulation_access_custom": { "is_sandbox": false, "store": "promotional" }
+                    },
+                    "non_subscriptions": {}
+                  }
+                }
+                """);
+
+        // when & then: 실결제로 보고 버리면 stage 에서 부여받은 유저가 시즌 참여에서 403 을 받는다
+        assertThat(body.entitlementsIn(RevenueCatEnvironment.SANDBOX)).containsExactly(
+                new RevenueCatEntitlement("simulation_access", Instant.parse("2026-11-27T07:00:00Z")));
+        assertThat(body.entitlementsIn(RevenueCatEnvironment.PRODUCTION)).containsExactly(
+                new RevenueCatEntitlement("simulation_access", Instant.parse("2026-11-27T07:00:00Z")));
+    }
+
+    @Test
     @DisplayName("비구독 상품은 같은 상품의 구매 중 하나라도 환경이 맞으면 반영한다")
     void non_subscription_kept_when_any_purchase_matches() {
         // given: 같은 평생권을 샌드박스로 한 번, 실결제로 한 번 산 유저
