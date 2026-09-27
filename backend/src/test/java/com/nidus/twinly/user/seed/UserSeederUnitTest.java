@@ -150,6 +150,9 @@ class UserSeederUnitTest {
     ScenarioCleaner scenarioCleaner;
 
     @Mock
+    ShowcasePhotoSeeder showcasePhotoSeeder;
+
+    @Mock
     SeedResourceHashRepository seedResourceHashRepository;
 
     UserSeeder userSeeder;
@@ -787,7 +790,7 @@ class UserSeederUnitTest {
     private UserSeeder seederWith(SeedProperties seedProperties) {
         return new UserSeeder(userRepository, personaElementRepository, userSurveyAnswerRepository, aiChatRepository, blindIndexHasher, surveyLoader,
                 interestLoader, currentSeasonReader, seasonParticipationRepository, userEntitlementRepository,
-                policyCatalog, agreementRepository, purchaseWriter, simulationService, sceneRepository, scenarioCleaner, seedResourceHashRepository, seedProperties, new ObjectMapper());
+                policyCatalog, agreementRepository, purchaseWriter, simulationService, sceneRepository, scenarioCleaner, showcasePhotoSeeder, seedResourceHashRepository, seedProperties, new ObjectMapper());
     }
 
     @Test
@@ -841,6 +844,22 @@ class UserSeederUnitTest {
         assertThatThrownBy(() -> UserSeeder.remapUserRefs(day, Map.of("1", "101")))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("21");
+    }
+
+    @Test
+    @DisplayName("쇼케이스 유저 20명에게만 프로필 사진을 채운다")
+    void run_seeds_profile_photos_for_showcase_users() throws IOException {
+        // given: 아직 시드 유저가 없는 상태
+        given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
+
+        // when: 시더 실행
+        userSeeder.run(null);
+
+        // then: 앞쪽 쇼케이스 유저 20명이 순서대로 사진 시더에 넘어간다
+        ArgumentCaptor<List<User>> captor = ArgumentCaptor.captor();
+        then(showcasePhotoSeeder).should().seed(captor.capture());
+        assertThat(captor.getValue()).extracting(User::getId)
+                .containsExactlyElementsOf(LongStream.rangeClosed(1, SHOWCASE_USER_COUNT).boxed().toList());
     }
 
     @Test
