@@ -27,6 +27,9 @@ revenue-cat:
   secret-api-key: test-revenue-cat-secret-api-key
   environment: SANDBOX
 
+early-signup-grant:
+  ends-at: "2099-01-01T00:00:00+09:00"
+
 nice:
   client-id: test-nice-client-id
   client-secret: test-nice-client-secret

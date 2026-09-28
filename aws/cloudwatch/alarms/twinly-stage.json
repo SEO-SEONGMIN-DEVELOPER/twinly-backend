@@ -244,7 +244,7 @@
     },
     {
         "name": "twinly-stage-api-revenue-cat-grant-failure",
-        "description": "선착순 가입 권한 부여가 10분 넘게 계속 실패. 가입 직후 부여와 매분 재시도가 모두 이 코드로 기록되므로, 부여 전인 행이 하나라도 계속 실패하면 걸린다. 일시적 오류는 evaluationPeriods 2 로 걸러진다.\n\n조치:\n1. 원인 구분 (응답 코드와 본문의 code)\n   fields @timestamp, @logStream, log | filter log like /REVENUE_CAT_GRANT_FAILED/ | sort @timestamp desc\n2. 401 이면 RevenueCat 대시보드 API keys 에서 키 상태 확인 후 SSM /twinly/stage/api/env 갱신\n3. 404(code 7259) 면 RevenueCat 에 해당 고객이 아직 없어 거절된 것이다. 부여 전에 고객을 만드는 흐름이 깨졌는지 확인한다.\n4. 5xx·타임아웃이면 RevenueCat 상태 페이지 확인. 부여 전인 행은 매분 재시도되므로 복구되면 자동으로 따라잡는다.\n5. 밀린 대상 확인: SELECT id, user_id, expires_at FROM early_signup_grants WHERE granted_at IS NULL\n\n유저 영향: 선착순 300명 안에 든 가입자가 무료 권한을 받지 못해 참여 화면에서 결제를 요구받는다. 가입과 다른 기능은 정상이다.",
+        "description": "선착순 가입 권한 부여가 10분 넘게 계속 실패. 가입 직후 부여와 매분 재시도가 모두 이 코드로 기록되므로, 부여 전인 행이 하나라도 계속 실패하면 걸린다. 일시적 오류는 evaluationPeriods 2 로 걸러진다.\n\n조치:\n1. 원인 구분 (응답 코드와 본문의 code)\n   fields @timestamp, @logStream, log | filter log like /REVENUE_CAT_GRANT_FAILED/ | sort @timestamp desc\n2. 401 이면 RevenueCat 대시보드 API keys 에서 키 상태 확인 후 SSM /twinly/stage/api/env 갱신\n3. 404(code 7259) 면 RevenueCat 에 해당 고객이 아직 없어 거절된 것이다. 부여 전에 고객을 만드는 흐름이 깨졌는지 확인한다.\n4. 5xx·타임아웃이면 RevenueCat 상태 페이지 확인. 부여 전인 행은 매분 재시도되므로 복구되면 자동으로 따라잡는다.\n5. 밀린 대상 확인: SELECT id, user_id, expires_at FROM early_signup_grants WHERE granted_at IS NULL\n\n유저 영향: 선착순 자리(남녀 각 150명)를 받은 가입자가 무료 권한을 받지 못해 참여 화면에서 결제를 요구받는다. 가입과 다른 기능은 정상이다.",
         "namespace": "twinly/stage/api",
         "metric": "RevenueCatGrantFailureCount",
         "statistic": "Sum",

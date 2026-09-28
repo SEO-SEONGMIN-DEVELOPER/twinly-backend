@@ -17,6 +17,7 @@ import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.legal.domain.PolicyKind;
 import com.nidus.twinly.purchase.client.RevenueCatClient;
+import com.nidus.twinly.purchase.EarlySignupGrantProperties;
 import com.nidus.twinly.purchase.entity.EarlySignupGrant;
 import com.nidus.twinly.purchase.entity.EarlySignupGrantCounter;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
@@ -86,6 +87,9 @@ class AuthSignupGrantIntegrationTest extends AbstractIntegrationTest {
     EarlySignupGrantRepository earlySignupGrantRepository;
 
     @Autowired
+    EarlySignupGrantProperties earlySignupGrantProperties;
+
+    @Autowired
     EarlySignupGrantCounterRepository earlySignupGrantCounterRepository;
 
     @Autowired
@@ -125,7 +129,8 @@ class AuthSignupGrantIntegrationTest extends AbstractIntegrationTest {
             jdbcTemplate.update("DELETE FROM anon_session_verification_sessions WHERE anon_session_id = ?", anonSessionId);
             jdbcTemplate.update("DELETE FROM anon_sessions WHERE id = ?", anonSessionId);
         }
-        setAssignedCount(0);
+        setAssignedCount(Gender.MALE, 0);
+        setAssignedCount(Gender.FEMALE, 0);
 
         anonSessionIds.clear();
         otherUserIds.clear();
@@ -135,7 +140,7 @@ class AuthSignupGrantIntegrationTest extends AbstractIntegrationTest {
     @DisplayName("회원가입: 응답 전에 앱이 로그인할 RevenueCat 식별자로 배정 때 정한 만료 시각의 권한을 부여하고, 부여 완료가 커밋된다")
     void signup_grants_simulation_access_before_response() throws Exception {
         // given: 가입 조건을 모두 갖춘 익명 세션
-        Applicant applicant = readyToSignUp();
+        Applicant applicant = readyToSignUp(Gender.MALE);
 
         // when: 익명 세션 토큰으로 회원가입 API 호출
         mockMvc.perform(post("/api/v1/auth/signup")
@@ -148,18 +153,19 @@ class AuthSignupGrantIntegrationTest extends AbstractIntegrationTest {
         then(revenueCatClient).should(atLeastOnce()).grantPromotional(
                 created.getRevenueCatUserId().toString(), EntitlementReader.SIMULATION_ACCESS, grant.getExpiresAt());
 
-        // then: 커밋이 끝난 뒤의 쓰기지만 별도 트랜잭션으로 저장돼 재시도 대상에서 빠지고, 자리는 하나 소모된다
+        // then: 커밋이 끝난 뒤의 쓰기지만 별도 트랜잭션으로 저장돼 재시도 대상에서 빠지고, 가입자 성별의 자리만 하나 소모된다
         assertThat(grant.getUserId()).isEqualTo(created.getId());
         assertThat(grant.getGrantedAt()).isNotNull();
-        assertThat(grant.getExpiresAt()).isAfter(Instant.now().plus(Duration.ofDays(58)));
-        assertThat(assignedCount()).isEqualTo(1);
+        assertThat(grant.getExpiresAt()).isEqualTo(earlySignupGrantProperties.endsAt());
+        assertThat(assignedCount(Gender.MALE)).isEqualTo(1);
+        assertThat(assignedCount(Gender.FEMALE)).isZero();
     }
 
     @Test
     @DisplayName("회원가입: RevenueCat 부여가 실패해도 가입은 201 로 성공하고 자리는 부여 전 상태로 남아 재시도 대상이 된다")
     void signup_succeeds_when_grant_fails() throws Exception {
         // given: 가입 가능한 익명 세션 + RevenueCat 장애
-        Applicant applicant = readyToSignUp();
+        Applicant applicant = readyToSignUp(Gender.MALE);
         willThrow(new BusinessException(ErrorCode.REVENUE_CAT_GRANT_FAILED))
                 .given(revenueCatClient).grantPromotional(anyString(), anyString(), any());
 
@@ -179,12 +185,12 @@ class AuthSignupGrantIntegrationTest extends AbstractIntegrationTest {
     @DisplayName("회원가입: 탈퇴 후 같은 본인인증으로 다시 가입하면 가입은 되지만 선착순 자리는 다시 받지 않는다")
     void resignup_with_same_di_does_not_grant_again() throws Exception {
         // given: 탈퇴 전 계정으로 이미 받은 본인 (users.di_hash 는 파기 때 지워지므로 부여 기록에만 DI 해시가 남는다)
-        Applicant applicant = readyToSignUp();
+        Applicant applicant = readyToSignUp(Gender.MALE);
         User withdrawn = saveUser();
         otherUserIds.add(withdrawn.getId());
-        earlySignupGrantRepository.save(EarlySignupGrant.assign(withdrawn.getId(), blindIndexHasher.hash(applicant.di()), Instant.now()));
+        earlySignupGrantRepository.save(EarlySignupGrant.assign(withdrawn.getId(), blindIndexHasher.hash(applicant.di()), earlySignupGrantProperties.endsAt(), Instant.now()));
         jdbcTemplate.update("UPDATE early_signup_grants SET granted_at = UTC_TIMESTAMP(6) WHERE user_id = ?", withdrawn.getId());
-        setAssignedCount(1);
+        setAssignedCount(Gender.MALE, 1);
 
         // when: 같은 DI 로 회원가입 API 호출
         mockMvc.perform(post("/api/v1/auth/signup")
@@ -195,21 +201,21 @@ class AuthSignupGrantIntegrationTest extends AbstractIntegrationTest {
         User created = createdUser(applicant);
         assertThat(earlySignupGrantRepository.findAll()).extracting(EarlySignupGrant::getUserId).containsExactly(withdrawn.getId());
         then(revenueCatClient).should(never()).grantPromotional(eq(created.getRevenueCatUserId().toString()), anyString(), any());
-        assertThat(assignedCount()).isEqualTo(1);
+        assertThat(assignedCount(Gender.MALE)).isEqualTo(1);
     }
 
     @Test
-    @DisplayName("회원가입 동시 요청: 마지막 한 자리를 두고 여러 명이 동시에 가입하면 모두 가입되지만 자리는 한 명만 받고 카운터는 한도를 넘지 않는다")
+    @DisplayName("회원가입 동시 요청: 같은 성별의 마지막 한 자리를 두고 여러 명이 동시에 가입하면 모두 가입되지만 자리는 한 명만 받고 카운터는 한도를 넘지 않는다")
     void signup_concurrent_last_slot_only_one_assigned() throws Exception {
         ExecutorService executor = Executors.newFixedThreadPool(THREADS);
         try {
             for (int round = 0; round < ROUNDS; round++) {
-                // given: 299명이 배정된 상태 + 서로 다른 본인으로 가입 준비를 마친 익명 세션 여러 개
+                // given: 남성 149명이 배정된 상태 + 서로 다른 남성 본인으로 가입 준비를 마친 익명 세션 여러 개
                 earlySignupGrantRepository.deleteAll();
-                setAssignedCount(EarlySignupGrantCounter.LIMIT - 1);
+                setAssignedCount(Gender.MALE, EarlySignupGrantCounter.LIMIT_PER_GENDER - 1);
                 List<Applicant> applicants = new ArrayList<>();
                 for (int i = 0; i < THREADS; i++) {
-                    applicants.add(readyToSignUp());
+                    applicants.add(readyToSignUp(Gender.MALE));
                 }
 
                 // when: 출발 신호에 맞춰 동시에 회원가입 API 호출
@@ -233,13 +239,36 @@ class AuthSignupGrantIntegrationTest extends AbstractIntegrationTest {
                 // then: 자리 경쟁이 가입 자체를 실패시키지 않는다 (잠금 대기·교착으로 500 이 나면 안 된다)
                 assertThat(statuses).as("round %d statuses", round).containsOnly(201);
 
-                // then: 행은 정확히 하나, 카운터는 정확히 한도 (count(*) 로 셌다면 여러 명이 299 를 보고 모두 배정된다)
+                // then: 행은 정확히 하나, 카운터는 정확히 한도 (count(*) 로 셌다면 여러 명이 149 를 보고 모두 배정된다)
                 assertThat(earlySignupGrantRepository.findAll()).as("round %d grants", round).hasSize(1);
-                assertThat(assignedCount()).as("round %d counter", round).isEqualTo(EarlySignupGrantCounter.LIMIT);
+                assertThat(assignedCount(Gender.MALE)).as("round %d counter", round).isEqualTo(EarlySignupGrantCounter.LIMIT_PER_GENDER);
             }
         } finally {
             executor.shutdownNow();
         }
+    }
+
+    @Test
+    @DisplayName("회원가입: 남성 150명이 다 찼어도 여성 가입자는 여성 자리를 받고, 남성 가입자는 받지 못한다")
+    void signup_assigns_by_gender_quota() throws Exception {
+        // given: 남성 자리만 한도까지 찬 상태 + 남성·여성 가입자 한 명씩
+        setAssignedCount(Gender.MALE, EarlySignupGrantCounter.LIMIT_PER_GENDER);
+        Applicant man = readyToSignUp(Gender.MALE);
+        Applicant woman = readyToSignUp(Gender.FEMALE);
+
+        // when: 두 사람이 차례로 회원가입 API 호출
+        mockMvc.perform(post("/api/v1/auth/signup")
+                        .header("Authorization", "Bearer " + man.anonToken()))
+                .andExpect(status().isCreated());
+        mockMvc.perform(post("/api/v1/auth/signup")
+                        .header("Authorization", "Bearer " + woman.anonToken()))
+                .andExpect(status().isCreated());
+
+        // then: 둘 다 가입되지만 자리는 여성만 받고, 성별 카운터가 따로 움직인다
+        assertThat(earlySignupGrantRepository.findAll()).extracting(EarlySignupGrant::getUserId)
+                .containsExactly(createdUser(woman).getId());
+        assertThat(assignedCount(Gender.MALE)).isEqualTo(EarlySignupGrantCounter.LIMIT_PER_GENDER);
+        assertThat(assignedCount(Gender.FEMALE)).isEqualTo(1);
     }
 
     private record Applicant(
@@ -250,7 +279,7 @@ class AuthSignupGrantIntegrationTest extends AbstractIntegrationTest {
     }
 
     /** 본인인증·이메일 인증·필수 약관 동의·프로필 입력을 마친 익명 세션을 커밋된 상태로 만든다. */
-    private Applicant readyToSignUp() {
+    private Applicant readyToSignUp(Gender gender) {
         int n = seq.incrementAndGet();
         UUID anonToken = UUID.randomUUID();
         String phone = "0109%07d".formatted(n);
@@ -268,7 +297,7 @@ class AuthSignupGrantIntegrationTest extends AbstractIntegrationTest {
 
         AnonSessionIdentityVerification identity = AnonSessionIdentityVerification.create(
                 anonSessionId, "TWINLY-" + UUID.randomUUID(), "tx-" + UUID.randomUUID(), Instant.now().plus(Duration.ofMinutes(10)));
-        identity.verify("홍길동", "2000-01-01", Gender.MALE, phone, di, blindIndexHasher.hash(di),
+        identity.verify("홍길동", "2000-01-01", gender, phone, di, blindIndexHasher.hash(di),
                 NationalInfo.DOMESTIC, MobileCarrier.SKT);
         anonSessionIdentityVerificationRepository.save(identity);
 
@@ -288,12 +317,12 @@ class AuthSignupGrantIntegrationTest extends AbstractIntegrationTest {
         return userRepository.findByPhoneNumberHash(blindIndexHasher.hash(applicant.phone())).orElseThrow();
     }
 
-    private void setAssignedCount(int assignedCount) {
-        jdbcTemplate.update("UPDATE early_signup_grant_counter SET assigned_count = ? WHERE id = ?",
-                assignedCount, EarlySignupGrantCounter.SINGLETON_ID);
+    private void setAssignedCount(Gender gender, int assignedCount) {
+        jdbcTemplate.update("UPDATE early_signup_grant_counters SET assigned_count = ? WHERE gender = ?",
+                assignedCount, gender.name());
     }
 
-    private int assignedCount() {
-        return earlySignupGrantCounterRepository.findById(EarlySignupGrantCounter.SINGLETON_ID).orElseThrow().getAssignedCount();
+    private int assignedCount(Gender gender) {
+        return earlySignupGrantCounterRepository.findById(gender).orElseThrow().getAssignedCount();
     }
 }

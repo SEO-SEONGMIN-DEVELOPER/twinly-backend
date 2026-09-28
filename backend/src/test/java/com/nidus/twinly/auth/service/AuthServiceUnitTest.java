@@ -1184,8 +1184,8 @@ class AuthServiceUnitTest {
         then(anonSessionIdentityVerificationRepository).should().deleteByAnonSessionId(ANON_SESSION_ID);
         then(verificationRepository).should(times(2)).save(any());
 
-        // then: 선착순 권한 자리 배정을 가입 유저와 본인인증 DI 해시로 요청한다 (한도·중복 판단은 writer 가 잠금 안에서 한다)
-        then(earlySignupGrantWriter).should().assign(eq(USER_ID), eq("hash:" + DI), any(Instant.class));
+        // then: 선착순 권한 자리 배정을 가입 유저, 본인인증 성별, DI 해시로 요청한다 (성별 한도·중복 판단은 writer 가 잠금 안에서 한다)
+        then(earlySignupGrantWriter).should().assign(eq(USER_ID), eq(Gender.FEMALE), eq("hash:" + DI), any(Instant.class));
 
         // then: 가입한 유저 id 로 가입 완료 이벤트가 발행된다 (요약 생성은 커밋 이후 리스너가 비동기로 처리)
         then(eventPublisher).should().publishEvent(new UserSignedUpEvent(USER_ID));
