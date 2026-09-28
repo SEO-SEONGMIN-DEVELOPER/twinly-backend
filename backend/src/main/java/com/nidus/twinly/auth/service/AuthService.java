@@ -488,7 +488,7 @@ public class AuthService {
         verificationRepository.save(Verification.create(user.getId(), VerificationType.IDENTITY, identityVerification.getVerifiedAt()));
         verificationRepository.save(Verification.create(user.getId(), VerificationType.EMAIL, emailSession.getVerifiedAt()));
 
-        earlySignupGrantWriter.assign(user.getId(), diHash, Instant.now());
+        earlySignupGrantWriter.assign(user.getId(), identityVerification.getGender(), diHash, Instant.now());
 
         eventPublisher.publishEvent(new UserSignedUpEvent(user.getId()));
 
