@@ -45,7 +45,7 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class ParallelRelationService {
 
-    private static final String SHARE_MESSAGE_FORMAT = "[트윈리] 나랑 평행우주에서 무슨 사이인지 확인해보자! 코드: %s";
+    private static final String SHARE_MESSAGE_FORMAT = "트윈리에서 나랑 평행우주에서 무슨 사이인지 확인해봐! 코드: %1$s\nhttps://trytwinly.com/r/%1$s";
 
     private final ParallelRelationCodeRepository parallelRelationCodeRepository;
     private final ParallelRelationRepository parallelRelationRepository;

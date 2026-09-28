@@ -100,7 +100,8 @@ class ParallelRelationServiceUnitTest {
 
         // then: 같은 코드 반환 + 새 코드 발급·저장 없음
         assertThat(result.code()).isEqualTo(CODE);
-        assertThat(result.shareMessage()).contains(CODE);
+        assertThat(result.shareMessage()).isEqualTo(
+                "트윈리에서 나랑 평행우주에서 무슨 사이인지 확인해봐! 코드: " + CODE + "\nhttps://trytwinly.com/r/" + CODE);
         then(parallelRelationCodeIssuer).should(never()).issue();
         then(parallelRelationCodeRepository).should(never()).save(any());
     }
