@@ -1,15 +1,16 @@
 package com.nidus.twinly.purchase.writer;
 
 import com.nidus.twinly.common.domain.Gender;
+import com.nidus.twinly.purchase.EarlySignupGrantProperties;
 import com.nidus.twinly.purchase.entity.EarlySignupGrant;
 import com.nidus.twinly.purchase.entity.EarlySignupGrantCounter;
 import com.nidus.twinly.purchase.repository.EarlySignupGrantCounterRepository;
 import com.nidus.twinly.purchase.repository.EarlySignupGrantRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.BeanUtils;
@@ -24,6 +25,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 
 @ExtendWith(MockitoExtension.class)
 class EarlySignupGrantWriterUnitTest {
@@ -32,6 +34,7 @@ class EarlySignupGrantWriterUnitTest {
     private static final Gender GENDER = Gender.MALE;
     private static final String DI_HASH = "di-hash";
     private static final Instant NOW = Instant.parse("2026-09-27T07:00:00Z");
+    private static final Instant ENDS_AT = Instant.parse("2026-12-31T15:00:00Z");
 
     @Mock
     EarlySignupGrantCounterRepository earlySignupGrantCounterRepository;
@@ -39,8 +42,13 @@ class EarlySignupGrantWriterUnitTest {
     @Mock
     EarlySignupGrantRepository earlySignupGrantRepository;
 
-    @InjectMocks
     EarlySignupGrantWriter earlySignupGrantWriter;
+
+    @BeforeEach
+    void setUp() {
+        earlySignupGrantWriter = new EarlySignupGrantWriter(
+                earlySignupGrantCounterRepository, earlySignupGrantRepository, new EarlySignupGrantProperties(ENDS_AT));
+    }
 
     @Test
     @DisplayName("자리가 남았고 처음 받는 본인이면 부여 대상 행을 만들고 카운터를 1 올린다")
@@ -63,50 +71,30 @@ class EarlySignupGrantWriterUnitTest {
     }
 
     @Test
-    @DisplayName("만료 시각은 배정 시점에서 두 달 뒤, 같은 시각이다")
-    void assign_expires_two_months_later() {
-        // given: 한국 시간 9월 27일 16시에 가입
+    @DisplayName("만료 시각은 가입 시점과 무관하게 모두 같은 종료 시각(올해가 끝나는 순간)이다")
+    void assign_expires_at_configured_end_regardless_of_signup_time() {
+        // given: 9월에 가입한 사람과 올해 마지막 순간(한국 시간 12월 31일 23:59:59)에 가입한 사람
         given(earlySignupGrantCounterRepository.findWithLockByGender(GENDER)).willReturn(Optional.of(counter(GENDER, 0)));
 
-        // when: 첫 자리로 배정
+        // when: 두 사람을 차례로 배정
         earlySignupGrantWriter.assign(USER_ID, GENDER, DI_HASH, NOW);
+        earlySignupGrantWriter.assign(2L, GENDER, "other-di-hash", Instant.parse("2026-12-31T14:59:59Z"));
 
-        // then: 11월 27일 16시에 끝난다
+        // then: 둘 다 한국 시간 2027년 1월 1일 0시에 끝난다 (늦게 가입할수록 무료 기간이 짧아진다)
         ArgumentCaptor<EarlySignupGrant> captor = ArgumentCaptor.forClass(EarlySignupGrant.class);
-        then(earlySignupGrantRepository).should().save(captor.capture());
-        assertThat(captor.getValue().getExpiresAt()).isEqualTo(Instant.parse("2026-11-27T07:00:00Z"));
+        then(earlySignupGrantRepository).should(times(2)).save(captor.capture());
+        assertThat(captor.getAllValues()).extracting(EarlySignupGrant::getExpiresAt).containsOnly(ENDS_AT);
     }
 
     @Test
-    @DisplayName("두 달은 한국 달력으로 센다: 한국 날짜로 12월 31일 가입이면 2월 말일에 끝난다")
-    void assign_counts_months_on_kst_calendar() {
-        // given: UTC 로는 12월 30일 15시지만 한국 시간으로는 12월 31일 0시에 가입
-        Instant assignedAt = Instant.parse("2026-12-30T15:00:00Z");
-        given(earlySignupGrantCounterRepository.findWithLockByGender(GENDER)).willReturn(Optional.of(counter(GENDER, 0)));
+    @DisplayName("종료 시각이 지난 뒤 가입하면 자리를 배정하지 않고 카운터도 잠그지 않는다")
+    void assign_skips_after_end() {
+        // when: 한국 시간 2027년 1월 1일 0시 정각에 가입
+        earlySignupGrantWriter.assign(USER_ID, GENDER, DI_HASH, ENDS_AT);
 
-        // when: 한국 날짜 기준 연말에 배정
-        earlySignupGrantWriter.assign(USER_ID, GENDER, DI_HASH, assignedAt);
-
-        // then: 한국 시간 2월 28일 0시에 끝난다 (UTC 달력으로 세면 12월 30일 기준이라 하루 늦은 2월 28일 15시 UTC 가 된다)
-        ArgumentCaptor<EarlySignupGrant> captor = ArgumentCaptor.forClass(EarlySignupGrant.class);
-        then(earlySignupGrantRepository).should().save(captor.capture());
-        assertThat(captor.getValue().getExpiresAt()).isEqualTo(Instant.parse("2027-02-27T15:00:00Z"));
-    }
-
-    @Test
-    @DisplayName("만료 시각은 RevenueCat 이 받는 밀리초 단위로 자른다: 첫 부여와 DB 에서 읽은 재시도가 같은 값을 보낸다")
-    void assign_truncates_expiry_to_millis() {
-        // given: Linux 의 Instant.now() 처럼 나노초까지 있는 배정 시각 (DB 는 마이크로초까지만 저장한다)
-        Instant assignedAt = Instant.parse("2026-09-27T07:00:00.327706361Z");
-        given(earlySignupGrantCounterRepository.findWithLockByGender(GENDER)).willReturn(Optional.of(counter(GENDER, 0)));
-
-        // when: 배정
-        earlySignupGrantWriter.assign(USER_ID, GENDER, DI_HASH, assignedAt);
-
-        // then: 밀리초 아래는 버려져, 메모리·DB·RevenueCat end_time_ms 가 모두 같은 시각이 된다
-        ArgumentCaptor<EarlySignupGrant> captor = ArgumentCaptor.forClass(EarlySignupGrant.class);
-        then(earlySignupGrantRepository).should().save(captor.capture());
-        assertThat(captor.getValue().getExpiresAt()).isEqualTo(Instant.parse("2026-11-27T07:00:00.327Z"));
+        // then: 이미 끝난 권한을 주느라 자리를 소모하지 않고, 캠페인이 끝난 뒤의 가입은 잠금도 기다리지 않는다
+        then(earlySignupGrantCounterRepository).shouldHaveNoInteractions();
+        then(earlySignupGrantRepository).should(never()).save(any());
     }
 
     @Test

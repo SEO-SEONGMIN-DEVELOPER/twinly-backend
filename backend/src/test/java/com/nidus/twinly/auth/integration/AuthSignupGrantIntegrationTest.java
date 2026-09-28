@@ -17,6 +17,7 @@ import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.legal.domain.PolicyKind;
 import com.nidus.twinly.purchase.client.RevenueCatClient;
+import com.nidus.twinly.purchase.EarlySignupGrantProperties;
 import com.nidus.twinly.purchase.entity.EarlySignupGrant;
 import com.nidus.twinly.purchase.entity.EarlySignupGrantCounter;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
@@ -86,6 +87,9 @@ class AuthSignupGrantIntegrationTest extends AbstractIntegrationTest {
     EarlySignupGrantRepository earlySignupGrantRepository;
 
     @Autowired
+    EarlySignupGrantProperties earlySignupGrantProperties;
+
+    @Autowired
     EarlySignupGrantCounterRepository earlySignupGrantCounterRepository;
 
     @Autowired
@@ -152,7 +156,7 @@ class AuthSignupGrantIntegrationTest extends AbstractIntegrationTest {
         // then: 커밋이 끝난 뒤의 쓰기지만 별도 트랜잭션으로 저장돼 재시도 대상에서 빠지고, 가입자 성별의 자리만 하나 소모된다
         assertThat(grant.getUserId()).isEqualTo(created.getId());
         assertThat(grant.getGrantedAt()).isNotNull();
-        assertThat(grant.getExpiresAt()).isAfter(Instant.now().plus(Duration.ofDays(58)));
+        assertThat(grant.getExpiresAt()).isEqualTo(earlySignupGrantProperties.endsAt());
         assertThat(assignedCount(Gender.MALE)).isEqualTo(1);
         assertThat(assignedCount(Gender.FEMALE)).isZero();
     }
@@ -184,7 +188,7 @@ class AuthSignupGrantIntegrationTest extends AbstractIntegrationTest {
         Applicant applicant = readyToSignUp(Gender.MALE);
         User withdrawn = saveUser();
         otherUserIds.add(withdrawn.getId());
-        earlySignupGrantRepository.save(EarlySignupGrant.assign(withdrawn.getId(), blindIndexHasher.hash(applicant.di()), Instant.now()));
+        earlySignupGrantRepository.save(EarlySignupGrant.assign(withdrawn.getId(), blindIndexHasher.hash(applicant.di()), earlySignupGrantProperties.endsAt(), Instant.now()));
         jdbcTemplate.update("UPDATE early_signup_grants SET granted_at = UTC_TIMESTAMP(6) WHERE user_id = ?", withdrawn.getId());
         setAssignedCount(Gender.MALE, 1);
 

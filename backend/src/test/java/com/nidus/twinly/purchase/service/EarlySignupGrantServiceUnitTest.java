@@ -48,6 +48,7 @@ class EarlySignupGrantServiceUnitTest {
     private static final Long GRANT_ID = 7L;
     private static final UUID REVENUE_CAT_USER_ID = UUID.fromString("0f8c1e2a-4b7d-4c31-9a6e-2f5b8c0d1e34");
     private static final Instant ASSIGNED_AT = Instant.parse("2026-09-27T07:00:00Z");
+    private static final Instant EXPIRES_AT = Instant.parse("2026-12-31T15:00:00Z");
 
     @Mock
     EarlySignupGrantRepository earlySignupGrantRepository;
@@ -183,7 +184,7 @@ class EarlySignupGrantServiceUnitTest {
     }
 
     private EarlySignupGrant grant(Long userId) {
-        EarlySignupGrant grant = EarlySignupGrant.assign(userId, "di-hash-" + userId, ASSIGNED_AT);
+        EarlySignupGrant grant = EarlySignupGrant.assign(userId, "di-hash-" + userId, EXPIRES_AT, ASSIGNED_AT);
         ReflectionTestUtils.setField(grant, "id", GRANT_ID);
         return grant;
     }

@@ -105,6 +105,9 @@ revenue-cat:
   read-timeout: 5s
   sync-interval: 30s
 
+early-signup-grant:
+  ends-at: "2027-01-01T00:00:00+09:00"
+
 nice:
   client-id: ${NICE_CLIENT_ID}
   client-secret: ${NICE_CLIENT_SECRET}

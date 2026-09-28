@@ -1,6 +1,7 @@
 package com.nidus.twinly.purchase.writer;
 
 import com.nidus.twinly.common.domain.Gender;
+import com.nidus.twinly.purchase.EarlySignupGrantProperties;
 import com.nidus.twinly.purchase.entity.EarlySignupGrant;
 import com.nidus.twinly.purchase.entity.EarlySignupGrantCounter;
 import com.nidus.twinly.purchase.repository.EarlySignupGrantCounterRepository;
@@ -18,9 +19,15 @@ public class EarlySignupGrantWriter {
 
     private final EarlySignupGrantCounterRepository earlySignupGrantCounterRepository;
     private final EarlySignupGrantRepository earlySignupGrantRepository;
+    private final EarlySignupGrantProperties earlySignupGrantProperties;
 
     @Transactional
     public void assign(Long userId, Gender gender, String diHash, Instant assignedAt) {
+        Instant endsAt = earlySignupGrantProperties.endsAt();
+        if (!assignedAt.isBefore(endsAt)) {
+            return;
+        }
+
         EarlySignupGrantCounter counter = earlySignupGrantCounterRepository.findWithLockByGender(gender)
                 .orElseThrow(() -> new IllegalStateException("early_signup_grant_counters 에 " + gender + " 행이 없습니다."));
 
@@ -28,7 +35,7 @@ public class EarlySignupGrantWriter {
             return;
         }
 
-        earlySignupGrantRepository.save(EarlySignupGrant.assign(userId, diHash, assignedAt));
+        earlySignupGrantRepository.save(EarlySignupGrant.assign(userId, diHash, endsAt, assignedAt));
         counter.increase();
     }
 
