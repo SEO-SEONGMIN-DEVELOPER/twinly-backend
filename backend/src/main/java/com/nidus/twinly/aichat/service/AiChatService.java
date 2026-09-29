@@ -27,7 +27,7 @@ import java.util.Optional;
 public class AiChatService {
 
     static final int MAX_TURN_INDEX = 7;
-    static final int RESTART_TURN_INDEX = 4;
+    static final int TOPIC_TURN_COUNT = 2;
     static final String LAST_MESSAGE = "지금까지 이야기 들려줘서 고마워!";
 
     private final BedrockService bedrockService;
@@ -89,7 +89,7 @@ public class AiChatService {
         int nextTurnIndex = command.turnIndex() + 1;
 
         List<AnonSessionPersonaElement> personaElements = anonSessionPersonaElementRepository.findAllByAnonSessionId(anonSessionId);
-        String nextQuestionPrompt = nextTurnIndex == RESTART_TURN_INDEX
+        String nextQuestionPrompt = nextTurnIndex % TOPIC_TURN_COUNT == 0
                 ? aiChatPromptBuilder.interestPrompt(anonSessionSnapshot.affiliation(), traits(personaElements), askedQuestions(anonSessionId))
                 : aiChatPromptBuilder.followUpPrompt(anonSessionSnapshot.affiliation(), traits(personaElements), aiQuestion.getMessage(), command.message());
         String message = bedrockService.converse(nextQuestionPrompt);

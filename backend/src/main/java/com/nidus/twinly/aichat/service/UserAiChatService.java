@@ -28,7 +28,7 @@ import java.util.Optional;
 
 import static com.nidus.twinly.aichat.service.AiChatService.LAST_MESSAGE;
 import static com.nidus.twinly.aichat.service.AiChatService.MAX_TURN_INDEX;
-import static com.nidus.twinly.aichat.service.AiChatService.RESTART_TURN_INDEX;
+import static com.nidus.twinly.aichat.service.AiChatService.TOPIC_TURN_COUNT;
 
 @Service
 @RequiredArgsConstructor
@@ -92,7 +92,7 @@ public class UserAiChatService {
         int nextTurnIndex = command.turnIndex() + 1;
 
         User user = findUser(userId);
-        String nextQuestionPrompt = nextTurnIndex == RESTART_TURN_INDEX
+        String nextQuestionPrompt = nextTurnIndex % TOPIC_TURN_COUNT == 0
                 ? aiChatPromptBuilder.interestPrompt(user.getAffiliation(), traits(userId), askedQuestions(userId))
                 : aiChatPromptBuilder.followUpPrompt(user.getAffiliation(), traits(userId), aiQuestion.getMessage(), command.message());
         String message = bedrockService.converse(nextQuestionPrompt);
