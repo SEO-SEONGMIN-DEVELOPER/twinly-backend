@@ -37,6 +37,7 @@ import com.nidus.twinly.relationship.repository.RelationshipRepository;
 import com.nidus.twinly.season.entity.Season;
 import com.nidus.twinly.season.repository.SeasonParticipationRepository;
 import com.nidus.twinly.season.repository.SeasonRepository;
+import com.nidus.twinly.simulation.client.SimulationPreloadClient;
 import com.nidus.twinly.support.AbstractIntegrationTest;
 import com.nidus.twinly.user.domain.DisclosureField;
 import com.nidus.twinly.user.entity.PersonaElement;
@@ -64,6 +65,8 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import com.nidus.twinly.common.survey.SurveyLoader;
 import com.nidus.twinly.common.survey.SurveyQuestion;
 
@@ -71,9 +74,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.hamcrest.Matchers.startsWith;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.BDDMockito.willAnswer;
+import static org.mockito.Mockito.after;
 import static org.mockito.Mockito.times;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -123,6 +130,9 @@ class MeIntegrationTest extends AbstractIntegrationTest {
     // CloudFront 서명 URL 생성은 실제 키가 필요하므로 목으로 대체한다.
     @MockitoBean
     CloudFrontService cloudFrontService;
+
+    @MockitoBean
+    SimulationPreloadClient simulationPreloadClient;
 
     @Autowired
     PolicyRepository policyRepository;
@@ -228,6 +238,70 @@ class MeIntegrationTest extends AbstractIntegrationTest {
 
         // then: 동의 시점에 현재 시즌 참가 행이 생겨 앱에 참여 중으로 보인다
         assertThat(seasonParticipationRepository.findByUserIdAndSeasonId(me.getId(), season.getId())).isPresent();
+    }
+
+    @Test
+    @DisplayName("약관 동의: 시즌 첫 참가라도 트랜잭션이 커밋되지 않으면 선생성을 요청하지 않는다")
+    void grantConsents_first_participation_without_commit_does_not_request_preload() throws Exception {
+        // given: 진행 중인 시즌, 권한만 있고 참가 행이 없는 유저 (테스트 트랜잭션은 끝나면 롤백된다)
+        Instant now = Instant.now();
+        seasonRepository.save(Season.create(now.minus(Duration.ofDays(1)), now.plus(Duration.ofDays(30))));
+        User me = saveUser();
+        userEntitlementRepository.save(UserEntitlement.create(
+                me.getId(), EntitlementReader.SIMULATION_ACCESS, now.plus(Duration.ofDays(30)), now));
+
+        // when: 필수 약관에 동의해 처음으로 시즌에 참가
+        mockMvc.perform(post("/api/v1/me/consents")
+                        .header("Authorization", bearer(me.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"grants":[{"policyId":"thirdPartyRealIdentityDisclosure","version":"1.1"}]}
+                                """))
+                .andExpect(status().isOk());
+
+        // then: 동의가 아직 커밋되지 않았으므로 AI 서버가 403을 받을 요청을 미리 보내지 않는다
+        then(simulationPreloadClient).should(after(1000).never()).preload(any(), any(), anyList());
+    }
+
+    @Test
+    @DisplayName("약관 동의: 시즌에 처음 참가하면 커밋 뒤에 선생성을 요청해, AI 서버가 곧바로 페르소나를 조회해도 403이 나지 않는다")
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void grantConsents_first_participation_requests_preload_after_commit() throws Exception {
+        // given: 진행 중인 시즌, 선착순 부여로 가입 직후 권한만 받고 아직 약관에 동의하지 않은 유저
+        Instant now = Instant.now();
+        Season season = seasonRepository.save(Season.create(now.minus(Duration.ofDays(1)), now.plus(Duration.ofDays(30))));
+        User me = saveUser();
+        userEntitlementRepository.save(UserEntitlement.create(
+                me.getId(), EntitlementReader.SIMULATION_ACCESS, now.plus(Duration.ofDays(30)), now));
+
+        // given: AI 서버처럼 선생성 요청을 받자마자 페르소나를 조회한다
+        CompletableFuture<Integer> personaStatus = new CompletableFuture<>();
+        willAnswer(invocation -> {
+            personaStatus.complete(mockMvc.perform(get("/internal/v1/users/{userId}/persona", me.getId()))
+                    .andReturn().getResponse().getStatus());
+            return null;
+        }).given(simulationPreloadClient).preload(eq(me.getId()), any(), anyList());
+
+        try {
+            // when: 평행우주 입장 필수 약관에 동의해 처음으로 시즌에 참가
+            mockMvc.perform(post("/api/v1/me/consents")
+                            .header("Authorization", bearer(me.getId()))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"grants":[{"policyId":"thirdPartyRealIdentityDisclosure","version":"1.1"}]}
+                                    """))
+                    .andExpect(status().isOk());
+
+            // then: 약관 동의가 커밋된 뒤라 선생성 직후 페르소나 조회가 성공한다
+            assertThat(personaStatus.get(10, TimeUnit.SECONDS)).isEqualTo(200);
+        } finally {
+            seasonParticipationRepository.findByUserIdAndSeasonId(me.getId(), season.getId())
+                    .ifPresent(seasonParticipationRepository::delete);
+            agreementRepository.deleteAll(agreementRepository.findAllByUserIdAndRevokedAtIsNull(me.getId()));
+            userEntitlementRepository.deleteAll(userEntitlementRepository.findAllByUserId(me.getId()));
+            seasonRepository.deleteById(season.getId());
+            userRepository.deleteById(me.getId());
+        }
     }
 
     @Test

@@ -10,7 +10,6 @@ import com.nidus.twinly.purchase.client.RevenueCatClient;
 import com.nidus.twinly.purchase.client.RevenueCatEntitlement;
 import com.nidus.twinly.purchase.domain.RevenueCatEnvironment;
 import com.nidus.twinly.purchase.dto.command.RevenueCatWebhookCommand;
-import com.nidus.twinly.purchase.event.SimulationAccessGrantedEvent;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.purchase.writer.PurchaseWriter;
 import com.nidus.twinly.season.writer.SeasonParticipationWriter;
@@ -18,7 +17,6 @@ import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.scheduling.annotation.Async;
@@ -42,7 +40,6 @@ public class PurchaseService {
     private final PurchaseWriter purchaseWriter;
     private final EntitlementReader entitlementReader;
     private final SeasonParticipationWriter seasonParticipationWriter;
-    private final ApplicationEventPublisher eventPublisher;
 
     public void receiveWebhook(RevenueCatWebhookCommand command) {
         InfoLog.log(log, "RevenueCat 웹훅을 받았습니다.", field("type", command.type()), field("environment", command.environment()), field("eventId", command.eventId()));
@@ -101,17 +98,11 @@ public class PurchaseService {
         Instant syncedAt = Instant.now();
         List<RevenueCatEntitlement> entitlements = revenueCatClient.entitlements(user.getRevenueCatUserId().toString());
 
-        boolean hadAccess = entitlementReader.hasSimulationAccess(user.getId());
         purchaseWriter.replaceEntitlements(user.getId(), entitlements, syncedAt);
-        boolean hasAccess = entitlementReader.hasSimulationAccess(user.getId());
 
-        if (hasAccess) {
+        if (entitlementReader.hasSimulationAccess(user.getId())) {
             purchaseWriter.assignPool(user.getId());
             seasonParticipationWriter.participateInCurrentSeasonIfEligible(user.getId());
-        }
-
-        if (!hadAccess && hasAccess) {
-            eventPublisher.publishEvent(new SimulationAccessGrantedEvent(user.getId(), syncedAt));
         }
     }
 
