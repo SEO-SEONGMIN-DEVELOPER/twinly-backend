@@ -4,19 +4,23 @@ import com.nidus.twinly.legal.domain.PolicyKind;
 import com.nidus.twinly.legal.reader.ConsentReader;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.season.entity.Season;
+import com.nidus.twinly.season.event.SeasonParticipationStartedEvent;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.season.repository.SeasonParticipationRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.BeanUtils;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
@@ -40,6 +44,9 @@ class SeasonParticipationWriterUnitTest {
 
     @Mock
     SeasonParticipationRepository seasonParticipationRepository;
+
+    @Mock
+    ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     SeasonParticipationWriter seasonParticipationWriter;
@@ -89,6 +96,39 @@ class SeasonParticipationWriterUnitTest {
     }
 
     @Test
+    @DisplayName("현재 시즌에 처음 참가하면 시즌 참가 시작 이벤트를 발행한다")
+    void participateInCurrentSeason_first_in_season_publishes_event() {
+        // given: 활성 시즌에 아직 참가 행이 없는 유저 (약관 동의로 막 참가 조건을 갖춤)
+        given(currentSeasonReader.read()).willReturn(season());
+        given(seasonParticipationRepository.existsByUserIdAndSeasonId(10L, CURRENT_SEASON_ID)).willReturn(false);
+
+        // when: 현재 시즌 참가
+        seasonParticipationWriter.participateInCurrentSeason(10L);
+
+        // then: 참가를 저장하고, 선생성이 이어지도록 이 유저의 참가 시작 이벤트가 참가 시각과 함께 나간다
+        then(seasonParticipationRepository).should().upsert(10L, CURRENT_SEASON_ID);
+        ArgumentCaptor<SeasonParticipationStartedEvent> captor = ArgumentCaptor.forClass(SeasonParticipationStartedEvent.class);
+        then(eventPublisher).should().publishEvent(captor.capture());
+        assertThat(captor.getValue().userId()).isEqualTo(10L);
+        assertThat(captor.getValue().participatedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("현재 시즌에 이미 참가한 유저면 참가는 upsert 하되 이벤트를 다시 발행하지 않는다")
+    void participateInCurrentSeason_already_in_season_does_not_publish_event() {
+        // given: 같은 시즌 참가 행이 이미 있는 유저 (구매 동기화·참가 요청이 반복되는 경우)
+        given(currentSeasonReader.read()).willReturn(season());
+        given(seasonParticipationRepository.existsByUserIdAndSeasonId(10L, CURRENT_SEASON_ID)).willReturn(true);
+
+        // when: 현재 시즌 참가
+        seasonParticipationWriter.participateInCurrentSeason(10L);
+
+        // then: 최초 참가 시각은 upsert 가 지키고, 선생성은 다시 요청하지 않는다
+        then(seasonParticipationRepository).should().upsert(10L, CURRENT_SEASON_ID);
+        then(eventPublisher).should(never()).publishEvent(any());
+    }
+
+    @Test
     @DisplayName("활성 시즌이 없으면 참가를 저장하지 않고 예외가 전파된다")
     void participateInCurrentSeason_when_current_season_missing_throws() {
         // given: 참가 조건은 갖췄지만 활성 시즌이 없는 비정상 상태
@@ -101,6 +141,7 @@ class SeasonParticipationWriterUnitTest {
                 .isInstanceOf(IllegalStateException.class);
 
         then(seasonParticipationRepository).should(never()).upsert(any(), any());
+        then(eventPublisher).should(never()).publishEvent(any());
     }
 
     @Test
@@ -113,10 +154,11 @@ class SeasonParticipationWriterUnitTest {
         // when: 새 시즌으로 일괄 참가
         seasonParticipationWriter.participateAllEligible(NEW_SEASON_ID);
 
-        // then: 동의한 두 명만 새 시즌 참가 행이 생긴다
+        // then: 동의한 두 명만 새 시즌 참가 행이 생기고, 이미 시뮬레이션을 받던 유저들이라 선생성 이벤트는 내지 않는다
         then(seasonParticipationRepository).should().upsert(10L, NEW_SEASON_ID);
         then(seasonParticipationRepository).should().upsert(20L, NEW_SEASON_ID);
         then(seasonParticipationRepository).should(never()).upsert(30L, NEW_SEASON_ID);
+        then(eventPublisher).should(never()).publishEvent(any());
     }
 
     private Season season() {

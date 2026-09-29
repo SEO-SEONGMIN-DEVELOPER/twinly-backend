@@ -12,7 +12,6 @@ import com.nidus.twinly.purchase.client.RevenueCatEntitlement;
 import com.nidus.twinly.purchase.domain.RevenueCatEnvironment;
 import com.nidus.twinly.purchase.dto.command.RevenueCatWebhookCommand;
 import com.nidus.twinly.purchase.entity.UserEntitlement;
-import com.nidus.twinly.purchase.event.SimulationAccessGrantedEvent;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.purchase.writer.PurchaseWriter;
 import com.nidus.twinly.season.writer.SeasonParticipationWriter;
@@ -22,11 +21,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -73,9 +70,6 @@ class PurchaseServiceUnitTest {
     @Mock
     SeasonParticipationWriter seasonParticipationWriter;
 
-    @Mock
-    ApplicationEventPublisher eventPublisher;
-
     PurchaseService purchaseService;
 
     @BeforeEach
@@ -84,7 +78,7 @@ class PurchaseServiceUnitTest {
                 Duration.ofSeconds(3), Duration.ofSeconds(5), Duration.ofSeconds(30));
         purchaseService = new PurchaseService(
                 properties, revenueCatClient, userRepository, purchaseWriter, entitlementReader,
-                seasonParticipationWriter, eventPublisher);
+                seasonParticipationWriter);
     }
 
     @Test
@@ -126,7 +120,7 @@ class PurchaseServiceUnitTest {
                 new RevenueCatProperties("secret", "sk_test", RevenueCatEnvironment.PRODUCTION,
                         Duration.ofSeconds(3), Duration.ofSeconds(5), Duration.ofSeconds(30)),
                 revenueCatClient, userRepository, purchaseWriter, entitlementReader,
-                seasonParticipationWriter, eventPublisher);
+                seasonParticipationWriter);
         given(userRepository.findByRevenueCatUserId(REVENUE_CAT_USER_ID)).willReturn(Optional.of(user()));
         given(revenueCatClient.entitlements(APP_USER_ID)).willReturn(List.of());
         given(purchaseWriter.beginEvent(anyString(), anyString(), any(), any(), any())).willReturn(true);
@@ -384,42 +378,6 @@ class PurchaseServiceUnitTest {
         // then: 참가 행을 만들지 않고 풀도 배정하지 않는다
         then(seasonParticipationWriter).should(never()).participateInCurrentSeasonIfEligible(anyLong());
         then(purchaseWriter).should(never()).assignPool(anyLong());
-    }
-
-    @Test
-    @DisplayName("동기화로 simulation_access 가 없다가 생기면 권한 획득 이벤트를 발행한다")
-    void sync_publishes_event_when_access_newly_granted() {
-        // given: 동기화 전에는 권한이 없고, 교체 후에 생김
-        User user = user();
-        given(revenueCatClient.entitlements(APP_USER_ID))
-                .willReturn(List.of(new RevenueCatEntitlement("simulation_access", Instant.parse("2026-09-30T00:00:00Z"))));
-        given(entitlementReader.hasSimulationAccess(USER_ID)).willReturn(false, true);
-
-        // when: 동기화
-        purchaseService.sync(user);
-
-        // then: 이 유저의 권한 획득 이벤트가 반영 시각과 함께 한 번 나간다
-        ArgumentCaptor<SimulationAccessGrantedEvent> captor = ArgumentCaptor.forClass(SimulationAccessGrantedEvent.class);
-        then(eventPublisher).should().publishEvent(captor.capture());
-        assertThat(captor.getValue().userId()).isEqualTo(USER_ID);
-        assertThat(captor.getValue().grantedAt()).isNotNull();
-    }
-
-    @Test
-    @DisplayName("이미 simulation_access 가 있던 유저의 갱신 동기화에는 이벤트를 발행하지 않는다")
-    void sync_does_not_publish_event_when_access_already_held() {
-        // given: 동기화 전후 모두 권한 보유 (구독 갱신)
-        User user = user();
-        given(revenueCatClient.entitlements(APP_USER_ID))
-                .willReturn(List.of(new RevenueCatEntitlement("simulation_access", Instant.parse("2026-10-30T00:00:00Z"))));
-        given(entitlementReader.hasSimulationAccess(USER_ID)).willReturn(true, true);
-
-        // when: 동기화
-        purchaseService.sync(user);
-
-        // then: 시즌 참가는 이어지지만 이벤트는 없다
-        then(seasonParticipationWriter).should().participateInCurrentSeasonIfEligible(USER_ID);
-        then(eventPublisher).should(never()).publishEvent(any(SimulationAccessGrantedEvent.class));
     }
 
     @Test
