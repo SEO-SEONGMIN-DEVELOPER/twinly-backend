@@ -184,12 +184,12 @@ class UserAiChatServiceUnitTest {
     }
 
     @Test
-    @DisplayName("5번째 턴(인덱스 4) 질문은 직전 답변을 잇지 않고 이미 물어본 질문을 피해 관심사로 새 대화를 시작한다")
+    @DisplayName("2턴마다(인덱스 2, 4, 6) 질문은 직전 답변을 잇지 않고 이미 물어본 질문을 피해 관심사로 새 대화를 시작한다")
     void aiChatMessage_restart_turn_asks_new_interest_question() {
-        // given: 3번 턴 AI 질문이 있고 아직 답하지 않음, 이미 물어본 AI 질문 2건
-        given(aiChatRepository.findByUserIdAndTurnIndexAndSender(ME, 3, AiChatSender.AI))
-                .willReturn(Optional.of(AiChat.create(ME, AiChatSender.AI, "그 산 정상에서 뭐 했어?", 3, NOW)));
-        given(aiChatRepository.findByUserIdAndTurnIndexAndSender(ME, 3, AiChatSender.USER)).willReturn(Optional.empty());
+        // given: 1번 턴 AI 질문이 있고 아직 답하지 않음, 이미 물어본 AI 질문 2건
+        given(aiChatRepository.findByUserIdAndTurnIndexAndSender(ME, 1, AiChatSender.AI))
+                .willReturn(Optional.of(AiChat.create(ME, AiChatSender.AI, "그 산 정상에서 뭐 했어?", 1, NOW)));
+        given(aiChatRepository.findByUserIdAndTurnIndexAndSender(ME, 1, AiChatSender.USER)).willReturn(Optional.empty());
         given(userRepository.findById(ME)).willReturn(Optional.of(user()));
         given(personaElementRepository.findAllByUserIdOrderByIdAsc(ME))
                 .willReturn(List.of(PersonaElement.create(ME, PersonaDimension.INTEREST, "재즈", NOW)));
@@ -197,20 +197,20 @@ class UserAiChatServiceUnitTest {
                 .willReturn(List.of(
                         AiChat.create(ME, AiChatSender.AI, "등산은 어디로 자주 가?", 0, NOW),
                         AiChat.create(ME, AiChatSender.USER, "북한산", 0, NOW),
-                        AiChat.create(ME, AiChatSender.AI, "그 산 정상에서 뭐 했어?", 3, NOW)));
+                        AiChat.create(ME, AiChatSender.AI, "그 산 정상에서 뭐 했어?", 1, NOW)));
         given(bedrockService.converse(anyString())).willReturn("재즈는 어떤 아티스트 좋아해?");
 
-        // when: 3번 턴에 답변 전송
-        MeAiChatMessageResult result = userAiChatService.aiChatMessage(ME, new MeAiChatMessageCommand("사진 찍었어", 3));
+        // when: 1번 턴에 답변 전송
+        MeAiChatMessageResult result = userAiChatService.aiChatMessage(ME, new MeAiChatMessageCommand("사진 찍었어", 1));
 
-        // then: 후속 질문이 아니라 이미 물어본 질문 목록이 담긴 관심사 프롬프트로 4번 턴 질문을 생성
+        // then: 후속 질문이 아니라 이미 물어본 질문 목록이 담긴 관심사 프롬프트로 2번 턴 질문을 생성
         ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
         then(bedrockService).should().converse(promptCaptor.capture());
         assertThat(promptCaptor.getValue())
                 .contains("[이미 물어본 질문]", "- 등산은 어디로 자주 가?", "- 그 산 정상에서 뭐 했어?", "완전히 새로운 주제")
                 .doesNotContain("[방금 나눈 대화]", "- 북한산");
 
-        assertThat(result).isEqualTo(new MeAiChatMessageResult("재즈는 어떤 아티스트 좋아해?", 4, false));
+        assertThat(result).isEqualTo(new MeAiChatMessageResult("재즈는 어떤 아티스트 좋아해?", 2, false));
     }
 
     @Test
