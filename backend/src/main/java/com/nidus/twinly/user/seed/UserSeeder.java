@@ -85,7 +85,7 @@ public class UserSeeder implements ApplicationRunner {
     private static final int PHONE_START = 9001;
     static final String EMAIL_LOCAL_PREFIX = "test-seed";
     private static final String SCENARIO_RESOURCE = "seed/showcase-scenarios.json";
-    static final LocalDate SCENARIO_BASE_DATE = LocalDate.of(2026, 9, 16);
+    static final LocalDate SCENARIO_BASE_DATE = LocalDate.of(2026, 10, 10);
     private static final String PERSONA_RESOURCE = "seed/ai-test-personas.json";
     private static final int PERSONA_DETAILS_PER_USER = 8;
     static final Instant SYNC_PROTECTED_SYNCED_AT = Instant.parse("2099-12-31T00:00:00Z");
