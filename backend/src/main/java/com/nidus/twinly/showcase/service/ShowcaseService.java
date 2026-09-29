@@ -59,8 +59,8 @@ public class ShowcaseService {
     private static final String SCHOOL_SUFFIX = "학교";
     private static final long TARGET_USER_REF = 1L;
     private static final String MASKED_GIVEN_NAME = "OO";
-    private static final int TOTAL_USER_COUNT_OFFSET = 70;
-    private static final int SAME_ORGANIZATION_USER_COUNT_OFFSET = 23;
+    private static final int TOTAL_USER_COUNT_OFFSET = 20;
+    private static final int SAME_ORGANIZATION_USER_COUNT_OFFSET = 8;
     private static final List<String> PSEUDONYM_FAMILY_NAMES = List.of(
             "김", "이", "박", "최", "정", "강", "조", "윤", "장", "임",
             "한", "오", "서", "신", "권", "황", "안", "송", "류", "홍"

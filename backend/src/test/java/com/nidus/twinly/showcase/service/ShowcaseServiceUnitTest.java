@@ -402,8 +402,8 @@ class ShowcaseServiceUnitTest {
         ShowcaseTodayResult result = showcaseService.today(VIEWER_ID);
 
         // then: 호출자 소속(성신여자대학교 → 성신여대)이 userCounts에 실리고, 대상 소속과 섞이지 않는다
-        assertThat(result.userCounts().total()).isEqualTo(12840 + 70);
-        assertThat(result.userCounts().sameOrganization()).isEqualTo(320 + 23);
+        assertThat(result.userCounts().total()).isEqualTo(12840 + 20);
+        assertThat(result.userCounts().sameOrganization()).isEqualTo(320 + 8);
         assertThat(result.userCounts().organization()).isEqualTo("성신여대");
         assertThat(result.userInfos().get(0).organization()).isEqualTo("고려대");
     }
