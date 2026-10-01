@@ -25,6 +25,14 @@ public class User {
 
     private static final int BIRTH_YEAR_LENGTH = 4;
 
+    private static final String WOMENS_UNIVERSITY_SUFFIX = "여자대학교";
+
+    private static final String WOMENS_UNIVERSITY_ABBREVIATION = "여대";
+
+    private static final String UNIVERSITY_SUFFIX = "대학교";
+
+    private static final String SCHOOL_SUFFIX = "학교";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -180,6 +188,23 @@ public class User {
 
     public String displayNickname() {
         return isWithdrawn() ? WITHDRAWN_NAME : nickname;
+    }
+
+    public String shortOrganization() {
+        if (organization == null) {
+            return null;
+        }
+
+        if (organization.endsWith(WOMENS_UNIVERSITY_SUFFIX)) {
+            return organization.substring(0, organization.length() - WOMENS_UNIVERSITY_SUFFIX.length())
+                    + WOMENS_UNIVERSITY_ABBREVIATION;
+        }
+
+        if (!organization.endsWith(UNIVERSITY_SUFFIX)) {
+            return organization;
+        }
+
+        return organization.substring(0, organization.length() - SCHOOL_SUFFIX.length());
     }
 
     public void changeAffiliation(String affiliation, String affiliationHash) {

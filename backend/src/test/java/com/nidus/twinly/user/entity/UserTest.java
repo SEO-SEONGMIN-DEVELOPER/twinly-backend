@@ -59,6 +59,31 @@ class UserTest {
         assertThat(user.displayNickname()).isEqualTo("nick");
     }
 
+    @Test
+    @DisplayName("소속이 대학교로 끝나면 학교를 떼고, 그 밖의 소속은 그대로 둔다")
+    void short_organization_of_university() {
+        // given: 대학교 소속 유저와 고등학교 소속 유저
+        User university = user(null);
+        ReflectionTestUtils.setField(university, "organization", "성균관대학교");
+        User highSchool = user(null);
+        ReflectionTestUtils.setField(highSchool, "organization", "한국고등학교");
+
+        // then: 성균관대학교 → 성균관대, 한국고등학교는 그대로
+        assertThat(university.shortOrganization()).isEqualTo("성균관대");
+        assertThat(highSchool.shortOrganization()).isEqualTo("한국고등학교");
+    }
+
+    @Test
+    @DisplayName("소속이 여자대학교로 끝나면 여대로 줄인다")
+    void short_organization_of_womens_university() {
+        // given: 여자대학교 소속 유저
+        User user = user(null);
+        ReflectionTestUtils.setField(user, "organization", "성신여자대학교");
+
+        // then: 성신여자대학교 → 성신여대
+        assertThat(user.shortOrganization()).isEqualTo("성신여대");
+    }
+
     private User user(Instant deletedAt) {
         User user = User.create(
                 "nick", "홍", "familyHash", "길동", "givenHash",
