@@ -6,6 +6,10 @@ import com.nidus.twinly.activity.repository.QuestionRepository;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
 import com.nidus.twinly.common.crypto.BlindIndexHasher;
 import com.nidus.twinly.common.persona.PersonaDimension;
+import com.nidus.twinly.common.persona.PersonalityType;
+import com.nidus.twinly.common.persona.PersonalityTypeCalculator;
+import com.nidus.twinly.common.persona.PersonalityTypeLoader;
+import com.nidus.twinly.common.persona.PersonalityTypePart;
 import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.photo.PhotoPosInfo;
 import com.nidus.twinly.common.photo.PhotoType;
@@ -55,6 +59,8 @@ import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsProfileTargetResult
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsResult;
 import com.nidus.twinly.me.dto.result.MeConsentsResult;
 import com.nidus.twinly.me.dto.result.MeHesitationsResult;
+import com.nidus.twinly.me.dto.result.MePersonalityTypePartResult;
+import com.nidus.twinly.me.dto.result.MePersonalityTypeResult;
 import com.nidus.twinly.me.dto.result.MeProfileEditViewResult;
 import com.nidus.twinly.me.dto.result.MeProfileResult;
 import com.nidus.twinly.me.dto.result.MeProfilePhotoCommitResult;
@@ -204,6 +210,12 @@ class MeServiceUnitTest {
 
     @Mock
     SurveyLoader surveyLoader;
+
+    @Mock
+    PersonalityTypeCalculator personalityTypeCalculator;
+
+    @Mock
+    PersonalityTypeLoader personalityTypeLoader;
 
     @Mock
     UserTendencyAnswerRepository userTendencyAnswerRepository;
@@ -1490,7 +1502,7 @@ class MeServiceUnitTest {
     }
 
     private SurveyQuestion surveyQuestion(Integer id, PersonaDimension dimension) {
-        return new SurveyQuestion(id, dimension, "시나리오", Map.of(
+        return new SurveyQuestion(id, dimension, null, "시나리오", Map.of(
                 SurveyOptionName.A, new SurveyOption("A 라벨", "A 특성"),
                 SurveyOptionName.B, new SurveyOption("B 라벨", "B 특성")));
     }
@@ -1524,6 +1536,56 @@ class MeServiceUnitTest {
         // then: INTEREST 차원만 삭제되고 저장은 호출되지 않음
         then(personaElementRepository).should().deleteByUserIdAndDimension(ME, PersonaDimension.INTEREST);
         then(personaElementRepository).should(never()).save(any());
+    }
+
+    // ---------------------------------------------------------------- 성격 유형
+
+    @Test
+    @DisplayName("성격 유형 조회는 페르소나 문장을 저장 순서대로 계산기에 넘기고, 나온 코드의 이름·축 단어·형용사/명사 문구와 그림의 공개 URL을 반환한다")
+    void personalityType_success() {
+        // given: 페르소나 문장 2개, 계산기는 01110을, 로더는 탐구적인 수호자를, CloudFront 는 그림 key 의 공개 URL을 반환
+        given(personaElementRepository.findAllByUserIdOrderByIdAsc(ME)).willReturn(List.of(
+                personaElement(PersonaDimension.EXTRAVERSION, "외향성 문장"),
+                personaElement(PersonaDimension.INTEREST, "등산")));
+        given(personalityTypeCalculator.calculate(List.of("외향성 문장", "등산"))).willReturn(Optional.of("01110"));
+        given(personalityTypeLoader.get("01110"))
+                .willReturn(new PersonalityType(
+                        "01110",
+                        "탐구적인 수호자",
+                        List.of("차분", "탐험", "계획", "다정", "안정"),
+                        new PersonalityTypePart("01", "탐구적인", "형용사 한 줄", "형용사 설명"),
+                        new PersonalityTypePart("110", "수호자", "명사 한 줄", "명사 설명"),
+                        "personality-types/v1/01110.png"));
+        given(cloudFrontService.getPublicUrl("personality-types/v1/01110.png"))
+                .willReturn("https://cdn.example/personality-types/v1/01110.png");
+
+        // when: 성격 유형 조회
+        MePersonalityTypeResult result = meService.personalityType(ME);
+
+        // then: 로더가 찾은 이름·축 단어·형용사/명사의 한 줄 소개와 설명 + 서명 없는 공개 URL을 담음
+        assertThat(result).isEqualTo(new MePersonalityTypeResult(
+                "탐구적인 수호자",
+                List.of("차분", "탐험", "계획", "다정", "안정"),
+                new MePersonalityTypePartResult("형용사 한 줄", "형용사 설명"),
+                new MePersonalityTypePartResult("명사 한 줄", "명사 설명"),
+                "https://cdn.example/personality-types/v1/01110.png"));
+        then(cloudFrontService).should(never()).getSignedUrl(anyString());
+    }
+
+    @Test
+    @DisplayName("계산기가 유형을 정하지 못하면 PERSONA_NOT_FOUND 예외가 발생하고 문구를 찾지 않는다")
+    void personalityType_without_type_throws_persona_not_found() {
+        // given: 페르소나가 없어 계산기가 빈 값을 반환
+        given(personaElementRepository.findAllByUserIdOrderByIdAsc(ME)).willReturn(List.of());
+        given(personalityTypeCalculator.calculate(List.of())).willReturn(Optional.empty());
+
+        // when & then: PERSONA_NOT_FOUND 예외 발생 + 로더는 호출되지 않음
+        assertThatThrownBy(() -> meService.personalityType(ME))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PERSONA_NOT_FOUND);
+
+        then(personalityTypeLoader).should(never()).get(anyString());
     }
 
     // ---------------------------------------------------------------- 성향 질문

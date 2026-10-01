@@ -31,6 +31,7 @@ public class SurveyLoader {
         questionMap = new LinkedHashMap<>();
         for (JsonNode questionNode : survey.get("questions")) {
             SurveyQuestion question = objectMapper.treeToValue(questionNode, SurveyQuestion.class);
+            validateHighOption(question);
             questionMap.put(question.id(), question);
         }
 
@@ -49,6 +50,14 @@ public class SurveyLoader {
         lastQuestionId = questionMap.keySet().stream()
                 .reduce((first, second) -> second)
                 .orElseThrow(() -> new IllegalStateException("설문 문항이 비어 있습니다: survey/survey_v2_mixed.json"));
+    }
+
+    private void validateHighOption(SurveyQuestion question) {
+        boolean hasHighOption = question.highOption() != null;
+
+        if (question.dimension().isBigFive() != hasHighOption) {
+            throw new IllegalStateException("Big5 문항에만 highOption 이 있어야 합니다: " + question.id());
+        }
     }
 
     public SurveyQuestion getQuestion(Integer id) {

@@ -284,6 +284,7 @@ class OnboardingControllerUnitTest {
         given(onboardingService.surveyQuestions()).willReturn(List.of(new SurveyQuestion(
                 8,
                 PersonaDimension.OPENNESS,
+                null,
                 "다음 주 일정을 정리하고 있어요.",
                 Map.of(
                         SurveyOptionName.A, new SurveyOption("A 선택지 라벨", "A 특성"),

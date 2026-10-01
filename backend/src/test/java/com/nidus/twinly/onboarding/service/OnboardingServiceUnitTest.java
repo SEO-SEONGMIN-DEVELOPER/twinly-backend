@@ -906,7 +906,7 @@ class OnboardingServiceUnitTest {
     }
 
     private SurveyQuestion question(Integer id) {
-        return new SurveyQuestion(id, PersonaDimension.OPENNESS, "시나리오", Map.of(
+        return new SurveyQuestion(id, PersonaDimension.OPENNESS, null, "시나리오", Map.of(
                 SurveyOptionName.A, new SurveyOption("A 라벨", "A 특성"),
                 SurveyOptionName.B, new SurveyOption("B 라벨", "B 특성")));
     }

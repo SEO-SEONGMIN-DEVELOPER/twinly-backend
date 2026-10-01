@@ -66,6 +66,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -410,6 +411,75 @@ class MeIntegrationTest extends AbstractIntegrationTest {
     void without_auth_returns_401() throws Exception {
         // when & then: 인증 헤더 없이 내 상태 조회 시 401
         mockMvc.perform(get("/api/v1/me/status"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("성격 유형 조회: DB의 설문 답 문장을 실제 설문·유형 파일로 풀어 이름·축 단어·형용사/명사 문구·그림 URL을 내려준다")
+    void personalityType_end_to_end() throws Exception {
+        // given: 외향성 10·11번과 신경성 15·16·17번만 B, 나머지는 A로 답한 페르소나 + 설문 밖 관심사 1개
+        User me = saveUser();
+        Map<Integer, SurveyOptionName> answers = Map.of(
+                10, SurveyOptionName.B,
+                11, SurveyOptionName.B,
+                15, SurveyOptionName.B,
+                16, SurveyOptionName.B,
+                17, SurveyOptionName.B);
+        personaElementRepository.saveAll(surveyLoader.getAllQuestions().stream()
+                .map(question -> PersonaElement.create(
+                        me.getId(),
+                        question.dimension(),
+                        question.traitFor(answers.getOrDefault(question.id(), SurveyOptionName.A)),
+                        Instant.now()))
+                .toList());
+        personaElementRepository.save(PersonaElement.create(me.getId(), PersonaDimension.INTEREST, "등산", Instant.now()));
+        flushAndClear();
+        given(cloudFrontService.getPublicUrl(anyString()))
+                .willAnswer(invocation -> "https://test.cloudfront.net/" + invocation.getArgument(0));
+
+        // when: 실제 액세스 토큰으로 성격 유형 조회 API 호출
+        var result = mockMvc.perform(get("/api/v1/me/personality-type")
+                .header("Authorization", bearer(me.getId())));
+
+        // then: 차분·탐험·계획·다정·안정(01110)이라 탐구적인 수호자 + 설계 문서 2장의 탐구적인·수호자 문구 + 코드로 지은 그림 URL, 유형 코드는 내려가지 않음
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("탐구적인 수호자"))
+                .andExpect(jsonPath("$.keywords.length()").value(5))
+                .andExpect(jsonPath("$.keywords[0]").value("차분"))
+                .andExpect(jsonPath("$.keywords[1]").value("탐험"))
+                .andExpect(jsonPath("$.keywords[2]").value("계획"))
+                .andExpect(jsonPath("$.keywords[3]").value("다정"))
+                .andExpect(jsonPath("$.keywords[4]").value("안정"))
+                .andExpect(jsonPath("$.adjective.tagline").value("혼자 깊이 파고들며 넓혀 가는"))
+                .andExpect(jsonPath("$.adjective.description").value(
+                        "사람이 많은 곳보다 조용한 시간에 힘을 얻어요. 궁금한 게 있으면 이것저것 찾아보고, 오래 곱씹으며 생각을 키워요."))
+                .andExpect(jsonPath("$.noun.tagline").value("한결같이 곁을 지키는 사람"))
+                .andExpect(jsonPath("$.noun.description").value(
+                        "한번 맺은 관계와 약속은 끝까지 책임져요. 웬만한 일에는 흔들리지 않고, 변함없는 모습으로 주변에 든든한 버팀목이 되어 줘요."))
+                .andExpect(jsonPath("$.imageUrl").value("https://test.cloudfront.net/personality-types/v1/01110.png"))
+                .andExpect(jsonPath("$.code").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("성격 유형 조회: 페르소나가 없는 유저는 422 PERSONA_NOT_FOUND를 받는다")
+    void personalityType_without_persona_returns_422() throws Exception {
+        // given: 설문을 하지 않아 페르소나가 없는 실제 유저
+        User me = saveUser();
+
+        // when: 실제 액세스 토큰으로 성격 유형 조회 API 호출
+        var result = mockMvc.perform(get("/api/v1/me/personality-type")
+                .header("Authorization", bearer(me.getId())));
+
+        // then: 422 PERSONA_NOT_FOUND
+        result.andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value(ErrorCode.PERSONA_NOT_FOUND.name()));
+    }
+
+    @Test
+    @DisplayName("성격 유형 조회: 인증 헤더가 없으면 실제 컨텍스트에서도 401을 반환한다")
+    void personalityType_without_auth_returns_401() throws Exception {
+        // when & then: 인증 헤더 없이 성격 유형 조회 시 401
+        mockMvc.perform(get("/api/v1/me/personality-type"))
                 .andExpect(status().isUnauthorized());
     }
 

@@ -36,6 +36,8 @@ import com.nidus.twinly.me.dto.result.MeAppNotificationsUnreadCountResult;
 import com.nidus.twinly.me.dto.result.MeConsentsItemResult;
 import com.nidus.twinly.me.dto.result.MeConsentsResult;
 import com.nidus.twinly.me.dto.result.MeHesitationsResult;
+import com.nidus.twinly.me.dto.result.MePersonalityTypePartResult;
+import com.nidus.twinly.me.dto.result.MePersonalityTypeResult;
 import com.nidus.twinly.me.dto.result.MeProfileEditViewResult;
 import com.nidus.twinly.me.dto.result.MeProfileResult;
 import com.nidus.twinly.me.dto.result.MeProfilePhotoCommitResult;
@@ -678,6 +680,67 @@ class MeControllerUnitTest {
                 .andExpect(jsonPath("$.gender").value("female"));
     }
 
+    // ---------------------------------------------------------------- 성격 유형
+
+    @Test
+    @DisplayName("성격 유형 조회 시 인증 유저 id로 위임하고 이름·축 단어 배열·형용사/명사 문구·그림 URL만 담긴 JSON을 반환한다")
+    void personalityType_success() throws Exception {
+        // given: 서비스가 탐구적인 수호자 유형을 반환
+        given(meService.personalityType(ME))
+                .willReturn(new MePersonalityTypeResult(
+                        "탐구적인 수호자",
+                        List.of("차분", "탐험", "계획", "다정", "안정"),
+                        new MePersonalityTypePartResult("형용사 한 줄", "형용사 설명"),
+                        new MePersonalityTypePartResult("명사 한 줄", "명사 설명"),
+                        "https://cdn.example/personality-types/v1/01110.png"));
+
+        // when: 성격 유형 조회 API 호출
+        var result = mockMvc.perform(get("/api/v1/me/personality-type")
+                .header("Authorization", BEARER));
+
+        // then: 200 반환 + 축 단어는 5개 배열, 형용사·명사는 각각 한 줄 소개와 설명으로 나뉘고, 유형 코드·합친 설명은 내려가지 않음
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("탐구적인 수호자"))
+                .andExpect(jsonPath("$.keywords.length()").value(5))
+                .andExpect(jsonPath("$.keywords[0]").value("차분"))
+                .andExpect(jsonPath("$.keywords[4]").value("안정"))
+                .andExpect(jsonPath("$.adjective.tagline").value("형용사 한 줄"))
+                .andExpect(jsonPath("$.adjective.description").value("형용사 설명"))
+                .andExpect(jsonPath("$.noun.tagline").value("명사 한 줄"))
+                .andExpect(jsonPath("$.noun.description").value("명사 설명"))
+                .andExpect(jsonPath("$.imageUrl").value("https://cdn.example/personality-types/v1/01110.png"))
+                .andExpect(jsonPath("$.description").doesNotExist())
+                .andExpect(jsonPath("$.code").doesNotExist());
+        then(meService).should().personalityType(ME);
+    }
+
+    @Test
+    @DisplayName("유형을 정할 수 없어 서비스가 PERSONA_NOT_FOUND를 던지면 422를 반환한다")
+    void personalityType_persona_not_found_returns_422() throws Exception {
+        // given: 서비스가 PERSONA_NOT_FOUND 예외를 던짐
+        given(meService.personalityType(ME))
+                .willThrow(new BusinessException(ErrorCode.PERSONA_NOT_FOUND));
+
+        // when: 성격 유형 조회 API 호출
+        var result = mockMvc.perform(get("/api/v1/me/personality-type")
+                .header("Authorization", BEARER));
+
+        // then: 422 PERSONA_NOT_FOUND 반환
+        result.andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("PERSONA_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("인증 헤더가 없으면 401을 반환하고 성격 유형 조회를 위임하지 않는다")
+    void personalityType_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 성격 유형 조회 API 호출
+        var result = mockMvc.perform(get("/api/v1/me/personality-type"));
+
+        // then: 401 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isUnauthorized());
+        then(meService).should(never()).personalityType(anyLong());
+    }
+
     // ---------------------------------------------------------------- 망설임
 
     @Test
@@ -1120,7 +1183,7 @@ class MeControllerUnitTest {
     @DisplayName("설문 문항 목록 조회 시 200과 id·dimension·scenario·선택지 라벨만 담긴 JSON을 반환한다")
     void surveyQuestions_success() throws Exception {
         // given: 서비스가 문항 1개를 반환
-        given(meService.surveyQuestions()).willReturn(List.of(new SurveyQuestion(8, PersonaDimension.OPENNESS, "다음 주 일정을 정리하고 있어요.", Map.of(
+        given(meService.surveyQuestions()).willReturn(List.of(new SurveyQuestion(8, PersonaDimension.OPENNESS, null, "다음 주 일정을 정리하고 있어요.", Map.of(
                 SurveyOptionName.A, new SurveyOption("A 선택지 라벨", "A 특성"),
                 SurveyOptionName.B, new SurveyOption("B 선택지 라벨", "B 특성")))));
 

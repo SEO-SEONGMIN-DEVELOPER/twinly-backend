@@ -36,6 +36,7 @@ import com.nidus.twinly.me.dto.response.MeAppNotificationsFeedsResponse;
 import com.nidus.twinly.me.dto.response.MeAppNotificationsUnreadCountResponse;
 import com.nidus.twinly.me.dto.response.MeConsentsResponse;
 import com.nidus.twinly.me.dto.response.MeHesitationsResponse;
+import com.nidus.twinly.me.dto.response.MePersonalityTypeResponse;
 import com.nidus.twinly.me.dto.response.MePushNotificationsResponse;
 import com.nidus.twinly.me.dto.response.MeProfileEditViewResponse;
 import com.nidus.twinly.me.dto.response.MeProfileResponse;
@@ -275,6 +276,13 @@ public class MeController {
     @GetMapping("/api/v1/me/info")
     public MeInfoResponse info(@AuthenticationPrincipal UserInfo userInfo) {
         return MeInfoResponse.from(meService.info(userInfo.id()));
+    }
+
+    @Operation(summary = "내 성격 유형 조회")
+    @ApiResponse(responseCode = "422", description = "PERSONA_NOT_FOUND")
+    @GetMapping("/api/v1/me/personality-type")
+    public MePersonalityTypeResponse personalityType(@AuthenticationPrincipal UserInfo userInfo) {
+        return MePersonalityTypeResponse.from(meService.personalityType(userInfo.id()));
     }
 
     @Operation(summary = "망설임 목록 조회")

@@ -6,6 +6,9 @@ import com.nidus.twinly.activity.repository.QuestionRepository;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
 import com.nidus.twinly.common.crypto.BlindIndexHasher;
 import com.nidus.twinly.common.persona.PersonaDimension;
+import com.nidus.twinly.common.persona.PersonalityType;
+import com.nidus.twinly.common.persona.PersonalityTypeCalculator;
+import com.nidus.twinly.common.persona.PersonalityTypeLoader;
 import com.nidus.twinly.common.photo.PhotoPosInfo;
 import com.nidus.twinly.common.photo.PhotoType;
 import com.nidus.twinly.common.photo.ProfilePhotoInfo;
@@ -53,6 +56,8 @@ import com.nidus.twinly.me.dto.result.MeAppNotificationsUnreadCountResult;
 import com.nidus.twinly.me.dto.result.MeConsentsItemResult;
 import com.nidus.twinly.me.dto.result.MeConsentsResult;
 import com.nidus.twinly.me.dto.result.MeHesitationsResult;
+import com.nidus.twinly.me.dto.result.MePersonalityTypePartResult;
+import com.nidus.twinly.me.dto.result.MePersonalityTypeResult;
 import com.nidus.twinly.me.dto.result.MePushNotificationsResult;
 import com.nidus.twinly.me.dto.result.MePushNotificationsSettingsResult;
 import com.nidus.twinly.me.dto.result.MeProfileEditViewResult;
@@ -158,6 +163,8 @@ public class MeService {
     private final PolicyUrlResolver policyUrlResolver;
     private final SeasonParticipationWriter seasonParticipationWriter;
     private final SurveyLoader surveyLoader;
+    private final PersonalityTypeCalculator personalityTypeCalculator;
+    private final PersonalityTypeLoader personalityTypeLoader;
     private final TendencyLoader tendencyLoader;
 
     public MeProfilePhotoPresignResult profilePhotoPresign(Long userId, MeProfilePhotoPresignCommand command) {
@@ -522,6 +529,25 @@ public class MeService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
         return new MeInfoResult(user.getGender());
+    }
+
+    public MePersonalityTypeResult personalityType(Long userId) {
+        List<String> explanations = personaElementRepository.findAllByUserIdOrderByIdAsc(userId).stream()
+                .map(PersonaElement::getExplanation)
+                .toList();
+
+        String code = personalityTypeCalculator.calculate(explanations)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PERSONA_NOT_FOUND));
+
+        PersonalityType type = personalityTypeLoader.get(code);
+
+        return new MePersonalityTypeResult(
+                type.name(),
+                type.keywords(),
+                new MePersonalityTypePartResult(type.adjective().tagline(), type.adjective().description()),
+                new MePersonalityTypePartResult(type.noun().tagline(), type.noun().description()),
+                cloudFrontService.getPublicUrl(type.imageKey())
+        );
     }
 
     private MeStatusPersonaResult personaStatus(Long userId, User user) {
