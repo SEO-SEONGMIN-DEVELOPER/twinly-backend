@@ -55,6 +55,7 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -337,6 +338,80 @@ class SimulationServiceUnitTest {
                 USER_ID, newPartnerId, AppNotificationScheduleType.FIRST_MEETING.name(), DATE, KstTimes.toInstant(DATE.atTime(11, 0)));
         then(appNotificationScheduleRepository).should(never()).insertIfAbsent(
                 eq(USER_ID), eq(PARTNER_ID), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("처음 대화하는 상대는 첫 대화 시작 시각에 친밀도 0 관계를 함께 저장하고, AI가 관계를 보내지 않은 상대도 저장한다")
+    void simulations_saves_zero_intimacy_relationship_at_first_dialogue_start() {
+        // given: 두 사람과 11시에 처음 대화했고, AI는 그중 한 사람의 관계만 21시로 보냈다
+        Long newPartnerId = 56L;
+        givenEmptyPreviousSimulation();
+        given(scenePartnerRepository.findPartnerUserIdsWithDialogueBeforeDate(USER_ID, List.of(PARTNER_ID, newPartnerId), DATE))
+                .willReturn(List.of());
+        SimulationsCommand command = new SimulationsCommand(USER_ID, DATE, List.of(
+                dialogueScene(DATE, 11, List.of(PARTNER_ID, newPartnerId))
+        ), List.of(), List.of(
+                new SimulationsRelationshipCommand(PARTNER_ID, DATE.atTime(21, 0), 20, "AI가 파악한 상대")
+        ));
+
+        // when: 시뮬레이션 결과 저장
+        simulationService.simulations(USER_ID, command);
+
+        // then: AI 관계는 그대로, 두 상대 모두 11시에 친밀도 0 관계가 더해져 첫 대화부터 사람 목록에 보인다
+        ArgumentCaptor<List<Relationship>> captor = ArgumentCaptor.captor();
+        then(relationshipRepository).should().saveAll(captor.capture());
+        assertThat(captor.getValue())
+                .extracting(Relationship::getPartnerUserId, Relationship::getIntimacy, Relationship::getUpdateTime, Relationship::getPartnerModel)
+                .containsExactlyInAnyOrder(
+                        tuple(PARTNER_ID, 20, DATE.atTime(21, 0), "AI가 파악한 상대"),
+                        tuple(PARTNER_ID, 0, DATE.atTime(11, 0), "아직 알게된 점이 없습니다."),
+                        tuple(newPartnerId, 0, DATE.atTime(11, 0), "아직 알게된 점이 없습니다."));
+    }
+
+    @Test
+    @DisplayName("AI 관계 갱신 시각이 첫 대화 시작과 같거나 더 이르면 친밀도 0 관계를 넣지 않는다")
+    void simulations_skips_zero_intimacy_relationship_when_ai_relationship_is_not_later() {
+        // given: 11시에 두 사람과 처음 대화했고, AI 관계는 한 사람은 11시 정각, 다른 사람은 10시
+        Long newPartnerId = 56L;
+        givenEmptyPreviousSimulation();
+        given(scenePartnerRepository.findPartnerUserIdsWithDialogueBeforeDate(USER_ID, List.of(PARTNER_ID, newPartnerId), DATE))
+                .willReturn(List.of());
+        SimulationsCommand command = new SimulationsCommand(USER_ID, DATE, List.of(
+                dialogueScene(DATE, 11, List.of(PARTNER_ID, newPartnerId))
+        ), List.of(), List.of(
+                new SimulationsRelationshipCommand(PARTNER_ID, DATE.atTime(11, 0), 20, "{}"),
+                new SimulationsRelationshipCommand(newPartnerId, DATE.atTime(10, 0), 20, "{}")
+        ));
+
+        // when: 시뮬레이션 결과 저장
+        simulationService.simulations(USER_ID, command);
+
+        // then: 0점 관계가 더 늦은 기록이 되어 AI 친밀도를 가리거나, 같은 시각으로 유니크 키에 걸리는 일이 없다
+        ArgumentCaptor<List<Relationship>> captor = ArgumentCaptor.captor();
+        then(relationshipRepository).should().saveAll(captor.capture());
+        assertThat(captor.getValue()).extracting(Relationship::getIntimacy).containsOnly(20);
+    }
+
+    @Test
+    @DisplayName("이전 날짜에 관계 기록이 있는 상대는 처음 대화해도 친밀도 0 관계를 넣지 않는다")
+    void simulations_skips_zero_intimacy_relationship_when_previous_relationship_exists() {
+        // given: 오늘 처음 대화했지만 대화 없이 쌓인 이전 날짜 관계 기록이 있다
+        givenEmptyPreviousSimulation();
+        given(scenePartnerRepository.findPartnerUserIdsWithDialogueBeforeDate(USER_ID, List.of(PARTNER_ID), DATE))
+                .willReturn(List.of());
+        given(relationshipRepository.findLatestByUserIdAndPartnerUserIdBeforeDate(USER_ID, PARTNER_ID, DATE))
+                .willReturn(Optional.of(relationship(20)));
+        SimulationsCommand command = new SimulationsCommand(USER_ID, DATE, List.of(
+                dialogueScene(DATE, 11, List.of(PARTNER_ID))
+        ), List.of(), List.of());
+
+        // when: 시뮬레이션 결과 저장
+        simulationService.simulations(USER_ID, command);
+
+        // then: 이미 목록에 보이는 상대의 친밀도를 0으로 떨어뜨리지 않는다
+        ArgumentCaptor<List<Relationship>> captor = ArgumentCaptor.captor();
+        then(relationshipRepository).should().saveAll(captor.capture());
+        assertThat(captor.getValue()).isEmpty();
     }
 
     @Test

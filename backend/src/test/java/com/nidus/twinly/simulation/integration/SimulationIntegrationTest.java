@@ -10,6 +10,8 @@ import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.notification.domain.AppNotificationScheduleType;
 import com.nidus.twinly.notification.entity.AppNotificationSchedule;
 import com.nidus.twinly.notification.repository.AppNotificationScheduleRepository;
+import com.nidus.twinly.relationship.entity.Relationship;
+import com.nidus.twinly.relationship.repository.RelationshipRepository;
 import com.nidus.twinly.support.AbstractIntegrationTest;
 import com.nidus.twinly.user.entity.User;
 import org.junit.jupiter.api.DisplayName;
@@ -46,6 +48,9 @@ class SimulationIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     AppNotificationScheduleRepository appNotificationScheduleRepository;
+
+    @Autowired
+    RelationshipRepository relationshipRepository;
 
     @Test
     @DisplayName("같은 날짜로 다시 반영하면 이전 장면·질문과 그 자식 행까지 정리되고 새 결과로 교체된다")
@@ -100,6 +105,33 @@ class SimulationIntegrationTest extends AbstractIntegrationTest {
                 .containsExactlyInAnyOrder(
                         tuple(partner.getId(), DATE, KstTimes.toInstant(DATE.atTime(9, 0))),
                         tuple(newcomer.getId(), DATE.plusDays(1), KstTimes.toInstant(DATE.plusDays(1).atTime(9, 0))));
+    }
+
+    @Test
+    @DisplayName("처음 대화한 날에는 첫 대화 시작 시각의 친밀도 0 관계가 AI 관계와 같은 날짜로 함께 저장되고, 다음 날에는 넣지 않는다")
+    void simulations_saves_zero_intimacy_relationship_only_on_first_dialogue_date() throws Exception {
+        // given: 첫날 한 상대와 처음 대화한 결과가 저장돼 있다
+        User me = saveUser();
+        User partner = saveUser();
+        User newcomer = saveUser();
+        simulateDay(me, DATE, List.of(partner.getId()), partner.getId(), 20).andExpect(status().isOk());
+
+        // when: 다음 날, 어제의 상대와 AI 관계가 오지 않은 새 상대가 함께한 대화 결과를 저장
+        simulateDay(me, DATE.plusDays(1), List.of(partner.getId(), newcomer.getId()), partner.getId(), 25)
+                .andExpect(status().isOk());
+
+        // then: 같은 날짜에 0점 관계와 AI 관계가 공존하고(유니크 키에 갱신 시각이 들어가 있어야 저장된다),
+        //       어제의 상대는 둘째 날 0점 관계 없이 AI 관계만, 새 상대는 0점 관계만 남는다
+        assertThat(relationshipRepository.findAll().stream()
+                .filter(relationship -> relationship.getUserId().equals(me.getId()))
+                .toList())
+                .extracting(Relationship::getPartnerUserId, Relationship::getDate, Relationship::getIntimacy,
+                        Relationship::getUpdateTime, Relationship::getPartnerModel)
+                .containsExactlyInAnyOrder(
+                        tuple(partner.getId(), DATE, 0, DATE.atTime(9, 0), "아직 알게된 점이 없습니다."),
+                        tuple(partner.getId(), DATE, 20, DATE.atTime(22, 0), "model-v1"),
+                        tuple(partner.getId(), DATE.plusDays(1), 25, DATE.plusDays(1).atTime(22, 0), "model-v1"),
+                        tuple(newcomer.getId(), DATE.plusDays(1), 0, DATE.plusDays(1).atTime(9, 0), "아직 알게된 점이 없습니다."));
     }
 
     @Test
