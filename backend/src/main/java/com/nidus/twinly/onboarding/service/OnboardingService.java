@@ -43,6 +43,7 @@ import com.nidus.twinly.organization.repository.OrganizationAffiliationRepositor
 import com.nidus.twinly.organization.repository.OrganizationDomainRepository;
 import com.nidus.twinly.organization.repository.OrganizationRepository;
 import com.nidus.twinly.organization.service.OrganizationCatalog;
+import com.nidus.twinly.user.domain.NicknamePolicy;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -61,11 +62,6 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class OnboardingService {
 
-    private static final Set<String> FORBIDDEN_NICKNAME_WORDS = Set.of(
-            "admin", "관리자", "운영자", "공지"
-    );
-
-    private static final Pattern NICKNAME_PATTERN = Pattern.compile("^[가-힣a-zA-Z0-9_-]{2,20}$");
     private static final Pattern AFFILIATION_NUMBER_PATTERN = Pattern.compile("^(?=.{1,50}$)[0-9]+(?:[-_][0-9]+)?$");
     private static final Pattern WHITESPACE_PATTERN = Pattern.compile("\\s+");
 
@@ -218,7 +214,7 @@ public class OnboardingService {
 
     public OnboardingProfileNicknameCheckResult profileNicknameCheck(AnonSessionSnapshot anonSessionSnapshot, OnboardingProfileNicknameCheckCommand command) {
         Long anonSessionId = anonSessionSnapshot.id();
-        String nickname = validateAndNormalizeNickname(command.nickname());
+        String nickname = NicknamePolicy.normalize(command.nickname());
 
         boolean isAvailable = !userRepository.existsByNickname(nickname)
                 && !anonSessionRepository.existsByNicknameAndIdNot(nickname, anonSessionId);
@@ -229,7 +225,7 @@ public class OnboardingService {
     @Transactional
     public void profileNickname(AnonSessionSnapshot anonSessionSnapshot, OnboardingProfileNicknameCommand command) {
         Long anonSessionId = anonSessionSnapshot.id();
-        String nickname = validateAndNormalizeNickname(command.nickname());
+        String nickname = NicknamePolicy.normalize(command.nickname());
 
         if (userRepository.existsByNickname(nickname)
                 || anonSessionRepository.existsByNicknameAndIdNot(nickname, anonSessionId)) {
@@ -302,24 +298,6 @@ public class OnboardingService {
         if (!policyIdsToRevoke.isEmpty()) {
             anonSessionAgreementRepository.revokeWithPreviousVersionsByAnonSessionIdAndPolicyIdIn(anonSessionId, policyIdsToRevoke);
         }
-    }
-
-    private String validateAndNormalizeNickname(String nickname) {
-        String trimmed = nickname.trim();
-
-        if (!NICKNAME_PATTERN.matcher(trimmed).matches()) {
-            throw new BusinessException(ErrorCode.INVALID_NICKNAME, "닉네임은 2~20자의 한글·영문·숫자·(_-)만 사용할 수 있습니다: " + trimmed);
-        }
-
-        String normalized = trimmed.toLowerCase();
-        boolean containsForbiddenWord = FORBIDDEN_NICKNAME_WORDS.stream()
-                .anyMatch(normalized::contains);
-
-        if (containsForbiddenWord) {
-            throw new BusinessException(ErrorCode.INVALID_NICKNAME);
-        }
-
-        return trimmed;
     }
 
     public OnboardingOrganizationsResult organizations() {

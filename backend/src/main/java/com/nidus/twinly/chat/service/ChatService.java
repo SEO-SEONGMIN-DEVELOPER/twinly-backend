@@ -293,7 +293,7 @@ public class ChatService {
                 ),
                 new ChatRoomPartnerResult(
                         partner.getId(),
-                        partner.displayGivenName(),
+                        partner.displayNickname(),
                         toProfilePhotoInfo(partner, partnerPhoto),
                         relationship != null ? relationship.getIntimacy() : 0,
                         partner.isWithdrawn()
@@ -353,7 +353,7 @@ public class ChatService {
                 ),
                 new ChatRoomDetailPartnerResult(
                         partner.getId(),
-                        partner.displayGivenName(),
+                        partner.displayNickname(),
                         toProfilePhotoInfo(partner, partnerPhoto),
                         intimacy,
                         RelationshipSpecificType.fromIntimacy(intimacy),

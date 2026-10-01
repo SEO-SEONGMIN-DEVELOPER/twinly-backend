@@ -92,7 +92,7 @@ class ChatPushNotifierUnitTest {
     }
 
     @Test
-    @DisplayName("발신자 실명과 썸네일 key 를 담아 발송한다")
+    @DisplayName("발신자 닉네임과 썸네일 key 를 담아 발송한다")
     void sends_with_sender_name_and_thumbnail() {
         // given: 썸네일이 있는 발신자
         given(pushRecipientResolver.resolve(anyList(), any())).willReturn(List.of(device()));
@@ -158,9 +158,9 @@ class ChatPushNotifierUnitTest {
 
     private User user() {
         return User.create(
-                "nickname",
+                "나야",
                 "김", "familyHash",
-                "나야", "givenHash",
+                "실명", "givenHash",
                 Gender.FEMALE,
                 "organization", "organizationHash",
                 "aff", "affHash",

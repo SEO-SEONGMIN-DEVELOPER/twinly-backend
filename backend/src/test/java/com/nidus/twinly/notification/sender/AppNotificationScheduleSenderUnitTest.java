@@ -71,12 +71,12 @@ class AppNotificationScheduleSenderUnitTest {
     }
 
     @Test
-    @DisplayName("첫 만남 예약은 피드를 남기지 않고 상대 이름을 담은 푸시 이벤트만 발행한다")
+    @DisplayName("첫 만남 예약은 피드를 남기지 않고 상대 닉네임을 담은 푸시 이벤트만 발행한다")
     void send_first_meeting_publishes_push_event_only() {
         // given: 도래한 첫 만남 예약과 조회 가능한 상대
         AppNotificationSchedule schedule = schedule(AppNotificationScheduleType.FIRST_MEETING);
         given(appNotificationScheduleRepository.findWithLockById(SCHEDULE_ID)).willReturn(Optional.of(schedule));
-        given(userRepository.findById(PARTNER)).willReturn(Optional.of(user("박", "상대")));
+        given(userRepository.findById(PARTNER)).willReturn(Optional.of(user("상대")));
 
         // when: 발송
         boolean sent = appNotificationScheduleSender.send(SCHEDULE_ID, NOW);
@@ -98,7 +98,7 @@ class AppNotificationScheduleSenderUnitTest {
     void send_first_meeting_skips_push_for_withdrawn_partner() {
         // given: 예약 이후 탈퇴한 상대
         AppNotificationSchedule schedule = schedule(AppNotificationScheduleType.FIRST_MEETING);
-        User withdrawn = user("박", "상대");
+        User withdrawn = user("상대");
         ReflectionTestUtils.setField(withdrawn, "deletedAt", Instant.now());
         given(appNotificationScheduleRepository.findWithLockById(SCHEDULE_ID)).willReturn(Optional.of(schedule));
         given(userRepository.findById(PARTNER)).willReturn(Optional.of(withdrawn));
@@ -150,11 +150,11 @@ class AppNotificationScheduleSenderUnitTest {
         return schedule;
     }
 
-    private User user(String familyName, String givenName) {
+    private User user(String nickname) {
         User user = User.create(
-                "nickname",
-                familyName, "familyHash",
-                givenName, "givenHash",
+                nickname,
+                "홍", "familyHash",
+                "실명", "givenHash",
                 Gender.MALE,
                 "organization", "organizationHash",
                 "aff", "affHash",

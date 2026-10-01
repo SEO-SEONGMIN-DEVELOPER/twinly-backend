@@ -14,6 +14,7 @@ public record SimulationPersonaResponse(
         Long userId,
         String familyName,
         String givenName,
+        String nickname,
         Gender gender,
         String organization,
         String affiliation,
@@ -23,6 +24,6 @@ public record SimulationPersonaResponse(
 ) {
 
     public static SimulationPersonaResponse from(SimulationPersonaResult result) {
-        return new SimulationPersonaResponse(result.userId(), result.familyName(), result.givenName(), result.gender(), result.organization(), result.affiliation(), result.birthDate(), result.personaElements(), result.poolNumber());
+        return new SimulationPersonaResponse(result.userId(), result.familyName(), result.givenName(), result.nickname(), result.gender(), result.organization(), result.affiliation(), result.birthDate(), result.personaElements(), result.poolNumber());
     }
 }

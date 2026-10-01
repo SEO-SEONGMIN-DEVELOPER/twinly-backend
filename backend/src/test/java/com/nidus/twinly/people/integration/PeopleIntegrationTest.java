@@ -90,7 +90,7 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.people.length()").value(2))
                 .andExpect(jsonPath("$.people[0].userId").value(partner1.getId().toString()))
-                .andExpect(jsonPath("$.people[0].userName").value(partner1.getGivenName()))
+                .andExpect(jsonPath("$.people[0].userName").value(partner1.getNickname()))
                 .andExpect(jsonPath("$.people[0].intimacy").value(40))
                 .andExpect(jsonPath("$.people[0].relationshipType").value("friend"))
                 .andExpect(jsonPath("$.people[0].isFavorited").value(false))
@@ -150,7 +150,7 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.people.length()").value(2))
                 .andExpect(jsonPath("$.people[0].userId").value(active.getId().toString()))
-                .andExpect(jsonPath("$.people[0].userName").value(active.getGivenName()))
+                .andExpect(jsonPath("$.people[0].userName").value(active.getNickname()))
                 .andExpect(jsonPath("$.people[0].profilePhoto").exists())
                 .andExpect(jsonPath("$.people[1].userId").value(withdrawn.getId().toString()))
                 .andExpect(jsonPath("$.people[1].userName").value(User.WITHDRAWN_NAME))
@@ -182,7 +182,7 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("프로필 조회: 실제 유저·관계 데이터를 관통해 성+이름과 친밀도 기반 관계 타입을 내려준다")
+    @DisplayName("프로필 조회: 실제 유저·관계 데이터를 관통해 닉네임과 친밀도 기반 관계 타입을 내려준다")
     void profile_success_end_to_end() throws Exception {
         // given: 친밀도 75인 상대를 실제 DB에 저장
         User me = saveUser();
@@ -196,7 +196,7 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
         // then: 200 + 타인이므로 이름만, 공개 미동의 필드는 null, 차단/즐겨찾기는 false
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.userId").value(partner.getId().toString()))
-                .andExpect(jsonPath("$.userName").value(partner.getGivenName()))
+                .andExpect(jsonPath("$.userName").value(partner.getNickname()))
                 .andExpect(jsonPath("$.intimacy").value(75))
                 .andExpect(jsonPath("$.relationshipType").value("bestFriend"))
                 .andExpect(jsonPath("$.isFavorited").value(false))
@@ -332,7 +332,7 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
         // then: 200 + 상대 정보와 7/20 이벤트(장소·미리보기·변화량 30·관계 변화)가 내려온다
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.partner.userId").value(partner.getId().toString()))
-                .andExpect(jsonPath("$.partner.userName").value(partner.getGivenName()))
+                .andExpect(jsonPath("$.partner.userName").value(partner.getNickname()))
                 .andExpect(jsonPath("$.partner.intimacy").value(40))
                 .andExpect(jsonPath("$.events.length()").value(1))
                 .andExpect(jsonPath("$.events[0].date").value("2026-07-20"))
@@ -375,8 +375,8 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.userInfos.length()").value(2))
                 .andExpect(jsonPath("$.userInfos[0].userId").value(me.getId().toString()))
                 .andExpect(jsonPath("$.userInfos[1].userId").value(partner.getId().toString()))
-                .andExpect(jsonPath("$.userInfos[0].userName").value(me.getGivenName()))
-                .andExpect(jsonPath("$.userInfos[1].userName").value(partner.getGivenName()));
+                .andExpect(jsonPath("$.userInfos[0].userName").value(me.getNickname()))
+                .andExpect(jsonPath("$.userInfos[1].userName").value(partner.getNickname()));
     }
 
     @Test

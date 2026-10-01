@@ -143,7 +143,7 @@ class SimulationScheduledNotificationIntegrationTest extends AbstractIntegration
         // then: 푸시는 커밋 뒤 별도 스레드에서 나가므로 기다렸다가 내용을 확인한다
         String json = sentMessages(1).getFirst();
         assertThat(json).contains("\"type\":\"oneTimePushOnly\"");
-        assertThat(json).contains(partner.displayGivenName() + "님을 처음 만났어요.");
+        assertThat(json).contains(partner.displayNickname() + "님을 처음 만났어요.");
         assertThat(json).doesNotContain("appNotificationId");
     }
 
@@ -209,7 +209,7 @@ class SimulationScheduledNotificationIntegrationTest extends AbstractIntegration
 
         // then: 저장 시점에 직접 보내지 않고, 일어난 시각 그대로 예약됐다가 곧바로 발송된다
         List<String> messages = sentMessages(2);
-        assertThat(messages).anySatisfy(json -> assertThat(json).contains(partner.displayGivenName() + "님을 처음 만났어요."));
+        assertThat(messages).anySatisfy(json -> assertThat(json).contains(partner.displayNickname() + "님을 처음 만났어요."));
         assertThat(messages).anySatisfy(json -> assertThat(json).contains("\"type\":\"friend\""));
         assertThat(appNotificationScheduleRepository.findAll())
                 .extracting(AppNotificationSchedule::getType, AppNotificationSchedule::getScheduledAt)

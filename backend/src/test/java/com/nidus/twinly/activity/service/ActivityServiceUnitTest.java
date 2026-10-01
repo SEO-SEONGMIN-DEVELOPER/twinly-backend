@@ -94,7 +94,7 @@ class ActivityServiceUnitTest {
         given(sceneRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of(scene));
         given(scenePartnerRepository.findAllBySceneIdIn(List.of(10L))).willReturn(List.of(scenePartner(10L, 100L)));
         given(userRepository.findAllById(List.of(USER_ID, 100L)))
-                .willReturn(List.of(user(USER_ID, "나", "자신"), user(100L, "홍", "길동")));
+                .willReturn(List.of(user(USER_ID, "자신"), user(100L, "길동")));
         given(questionRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of());
 
         // when: 활동 조회
@@ -122,7 +122,7 @@ class ActivityServiceUnitTest {
     }
 
     @Test
-    @DisplayName("씬 본문의 이름 자리는 실제 유저 이름으로 치환해서 내려간다")
+    @DisplayName("씬 본문의 이름 자리는 실제 유저 닉네임으로 치환해서 내려간다")
     void activity_replaces_name_placeholders() {
         // given: 나레이션·속마음에는 파트너(100), 대사에는 본인(1)의 이름 자리가 들어 있다
         Scene action = actionScene(10L, "v1", "학교 복도",
@@ -140,15 +140,15 @@ class ActivityServiceUnitTest {
         given(scenePartnerRepository.findAllBySceneIdIn(List.of(10L, 11L)))
                 .willReturn(List.of(scenePartner(10L, 100L), scenePartner(11L, 100L)));
         given(userRepository.findAllById(List.of(USER_ID, 100L)))
-                .willReturn(List.of(user(USER_ID, "나", "자신"), user(100L, "홍", "길동")));
+                .willReturn(List.of(user(USER_ID, "자신"), user(100L, "길동")));
         given(userRepository.findAllById(Set.of(USER_ID, 100L)))
-                .willReturn(List.of(user(USER_ID, "나", "자신"), user(100L, "홍", "길동")));
+                .willReturn(List.of(user(USER_ID, "자신"), user(100L, "길동")));
         given(questionRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of());
 
         // when: 활동 조회
         ActivityResult result = activityService.activity(USER_ID, DATE);
 
-        // then: 나레이션/속마음과 대사의 행동·본문 모두 이름으로 바뀐다
+        // then: 나레이션/속마음과 대사의 행동·본문 모두 닉네임으로 바뀐다
         ActivityActionSceneResult actionResult = (ActivityActionSceneResult) result.scenes().get(0);
         assertThat(actionResult.narration()).isEqualTo("길동과 복도를 걸었다");
         assertThat(actionResult.mind()).isEqualTo("길동은 오늘 조용했다");
@@ -169,7 +169,7 @@ class ActivityServiceUnitTest {
                 DATE.plusDays(1).atTime(1, 30), DATE.plusDays(1).atTime(2, 0),
                 "야식을 샀다", "출출했다");
         given(sceneRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of(scene));
-        given(userRepository.findAllById(List.of(USER_ID))).willReturn(List.of(user(USER_ID, "나", "자신")));
+        given(userRepository.findAllById(List.of(USER_ID))).willReturn(List.of(user(USER_ID, "자신")));
         given(questionRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of());
 
         // when: 7/26 회차 조회
@@ -194,7 +194,7 @@ class ActivityServiceUnitTest {
         Scene scene = dialogueScene(11L, "v1", "교실",
                 DATE.atTime(12, 0), DATE.atTime(12, 30), linesJson);
         given(sceneRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of(scene));
-        given(userRepository.findAllById(List.of(USER_ID))).willReturn(List.of(user(USER_ID, "나", "자신")));
+        given(userRepository.findAllById(List.of(USER_ID))).willReturn(List.of(user(USER_ID, "자신")));
         given(questionRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of());
 
         // when: 활동 조회
@@ -223,7 +223,7 @@ class ActivityServiceUnitTest {
         Scene broken = dialogueScene(11L, "v1", "교실",
                 DATE.atTime(12, 0), DATE.atTime(12, 30), "{\"not\":\"an array\"}");
         given(sceneRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of(broken));
-        given(userRepository.findAllById(List.of(USER_ID))).willReturn(List.of(user(USER_ID, "나", "자신")));
+        given(userRepository.findAllById(List.of(USER_ID))).willReturn(List.of(user(USER_ID, "자신")));
         given(questionRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of());
 
         // when: 활동 조회
@@ -242,7 +242,7 @@ class ActivityServiceUnitTest {
         Scene scene = dialogueScene(11L, "v1", "교실",
                 DATE.atTime(12, 0), DATE.atTime(12, 30), null);
         given(sceneRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of(scene));
-        given(userRepository.findAllById(List.of(USER_ID))).willReturn(List.of(user(USER_ID, "나", "자신")));
+        given(userRepository.findAllById(List.of(USER_ID))).willReturn(List.of(user(USER_ID, "자신")));
         given(questionRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of());
 
         // when: 활동 조회
@@ -258,7 +258,7 @@ class ActivityServiceUnitTest {
     void activity_maps_questions() {
         // given: 씬은 없고 PROMISE 질문 1개만 존재
         given(sceneRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of());
-        given(userRepository.findAllById(List.of(USER_ID))).willReturn(List.of(user(USER_ID, "나", "자신")));
+        given(userRepository.findAllById(List.of(USER_ID))).willReturn(List.of(user(USER_ID, "자신")));
         given(questionRepository.findAllByUserIdAndDate(USER_ID, DATE))
                 .willReturn(List.of(question(50L, DATE.atTime(21, 30), QuestionType.PROMISE,
                         "오늘 어땠어?", List.of("좋았어", "별로야"))));
@@ -282,7 +282,7 @@ class ActivityServiceUnitTest {
     void activity_without_scenes_returns_null_version() {
         // given: 해당 날짜에 씬도 질문도 없음
         given(sceneRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of());
-        given(userRepository.findAllById(List.of(USER_ID))).willReturn(List.of(user(USER_ID, "나", "자신")));
+        given(userRepository.findAllById(List.of(USER_ID))).willReturn(List.of(user(USER_ID, "자신")));
         given(questionRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of());
 
         // when: 활동 조회
@@ -307,7 +307,7 @@ class ActivityServiceUnitTest {
         given(scenePartnerRepository.findAllBySceneIdIn(List.of(10L, 11L)))
                 .willReturn(List.of(scenePartner(10L, 100L), scenePartner(11L, 100L), scenePartner(11L, 200L)));
         given(userRepository.findAllById(List.of(USER_ID, 100L, 200L)))
-                .willReturn(List.of(user(USER_ID, "나", "자신"), user(100L, "홍", "길동"), user(200L, "김", "철수")));
+                .willReturn(List.of(user(USER_ID, "자신"), user(100L, "길동"), user(200L, "철수")));
         given(photoRepository.findAllByUserIdInAndType(List.of(USER_ID, 100L, 200L), PhotoType.PROFILE))
                 .willReturn(List.of(Photo.create(100L, PhotoType.PROFILE, "profile/100/key", 10, 20, 100, 200, Instant.now())));
         given(cloudFrontService.getSignedUrl("profile/100/key")).willReturn("https://cdn.example.com/signed100");
@@ -316,7 +316,7 @@ class ActivityServiceUnitTest {
         // when: 활동 조회
         ActivityResult result = activityService.activity(USER_ID, DATE);
 
-        // then: 조회자 본인이 맨 앞에 오고, 여러 씬에 중복 등장한 유저도 한 건이며, 이름과 key/서명 URL이 함께 담긴다
+        // then: 조회자 본인이 맨 앞에 오고, 여러 씬에 중복 등장한 유저도 한 건이며, 닉네임과 key/서명 URL이 함께 담긴다
         assertThat(result.userInfos()).containsExactly(
                 new ActivityUserInfoResult(USER_ID, "자신", null),
                 new ActivityUserInfoResult(100L, "길동", new ProfilePhotoInfo("profile/100/key", "https://cdn.example.com/signed100",
@@ -331,7 +331,7 @@ class ActivityServiceUnitTest {
         Scene scene = actionScene(10L, "v1", "집",
                 DATE.atTime(9, 0), DATE.atTime(10, 0), "쉬었다", "편안했다");
         given(sceneRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of(scene));
-        given(userRepository.findAllById(List.of(USER_ID))).willReturn(List.of(user(USER_ID, "나", "자신")));
+        given(userRepository.findAllById(List.of(USER_ID))).willReturn(List.of(user(USER_ID, "자신")));
         given(questionRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of());
 
         // when: 활동 조회
@@ -397,9 +397,9 @@ class ActivityServiceUnitTest {
         return question;
     }
 
-    private User user(Long id, String familyName, String givenName) {
+    private User user(Long id, String nickname) {
         User user = User.create(
-                "nick", familyName, "familyHash", givenName, "givenHash",
+                nickname, "홍", "familyHash", "실명", "givenHash",
                 Gender.MALE, "organization", "organizationHash", "aff", "affHash", "affNo", "affNoHash",
                 "2000-01-01", "birthHash", "phone", "phoneHash", "email", "emailHash", null, null, null, null);
         ReflectionTestUtils.setField(user, "id", id);

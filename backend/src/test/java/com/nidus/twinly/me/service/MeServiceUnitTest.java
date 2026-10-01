@@ -3,6 +3,7 @@ package com.nidus.twinly.me.service;
 import com.nidus.twinly.activity.domain.QuestionType;
 import com.nidus.twinly.activity.entity.Question;
 import com.nidus.twinly.activity.repository.QuestionRepository;
+import com.nidus.twinly.anon.repository.AnonSessionRepository;
 import com.nidus.twinly.app.domain.AppPlatform;
 import com.nidus.twinly.app.domain.AppVersion;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
@@ -46,6 +47,8 @@ import com.nidus.twinly.legal.service.PolicyUrlResolver;
 import com.nidus.twinly.me.domain.HesitationDuration;
 import com.nidus.twinly.me.domain.HesitationStatus;
 import com.nidus.twinly.me.dto.command.MeAppNotificationsReadAllCommand;
+import com.nidus.twinly.me.dto.command.MeChangeProfileNicknameCommand;
+import com.nidus.twinly.me.dto.command.MeCheckProfileNicknameCommand;
 import com.nidus.twinly.me.dto.command.MeChangeProfileVisibilitySettingCommand;
 import com.nidus.twinly.me.dto.command.MeChangePushNotificationsCommand;
 import com.nidus.twinly.me.dto.command.MeGrantConsentsCommand;
@@ -61,6 +64,7 @@ import com.nidus.twinly.me.dto.command.MeSendFeedbackCommand;
 import com.nidus.twinly.me.dto.command.MeSubmitTendencyAnswerCommand;
 import com.nidus.twinly.me.dto.command.MeSurveyAnswerCommand;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsChatTargetResult;
+import com.nidus.twinly.me.dto.result.MeCheckProfileNicknameResult;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsProfileTargetResult;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsResult;
 import com.nidus.twinly.me.dto.result.MeConsentsResult;
@@ -123,6 +127,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.BeanUtils;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
@@ -177,6 +182,9 @@ class MeServiceUnitTest {
 
     @Mock
     UserRepository userRepository;
+
+    @Mock
+    AnonSessionRepository anonSessionRepository;
 
     @Mock
     PolicyNameRepository policyNameRepository;
@@ -457,6 +465,7 @@ class MeServiceUnitTest {
 
         // then: 유저 정보 + 서명 URL 반환
         assertThat(result.userId()).isEqualTo(ME);
+        assertThat(result.nickname()).isEqualTo("nick");
         assertThat(result.familyName()).isEqualTo("홍");
         assertThat(result.givenName()).isEqualTo("길동");
         assertThat(result.affiliation()).isEqualTo("니두스");
@@ -1576,9 +1585,9 @@ class MeServiceUnitTest {
                         List.of("차분", "탐험", "계획", "다정", "안정"),
                         new PersonalityTypePart("01", "탐구적인", "형용사 한 줄", "형용사 설명"),
                         new PersonalityTypePart("110", "수호자", "명사 한 줄", "명사 설명"),
-                        "personality-types/v1/01110.png"));
-        given(cloudFrontService.getPublicUrl("personality-types/v1/01110.png"))
-                .willReturn("https://cdn.example/personality-types/v1/01110.png");
+                        "personality-types/v1/110.webp"));
+        given(cloudFrontService.getPublicUrl("personality-types/v1/110.webp"))
+                .willReturn("https://cdn.example/personality-types/v1/110.webp");
 
         // when: 성격 유형 조회
         MePersonalityTypeResult result = meService.personalityType(ME);
@@ -1589,7 +1598,7 @@ class MeServiceUnitTest {
                 List.of("차분", "탐험", "계획", "다정", "안정"),
                 new MePersonalityTypePartResult("형용사 한 줄", "형용사 설명"),
                 new MePersonalityTypePartResult("명사 한 줄", "명사 설명"),
-                "https://cdn.example/personality-types/v1/01110.png"));
+                "https://cdn.example/personality-types/v1/110.webp"));
         then(cloudFrontService).should(never()).getSignedUrl(anyString());
     }
 
@@ -1853,5 +1862,179 @@ class MeServiceUnitTest {
         ArgumentCaptor<List<UserFeedbackOption>> captor = ArgumentCaptor.forClass(List.class);
         then(userFeedbackOptionRepository).should().saveAll(captor.capture());
         return captor.getValue();
+    }
+
+    // ---------------------------------------------------------------- 닉네임 수정
+
+    @Test
+    @DisplayName("닉네임 수정은 앞뒤 공백을 제거한 값으로 유저 닉네임을 바꾸고 즉시 flush한다")
+    void changeProfileNickname_trims_and_updates_user() {
+        // given: 유저가 존재하고 다른 유저·온보딩 세션 어디에도 같은 닉네임이 없음
+        User user = user();
+        given(userRepository.findById(ME)).willReturn(Optional.of(user));
+        given(userRepository.existsByNicknameAndIdNot("트윈이", ME)).willReturn(false);
+        given(anonSessionRepository.existsByNickname("트윈이")).willReturn(false);
+
+        // when: 앞뒤 공백이 있는 닉네임으로 수정
+        meService.changeProfileNickname(ME, new MeChangeProfileNicknameCommand("  트윈이  "));
+
+        // then: 공백이 제거된 닉네임이 반영되고 유니크 위반을 잡기 위해 flush까지 수행
+        assertThat(user.getNickname()).isEqualTo("트윈이");
+        then(userRepository).should().saveAndFlush(user);
+    }
+
+    @Test
+    @DisplayName("자기 닉네임의 대소문자만 바꾸는 경우 본인 행을 중복 검사에서 제외해 성공한다")
+    void changeProfileNickname_case_only_change_excludes_self() {
+        // given: 현재 닉네임이 Twinly이고, 본인을 뺀 중복 검사에서는 걸리지 않음
+        User user = user();
+        user.changeNickname("Twinly");
+        given(userRepository.findById(ME)).willReturn(Optional.of(user));
+        given(userRepository.existsByNicknameAndIdNot("twinly", ME)).willReturn(false);
+        given(anonSessionRepository.existsByNickname("twinly")).willReturn(false);
+
+        // when: 대소문자만 다른 닉네임으로 수정
+        meService.changeProfileNickname(ME, new MeChangeProfileNicknameCommand("twinly"));
+
+        // then: 본인 닉네임에 막히지 않고 바뀐 값이 반영됨
+        assertThat(user.getNickname()).isEqualTo("twinly");
+    }
+
+    @Test
+    @DisplayName("다른 유저가 쓰는 닉네임이면 NICKNAME_ALREADY_USED 예외가 발생하고 닉네임을 바꾸지 않는다")
+    void changeProfileNickname_taken_by_other_user_throws() {
+        // given: 다른 유저가 이미 사용 중인 닉네임
+        User user = user();
+        given(userRepository.findById(ME)).willReturn(Optional.of(user));
+        given(userRepository.existsByNicknameAndIdNot("twinly", ME)).willReturn(true);
+
+        // when & then: NICKNAME_ALREADY_USED 예외 발생 + 닉네임·저장 변화 없음
+        assertThatThrownBy(() -> meService.changeProfileNickname(ME, new MeChangeProfileNicknameCommand("twinly")))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.NICKNAME_ALREADY_USED);
+
+        assertThat(user.getNickname()).isEqualTo("nick");
+        then(userRepository).should(never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("온보딩 중인 익명 세션이 잡아 둔 닉네임이면 NICKNAME_ALREADY_USED 예외가 발생한다")
+    void changeProfileNickname_taken_by_onboarding_session_throws() {
+        // given: 가입 유저 중에는 없지만 온보딩 중인 세션이 사용 중인 닉네임
+        User user = user();
+        given(userRepository.findById(ME)).willReturn(Optional.of(user));
+        given(userRepository.existsByNicknameAndIdNot("twinly", ME)).willReturn(false);
+        given(anonSessionRepository.existsByNickname("twinly")).willReturn(true);
+
+        // when & then: NICKNAME_ALREADY_USED 예외 발생 + 닉네임·저장 변화 없음
+        assertThatThrownBy(() -> meService.changeProfileNickname(ME, new MeChangeProfileNicknameCommand("twinly")))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.NICKNAME_ALREADY_USED);
+
+        assertThat(user.getNickname()).isEqualTo("nick");
+        then(userRepository).should(never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("닉네임이 2자 미만이면 INVALID_NICKNAME 예외가 발생하고 저장소를 조회하지 않는다")
+    void changeProfileNickname_too_short_throws() {
+        // when & then: 1자 닉네임은 INVALID_NICKNAME으로 거절 + 유저·중복 조회 없음
+        assertThatThrownBy(() -> meService.changeProfileNickname(ME, new MeChangeProfileNicknameCommand("a")))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_NICKNAME);
+
+        then(userRepository).should(never()).findById(anyLong());
+        then(anonSessionRepository).should(never()).existsByNickname(any());
+    }
+
+    @Test
+    @DisplayName("닉네임 수정 시 유저가 없으면 USER_NOT_FOUND 예외가 발생한다")
+    void changeProfileNickname_user_not_found_throws() {
+        // given: 유저가 존재하지 않음
+        given(userRepository.findById(ME)).willReturn(Optional.empty());
+
+        // when & then: USER_NOT_FOUND 예외 발생
+        assertThatThrownBy(() -> meService.changeProfileNickname(ME, new MeChangeProfileNicknameCommand("twinly")))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.USER_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("검사를 통과한 뒤 다른 요청이 같은 닉네임을 선점하면 NICKNAME_ALREADY_USED 예외로 변환된다")
+    void changeProfileNickname_when_lost_race_throws_already_used() {
+        // given: 검사 시점에는 비어 있었지만 flush 시점에 유니크 제약이 걸리는 상황
+        User user = user();
+        given(userRepository.findById(ME)).willReturn(Optional.of(user));
+        given(userRepository.existsByNicknameAndIdNot("twinly", ME)).willReturn(false);
+        given(anonSessionRepository.existsByNickname("twinly")).willReturn(false);
+        given(userRepository.saveAndFlush(user))
+                .willThrow(new DataIntegrityViolationException("uk_users_nickname"));
+
+        // when & then: 500이 아니라 도메인 에러(409)로 나간다
+        assertThatThrownBy(() -> meService.changeProfileNickname(ME, new MeChangeProfileNicknameCommand("twinly")))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.NICKNAME_ALREADY_USED);
+    }
+
+    // ---------------------------------------------------------------- 닉네임 중복 확인
+
+    @Test
+    @DisplayName("닉네임 중복 확인은 앞뒤 공백을 제거한 값이 다른 유저·온보딩 세션 어디에도 없으면 사용 가능으로 응답한다")
+    void checkProfileNickname_available() {
+        // given: 본인을 뺀 유저와 온보딩 세션 어디에도 같은 닉네임이 없음
+        given(userRepository.existsByNicknameAndIdNot("트윈이", ME)).willReturn(false);
+        given(anonSessionRepository.existsByNickname("트윈이")).willReturn(false);
+
+        // when: 앞뒤 공백이 있는 닉네임으로 중복 확인
+        MeCheckProfileNicknameResult result = meService.checkProfileNickname(ME, new MeCheckProfileNicknameCommand("  트윈이  "));
+
+        // then: 사용 가능
+        assertThat(result.isAvailable()).isTrue();
+    }
+
+    @Test
+    @DisplayName("닉네임 중복 확인은 다른 유저가 쓰는 닉네임이면 사용 불가로 응답하고 온보딩 세션은 조회하지 않는다")
+    void checkProfileNickname_taken_by_other_user() {
+        // given: 본인을 뺀 다른 유저가 사용 중
+        given(userRepository.existsByNicknameAndIdNot("twinly", ME)).willReturn(true);
+
+        // when: 닉네임 중복 확인
+        MeCheckProfileNicknameResult result = meService.checkProfileNickname(ME, new MeCheckProfileNicknameCommand("twinly"));
+
+        // then: 사용 불가 + 이미 판정이 끝났으므로 온보딩 세션 조회 생략
+        assertThat(result.isAvailable()).isFalse();
+        then(anonSessionRepository).should(never()).existsByNickname(any());
+    }
+
+    @Test
+    @DisplayName("닉네임 중복 확인은 온보딩 중인 익명 세션이 잡아 둔 닉네임이면 사용 불가로 응답한다")
+    void checkProfileNickname_taken_by_onboarding_session() {
+        // given: 가입 유저 중에는 없지만 온보딩 중인 세션이 사용 중
+        given(userRepository.existsByNicknameAndIdNot("twinly", ME)).willReturn(false);
+        given(anonSessionRepository.existsByNickname("twinly")).willReturn(true);
+
+        // when: 닉네임 중복 확인
+        MeCheckProfileNicknameResult result = meService.checkProfileNickname(ME, new MeCheckProfileNicknameCommand("twinly"));
+
+        // then: 사용 불가
+        assertThat(result.isAvailable()).isFalse();
+    }
+
+    @Test
+    @DisplayName("닉네임 중복 확인은 금지어가 포함되면 INVALID_NICKNAME 예외가 발생하고 저장소를 조회하지 않는다")
+    void checkProfileNickname_with_forbidden_word_throws() {
+        // when & then: 금지어(관리자)가 들어간 닉네임은 INVALID_NICKNAME으로 거절 + 중복 조회 없음
+        assertThatThrownBy(() -> meService.checkProfileNickname(ME, new MeCheckProfileNicknameCommand("관리자트윈")))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_NICKNAME);
+
+        then(userRepository).should(never()).existsByNicknameAndIdNot(any(), anyLong());
+        then(anonSessionRepository).should(never()).existsByNickname(any());
     }
 }

@@ -23,7 +23,7 @@ public class PersonalityTypeLoader {
     private static final Set<String> ADJECTIVE_CODES = Set.of("00", "01", "10", "11");
     private static final Set<String> NOUN_CODES = Set.of("000", "001", "010", "011", "100", "101", "110", "111");
     private static final int ADJECTIVE_CODE_LENGTH = 2;
-    private static final String CODE_PLACEHOLDER = "{code}";
+    private static final String NOUN_CODE_PLACEHOLDER = "{nounCode}";
     private static final char HIGH = '1';
 
     private final ObjectMapper objectMapper;
@@ -47,8 +47,8 @@ public class PersonalityTypeLoader {
     private String loadImageKeyPattern(JsonNode node) {
         String pattern = node != null && node.isString() ? node.asString() : null;
 
-        if (pattern == null || !pattern.contains(CODE_PLACEHOLDER)) {
-            throw new IllegalStateException("imageKeyPattern 에 " + CODE_PLACEHOLDER + " 가 있어야 합니다: " + pattern);
+        if (pattern == null || !pattern.contains(NOUN_CODE_PLACEHOLDER)) {
+            throw new IllegalStateException("imageKeyPattern 에 " + NOUN_CODE_PLACEHOLDER + " 가 있어야 합니다: " + pattern);
         }
 
         return pattern;
@@ -100,7 +100,7 @@ public class PersonalityTypeLoader {
                 keywords(code),
                 adjective,
                 noun,
-                imageKeyPattern.replace(CODE_PLACEHOLDER, code)
+                imageKeyPattern.replace(NOUN_CODE_PLACEHOLDER, noun.code())
         );
     }
 

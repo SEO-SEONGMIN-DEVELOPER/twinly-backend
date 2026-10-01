@@ -79,7 +79,7 @@ class ShowcaseControllerUnitTest {
                 .andExpect(jsonPath("$.scenes[1].with[0]").value("2"))
                 .andExpect(jsonPath("$.scenes[1].lines[0].t").value("bubble"))
                 .andExpect(jsonPath("$.scenes[1].lines[0].userRef").value("2"))
-                .andExpect(jsonPath("$.userInfos[0].userName").value("김OO"))
+                .andExpect(jsonPath("$.userInfos[0].userName").value("민수짱"))
                 .andExpect(jsonPath("$.userInfos[0].gender").value("male"))
                 .andExpect(jsonPath("$.userInfos[0].organization").value("한국대"))
                 .andExpect(jsonPath("$.userInfos[0].profilePhoto").doesNotExist())
@@ -110,11 +110,11 @@ class ShowcaseControllerUnitTest {
                 LocalDate.parse("2026-08-18"),
                 Instant.parse("2026-08-18T04:20:11Z"),
                 List.of(
-                        new ShowcaseActionSceneResult(88101L, "action", startsAt, endsAt, "학교 정문", List.of(), "김OO이 뛰었다.", "아슬아슬했다."),
+                        new ShowcaseActionSceneResult(88101L, "action", startsAt, endsAt, "학교 정문", List.of(), "민수짱이 뛰었다.", "아슬아슬했다."),
                         new ShowcaseDialogueSceneResult(88102L, "dialogue", startsAt, endsAt, "식당", List.of(2L),
                                 List.of(new ShowcaseBubbleLineResult("bubble", 2L, "웃으며", "여기 앉아.", startsAt)))
                 ),
-                List.of(new ShowcaseUserInfoResult(1L, "김OO", Gender.MALE, "한국대")),
+                List.of(new ShowcaseUserInfoResult(1L, "민수짱", Gender.MALE, "한국대")),
                 new ShowcaseUserCountsResult(12840, 320, "성신여대")
         );
     }

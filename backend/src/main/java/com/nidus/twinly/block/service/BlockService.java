@@ -65,7 +65,7 @@ public class BlockService {
                 .map(block -> {
                     User user = usersById.get(block.getBlockedUserId());
 
-                    String name = user.displayGivenName();
+                    String name = user.displayNickname();
 
                     return new BlockListItemResult(block.getBlockedUserId(), name);
                 })

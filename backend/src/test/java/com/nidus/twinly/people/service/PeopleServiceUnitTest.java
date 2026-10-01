@@ -144,7 +144,7 @@ class PeopleServiceUnitTest {
         given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), any(LocalDateTime.class)))
                 .willReturn(List.of(10L, 20L));
         given(userRepository.findAllById(List.of(10L, 20L)))
-                .willReturn(List.of(user(10L, "홍", "길동"), user(20L, "김", "철수")));
+                .willReturn(List.of(user(10L, "길동"), user(20L, "철수")));
         given(photoRepository.findAllByUserIdInAndType(List.of(10L, 20L), PhotoType.PROFILE))
                 .willReturn(List.of(Photo.create(10L, PhotoType.PROFILE, "key10", 10, 20, 100, 200, Instant.now())));
         given(cloudFrontService.getSignedUrl("key10")).willReturn("https://cdn.example.com/signed10");
@@ -198,7 +198,7 @@ class PeopleServiceUnitTest {
         given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(3), any(LocalDateTime.class)))
                 .willReturn(List.of(10L, 20L, 30L));
         given(userRepository.findAllById(List.of(10L, 20L)))
-                .willReturn(List.of(user(10L, "홍", "길동"), user(20L, "김", "철수")));
+                .willReturn(List.of(user(10L, "길동"), user(20L, "철수")));
 
         // when: limit 2로 사람 목록 조회
         PeopleResult result = peopleService.people(ME, null, 2);
@@ -213,11 +213,11 @@ class PeopleServiceUnitTest {
     @DisplayName("목록에서 탈퇴한 파트너는 사진 조회 대상에서 빠져 photo가 null이 된다")
     void people_excludes_withdrawn_partner_from_photo_lookup() {
         // given: 파트너 2명 중 20이 탈퇴한 상태
-        User withdrawn = user(20L, "김", "철수");
+        User withdrawn = user(20L, "철수");
         ReflectionTestUtils.setField(withdrawn, "deletedAt", Instant.now());
         given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), any(LocalDateTime.class))).willReturn(List.of(10L, 20L));
         given(userRepository.findAllById(List.of(10L, 20L)))
-                .willReturn(List.of(user(10L, "홍", "길동"), withdrawn));
+                .willReturn(List.of(user(10L, "길동"), withdrawn));
         given(photoRepository.findAllByUserIdInAndType(List.of(10L), PhotoType.PROFILE))
                 .willReturn(List.of(Photo.create(10L, PhotoType.PROFILE, "key10", 10, 20, 100, 200, Instant.now())));
         given(cloudFrontService.getSignedUrl("key10")).willReturn("https://cdn.example.com/signed10");
@@ -225,7 +225,7 @@ class PeopleServiceUnitTest {
         // when: 사람 목록 조회
         PeopleResult result = peopleService.people(ME, null, null);
 
-        // then: 탈퇴한 파트너는 목록에 남되 이름·사진이 가려진다
+        // then: 탈퇴한 파트너는 목록에 남되 닉네임·사진이 가려진다
         assertThat(result.people()).extracting(PeopleItemResult::userName)
                 .containsExactly("길동", User.WITHDRAWN_NAME);
         assertThat(result.people().get(0).profilePhoto()).isNotNull();
@@ -288,7 +288,7 @@ class PeopleServiceUnitTest {
     @DisplayName("프로필을 조회하면 대상은 상대, 조회자는 나로 조회 기록을 위임한다")
     void profile_records_view() {
         // given: 조회 가능한 상대
-        given(userRepository.findById(20L)).willReturn(Optional.of(user(20L, "김", "철수")));
+        given(userRepository.findById(20L)).willReturn(Optional.of(user(20L, "철수")));
 
         // when: 프로필 조회
         peopleService.profile(ME, 20L);
@@ -309,10 +309,10 @@ class PeopleServiceUnitTest {
     }
 
     @Test
-    @DisplayName("프로필은 상대 이름만 담고 공개 동의된 필드만 노출하며 차단/즐겨찾기 상태를 반영한다")
+    @DisplayName("프로필은 상대 닉네임만 담고 공개 동의된 필드만 노출하며 차단/즐겨찾기 상태를 반영한다")
     void profile_discloses_only_agreed_fields() {
         // given: 소속만 공개 동의하고, 즐겨찾기·차단된 상대
-        User partner = user(20L, "김", "철수");
+        User partner = user(20L, "철수");
         ReflectionTestUtils.setField(partner, "affiliation", "트윈리대학교");
         ReflectionTestUtils.setField(partner, "affiliationNumber", "20260001");
         given(userRepository.findById(20L)).willReturn(Optional.of(partner));
@@ -328,7 +328,7 @@ class PeopleServiceUnitTest {
         // when: 프로필 조회
         PeopleProfileResult result = peopleService.profile(ME, 20L);
 
-        // then: 상대는 이름만 + 동의 필드만 노출 + 즐겨찾기/차단 반영
+        // then: 상대는 닉네임만 + 동의 필드만 노출 + 즐겨찾기/차단 반영
         assertThat(result.userName()).isEqualTo("철수");
         assertThat(result.intimacy()).isEqualTo(75);
         assertThat(result.relationshipType()).isEqualTo(RelationshipType.BEST_FRIEND);
@@ -341,10 +341,10 @@ class PeopleServiceUnitTest {
     }
 
     @Test
-    @DisplayName("탈퇴한 상대의 프로필은 이름·사진·공개 필드를 모두 가리고 조회조차 하지 않는다")
+    @DisplayName("탈퇴한 상대의 프로필은 닉네임·사진·공개 필드를 모두 가리고 조회조차 하지 않는다")
     void profile_of_withdrawn_partner_is_masked() {
         // given: 소속을 공개 동의했지만 탈퇴한 상대
-        User partner = user(20L, "김", "철수");
+        User partner = user(20L, "철수");
         ReflectionTestUtils.setField(partner, "affiliation", "트윈리대학교");
         ReflectionTestUtils.setField(partner, "deletedAt", Instant.now());
         given(userRepository.findById(20L)).willReturn(Optional.of(partner));
@@ -510,7 +510,7 @@ class PeopleServiceUnitTest {
     @DisplayName("이벤트 목록을 조회하면 EVENT 종류로 열람 기록을 위임한다")
     void events_records_view_as_event_kind() {
         // given: 조회 가능한 상대
-        given(userRepository.findById(20L)).willReturn(Optional.of(user(20L, "김", "철수")));
+        given(userRepository.findById(20L)).willReturn(Optional.of(user(20L, "철수")));
 
         // when: 이벤트 목록 조회
         peopleService.events(ME, 20L, null, null);
@@ -537,7 +537,7 @@ class PeopleServiceUnitTest {
         LocalDate day = LocalDate.of(2026, 7, 19);
         String brokenJson = "{\"not\":\"an array\"}";
 
-        given(userRepository.findById(20L)).willReturn(Optional.of(user(20L, "김", "철수")));
+        given(userRepository.findById(20L)).willReturn(Optional.of(user(20L, "철수")));
         given(relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(eq(ME), eq(20L), any(LocalDateTime.class))).willReturn(Optional.empty());
         given(sceneRepository.findDistinctDatesFromCursorByUserIdAndWithPartnerUserId(eq(ME), eq(20L), isNull(), eq(21), any(LocalDateTime.class)))
                 .willReturn(List.of(day));
@@ -563,7 +563,7 @@ class PeopleServiceUnitTest {
         LocalDate before = LocalDate.of(2026, 7, 17);
         LocalDate day = LocalDate.of(2026, 7, 20);
 
-        given(userRepository.findById(20L)).willReturn(Optional.of(user(20L, "김", "철수")));
+        given(userRepository.findById(20L)).willReturn(Optional.of(user(20L, "철수")));
         given(relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(eq(ME), eq(20L), any(LocalDateTime.class)))
                 .willReturn(Optional.of(relationship(ME, 20L, day, 35, "{}")));
         given(sceneRepository.findDistinctDatesFromCursorByUserIdAndWithPartnerUserId(eq(ME), eq(20L), isNull(), eq(21), any(LocalDateTime.class)))
@@ -591,7 +591,7 @@ class PeopleServiceUnitTest {
         LocalDate day2 = LocalDate.of(2026, 7, 20);
         String linesJson = "[{\"t\":\"narr\",\"text\":\"안녕이라고 했다\"}]";
 
-        given(userRepository.findById(20L)).willReturn(Optional.of(user(20L, "김", "철수")));
+        given(userRepository.findById(20L)).willReturn(Optional.of(user(20L, "철수")));
         given(relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(eq(ME), eq(20L), any(LocalDateTime.class)))
                 .willReturn(Optional.of(relationship(ME, 20L, day2, 45, "{}")));
         given(sceneRepository.findDistinctDatesFromCursorByUserIdAndWithPartnerUserId(eq(ME), eq(20L), isNull(), eq(21), any(LocalDateTime.class)))
@@ -644,19 +644,19 @@ class PeopleServiceUnitTest {
     }
 
     @Test
-    @DisplayName("이벤트 목록의 미리보기도 이름 자리를 실제 유저 이름으로 치환한다")
+    @DisplayName("이벤트 목록의 미리보기도 이름 자리를 실제 유저 닉네임으로 치환한다")
     void events_replaces_name_placeholders_in_preview() {
         // given: 첫 씬의 나레이션에 상대(20)의 이름 자리가 들어 있다
         LocalDate day = LocalDate.of(2026, 7, 20);
 
-        given(userRepository.findById(20L)).willReturn(Optional.of(user(20L, "김", "철수")));
+        given(userRepository.findById(20L)).willReturn(Optional.of(user(20L, "철수")));
         given(relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(eq(ME), eq(20L), any(LocalDateTime.class))).willReturn(Optional.empty());
         given(sceneRepository.findDistinctDatesFromCursorByUserIdAndWithPartnerUserId(eq(ME), eq(20L), isNull(), eq(21), any(LocalDateTime.class)))
                 .willReturn(List.of(day));
         given(sceneRepository.findAllByUserIdAndWithPartnerUserIdAndDateIn(eq(ME), eq(20L), eq(List.of(day)), any(LocalDateTime.class)))
                 .willReturn(List.of(scene(100L, ME, day, "v1", "카페", SceneType.ACTION, "{user_20}와 카페에 갔다", null, null)));
         given(relationshipRepository.findForDeltaRange(eq(ME), eq(20L), eq(day), eq(day), any(LocalDateTime.class))).willReturn(List.of());
-        given(userRepository.findAllById(Set.of(20L))).willReturn(List.of(user(20L, "김", "철수")));
+        given(userRepository.findAllById(Set.of(20L))).willReturn(List.of(user(20L, "철수")));
 
         // when: 이벤트 목록 조회
         PeopleEventsResult result = peopleService.events(ME, 20L, null, null);
@@ -666,7 +666,7 @@ class PeopleServiceUnitTest {
     }
 
     @Test
-    @DisplayName("이벤트 상세의 씬 본문도 이름 자리를 실제 유저 이름으로 치환한다")
+    @DisplayName("이벤트 상세의 씬 본문도 이름 자리를 실제 유저 닉네임으로 치환한다")
     void event_replaces_name_placeholders() {
         given(userRepository.existsById(20L)).willReturn(true);
         // given: 나레이션과 속마음에 상대(20)의 이름 자리가 들어 있는 행동 씬
@@ -677,8 +677,8 @@ class PeopleServiceUnitTest {
         given(scenePartnerRepository.findAllBySceneIdIn(List.of(100L)))
                 .willReturn(List.of(scenePartner(100L, 20L)));
         given(userRepository.findAllById(List.of(ME, 20L)))
-                .willReturn(List.of(user(ME, "나", "자신"), user(20L, "김", "철수")));
-        given(userRepository.findAllById(Set.of(20L))).willReturn(List.of(user(20L, "김", "철수")));
+                .willReturn(List.of(user(ME, "자신"), user(20L, "철수")));
+        given(userRepository.findAllById(Set.of(20L))).willReturn(List.of(user(20L, "철수")));
 
         // when: 이벤트 상세 조회
         PeopleEventResult result = peopleService.event(ME, 20L, date);
@@ -701,7 +701,7 @@ class PeopleServiceUnitTest {
         given(scenePartnerRepository.findAllBySceneIdIn(List.of(100L)))
                 .willReturn(List.of(scenePartner(100L, 20L)));
         given(userRepository.findAllById(List.of(ME, 20L)))
-                .willReturn(List.of(user(ME, "나", "자신"), user(20L, "김", "철수")));
+                .willReturn(List.of(user(ME, "자신"), user(20L, "철수")));
 
         // when: 이벤트 상세 조회
         PeopleEventResult result = peopleService.event(ME, 20L, date);
@@ -737,7 +737,7 @@ class PeopleServiceUnitTest {
         given(scenePartnerRepository.findAllBySceneIdIn(List.of(100L)))
                 .willReturn(List.of(scenePartner(100L, 20L), scenePartner(100L, 30L)));
         given(userRepository.findAllById(List.of(ME, 20L, 30L)))
-                .willReturn(List.of(user(ME, "나", "자신"), user(20L, "김", "철수"), user(30L, "박", "영희")));
+                .willReturn(List.of(user(ME, "자신"), user(20L, "철수"), user(30L, "영희")));
         given(photoRepository.findAllByUserIdInAndType(List.of(ME, 20L, 30L), PhotoType.PROFILE))
                 .willReturn(List.of(Photo.create(20L, PhotoType.PROFILE, "profile/20/key", 10, 20, 100, 200, Instant.now())));
         given(cloudFrontService.getSignedUrl("profile/20/key")).willReturn("https://cdn.example.com/signed20");
@@ -757,7 +757,7 @@ class PeopleServiceUnitTest {
     @DisplayName("해당 날짜에 씬이 없으면 빈 씬 목록과 null version을 반환한다")
     void event_without_scenes_returns_empty() {
         given(userRepository.existsById(20L)).willReturn(true);
-        given(userRepository.findAllById(List.of(ME))).willReturn(List.of(user(ME, "나", "자신")));
+        given(userRepository.findAllById(List.of(ME))).willReturn(List.of(user(ME, "자신")));
 
         // when: 씬이 없는 날짜로 이벤트 상세 조회
         PeopleEventResult result = peopleService.event(ME, 20L, LocalDate.of(2026, 7, 20));
@@ -797,9 +797,9 @@ class PeopleServiceUnitTest {
 
     // ------------------------------------------------------------------ fixtures
 
-    private User user(Long id, String familyName, String givenName) {
+    private User user(Long id, String nickname) {
         User user = User.create(
-                "nick" + id, familyName, "familyHash", givenName, "givenHash",
+                nickname, "홍", "familyHash", "실명", "givenHash",
                 Gender.MALE, "organization", "organizationHash", "aff", "affHash", "affNo", "affNoHash",
                 "2000-01-01", "birthHash", "phone", "phoneHash", "email", "emailHash", null, null, null, null);
         ReflectionTestUtils.setField(user, "id", id);

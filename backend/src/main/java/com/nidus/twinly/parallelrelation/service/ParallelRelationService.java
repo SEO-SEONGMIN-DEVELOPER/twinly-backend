@@ -193,8 +193,8 @@ public class ParallelRelationService {
         ParallelRelationResult rendered = parallelRelationResolver.render(
                 pair.getRelation(),
                 pair.getStoryIndex(),
-                codeOwner.displayGivenName(),
-                submitter.displayGivenName()
+                codeOwner.displayNickname(),
+                submitter.displayNickname()
         );
 
         return new ParallelRelationDetailResult(
@@ -212,7 +212,7 @@ public class ParallelRelationService {
     }
 
     private ParallelRelationUserResult toUserResult(User user, Photo photo) {
-        return new ParallelRelationUserResult(user.getId(), user.displayGivenName(), toProfilePhotoInfo(user, photo));
+        return new ParallelRelationUserResult(user.getId(), user.displayNickname(), toProfilePhotoInfo(user, photo));
     }
 
     private ProfilePhotoInfo toProfilePhotoInfo(User user, Photo photo) {

@@ -13,14 +13,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 class UserTest {
 
     @Test
-    @DisplayName("탈퇴하지 않은 유저의 표시 이름은 내 프로필용 성+이름과 그 외 화면용 이름으로 나뉜다")
+    @DisplayName("탈퇴하지 않은 유저의 표시 이름은 내 프로필용 성+이름과 그 외 화면용 닉네임으로 나뉜다")
     void display_names_of_active_user() {
         // given: 탈퇴하지 않은 유저
         User user = user(null);
 
         // then: 두 표기 형식은 화면마다 의도적으로 다르다
         assertThat(user.displayFullName()).isEqualTo("홍길동");
-        assertThat(user.displayGivenName()).isEqualTo("길동");
+        assertThat(user.displayNickname()).isEqualTo("nick");
     }
 
     @Test
@@ -31,7 +31,7 @@ class UserTest {
 
         // then: 표기 형식과 무관하게 실명이 노출되지 않는다
         assertThat(user.displayFullName()).isEqualTo(User.WITHDRAWN_NAME);
-        assertThat(user.displayGivenName()).isEqualTo(User.WITHDRAWN_NAME);
+        assertThat(user.displayNickname()).isEqualTo(User.WITHDRAWN_NAME);
     }
 
     @Test
@@ -41,9 +41,9 @@ class UserTest {
         User user = user(null);
         user.requestWithdrawal(Duration.ofDays(15));
 
-        // then: 탈퇴로 판정되고 실명이 노출되지 않는다
+        // then: 탈퇴로 판정되고 닉네임이 노출되지 않는다
         assertThat(user.isWithdrawn()).isTrue();
-        assertThat(user.displayGivenName()).isEqualTo(User.WITHDRAWN_NAME);
+        assertThat(user.displayNickname()).isEqualTo(User.WITHDRAWN_NAME);
     }
 
     @Test
@@ -54,9 +54,9 @@ class UserTest {
         user.requestWithdrawal(Duration.ofDays(15));
         user.cancelWithdrawal();
 
-        // then: 탈퇴 판정이 풀리고 실명이 다시 표시된다
+        // then: 탈퇴 판정이 풀리고 닉네임이 다시 표시된다
         assertThat(user.isWithdrawn()).isFalse();
-        assertThat(user.displayGivenName()).isEqualTo("길동");
+        assertThat(user.displayNickname()).isEqualTo("nick");
     }
 
     private User user(Instant deletedAt) {

@@ -55,7 +55,7 @@ public class ChatPushNotifier {
                 chat.getId(),
                 chat.getRoomId(),
                 chat.getSenderUserId(),
-                sender.displayGivenName(),
+                sender.displayNickname(),
                 chat.getMessage(),
                 thumbnailKey(chat.getSenderUserId()),
                 chat.getSentAt());

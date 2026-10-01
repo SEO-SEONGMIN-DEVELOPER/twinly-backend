@@ -32,13 +32,10 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Function;
@@ -58,13 +55,8 @@ public class ShowcaseService {
     private static final String UNIVERSITY_SUFFIX = "대학교";
     private static final String SCHOOL_SUFFIX = "학교";
     private static final long TARGET_USER_REF = 1L;
-    private static final String MASKED_GIVEN_NAME = "OO";
     private static final int TOTAL_USER_COUNT_OFFSET = 20;
     private static final int SAME_ORGANIZATION_USER_COUNT_OFFSET = 8;
-    private static final List<String> PSEUDONYM_FAMILY_NAMES = List.of(
-            "김", "이", "박", "최", "정", "강", "조", "윤", "장", "임",
-            "한", "오", "서", "신", "권", "황", "안", "송", "류", "홍"
-    );
 
     private final ShowcaseRepository showcaseRepository;
     private final SceneRepository sceneRepository;
@@ -93,7 +85,8 @@ public class ShowcaseService {
         Set<Long> displayedUserIds = displayedUserIds(userRefByUserId, scenes);
         Map<Long, User> userById = userRepository.findAllById(displayedUserIds).stream()
                 .collect(Collectors.toMap(User::getId, Function.identity()));
-        Map<Long, String> maskedNameByUserId = maskedNameByUserId(showcase.getId(), displayedUserIds, userById);
+        Map<Long, String> nameByUserId = userById.values().stream()
+                .collect(Collectors.toMap(User::getId, User::displayNickname));
 
         return new ShowcaseTodayResult(
                 showcase.getId(),
@@ -101,9 +94,9 @@ public class ShowcaseService {
                 date,
                 Instant.now(),
                 scenes.stream()
-                        .map(scene -> toSceneResult(scene, partnerUserIdsBySceneId.get(scene.getId()), sceneLinesBySceneId.get(scene.getId()), userRefByUserId, maskedNameByUserId))
+                        .map(scene -> toSceneResult(scene, partnerUserIdsBySceneId.get(scene.getId()), sceneLinesBySceneId.get(scene.getId()), userRefByUserId, nameByUserId))
                         .toList(),
-                toUserInfoResults(userRefByUserId, userById, maskedNameByUserId),
+                toUserInfoResults(userRefByUserId, userById, nameByUserId),
                 toUserCountsResult(userId)
         );
     }
@@ -177,33 +170,11 @@ public class ShowcaseService {
         return userIds;
     }
 
-    private Map<Long, String> maskedNameByUserId(Long showcaseId, Set<Long> displayedUserIds, Map<Long, User> userById) {
-        List<String> familyNames = new ArrayList<>(PSEUDONYM_FAMILY_NAMES);
-        Collections.shuffle(familyNames, new Random(showcaseId));
-
-        Map<Long, String> maskedNameByUserId = new HashMap<>();
-        int index = 0;
-
-        for (Long userId : displayedUserIds) {
-            User user = userById.get(userId);
-
-            if (user == null) {
-                continue;
-            }
-
-            maskedNameByUserId.put(userId, user.isWithdrawn()
-                    ? User.WITHDRAWN_NAME
-                    : familyNames.get(index++ % familyNames.size()) + MASKED_GIVEN_NAME);
-        }
-
-        return maskedNameByUserId;
-    }
-
     private ShowcaseSceneResult toSceneResult(Scene scene,
                                               List<Long> partnerUserIds,
                                               List<SceneLine> sceneLines,
                                               Map<Long, Long> userRefByUserId,
-                                              Map<Long, String> maskedNameByUserId) {
+                                              Map<Long, String> nameByUserId) {
         OffsetDateTime startsAt = KstTimes.toKstOffsetDateTime(scene.getStartsAt());
         OffsetDateTime endsAt = KstTimes.toKstOffsetDateTime(scene.getEndsAt());
         List<Long> with = toUserRefs(partnerUserIds, userRefByUserId);
@@ -216,8 +187,8 @@ public class ShowcaseService {
                     endsAt,
                     scene.getPlace(),
                     with,
-                    sceneNameRenderer.render(scene.getNarration(), maskedNameByUserId),
-                    sceneNameRenderer.render(scene.getMind(), maskedNameByUserId)
+                    sceneNameRenderer.render(scene.getNarration(), nameByUserId),
+                    sceneNameRenderer.render(scene.getMind(), nameByUserId)
             );
             case DIALOGUE -> new ShowcaseDialogueSceneResult(
                     scene.getId(),
@@ -226,7 +197,7 @@ public class ShowcaseService {
                     endsAt,
                     scene.getPlace(),
                     with,
-                    toLineResults(sceneLines, userRefByUserId, maskedNameByUserId)
+                    toLineResults(sceneLines, userRefByUserId, nameByUserId)
             );
         };
     }
@@ -241,9 +212,9 @@ public class ShowcaseService {
                 .toList();
     }
 
-    private List<ShowcaseLineResult> toLineResults(List<SceneLine> sceneLines, Map<Long, Long> userRefByUserId, Map<Long, String> maskedNameByUserId) {
+    private List<ShowcaseLineResult> toLineResults(List<SceneLine> sceneLines, Map<Long, Long> userRefByUserId, Map<Long, String> nameByUserId) {
         return sceneLines.stream()
-                .map(line -> sceneNameRenderer.render(line, maskedNameByUserId))
+                .map(line -> sceneNameRenderer.render(line, nameByUserId))
                 .map(line -> toLineResult(line, userRefByUserId))
                 .toList();
     }
@@ -285,7 +256,7 @@ public class ShowcaseService {
         }
     }
 
-    private List<ShowcaseUserInfoResult> toUserInfoResults(Map<Long, Long> userRefByUserId, Map<Long, User> userById, Map<Long, String> maskedNameByUserId) {
+    private List<ShowcaseUserInfoResult> toUserInfoResults(Map<Long, Long> userRefByUserId, Map<Long, User> userById, Map<Long, String> nameByUserId) {
         List<ShowcaseUserInfoResult> userInfos = new ArrayList<>();
 
         userRefByUserId.forEach((userId, userRef) -> {
@@ -293,7 +264,7 @@ public class ShowcaseService {
 
             userInfos.add(new ShowcaseUserInfoResult(
                     userRef,
-                    maskedNameByUserId.get(userId),
+                    nameByUserId.get(userId),
                     user.getGender(),
                     toDisplayOrganization(user.getOrganization())
             ));

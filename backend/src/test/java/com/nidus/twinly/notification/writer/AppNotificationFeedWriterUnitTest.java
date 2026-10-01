@@ -51,16 +51,16 @@ class AppNotificationFeedWriterUnitTest {
     AppNotificationFeedWriter appNotificationFeedWriter;
 
     @Test
-    @DisplayName("match 피드는 양쪽 유저에게 각각 상대 실명을 제목에 담아 채팅방을 가리키도록 저장된다")
+    @DisplayName("match 피드는 양쪽 유저에게 각각 상대 닉네임을 제목에 담아 채팅방을 가리키도록 저장된다")
     void writeMatch_saves_chat_target_feed_for_both_users() {
-        // given: 양쪽 유저 실명 조회 가능
-        given(userRepository.findById(ME)).willReturn(Optional.of(user(ME, "김", "나야")));
-        given(userRepository.findById(PARTNER)).willReturn(Optional.of(user(PARTNER, "박", "상대")));
+        // given: 양쪽 유저 닉네임 조회 가능
+        given(userRepository.findById(ME)).willReturn(Optional.of(user(ME, "나야")));
+        given(userRepository.findById(PARTNER)).willReturn(Optional.of(user(PARTNER, "상대")));
 
         // when: 채팅방 생성 알림 기록
         appNotificationFeedWriter.writeMatch(ROOM_ID, ME, PARTNER);
 
-        // then: 2건이 저장되고 각각 제목에 상대 실명 + CHAT 타깃(roomId)을 가짐
+        // then: 2건이 저장되고 각각 제목에 상대 닉네임 + CHAT 타깃(roomId)을 가짐
         List<AppNotificationFeed> feeds = savedFeeds();
         assertThat(feeds).hasSize(2);
 
@@ -80,8 +80,8 @@ class AppNotificationFeedWriterUnitTest {
     @Test
     @DisplayName("friend 피드는 같은 날짜로 만든 기존 피드를 지운 뒤 상대 프로필을 가리키도록 1건만 저장된다")
     void writeFriend_replaces_same_date_feed_and_saves_profile_target() {
-        // given: 상대 실명 조회 가능
-        given(userRepository.findById(PARTNER)).willReturn(Optional.of(user(PARTNER, "박", "상대")));
+        // given: 상대 닉네임 조회 가능
+        given(userRepository.findById(PARTNER)).willReturn(Optional.of(user(PARTNER, "상대")));
 
         // when: 친구 승격 알림 기록
         given(appNotificationFeedRepository.save(any())).willAnswer(invocation -> invocation.getArgument(0));
@@ -108,10 +108,10 @@ class AppNotificationFeedWriterUnitTest {
     }
 
     @Test
-    @DisplayName("탈퇴한 상대의 실명은 제목·본문 어디에도 노출되지 않는다")
+    @DisplayName("탈퇴한 상대의 닉네임은 제목·본문 어디에도 노출되지 않는다")
     void writeFriend_uses_withdrawn_display_name() {
         // given: 탈퇴한 상대
-        User withdrawn = user(PARTNER, "박", "상대");
+        User withdrawn = user(PARTNER, "상대");
         ReflectionTestUtils.setField(withdrawn, "deletedAt", java.time.Instant.now());
         given(userRepository.findById(PARTNER)).willReturn(Optional.of(withdrawn));
 
@@ -120,15 +120,15 @@ class AppNotificationFeedWriterUnitTest {
 
         appNotificationFeedWriter.writeFriend(ME, PARTNER, DATE);
 
-        // then: 제목·본문 어디에도 원래 실명이 노출되지 않음
+        // then: 제목·본문 어디에도 원래 닉네임이 노출되지 않음
         ArgumentCaptor<AppNotificationFeed> captor = ArgumentCaptor.forClass(AppNotificationFeed.class);
         then(appNotificationFeedRepository).should().save(captor.capture());
-        assertThat(captor.getValue().getTitle()).doesNotContain("박상대");
-        assertThat(captor.getValue().getBody()).doesNotContain("박상대");
+        assertThat(captor.getValue().getTitle()).doesNotContain("상대");
+        assertThat(captor.getValue().getBody()).doesNotContain("상대");
     }
 
     @Test
-    @DisplayName("실명을 채울 상대가 없으면 USER_NOT_FOUND 예외가 발생하고 피드를 저장하지 않는다")
+    @DisplayName("닉네임을 채울 상대가 없으면 USER_NOT_FOUND 예외가 발생하고 피드를 저장하지 않는다")
     void writeMatch_partner_not_found_throws() {
         // given: 상대 유저 행이 없음
         given(userRepository.findById(PARTNER)).willReturn(Optional.empty());
@@ -156,11 +156,11 @@ class AppNotificationFeedWriterUnitTest {
                 .orElseThrow();
     }
 
-    private User user(Long id, String familyName, String givenName) {
+    private User user(Long id, String nickname) {
         User user = User.create(
-                "nickname",
-                familyName, "familyHash",
-                givenName, "givenHash",
+                nickname,
+                "홍", "familyHash",
+                "실명", "givenHash",
                 Gender.MALE,
                 "organization", "organizationHash",
                 "aff", "affHash",
