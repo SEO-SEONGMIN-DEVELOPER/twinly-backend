@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "imageKeyPattern": "personality-types/v1/{code}.png",
+  "imageKeyPattern": "personality-types/v1/{nounCode}.webp",
   "axes": [
     { "axis": "extraversion", "high": "활발", "low": "차분" },
     { "axis": "openness", "high": "탐험", "low": "현실" },

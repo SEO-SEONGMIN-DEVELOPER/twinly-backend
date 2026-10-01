@@ -7,6 +7,9 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -23,14 +26,14 @@ class PersonalityTypeLoaderUnitTest {
     }
 
     @Test
-    @DisplayName("유형 이름은 형용사 뒤에 명사를 붙인 것이고, 형용사·명사는 각자의 한 줄 소개와 설명을 그대로 갖고, 그림 key 는 코드로 짓는다")
+    @DisplayName("유형 이름은 형용사 뒤에 명사를 붙인 것이고, 형용사·명사는 각자의 한 줄 소개와 설명을 그대로 갖고, 그림 key 는 명사 코드로 짓는다")
     void get_combines_adjective_and_noun() {
         // when: 차분·탐험·계획·다정·안정
         PersonalityType type = loader.get("01110");
 
         // then: 설계 문서 2장의 탐구적인(01)·수호자(110) 항목과 같다
         assertThat(type.code()).isEqualTo("01110");
-        assertThat(type.imageKey()).isEqualTo("personality-types/v1/01110.png");
+        assertThat(type.imageKey()).isEqualTo("personality-types/v1/110.webp");
         assertThat(type.name()).isEqualTo("탐구적인 수호자");
         assertThat(type.keywords()).containsExactly("차분", "탐험", "계획", "다정", "안정");
         assertThat(type.adjective().tagline()).isEqualTo("혼자 깊이 파고들며 넓혀 가는");
@@ -50,7 +53,7 @@ class PersonalityTypeLoaderUnitTest {
     }
 
     @Test
-    @DisplayName("00000부터 11111까지 32개 코드 모두 이름과 형용사·명사의 한 줄 소개·설명이 있고 축 단어 조합과 그림 key 가 서로 겹치지 않는다")
+    @DisplayName("00000부터 11111까지 32개 코드 모두 이름과 형용사·명사의 한 줄 소개·설명이 있고, 축 단어 조합은 서로 겹치지 않으며, 그림은 명사가 같으면 같고 다르면 다르다")
     void get_resolves_every_code() {
         // given: 다섯 자리 이진수 32개
         List<String> codes = IntStream.range(0, 32)
@@ -60,7 +63,7 @@ class PersonalityTypeLoaderUnitTest {
         // when: 32개 코드 모두 조회
         List<PersonalityType> types = codes.stream().map(loader::get).toList();
 
-        // then: 모두 이름과 한 줄 소개·설명이 있고, 32유형이 서로 다른 축 단어 조합과 서로 다른 그림을 가진다
+        // then: 모두 이름과 한 줄 소개·설명이 있고, 32유형이 서로 다른 축 단어 조합을 가지며, 그림은 명사 8종에 한 장씩이다
         assertThat(types).allSatisfy(type -> {
             assertThat(type.name()).as(type.code()).isNotBlank();
             assertThat(type.keywords()).as(type.code()).hasSize(5);
@@ -70,6 +73,11 @@ class PersonalityTypeLoaderUnitTest {
             assertThat(type.noun().description()).as(type.code()).isNotBlank();
         });
         assertThat(types).extracting(PersonalityType::keywords).doesNotHaveDuplicates();
-        assertThat(types).extracting(PersonalityType::imageKey).doesNotHaveDuplicates();
+        Map<String, Set<String>> imageKeysByNoun = types.stream()
+                .collect(Collectors.groupingBy(type -> type.noun().code(),
+                        Collectors.mapping(PersonalityType::imageKey, Collectors.toSet())));
+        assertThat(imageKeysByNoun).hasSize(8);
+        assertThat(imageKeysByNoun.values()).allSatisfy(keys -> assertThat(keys).hasSize(1));
+        assertThat(imageKeysByNoun.values().stream().flatMap(Set::stream).distinct().count()).isEqualTo(8);
     }
 }
