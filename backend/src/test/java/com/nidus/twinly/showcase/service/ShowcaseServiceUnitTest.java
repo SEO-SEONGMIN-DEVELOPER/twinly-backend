@@ -71,7 +71,7 @@ class ShowcaseServiceUnitTest {
     @Mock
     CurrentSeasonReader currentSeasonReader;
 
-    // 이름 치환과 대사 파싱은 진짜 구현이 돌아야 치환 결과를 검증할 수 있다.
+    // 이름 치환과 대사 파싱은 진짜 구현이 돌아야 마스킹 결과를 검증할 수 있다.
     @Spy
     SceneNameRenderer sceneNameRenderer = new SceneNameRenderer();
 
@@ -297,8 +297,8 @@ class ShowcaseServiceUnitTest {
     }
 
     @Test
-    @DisplayName("본문과 userInfos의 이름은 닉네임으로 내려간다")
-    void today_uses_nicknames_in_scene_text() {
+    @DisplayName("본문과 userInfos의 이름은 실제 이름이 아닌 같은 가명(랜덤 성+OO)으로 치환된다")
+    void today_masks_names_in_scene_text() {
         // given: 나레이션에 이름 자리가 들어 있는 행동 씬
         given(showcaseRepository.findByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(showcase()));
         given(sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(anyLong(), any()))
@@ -310,10 +310,37 @@ class ShowcaseServiceUnitTest {
         // when: 오늘 관람 조회
         ShowcaseTodayResult result = showcaseService.today(VIEWER_ID);
 
-        // then: 본문과 userInfos에 같은 닉네임이 쓰이고 실명은 나가지 않는다
+        // then: 이름은 한 글자 성+OO 형태이고, 본문과 userInfos에 같은 가명이 쓰인다
+        String userName = result.userInfos().get(0).userName();
         ShowcaseActionSceneResult scene = (ShowcaseActionSceneResult) result.scenes().get(0);
-        assertThat(result.userInfos().get(0).userName()).isEqualTo("nick204");
-        assertThat(scene.narration()).isEqualTo("nick204이 뛰어서 등교했다.");
+        assertThat(userName).matches("[가-힣]OO");
+        assertThat(scene.narration()).isEqualTo(userName + "이 뛰어서 등교했다.");
+    }
+
+    @Test
+    @DisplayName("같은 관람을 다시 조회해도 가명이 유지되고, 한 관람 안의 서로 다른 유저는 서로 다른 가명을 받는다")
+    void today_pseudonyms_are_stable_and_distinct() {
+        // given: 대상과 동행자가 함께 나오는 씬
+        given(showcaseRepository.findByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(showcase()));
+        given(sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(anyLong(), any()))
+                .willReturn(List.of(actionScene(88101L, "{user_204}와 {user_311}이 등교했다.", null)));
+        given(scenePartnerRepository.findAllBySceneIdIn(anyList()))
+                .willReturn(List.of(ScenePartner.create(88101L, PARTNER_ID)));
+        given(userRepository.findAllById(any()))
+                .willReturn(List.of(user(TARGET_ID, "김", "민수"), user(PARTNER_ID, "김", "지훈")));
+        givenViewerCounts();
+
+        // when: 같은 관람을 두 번 조회
+        ShowcaseTodayResult first = showcaseService.today(VIEWER_ID);
+        ShowcaseTodayResult second = showcaseService.today(VIEWER_ID);
+
+        // then: 두 응답의 가명이 같고, 실제 성이 같은 두 유저도 서로 다른 가명을 받는다
+        List<String> firstNames = first.userInfos().stream().map(ShowcaseUserInfoResult::userName).toList();
+        List<String> secondNames = second.userInfos().stream().map(ShowcaseUserInfoResult::userName).toList();
+        assertThat(firstNames).isEqualTo(secondNames);
+        assertThat(firstNames).doesNotHaveDuplicates();
+        assertThat(((ShowcaseActionSceneResult) first.scenes().get(0)).narration())
+                .isEqualTo(firstNames.get(0) + "와 " + firstNames.get(1) + "이 등교했다.");
     }
 
     @Test
