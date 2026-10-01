@@ -3,8 +3,13 @@ package com.nidus.twinly.me.service;
 import com.nidus.twinly.activity.domain.QuestionType;
 import com.nidus.twinly.activity.entity.Question;
 import com.nidus.twinly.activity.repository.QuestionRepository;
+import com.nidus.twinly.app.domain.AppPlatform;
+import com.nidus.twinly.app.domain.AppVersion;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
 import com.nidus.twinly.common.crypto.BlindIndexHasher;
+import com.nidus.twinly.common.feedback.FeedbackOption;
+import com.nidus.twinly.common.feedback.FeedbackOptionLoader;
+import com.nidus.twinly.common.feedback.FeedbackType;
 import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.common.persona.PersonalityType;
 import com.nidus.twinly.common.persona.PersonalityTypeCalculator;
@@ -45,6 +50,7 @@ import com.nidus.twinly.me.dto.command.MeProfileCommand;
 import com.nidus.twinly.me.dto.command.MeProfilePhotoCommitCommand;
 import com.nidus.twinly.me.dto.command.MeProfilePhotoPresignCommand;
 import com.nidus.twinly.me.dto.command.MeRevokeConsentsCommand;
+import com.nidus.twinly.me.dto.command.MeSendFeedbackCommand;
 import com.nidus.twinly.me.dto.command.MeSubmitTendencyAnswerCommand;
 import com.nidus.twinly.me.dto.command.MeSurveyAnswerCommand;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsChatTargetResult;
@@ -55,6 +61,8 @@ import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsTargetResult;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsUnreadCountResult;
 import com.nidus.twinly.me.dto.result.MeConsentsItemResult;
 import com.nidus.twinly.me.dto.result.MeConsentsResult;
+import com.nidus.twinly.me.dto.result.MeFeedbackOptionsItemResult;
+import com.nidus.twinly.me.dto.result.MeFeedbackOptionsResult;
 import com.nidus.twinly.me.dto.result.MeHesitationsResult;
 import com.nidus.twinly.me.dto.result.MePersonalityTypePartResult;
 import com.nidus.twinly.me.dto.result.MePersonalityTypeResult;
@@ -94,10 +102,14 @@ import com.nidus.twinly.user.entity.DisclosureAgreement;
 import com.nidus.twinly.user.entity.PersonaElement;
 import com.nidus.twinly.user.entity.Photo;
 import com.nidus.twinly.user.entity.User;
+import com.nidus.twinly.user.entity.UserFeedback;
+import com.nidus.twinly.user.entity.UserFeedbackOption;
 import com.nidus.twinly.user.entity.UserSurveyAnswer;
 import com.nidus.twinly.user.repository.DisclosureAgreementRepository;
 import com.nidus.twinly.user.repository.PersonaElementRepository;
 import com.nidus.twinly.user.repository.PhotoRepository;
+import com.nidus.twinly.user.repository.UserFeedbackOptionRepository;
+import com.nidus.twinly.user.repository.UserFeedbackRepository;
 import com.nidus.twinly.user.repository.UserRepository;
 import com.nidus.twinly.user.repository.UserSurveyAnswerRepository;
 import com.nidus.twinly.user.repository.UserTendencyAnswerRepository;
@@ -158,6 +170,8 @@ public class MeService {
     private final RelationshipRepository relationshipRepository;
     private final UserSurveyAnswerRepository userSurveyAnswerRepository;
     private final UserTendencyAnswerRepository userTendencyAnswerRepository;
+    private final UserFeedbackRepository userFeedbackRepository;
+    private final UserFeedbackOptionRepository userFeedbackOptionRepository;
 
     private final PolicyCatalog policyCatalog;
     private final PolicyUrlResolver policyUrlResolver;
@@ -166,6 +180,7 @@ public class MeService {
     private final PersonalityTypeCalculator personalityTypeCalculator;
     private final PersonalityTypeLoader personalityTypeLoader;
     private final TendencyLoader tendencyLoader;
+    private final FeedbackOptionLoader feedbackOptionLoader;
 
     public MeProfilePhotoPresignResult profilePhotoPresign(Long userId, MeProfilePhotoPresignCommand command) {
         PhotoPresignResult presign = presignService.presignPhoto(userId, command.contentType(), PhotoType.PROFILE);
@@ -708,5 +723,42 @@ public class MeService {
         }
 
         userTendencyAnswerRepository.upsert(userId, questionId, optionId);
+    }
+
+    public MeFeedbackOptionsResult feedbackOptions(FeedbackType type) {
+        List<MeFeedbackOptionsItemResult> options = feedbackOptionLoader.getOptions(type).stream()
+                .map(option -> new MeFeedbackOptionsItemResult(option.id(), option.label()))
+                .toList();
+
+        return new MeFeedbackOptionsResult(options);
+    }
+
+    @Transactional
+    public void sendFeedback(Long userId, MeSendFeedbackCommand command, AppPlatform appPlatform, AppVersion appVersion) {
+        String detail = command.detail() == null || command.detail().isBlank() ? null : command.detail().strip();
+
+        if (command.type() == FeedbackType.SUGGESTION && detail == null) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "피드백 내용이 비어 있습니다: " + command.type());
+        }
+
+        Set<Long> availableOptionIds = feedbackOptionLoader.getOptions(command.type()).stream()
+                .map(FeedbackOption::id)
+                .collect(Collectors.toSet());
+
+        List<Long> optionIds = command.optionIds().stream()
+                .filter(availableOptionIds::contains)
+                .distinct()
+                .toList();
+
+        UserFeedback feedback = userFeedbackRepository.save(UserFeedback.create(
+                userId,
+                command.type(),
+                detail,
+                appPlatform,
+                appVersion != null ? appVersion.toString() : null));
+
+        userFeedbackOptionRepository.saveAll(optionIds.stream()
+                .map(optionId -> UserFeedbackOption.create(feedback.getId(), optionId))
+                .toList());
     }
 }

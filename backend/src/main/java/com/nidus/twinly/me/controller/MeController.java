@@ -1,6 +1,10 @@
 package com.nidus.twinly.me.controller;
 
 import com.nidus.twinly.aichat.service.UserAiChatService;
+import com.nidus.twinly.app.domain.AppPlatform;
+import com.nidus.twinly.app.domain.AppVersion;
+import com.nidus.twinly.app.filter.AppBlockFilter;
+import com.nidus.twinly.common.feedback.FeedbackType;
 import com.nidus.twinly.common.web.RequestId;
 import com.nidus.twinly.me.domain.HesitationDuration;
 import com.nidus.twinly.me.domain.HesitationStatus;
@@ -15,6 +19,7 @@ import com.nidus.twinly.me.dto.command.MeProfileCommand;
 import com.nidus.twinly.me.dto.command.MeProfilePhotoCommitCommand;
 import com.nidus.twinly.me.dto.command.MeProfilePhotoPresignCommand;
 import com.nidus.twinly.me.dto.command.MeRevokeConsentsCommand;
+import com.nidus.twinly.me.dto.command.MeSendFeedbackCommand;
 import com.nidus.twinly.me.dto.command.MeSubmitTendencyAnswerCommand;
 import com.nidus.twinly.me.dto.command.MeSurveyAnswerCommand;
 import com.nidus.twinly.me.dto.request.MeAiChatMessageRequest;
@@ -28,6 +33,7 @@ import com.nidus.twinly.me.dto.request.MeProfileRequest;
 import com.nidus.twinly.me.dto.request.MeProfilePhotoCommitRequest;
 import com.nidus.twinly.me.dto.request.MeProfilePhotoPresignRequest;
 import com.nidus.twinly.me.dto.request.MeRevokeConsentsRequest;
+import com.nidus.twinly.me.dto.request.MeSendFeedbackRequest;
 import com.nidus.twinly.me.dto.request.MeSubmitTendencyAnswerRequest;
 import com.nidus.twinly.me.dto.request.MeSurveyAnswerRequest;
 import com.nidus.twinly.me.dto.response.MeAiChatMessageResponse;
@@ -35,6 +41,7 @@ import com.nidus.twinly.me.dto.response.MeAiChatStartResponse;
 import com.nidus.twinly.me.dto.response.MeAppNotificationsFeedsResponse;
 import com.nidus.twinly.me.dto.response.MeAppNotificationsUnreadCountResponse;
 import com.nidus.twinly.me.dto.response.MeConsentsResponse;
+import com.nidus.twinly.me.dto.response.MeFeedbackOptionsResponse;
 import com.nidus.twinly.me.dto.response.MeHesitationsResponse;
 import com.nidus.twinly.me.dto.response.MePersonalityTypeResponse;
 import com.nidus.twinly.me.dto.response.MePushNotificationsResponse;
@@ -55,6 +62,7 @@ import com.nidus.twinly.notification.domain.NotificationType;
 import com.nidus.twinly.user.domain.DisclosureField;
 import com.nidus.twinly.user.dto.header.UserInfo;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -70,6 +78,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -337,5 +346,21 @@ public class MeController {
                                      @PathVariable String questionId,
                                      @Valid @RequestBody MeSubmitTendencyAnswerRequest request) {
         meService.submitTendencyAnswer(userInfo.id(), RequestId.toLong(questionId, "questionId"), MeSubmitTendencyAnswerCommand.from(request));
+    }
+
+    @Operation(summary = "피드백 선택지 조회")
+    @GetMapping("/api/v1/me/feedback/options")
+    public MeFeedbackOptionsResponse feedbackOptions(@AuthenticationPrincipal UserInfo userInfo,
+                                                     @RequestParam FeedbackType type) {
+        return MeFeedbackOptionsResponse.from(meService.feedbackOptions(type));
+    }
+
+    @Operation(summary = "피드백 보내기")
+    @PostMapping("/api/v1/me/feedback")
+    public void sendFeedback(@AuthenticationPrincipal UserInfo userInfo,
+                             @Parameter(hidden = true) @RequestHeader(value = AppBlockFilter.PLATFORM_HEADER, required = false) String appPlatform,
+                             @Parameter(hidden = true) @RequestHeader(value = AppBlockFilter.VERSION_HEADER, required = false) String appVersion,
+                             @Valid @RequestBody MeSendFeedbackRequest request) {
+        meService.sendFeedback(userInfo.id(), MeSendFeedbackCommand.from(request), AppPlatform.fromHeader(appPlatform).orElse(null), AppVersion.parse(appVersion).orElse(null));
     }
 }

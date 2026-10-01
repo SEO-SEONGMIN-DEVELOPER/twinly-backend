@@ -3,8 +3,13 @@ package com.nidus.twinly.me.service;
 import com.nidus.twinly.activity.domain.QuestionType;
 import com.nidus.twinly.activity.entity.Question;
 import com.nidus.twinly.activity.repository.QuestionRepository;
+import com.nidus.twinly.app.domain.AppPlatform;
+import com.nidus.twinly.app.domain.AppVersion;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
 import com.nidus.twinly.common.crypto.BlindIndexHasher;
+import com.nidus.twinly.common.feedback.FeedbackOption;
+import com.nidus.twinly.common.feedback.FeedbackOptionLoader;
+import com.nidus.twinly.common.feedback.FeedbackType;
 import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.common.persona.PersonalityType;
 import com.nidus.twinly.common.persona.PersonalityTypeCalculator;
@@ -52,12 +57,15 @@ import com.nidus.twinly.me.dto.command.MeProfilePhotoCommitCommand;
 import com.nidus.twinly.me.dto.command.MeProfilePhotoPresignCommand;
 import com.nidus.twinly.me.dto.command.MeRevokeConsentsCommand;
 import com.nidus.twinly.me.dto.command.MeRevokeConsentsItemCommand;
+import com.nidus.twinly.me.dto.command.MeSendFeedbackCommand;
 import com.nidus.twinly.me.dto.command.MeSubmitTendencyAnswerCommand;
 import com.nidus.twinly.me.dto.command.MeSurveyAnswerCommand;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsChatTargetResult;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsProfileTargetResult;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsResult;
 import com.nidus.twinly.me.dto.result.MeConsentsResult;
+import com.nidus.twinly.me.dto.result.MeFeedbackOptionsItemResult;
+import com.nidus.twinly.me.dto.result.MeFeedbackOptionsResult;
 import com.nidus.twinly.me.dto.result.MeHesitationsResult;
 import com.nidus.twinly.me.dto.result.MePersonalityTypePartResult;
 import com.nidus.twinly.me.dto.result.MePersonalityTypeResult;
@@ -95,10 +103,14 @@ import com.nidus.twinly.user.entity.DisclosureAgreement;
 import com.nidus.twinly.user.entity.PersonaElement;
 import com.nidus.twinly.user.entity.Photo;
 import com.nidus.twinly.user.entity.User;
+import com.nidus.twinly.user.entity.UserFeedback;
+import com.nidus.twinly.user.entity.UserFeedbackOption;
 import com.nidus.twinly.user.entity.UserSurveyAnswer;
 import com.nidus.twinly.user.repository.DisclosureAgreementRepository;
 import com.nidus.twinly.user.repository.PersonaElementRepository;
 import com.nidus.twinly.user.repository.PhotoRepository;
+import com.nidus.twinly.user.repository.UserFeedbackOptionRepository;
+import com.nidus.twinly.user.repository.UserFeedbackRepository;
 import com.nidus.twinly.user.repository.UserRepository;
 import com.nidus.twinly.user.repository.UserSurveyAnswerRepository;
 import com.nidus.twinly.user.repository.UserTendencyAnswerRepository;
@@ -222,6 +234,15 @@ class MeServiceUnitTest {
 
     @Mock
     TendencyLoader tendencyLoader;
+
+    @Mock
+    UserFeedbackRepository userFeedbackRepository;
+
+    @Mock
+    UserFeedbackOptionRepository userFeedbackOptionRepository;
+
+    @Mock
+    FeedbackOptionLoader feedbackOptionLoader;
 
     @InjectMocks
     MeService meService;
@@ -1666,5 +1687,171 @@ class MeServiceUnitTest {
                 .toList();
 
         return new TendencyQuestion(id, "문항 " + id, options);
+    }
+
+    @Test
+    @DisplayName("피드백 선택지 목록은 로더가 준 해당 type의 선택지를 순서 그대로 id·문구만 옮겨 담는다")
+    void feedbackOptions_maps_options_in_order() {
+        // given: 로더가 탈퇴 사유 선택지 3개를 id 순서와 다르게 반환
+        given(feedbackOptionLoader.getOptions(FeedbackType.WITHDRAWAL)).willReturn(List.of(
+                new FeedbackOption(3L, "다"),
+                new FeedbackOption(1L, "가"),
+                new FeedbackOption(2L, "나")));
+
+        // when: 탈퇴 사유 선택지 조회
+        MeFeedbackOptionsResult result = meService.feedbackOptions(FeedbackType.WITHDRAWAL);
+
+        // then: id 크기로 재정렬하지 않고 로더가 준 순서대로 담김
+        assertThat(result).isEqualTo(new MeFeedbackOptionsResult(List.of(
+                new MeFeedbackOptionsItemResult(3L, "다"),
+                new MeFeedbackOptionsItemResult(1L, "가"),
+                new MeFeedbackOptionsItemResult(2L, "나"))));
+    }
+
+    @Test
+    @DisplayName("피드백 선택지가 비어 있으면 빈 목록을 반환한다")
+    void feedbackOptions_returns_empty_when_no_options() {
+        // given: 로더에 건의하기 선택지가 하나도 없음
+        given(feedbackOptionLoader.getOptions(FeedbackType.SUGGESTION)).willReturn(List.of());
+
+        // when: 건의하기 선택지 조회
+        MeFeedbackOptionsResult result = meService.feedbackOptions(FeedbackType.SUGGESTION);
+
+        // then: 빈 배열
+        assertThat(result.options()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("건의하기를 보내면 앞뒤 공백을 지운 내용과 선택지, 앱 플랫폼·버전을 함께 저장한다")
+    void sendFeedback_suggestion_saves_feedback() {
+        // given: 건의하기 선택지는 4, 5, 6 + 저장하면 피드백 id 10이 매겨짐
+        given(feedbackOptionLoader.getOptions(FeedbackType.SUGGESTION)).willReturn(feedbackOptions(4L, 5L, 6L));
+        givenSavedFeedbackId(10L);
+
+        // when: 선택지 4와 앞뒤 공백이 있는 내용으로 건의하기 전송
+        meService.sendFeedback(ME, new MeSendFeedbackCommand(FeedbackType.SUGGESTION, List.of(4L), "  알림이 늦게 와요  "),
+                AppPlatform.IOS, new AppVersion(1, 2, 3));
+
+        // then: 유저·type·공백을 지운 내용·플랫폼·버전 문자열로 피드백 저장
+        UserFeedback saved = capturedFeedback();
+        assertThat(saved.getUserId()).isEqualTo(ME);
+        assertThat(saved.getType()).isEqualTo(FeedbackType.SUGGESTION);
+        assertThat(saved.getDetail()).isEqualTo("알림이 늦게 와요");
+        assertThat(saved.getAppPlatform()).isEqualTo(AppPlatform.IOS);
+        assertThat(saved.getAppVersion()).isEqualTo("1.2.3");
+
+        // then: 저장된 피드백 id로 고른 선택지 행 저장
+        assertThat(capturedFeedbackOptions())
+                .extracting(UserFeedbackOption::getFeedbackId, UserFeedbackOption::getOptionId)
+                .containsExactly(tuple(10L, 4L));
+    }
+
+    @Test
+    @DisplayName("목록에 없는 id와 다른 type의 id는 버리고, 중복 id는 한 번만 저장한다")
+    void sendFeedback_drops_unknown_and_duplicate_option_ids() {
+        // given: 탈퇴 사유 선택지는 1, 2, 3
+        given(feedbackOptionLoader.getOptions(FeedbackType.WITHDRAWAL)).willReturn(feedbackOptions(1L, 2L, 3L));
+        givenSavedFeedbackId(10L);
+
+        // when: 중복된 2, 건의하기 id 4, 없는 id 99를 섞어 탈퇴 사유 전송
+        meService.sendFeedback(ME, new MeSendFeedbackCommand(FeedbackType.WITHDRAWAL, List.of(2L, 4L, 99L, 2L, 1L), null),
+                null, null);
+
+        // then: 목록에 있는 id만 처음 나온 순서대로 한 번씩 저장
+        assertThat(capturedFeedbackOptions())
+                .extracting(UserFeedbackOption::getOptionId)
+                .containsExactly(2L, 1L);
+    }
+
+    @Test
+    @DisplayName("탈퇴 사유는 선택지가 있으면 내용 없이도 저장하고, 앱 헤더가 없으면 플랫폼·버전을 비워 둔다")
+    void sendFeedback_withdrawal_with_options_saves_without_detail() {
+        // given: 탈퇴 사유 선택지는 1, 2, 3
+        given(feedbackOptionLoader.getOptions(FeedbackType.WITHDRAWAL)).willReturn(feedbackOptions(1L, 2L, 3L));
+        givenSavedFeedbackId(10L);
+
+        // when: 선택지 1만 고르고 내용은 공백, 앱 헤더 없이 전송
+        meService.sendFeedback(ME, new MeSendFeedbackCommand(FeedbackType.WITHDRAWAL, List.of(1L), "   "), null, null);
+
+        // then: 선택지 1이 저장되고, 내용·플랫폼·버전은 null로 저장
+        assertThat(capturedFeedbackOptions())
+                .extracting(UserFeedbackOption::getOptionId)
+                .containsExactly(1L);
+        UserFeedback saved = capturedFeedback();
+        assertThat(saved.getDetail()).isNull();
+        assertThat(saved.getAppPlatform()).isNull();
+        assertThat(saved.getAppVersion()).isNull();
+    }
+
+    @Test
+    @DisplayName("탈퇴 사유에서 보낸 선택지가 모두 목록에 없어도 400 없이 빈 선택지로 저장한다")
+    void sendFeedback_withdrawal_with_only_unknown_options_saves_empty() {
+        // given: 탈퇴 사유 선택지는 1, 2, 3
+        given(feedbackOptionLoader.getOptions(FeedbackType.WITHDRAWAL)).willReturn(feedbackOptions(1L, 2L, 3L));
+        givenSavedFeedbackId(10L);
+
+        // when: 화면을 연 사이 내려간 선택지 99만 골라 내용 없이 전송
+        meService.sendFeedback(ME, new MeSendFeedbackCommand(FeedbackType.WITHDRAWAL, List.of(99L), null), null, null);
+
+        // then: 예외 없이 피드백은 저장되고 선택지 행은 없음
+        assertThat(capturedFeedback().getDetail()).isNull();
+        assertThat(capturedFeedbackOptions()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("탈퇴 사유는 선택지도 내용도 없어도 예외 없이 빈 피드백으로 저장한다")
+    void sendFeedback_withdrawal_without_options_and_detail_saves_empty() {
+        // given: 탈퇴 사유 선택지는 1, 2, 3
+        given(feedbackOptionLoader.getOptions(FeedbackType.WITHDRAWAL)).willReturn(feedbackOptions(1L, 2L, 3L));
+        givenSavedFeedbackId(10L);
+
+        // when: 빈 선택지 + 공백 내용으로 탈퇴 사유 전송
+        meService.sendFeedback(ME, new MeSendFeedbackCommand(FeedbackType.WITHDRAWAL, List.of(), " "), null, null);
+
+        // then: 내용 없는 피드백이 저장되고 선택지 행은 없음
+        UserFeedback saved = capturedFeedback();
+        assertThat(saved.getType()).isEqualTo(FeedbackType.WITHDRAWAL);
+        assertThat(saved.getDetail()).isNull();
+        assertThat(capturedFeedbackOptions()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("건의하기에서 내용이 없으면 선택지를 골랐어도 INVALID_REQUEST 예외가 발생하고 저장하지 않는다")
+    void sendFeedback_suggestion_without_detail_throws() {
+        // when & then: 선택지 4를 골랐지만 내용 null로 건의하기 전송 시 INVALID_REQUEST + 저장 안 함
+        assertThatThrownBy(() -> meService.sendFeedback(ME, new MeSendFeedbackCommand(FeedbackType.SUGGESTION, List.of(4L), null), null, null))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_REQUEST);
+
+        then(userFeedbackRepository).should(never()).save(any());
+        then(userFeedbackOptionRepository).should(never()).saveAll(any());
+    }
+
+    private List<FeedbackOption> feedbackOptions(Long... optionIds) {
+        return Stream.of(optionIds)
+                .map(optionId -> new FeedbackOption(optionId, "선택지 " + optionId))
+                .toList();
+    }
+
+    private void givenSavedFeedbackId(Long feedbackId) {
+        given(userFeedbackRepository.save(any(UserFeedback.class))).willAnswer(invocation -> {
+            UserFeedback feedback = invocation.getArgument(0);
+            ReflectionTestUtils.setField(feedback, "id", feedbackId);
+            return feedback;
+        });
+    }
+
+    private UserFeedback capturedFeedback() {
+        ArgumentCaptor<UserFeedback> captor = ArgumentCaptor.forClass(UserFeedback.class);
+        then(userFeedbackRepository).should().save(captor.capture());
+        return captor.getValue();
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<UserFeedbackOption> capturedFeedbackOptions() {
+        ArgumentCaptor<List<UserFeedbackOption>> captor = ArgumentCaptor.forClass(List.class);
+        then(userFeedbackOptionRepository).should().saveAll(captor.capture());
+        return captor.getValue();
     }
 }

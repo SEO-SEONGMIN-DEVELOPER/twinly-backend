@@ -2,6 +2,9 @@ package com.nidus.twinly.me.controller;
 
 import com.nidus.twinly.aichat.service.UserAiChatService;
 import com.nidus.twinly.anon.service.AnonService;
+import com.nidus.twinly.app.domain.AppPlatform;
+import com.nidus.twinly.app.domain.AppVersion;
+import com.nidus.twinly.common.feedback.FeedbackType;
 import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.photo.PhotoPosInfo;
 import com.nidus.twinly.common.photo.ProfilePhotoInfo;
@@ -25,6 +28,7 @@ import com.nidus.twinly.me.dto.command.MeProfilePhotoCommitCommand;
 import com.nidus.twinly.me.dto.command.MeProfilePhotoPresignCommand;
 import com.nidus.twinly.me.dto.command.MeRevokeConsentsCommand;
 import com.nidus.twinly.me.dto.command.MeRevokeConsentsItemCommand;
+import com.nidus.twinly.me.dto.command.MeSendFeedbackCommand;
 import com.nidus.twinly.me.dto.result.MeAiChatMessageResult;
 import com.nidus.twinly.me.dto.result.MeAiChatStartResult;
 import com.nidus.twinly.me.dto.command.MeSubmitTendencyAnswerCommand;
@@ -35,6 +39,8 @@ import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsResult;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsUnreadCountResult;
 import com.nidus.twinly.me.dto.result.MeConsentsItemResult;
 import com.nidus.twinly.me.dto.result.MeConsentsResult;
+import com.nidus.twinly.me.dto.result.MeFeedbackOptionsItemResult;
+import com.nidus.twinly.me.dto.result.MeFeedbackOptionsResult;
 import com.nidus.twinly.me.dto.result.MeHesitationsResult;
 import com.nidus.twinly.me.dto.result.MePersonalityTypePartResult;
 import com.nidus.twinly.me.dto.result.MePersonalityTypeResult;
@@ -85,6 +91,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willThrow;
@@ -1366,5 +1373,255 @@ class MeControllerUnitTest {
         // then: 422 TENDENCY_OPTION_NOT_IN_QUESTION 반환
         result.andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("TENDENCY_OPTION_NOT_IN_QUESTION"));
+    }
+
+    // ---------------------------------------------------------------- 피드백
+
+    @Test
+    @DisplayName("피드백 선택지 조회 시 200과 문자열 id·문구 목록을 반환하고 type으로 서비스를 호출한다")
+    void feedbackOptions_success() throws Exception {
+        // given: 서비스가 탈퇴 사유 선택지 2개를 반환
+        given(meService.feedbackOptions(FeedbackType.WITHDRAWAL)).willReturn(new MeFeedbackOptionsResult(List.of(
+                new MeFeedbackOptionsItemResult(2L, "대화할 상대가 없어요"),
+                new MeFeedbackOptionsItemResult(1L, "인연이 마음에 들지 않아요"))));
+
+        // when: type=withdrawal로 선택지 조회 API 호출
+        var result = mockMvc.perform(get("/api/v1/me/feedback/options")
+                .param("type", "withdrawal")
+                .header("Authorization", BEARER));
+
+        // then: 200 + 서비스가 준 순서대로 문자열 id와 문구가 담김
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.options.length()").value(2))
+                .andExpect(jsonPath("$.options[0].id").value("2"))
+                .andExpect(jsonPath("$.options[0].label").value("대화할 상대가 없어요"))
+                .andExpect(jsonPath("$.options[1].id").value("1"));
+        then(meService).should().feedbackOptions(FeedbackType.WITHDRAWAL);
+    }
+
+    @Test
+    @DisplayName("피드백 선택지 조회 시 type이 없으면 400 INVALID_REQUEST를 반환하고 서비스를 호출하지 않는다")
+    void feedbackOptions_without_type_returns_400() throws Exception {
+        // when: type 없이 선택지 조회 API 호출
+        var result = mockMvc.perform(get("/api/v1/me/feedback/options")
+                .header("Authorization", BEARER));
+
+        // then: 400 INVALID_REQUEST + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        then(meService).should(never()).feedbackOptions(any());
+    }
+
+    @Test
+    @DisplayName("피드백 선택지 조회 시 type이 정의되지 않은 값이면 400 INVALID_REQUEST를 반환하고 서비스를 호출하지 않는다")
+    void feedbackOptions_with_unknown_type_returns_400() throws Exception {
+        // when: 정의되지 않은 type으로 선택지 조회 API 호출
+        var result = mockMvc.perform(get("/api/v1/me/feedback/options")
+                .param("type", "report")
+                .header("Authorization", BEARER));
+
+        // then: 400 INVALID_REQUEST + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        then(meService).should(never()).feedbackOptions(any());
+    }
+
+    @Test
+    @DisplayName("피드백 선택지 조회 시 인증 헤더가 없으면 401을 반환하고 서비스를 호출하지 않는다")
+    void feedbackOptions_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 선택지 조회 API 호출
+        var result = mockMvc.perform(get("/api/v1/me/feedback/options")
+                .param("type", "withdrawal"));
+
+        // then: 401 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isUnauthorized());
+        then(meService).should(never()).feedbackOptions(any());
+    }
+
+    @Test
+    @DisplayName("피드백 보내기 성공 시 200을 반환하고 본문과 앱 헤더를 변환해 서비스를 호출한다")
+    void sendFeedback_success() throws Exception {
+        // when: 앱 플랫폼·버전 헤더와 함께 건의하기 전송
+        var result = mockMvc.perform(post("/api/v1/me/feedback")
+                .header("Authorization", BEARER)
+                .header("X-App-Platform", "ios")
+                .header("X-App-Version", "1.2.3")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"type":"suggestion","optionIds":["4","5"],"detail":"알림이 늦게 와요"}
+                        """));
+
+        // then: 200 + 인증 유저 id, 변환된 Command, 파싱된 플랫폼·버전으로 서비스에 위임
+        result.andExpect(status().isOk());
+        then(meService).should().sendFeedback(ME,
+                new MeSendFeedbackCommand(FeedbackType.SUGGESTION, List.of(4L, 5L), "알림이 늦게 와요"),
+                AppPlatform.IOS, new AppVersion(1, 2, 3));
+    }
+
+    @Test
+    @DisplayName("피드백 보내기 시 앱 헤더가 형식에 맞지 않아도 거절하지 않고 플랫폼·버전을 null로 넘긴다")
+    void sendFeedback_with_malformed_app_headers_passes_null() throws Exception {
+        // when: 알 수 없는 플랫폼·버전 헤더와 detail null로 탈퇴 사유 전송
+        var result = mockMvc.perform(post("/api/v1/me/feedback")
+                .header("Authorization", BEARER)
+                .header("X-App-Platform", "web")
+                .header("X-App-Version", "beta")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"type":"withdrawal","optionIds":["1"],"detail":null}
+                        """));
+
+        // then: 200 + 플랫폼·버전·detail 모두 null로 서비스에 위임
+        result.andExpect(status().isOk());
+        then(meService).should().sendFeedback(eq(ME),
+                eq(new MeSendFeedbackCommand(FeedbackType.WITHDRAWAL, List.of(1L), null)),
+                isNull(), isNull());
+    }
+
+    @Test
+    @DisplayName("피드백 보내기 시 detail이 정확히 500자면 통과한다")
+    void sendFeedback_with_500_chars_detail_passes() throws Exception {
+        // when: 500자 detail로 건의하기 전송
+        var result = mockMvc.perform(post("/api/v1/me/feedback")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"type\":\"suggestion\",\"optionIds\":[],\"detail\":\"" + "가".repeat(500) + "\"}"));
+
+        // then: 200 + 서비스 호출됨
+        result.andExpect(status().isOk());
+        then(meService).should().sendFeedback(eq(ME), any(), isNull(), isNull());
+    }
+
+    @Test
+    @DisplayName("피드백 보내기 시 detail이 500자를 넘으면 400 INVALID_REQUEST를 반환하고 서비스를 호출하지 않는다")
+    void sendFeedback_with_501_chars_detail_returns_400() throws Exception {
+        // when: 501자 detail로 건의하기 전송
+        var result = mockMvc.perform(post("/api/v1/me/feedback")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"type\":\"suggestion\",\"optionIds\":[],\"detail\":\"" + "가".repeat(501) + "\"}"));
+
+        // then: 400 INVALID_REQUEST + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        then(meService).should(never()).sendFeedback(anyLong(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("피드백 보내기 시 type이 없거나 정의되지 않은 값이면 400 INVALID_REQUEST를 반환하고 서비스를 호출하지 않는다")
+    void sendFeedback_with_invalid_type_returns_400() throws Exception {
+        // when: type 누락, 정의되지 않은 type으로 각각 전송
+        var missing = mockMvc.perform(post("/api/v1/me/feedback")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"optionIds":["1"],"detail":"내용"}
+                        """));
+        var unknown = mockMvc.perform(post("/api/v1/me/feedback")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"type":"report","optionIds":["1"],"detail":"내용"}
+                        """));
+
+        // then: 둘 다 400 INVALID_REQUEST + 서비스는 호출되지 않음
+        missing.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        unknown.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        then(meService).should(never()).sendFeedback(anyLong(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("피드백 보내기 시 optionIds가 없거나 배열이 아니거나 숫자 문자열이 아닌 항목·null 항목이 있으면 400 INVALID_REQUEST를 반환한다")
+    void sendFeedback_with_invalid_optionIds_returns_400() throws Exception {
+        // given: optionIds가 잘못된 본문 4가지
+        List<String> bodies = List.of(
+                """
+                {"type":"suggestion","detail":"내용"}
+                """,
+                """
+                {"type":"suggestion","optionIds":"4","detail":"내용"}
+                """,
+                """
+                {"type":"suggestion","optionIds":["abc"],"detail":"내용"}
+                """,
+                """
+                {"type":"suggestion","optionIds":[null],"detail":"내용"}
+                """);
+
+        for (String body : bodies) {
+            // when: 잘못된 optionIds로 전송
+            var result = mockMvc.perform(post("/api/v1/me/feedback")
+                    .header("Authorization", BEARER)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body));
+
+            // then: 400 INVALID_REQUEST
+            result.andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        }
+        then(meService).should(never()).sendFeedback(anyLong(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("피드백 보내기 시 detail이 문자열이 아닌 객체·배열이면 400 INVALID_REQUEST를 반환한다")
+    void sendFeedback_with_non_string_detail_returns_400() throws Exception {
+        // given: detail이 객체·배열인 본문
+        List<String> bodies = List.of(
+                """
+                {"type":"suggestion","optionIds":[],"detail":{"text":"내용"}}
+                """,
+                """
+                {"type":"suggestion","optionIds":[],"detail":["내용"]}
+                """);
+
+        for (String body : bodies) {
+            // when: 문자열이 아닌 detail로 전송
+            var result = mockMvc.perform(post("/api/v1/me/feedback")
+                    .header("Authorization", BEARER)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body));
+
+            // then: 400 INVALID_REQUEST
+            result.andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        }
+        then(meService).should(never()).sendFeedback(anyLong(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("피드백 보내기 시 서비스가 type별 규칙 위반으로 INVALID_REQUEST를 던지면 400을 반환한다")
+    void sendFeedback_rule_violation_returns_400() throws Exception {
+        // given: 서비스가 INVALID_REQUEST 예외를 던짐
+        willThrow(new BusinessException(ErrorCode.INVALID_REQUEST))
+                .given(meService).sendFeedback(anyLong(), any(), any(), any());
+
+        // when: 내용 없이 건의하기 전송
+        var result = mockMvc.perform(post("/api/v1/me/feedback")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"type":"suggestion","optionIds":["4"],"detail":null}
+                        """));
+
+        // then: 400 INVALID_REQUEST
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    @DisplayName("피드백 보내기 시 인증 헤더가 없으면 401을 반환하고 서비스를 호출하지 않는다")
+    void sendFeedback_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 피드백 전송
+        var result = mockMvc.perform(post("/api/v1/me/feedback")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"type":"suggestion","optionIds":[],"detail":"내용"}
+                        """));
+
+        // then: 401 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isUnauthorized());
+        then(meService).should(never()).sendFeedback(anyLong(), any(), any(), any());
     }
 }
