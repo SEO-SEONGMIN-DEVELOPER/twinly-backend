@@ -1,5 +1,6 @@
 package com.nidus.twinly.purchase.writer;
 
+import com.nidus.twinly.purchase.PoolProperties;
 import com.nidus.twinly.purchase.client.RevenueCatEntitlement;
 import com.nidus.twinly.purchase.entity.PoolCounter;
 import com.nidus.twinly.purchase.entity.RevenueCatEvent;
@@ -8,11 +9,11 @@ import com.nidus.twinly.purchase.repository.PoolCounterRepository;
 import com.nidus.twinly.purchase.repository.RevenueCatEventRepository;
 import com.nidus.twinly.purchase.repository.UserEntitlementRepository;
 import com.nidus.twinly.user.repository.UserRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.BeanUtils;
@@ -49,8 +50,12 @@ class PurchaseWriterUnitTest {
     @Mock
     PoolCounterRepository poolCounterRepository;
 
-    @InjectMocks
     PurchaseWriter purchaseWriter;
+
+    @BeforeEach
+    void setUp() {
+        purchaseWriter = writerWith(new PoolProperties(null));
+    }
 
     @Test
     @DisplayName("저장된 권한이 없으면 받아온 권한을 새로 저장한다")
@@ -243,6 +248,23 @@ class PurchaseWriterUnitTest {
     }
 
     @Test
+    @DisplayName("고정 풀 번호가 설정되면 카운터와 관계없이 그 풀을 배정하고 카운터를 1 올린다")
+    void assignPool_assigns_fixed_pool_when_configured() {
+        // given: 카운터 기준이면 풀 13 이지만 고정 풀 12 가 설정됨
+        purchaseWriter = writerWith(new PoolProperties(12));
+        PoolCounter counter = counter(600);
+        given(poolCounterRepository.findWithLockById(PoolCounter.SINGLETON_ID)).willReturn(Optional.of(counter));
+        given(userRepository.assignPoolNumber(USER_ID, 12)).willReturn(1);
+
+        // when: 배정
+        purchaseWriter.assignPool(USER_ID);
+
+        // then: 풀 12 로 갱신 쿼리가 나가고 카운터는 601
+        then(userRepository).should().assignPoolNumber(USER_ID, 12);
+        assertThat(counter.getAssignedCount()).isEqualTo(601);
+    }
+
+    @Test
     @DisplayName("카운터 행이 없으면 예외를 던진다")
     void assignPool_throws_when_counter_missing() {
         // given: 카운터 행 없음
@@ -251,6 +273,10 @@ class PurchaseWriterUnitTest {
         // when & then
         assertThatThrownBy(() -> purchaseWriter.assignPool(USER_ID))
                 .isInstanceOf(IllegalStateException.class);
+    }
+
+    private PurchaseWriter writerWith(PoolProperties poolProperties) {
+        return new PurchaseWriter(userEntitlementRepository, revenueCatEventRepository, userRepository, poolCounterRepository, poolProperties);
     }
 
     private PoolCounter counter(int assignedCount) {
