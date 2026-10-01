@@ -178,8 +178,8 @@ public class User {
         return isWithdrawn() ? WITHDRAWN_NAME : familyName + givenName;
     }
 
-    public String displayGivenName() {
-        return isWithdrawn() ? WITHDRAWN_NAME : givenName;
+    public String displayNickname() {
+        return isWithdrawn() ? WITHDRAWN_NAME : nickname;
     }
 
     public void changeAffiliation(String affiliation, String affiliationHash) {

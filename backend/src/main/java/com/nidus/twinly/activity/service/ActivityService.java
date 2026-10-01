@@ -104,7 +104,7 @@ public class ActivityService {
         }
 
         return userRepository.findAllById(userIds).stream()
-                .collect(Collectors.toMap(User::getId, User::displayGivenName));
+                .collect(Collectors.toMap(User::getId, User::displayNickname));
     }
 
     private ActivitySceneResult toSceneResult(Scene scene, List<Long> with, Map<Long, String> nameByUserId) {
@@ -145,7 +145,7 @@ public class ActivityService {
         return userIds.stream()
                 .map(userId -> new ActivityUserInfoResult(
                         userId,
-                        userById.get(userId).displayGivenName(),
+                        userById.get(userId).displayNickname(),
                         profilePhotoByUserId.get(userId)))
                 .toList();
     }

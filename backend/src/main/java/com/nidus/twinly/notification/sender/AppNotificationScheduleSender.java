@@ -51,7 +51,7 @@ public class AppNotificationScheduleSender {
             return;
         }
 
-        String partnerName = partner.get().displayGivenName();
+        String partnerName = partner.get().displayNickname();
 
         eventPublisher.publishEvent(new OneTimePushEvent(
                 schedule.getUserId(),

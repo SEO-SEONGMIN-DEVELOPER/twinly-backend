@@ -197,7 +197,7 @@ class ParallelRelationServiceUnitTest {
         // given: 코드는 살아 있지만 주인이 탈퇴한 상태다
         givenCodeOwner();
         given(parallelRelationRepository.findByUserAIdAndUserBId(CODE_OWNER_ID, SUBMITTER_ID)).willReturn(Optional.empty());
-        User withdrawnOwner = user(CODE_OWNER_ID, "김", "지훈");
+        User withdrawnOwner = user(CODE_OWNER_ID, "지훈");
         withdrawnOwner.delete();
         given(userRepository.findById(CODE_OWNER_ID)).willReturn(Optional.of(withdrawnOwner));
 
@@ -216,7 +216,7 @@ class ParallelRelationServiceUnitTest {
         // given: 코드 주인은 살아 있으나 페르소나가 없다
         givenCodeOwner();
         given(parallelRelationRepository.findByUserAIdAndUserBId(CODE_OWNER_ID, SUBMITTER_ID)).willReturn(Optional.empty());
-        given(userRepository.findById(CODE_OWNER_ID)).willReturn(Optional.of(user(CODE_OWNER_ID, "김", "지훈")));
+        given(userRepository.findById(CODE_OWNER_ID)).willReturn(Optional.of(user(CODE_OWNER_ID, "지훈")));
         given(personaElementRepository.existsByUserId(CODE_OWNER_ID)).willReturn(false);
 
         // when & then: 페르소나 없음 예외 + 결과 저장 안 함
@@ -234,7 +234,7 @@ class ParallelRelationServiceUnitTest {
         // given: 결과가 없고 두 사람 모두 페르소나가 있으며 원점수가 0.784, 표시 점수가 94다
         givenCodeOwner();
         given(parallelRelationRepository.findByUserAIdAndUserBId(CODE_OWNER_ID, SUBMITTER_ID)).willReturn(Optional.empty());
-        given(userRepository.findById(CODE_OWNER_ID)).willReturn(Optional.of(user(CODE_OWNER_ID, "김", "지훈")));
+        given(userRepository.findById(CODE_OWNER_ID)).willReturn(Optional.of(user(CODE_OWNER_ID, "지훈")));
         given(personaElementRepository.existsByUserId(anyLong())).willReturn(true);
         given(personaElementRepository.findAllByUserIdOrderByIdAsc(anyLong())).willReturn(List.of());
         given(personaSimilarityCalculator.similarity(any(), any())).willReturn(new PersonaSimilarity(0.784, Map.of()));
@@ -269,10 +269,10 @@ class ParallelRelationServiceUnitTest {
         given(parallelRelationRepository.findAllByUserAIdOrUserBIdOrderByIdDesc(SUBMITTER_ID, SUBMITTER_ID))
                 .willReturn(List.of(aliveRelation, withdrawnRelation));
 
-        User withdrawnPartner = user(2L, "박", "민수");
+        User withdrawnPartner = user(2L, "민수");
         withdrawnPartner.delete();
         given(userRepository.findAllById(anyList()))
-                .willReturn(List.of(user(CODE_OWNER_ID, "김", "지훈"), withdrawnPartner));
+                .willReturn(List.of(user(CODE_OWNER_ID, "지훈"), withdrawnPartner));
         given(photoRepository.findAllByUserIdInAndType(anyList(), any())).willReturn(List.of());
         given(parallelRelationResolver.title(any(), anyInt())).willReturn("아무때나 전화해도 좋아하는 사이");
 
@@ -318,7 +318,7 @@ class ParallelRelationServiceUnitTest {
     void relation_detail_with_withdrawn_partner_throws() {
         // given: 당사자이지만 상대가 탈퇴했다
         given(parallelRelationRepository.findById(1041L)).willReturn(Optional.of(savedRelation(1041L)));
-        User withdrawnPartner = user(CODE_OWNER_ID, "김", "지훈");
+        User withdrawnPartner = user(CODE_OWNER_ID, "지훈");
         withdrawnPartner.delete();
         given(userRepository.findById(CODE_OWNER_ID)).willReturn(Optional.of(withdrawnPartner));
 
@@ -334,13 +334,13 @@ class ParallelRelationServiceUnitTest {
     void relation_detail_renders_story_with_code_owner_as_a() {
         // given: 당사자가 조회하고, 두 사람 모두 정상 상태다
         given(parallelRelationRepository.findById(1041L)).willReturn(Optional.of(savedRelation(1041L)));
-        given(userRepository.findById(CODE_OWNER_ID)).willReturn(Optional.of(user(CODE_OWNER_ID, "김", "지훈")));
+        given(userRepository.findById(CODE_OWNER_ID)).willReturn(Optional.of(user(CODE_OWNER_ID, "지훈")));
         givenUsersAndStory();
 
         // when: 제출자가 단건 조회
         var result = parallelRelationService.relationDetail(SUBMITTER_ID, 1041L);
 
-        // then: 조회자가 user, 상대가 partner + 렌더링은 코드 주인 이름이 앞에 온다
+        // then: 조회자가 user, 상대가 partner + 렌더링은 코드 주인 닉네임이 앞에 온다
         assertThat(result.user().userId()).isEqualTo(SUBMITTER_ID);
         assertThat(result.partner().userId()).isEqualTo(CODE_OWNER_ID);
         then(parallelRelationResolver).should().render(ParallelRelationType.BEST_FRIEND, 7, "지훈", "서연");
@@ -353,7 +353,7 @@ class ParallelRelationServiceUnitTest {
         given(parallelRelationRepository.findAllByUserAIdOrUserBIdOrderByIdDesc(SUBMITTER_ID, SUBMITTER_ID))
                 .willReturn(List.of(savedRelation(1041L)));
         given(userRepository.findAllById(anyList()))
-                .willReturn(List.of(user(CODE_OWNER_ID, "김", "지훈")));
+                .willReturn(List.of(user(CODE_OWNER_ID, "지훈")));
         given(photoRepository.findAllByUserIdInAndType(anyList(), any())).willReturn(List.of());
         given(parallelRelationResolver.title(any(), anyInt())).willReturn("아무때나 전화해도 좋아하는 사이");
         given(parallelSimilarityScoreConverter.topPercent(94)).willReturn(3.5);
@@ -375,7 +375,7 @@ class ParallelRelationServiceUnitTest {
                 new ParallelScoreBand(70, 74, 11.6),
                 new ParallelScoreBand(75, 79, 17.3));
         given(parallelRelationRepository.findById(1041L)).willReturn(Optional.of(savedRelation(1041L)));
-        given(userRepository.findById(CODE_OWNER_ID)).willReturn(Optional.of(user(CODE_OWNER_ID, "김", "지훈")));
+        given(userRepository.findById(CODE_OWNER_ID)).willReturn(Optional.of(user(CODE_OWNER_ID, "지훈")));
         givenUsersAndStory();
         given(parallelSimilarityScoreConverter.topPercent(94)).willReturn(3.5);
         given(parallelSimilarityScoreConverter.distribution()).willReturn(bands);
@@ -396,7 +396,7 @@ class ParallelRelationServiceUnitTest {
 
     private void givenUsersAndStory() {
         given(userRepository.findAllById(anyList()))
-                .willReturn(List.of(user(CODE_OWNER_ID, "김", "지훈"), user(SUBMITTER_ID, "이", "서연")));
+                .willReturn(List.of(user(CODE_OWNER_ID, "지훈"), user(SUBMITTER_ID, "서연")));
         given(photoRepository.findAllByUserIdInAndType(anyList(), any())).willReturn(List.of());
         given(parallelRelationResolver.render(any(), anyInt(), anyString(), anyString()))
                 .willReturn(new ParallelRelationResult(ParallelRelationType.BEST_FRIEND, "제목", "이야기"));
@@ -414,11 +414,11 @@ class ParallelRelationServiceUnitTest {
         return relation;
     }
 
-    private User user(Long id, String familyName, String givenName) {
+    private User user(Long id, String nickname) {
         User user = User.create(
-                "nick" + id,
-                familyName, "familyHash",
-                givenName, "givenHash",
+                nickname,
+                "홍", "familyHash",
+                "실명", "givenHash",
                 Gender.MALE,
                 "한국대학교", "orgHash",
                 "컴퓨터공학과", "affHash",

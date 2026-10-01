@@ -94,30 +94,30 @@ class BlockServiceUnitTest {
     }
 
     @Test
-    @DisplayName("차단 목록은 이름만 반환하고, 탈퇴한 유저는 '탈퇴한 사용자'로 표기한다")
+    @DisplayName("차단 목록은 닉네임만 반환하고, 탈퇴한 유저는 '탈퇴한 사용자'로 표기한다")
     void blockList_maps_names_and_withdrawn_user() {
         // given: 차단 대상 2명 (정상 유저 10, 탈퇴 유저 20)
         given(blockRepository.findAllByUserId(1L))
                 .willReturn(List.of(Block.create(1L, 10L), Block.create(1L, 20L)));
 
-        User active = user("홍", "길동", null);
+        User active = user("길동", null);
         ReflectionTestUtils.setField(active, "id", 10L);
-        User withdrawn = user("김", "철수", Instant.now());
+        User withdrawn = user("철수", Instant.now());
         ReflectionTestUtils.setField(withdrawn, "id", 20L);
         given(userRepository.findAllById(anyList())).willReturn(List.of(active, withdrawn));
 
         // when: 차단 목록 조회
         BlockListResult result = blockService.blockList(1L);
 
-        // then: 정상 유저는 이름만, 탈퇴 유저는 '탈퇴한 사용자'
+        // then: 정상 유저는 닉네임만, 탈퇴 유저는 '탈퇴한 사용자'
         assertThat(result.blocks())
                 .extracting(item -> item.blockedUserId() + ":" + item.blockedUserName())
                 .containsExactly("10:길동", "20:탈퇴한 사용자");
     }
 
-    private User user(String familyName, String givenName, Instant deletedAt) {
+    private User user(String nickname, Instant deletedAt) {
         User user = User.create(
-                "nick", familyName, "familyHash", givenName, "givenHash",
+                nickname, "홍", "familyHash", "실명", "givenHash",
                 Gender.MALE, "organization", "organizationHash", "aff", "affHash", "affNo", "affNoHash",
                 "2000-01-01", "birthHash", "phone", "phoneHash", "email", "emailHash", null, null, null, null);
         if (deletedAt != null) {

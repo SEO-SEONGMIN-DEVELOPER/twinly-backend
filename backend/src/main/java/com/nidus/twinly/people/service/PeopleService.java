@@ -147,7 +147,7 @@ public class PeopleService {
 
                     return new PeopleItemResult(
                             partnerUserId,
-                            user.displayGivenName(),
+                            user.displayNickname(),
                             profilePhotoByPartnerUserId.get(partnerUserId),
                             intimacy,
                             RelationshipType.fromIntimacy(intimacy),
@@ -202,7 +202,7 @@ public class PeopleService {
 
         return new PeopleProfileResult(
                 partnerUserId,
-                partner.displayGivenName(),
+                partner.displayNickname(),
                 profilePhoto,
                 intimacy,
                 RelationshipType.fromIntimacy(intimacy),
@@ -282,7 +282,7 @@ public class PeopleService {
 
         PeopleEventsPartnerResult partnerResult = new PeopleEventsPartnerResult(
                 partnerUserId,
-                partner.displayGivenName(),
+                partner.displayNickname(),
                 profilePhoto,
                 intimacy,
                 RelationshipSpecificType.fromIntimacy(intimacy)
@@ -376,7 +376,7 @@ public class PeopleService {
         }
 
         return userRepository.findAllById(userIds).stream()
-                .collect(Collectors.toMap(User::getId, User::displayGivenName));
+                .collect(Collectors.toMap(User::getId, User::displayNickname));
     }
 
     private List<SceneLine> toSceneLines(Scene scene, Map<Long, String> nameByUserId) {
@@ -440,7 +440,7 @@ public class PeopleService {
         return userIds.stream()
                 .map(userId -> new PeopleEventUserInfoResult(
                         userId,
-                        userById.get(userId).displayGivenName(),
+                        userById.get(userId).displayNickname(),
                         profilePhotoByUserId.get(userId)))
                 .toList();
     }
