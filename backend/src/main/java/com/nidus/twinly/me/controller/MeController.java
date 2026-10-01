@@ -10,6 +10,8 @@ import com.nidus.twinly.me.domain.HesitationDuration;
 import com.nidus.twinly.me.domain.HesitationStatus;
 import com.nidus.twinly.me.dto.command.MeAiChatMessageCommand;
 import com.nidus.twinly.me.dto.command.MeAppNotificationsReadAllCommand;
+import com.nidus.twinly.me.dto.command.MeChangeProfileNicknameCommand;
+import com.nidus.twinly.me.dto.command.MeCheckProfileNicknameCommand;
 import com.nidus.twinly.me.dto.command.MeChangeProfileVisibilitySettingCommand;
 import com.nidus.twinly.me.dto.command.MeChangePushNotificationsCommand;
 import com.nidus.twinly.me.dto.command.MeGrantConsentsCommand;
@@ -24,6 +26,8 @@ import com.nidus.twinly.me.dto.command.MeSubmitTendencyAnswerCommand;
 import com.nidus.twinly.me.dto.command.MeSurveyAnswerCommand;
 import com.nidus.twinly.me.dto.request.MeAiChatMessageRequest;
 import com.nidus.twinly.me.dto.request.MeAppNotificationsReadAllRequest;
+import com.nidus.twinly.me.dto.request.MeChangeProfileNicknameRequest;
+import com.nidus.twinly.me.dto.request.MeCheckProfileNicknameRequest;
 import com.nidus.twinly.me.dto.request.MeChangeProfileVisibilitySettingRequest;
 import com.nidus.twinly.me.dto.request.MeChangePushNotificationsRequest;
 import com.nidus.twinly.me.dto.request.MeGrantConsentsRequest;
@@ -40,6 +44,7 @@ import com.nidus.twinly.me.dto.response.MeAiChatMessageResponse;
 import com.nidus.twinly.me.dto.response.MeAiChatStartResponse;
 import com.nidus.twinly.me.dto.response.MeAppNotificationsFeedsResponse;
 import com.nidus.twinly.me.dto.response.MeAppNotificationsUnreadCountResponse;
+import com.nidus.twinly.me.dto.response.MeCheckProfileNicknameResponse;
 import com.nidus.twinly.me.dto.response.MeConsentsResponse;
 import com.nidus.twinly.me.dto.response.MeFeedbackOptionsResponse;
 import com.nidus.twinly.me.dto.response.MeHesitationsResponse;
@@ -362,5 +367,25 @@ public class MeController {
                              @Parameter(hidden = true) @RequestHeader(value = AppBlockFilter.VERSION_HEADER, required = false) String appVersion,
                              @Valid @RequestBody MeSendFeedbackRequest request) {
         meService.sendFeedback(userInfo.id(), MeSendFeedbackCommand.from(request), AppPlatform.fromHeader(appPlatform).orElse(null), AppVersion.parse(appVersion).orElse(null));
+    }
+
+    @Operation(summary = "닉네임 수정")
+    @ApiResponses({
+            @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND"),
+            @ApiResponse(responseCode = "409", description = "NICKNAME_ALREADY_USED"),
+            @ApiResponse(responseCode = "422", description = "INVALID_NICKNAME")
+    })
+    @PutMapping("/api/v1/me/profile/nickname")
+    public void changeProfileNickname(@AuthenticationPrincipal UserInfo userInfo,
+                                      @Valid @RequestBody MeChangeProfileNicknameRequest request) {
+        meService.changeProfileNickname(userInfo.id(), MeChangeProfileNicknameCommand.from(request));
+    }
+
+    @Operation(summary = "닉네임 중복 확인")
+    @ApiResponse(responseCode = "422", description = "INVALID_NICKNAME")
+    @PostMapping("/api/v1/me/profile/nickname/check")
+    public MeCheckProfileNicknameResponse checkProfileNickname(@AuthenticationPrincipal UserInfo userInfo,
+                                                               @Valid @RequestBody MeCheckProfileNicknameRequest request) {
+        return MeCheckProfileNicknameResponse.from(meService.checkProfileNickname(userInfo.id(), MeCheckProfileNicknameCommand.from(request)));
     }
 }

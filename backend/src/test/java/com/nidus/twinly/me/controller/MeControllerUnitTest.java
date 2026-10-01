@@ -17,6 +17,8 @@ import com.nidus.twinly.me.domain.HesitationDuration;
 import com.nidus.twinly.me.domain.HesitationStatus;
 import com.nidus.twinly.me.dto.command.MeAiChatMessageCommand;
 import com.nidus.twinly.me.dto.command.MeAppNotificationsReadAllCommand;
+import com.nidus.twinly.me.dto.command.MeChangeProfileNicknameCommand;
+import com.nidus.twinly.me.dto.command.MeCheckProfileNicknameCommand;
 import com.nidus.twinly.me.dto.command.MeChangeProfileVisibilitySettingCommand;
 import com.nidus.twinly.me.dto.command.MeChangePushNotificationsCommand;
 import com.nidus.twinly.me.dto.command.MeGrantConsentsCommand;
@@ -31,6 +33,7 @@ import com.nidus.twinly.me.dto.command.MeRevokeConsentsItemCommand;
 import com.nidus.twinly.me.dto.command.MeSendFeedbackCommand;
 import com.nidus.twinly.me.dto.result.MeAiChatMessageResult;
 import com.nidus.twinly.me.dto.result.MeAiChatStartResult;
+import com.nidus.twinly.me.dto.result.MeCheckProfileNicknameResult;
 import com.nidus.twinly.me.dto.command.MeSubmitTendencyAnswerCommand;
 import com.nidus.twinly.me.dto.command.MeSurveyAnswerCommand;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsItemResult;
@@ -269,7 +272,7 @@ class MeControllerUnitTest {
     void profileEditView_success() throws Exception {
         // given: 서비스가 프로필 수정 화면 정보를 반환
         given(meService.profileEditView(ME))
-                .willReturn(new MeProfileEditViewResult(1L, "홍", "길동", "니두스", "2020123", "2000-01-01",
+                .willReturn(new MeProfileEditViewResult(1L, "트윈이", "홍", "길동", "니두스", "2020123", "2000-01-01",
                         new ProfilePhotoInfo("profile/1/key", "https://cdn/p.jpg", new PhotoPosInfo(new PhotoPosInfo.StartPos(10, 20), 100, 200)),
                         List.of("등산", "영화")));
 
@@ -280,6 +283,7 @@ class MeControllerUnitTest {
         // then: 200 반환 + userId는 문자열로 직렬화
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.userId").value("1"))
+                .andExpect(jsonPath("$.nickname").value("트윈이"))
                 .andExpect(jsonPath("$.familyName").value("홍"))
                 .andExpect(jsonPath("$.givenName").value("길동"))
                 .andExpect(jsonPath("$.affiliation").value("니두스"))
@@ -699,7 +703,7 @@ class MeControllerUnitTest {
                         List.of("차분", "탐험", "계획", "다정", "안정"),
                         new MePersonalityTypePartResult("형용사 한 줄", "형용사 설명"),
                         new MePersonalityTypePartResult("명사 한 줄", "명사 설명"),
-                        "https://cdn.example/personality-types/v1/01110.png"));
+                        "https://cdn.example/personality-types/v1/110.webp"));
 
         // when: 성격 유형 조회 API 호출
         var result = mockMvc.perform(get("/api/v1/me/personality-type")
@@ -715,7 +719,7 @@ class MeControllerUnitTest {
                 .andExpect(jsonPath("$.adjective.description").value("형용사 설명"))
                 .andExpect(jsonPath("$.noun.tagline").value("명사 한 줄"))
                 .andExpect(jsonPath("$.noun.description").value("명사 설명"))
-                .andExpect(jsonPath("$.imageUrl").value("https://cdn.example/personality-types/v1/01110.png"))
+                .andExpect(jsonPath("$.imageUrl").value("https://cdn.example/personality-types/v1/110.webp"))
                 .andExpect(jsonPath("$.description").doesNotExist())
                 .andExpect(jsonPath("$.code").doesNotExist());
         then(meService).should().personalityType(ME);
@@ -1623,5 +1627,128 @@ class MeControllerUnitTest {
         // then: 401 반환 + 서비스는 호출되지 않음
         result.andExpect(status().isUnauthorized());
         then(meService).should(never()).sendFeedback(anyLong(), any(), any(), any());
+    }
+
+    // ---------------------------------------------------------------- 닉네임 수정
+
+    @Test
+    @DisplayName("닉네임 수정 성공 시 200을 반환하고 닉네임 커맨드로 서비스를 호출한다")
+    void changeProfileNickname_success() throws Exception {
+        // when: 닉네임 수정 API 호출
+        var result = mockMvc.perform(put("/api/v1/me/profile/nickname")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"nickname":"트윈이"}
+                        """));
+
+        // then: 200 반환 + 인증 유저 id·닉네임 커맨드로 위임
+        result.andExpect(status().isOk());
+        then(meService).should().changeProfileNickname(ME, new MeChangeProfileNicknameCommand("트윈이"));
+    }
+
+    @Test
+    @DisplayName("닉네임 수정 요청의 nickname이 공백뿐이면 400을 반환하고 서비스를 호출하지 않는다")
+    void changeProfileNickname_with_blank_nickname_returns_400() throws Exception {
+        // when: 공백 닉네임으로 닉네임 수정 API 호출
+        var result = mockMvc.perform(put("/api/v1/me/profile/nickname")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"nickname":"   "}
+                        """));
+
+        // then: 400 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest());
+        then(meService).should(never()).changeProfileNickname(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("닉네임 수정 시 이미 사용 중인 닉네임이면 서비스 예외가 409로 매핑된다")
+    void changeProfileNickname_when_already_used_returns_409() throws Exception {
+        // given: 서비스가 NICKNAME_ALREADY_USED 예외를 던짐
+        willThrow(new BusinessException(ErrorCode.NICKNAME_ALREADY_USED))
+                .given(meService).changeProfileNickname(anyLong(), any());
+
+        // when: 중복 닉네임으로 닉네임 수정 API 호출
+        var result = mockMvc.perform(put("/api/v1/me/profile/nickname")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"nickname":"트윈이"}
+                        """));
+
+        // then: 409 반환 + 에러 코드 JSON
+        result.andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value(ErrorCode.NICKNAME_ALREADY_USED.name()));
+    }
+
+    @Test
+    @DisplayName("닉네임 수정 시 인증 헤더가 없으면 401을 반환하고 서비스를 호출하지 않는다")
+    void changeProfileNickname_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 닉네임 수정 API 호출
+        var result = mockMvc.perform(put("/api/v1/me/profile/nickname")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"nickname":"트윈이"}
+                        """));
+
+        // then: 401 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isUnauthorized());
+        then(meService).should(never()).changeProfileNickname(anyLong(), any());
+    }
+
+    // ---------------------------------------------------------------- 닉네임 중복 확인
+
+    @Test
+    @DisplayName("닉네임 중복 확인 성공 시 200과 사용 가능 여부를 반환하고 닉네임 커맨드로 서비스를 호출한다")
+    void checkProfileNickname_success() throws Exception {
+        // given: 서비스가 사용 가능(true)을 반환
+        given(meService.checkProfileNickname(ME, new MeCheckProfileNicknameCommand("트윈이")))
+                .willReturn(new MeCheckProfileNicknameResult(true));
+
+        // when: 닉네임 중복 확인 API 호출
+        var result = mockMvc.perform(post("/api/v1/me/profile/nickname/check")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"nickname":"트윈이"}
+                        """));
+
+        // then: 200 반환 + isAvailable JSON + 인증 유저 id·닉네임 커맨드로 위임
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.isAvailable").value(true));
+        then(meService).should().checkProfileNickname(ME, new MeCheckProfileNicknameCommand("트윈이"));
+    }
+
+    @Test
+    @DisplayName("닉네임 중복 확인 요청의 nickname이 공백뿐이면 400을 반환하고 서비스를 호출하지 않는다")
+    void checkProfileNickname_with_blank_nickname_returns_400() throws Exception {
+        // when: 공백 닉네임으로 중복 확인 API 호출
+        var result = mockMvc.perform(post("/api/v1/me/profile/nickname/check")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"nickname":"   "}
+                        """));
+
+        // then: 400 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest());
+        then(meService).should(never()).checkProfileNickname(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("닉네임 중복 확인 시 인증 헤더가 없으면 401을 반환하고 서비스를 호출하지 않는다")
+    void checkProfileNickname_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 중복 확인 API 호출
+        var result = mockMvc.perform(post("/api/v1/me/profile/nickname/check")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"nickname":"트윈이"}
+                        """));
+
+        // then: 401 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isUnauthorized());
+        then(meService).should(never()).checkProfileNickname(anyLong(), any());
     }
 }

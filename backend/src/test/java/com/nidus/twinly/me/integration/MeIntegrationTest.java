@@ -1,5 +1,7 @@
 package com.nidus.twinly.me.integration;
 
+import com.nidus.twinly.anon.entity.AnonSession;
+import com.nidus.twinly.anon.repository.AnonSessionRepository;
 import com.nidus.twinly.aichat.domain.AiChatSender;
 import com.nidus.twinly.aichat.entity.AiChat;
 import com.nidus.twinly.aichat.repository.AiChatRepository;
@@ -77,6 +79,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import com.nidus.twinly.common.survey.SurveyLoader;
@@ -157,6 +160,9 @@ class MeIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     EntityManager entityManager;
+
+    @Autowired
+    AnonSessionRepository anonSessionRepository;
 
     // CloudFront 서명 URL 생성은 실제 키가 필요하므로 목으로 대체한다.
     @MockitoBean
@@ -474,7 +480,7 @@ class MeIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.noun.tagline").value("한결같이 곁을 지키는 사람"))
                 .andExpect(jsonPath("$.noun.description").value(
                         "한번 맺은 관계와 약속은 끝까지 책임져요. 웬만한 일에는 흔들리지 않고, 변함없는 모습으로 주변에 든든한 버팀목이 되어 줘요."))
-                .andExpect(jsonPath("$.imageUrl").value("https://test.cloudfront.net/personality-types/v1/01110.png"))
+                .andExpect(jsonPath("$.imageUrl").value("https://test.cloudfront.net/personality-types/v1/110.webp"))
                 .andExpect(jsonPath("$.code").doesNotExist());
     }
 
@@ -554,6 +560,7 @@ class MeIntegrationTest extends AbstractIntegrationTest {
         // then: 저장한 값이 그대로 복호화되어 응답되고, 사진이 없으면 profilePhoto는 null
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.userId").value(me.getId().toString()))
+                .andExpect(jsonPath("$.nickname").value(me.getNickname()))
                 .andExpect(jsonPath("$.familyName").value(me.getFamilyName()))
                 .andExpect(jsonPath("$.givenName").value(me.getGivenName()))
                 .andExpect(jsonPath("$.affiliation").value(me.getAffiliation()))
@@ -1693,6 +1700,173 @@ class MeIntegrationTest extends AbstractIntegrationTest {
                 .extracting(UserFeedback::getType, UserFeedback::getDetail)
                 .containsExactly(tuple(FeedbackType.WITHDRAWAL, null));
         assertThat(optionIdsOf(feedbacks.getFirst())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("닉네임 수정: 앞뒤 공백을 뺀 닉네임이 DB에 저장되고 프로필 수정 화면 조회에 그대로 나온다")
+    void changeProfileNickname_end_to_end() throws Exception {
+        // given: 실제 유저 저장
+        User me = saveUser();
+        flushAndClear();
+
+        // when: 실제 액세스 토큰으로 앞뒤 공백이 있는 닉네임 수정 API 호출
+        mockMvc.perform(put("/api/v1/me/profile/nickname")
+                        .header("Authorization", bearer(me.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"nickname": "  트윈리새닉  "}
+                                """))
+                .andExpect(status().isOk());
+
+        // then: DB에 공백이 제거된 닉네임이 저장되고, 프로필 수정 화면에도 바뀐 값이 나온다
+        flushAndClear();
+        assertThat(userRepository.findById(me.getId()).orElseThrow().getNickname()).isEqualTo("트윈리새닉");
+        mockMvc.perform(get("/api/v1/me/profile-edit-view")
+                        .header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nickname").value("트윈리새닉"));
+    }
+
+    @Test
+    @DisplayName("닉네임 수정: 대소문자를 구분하지 않는 DB에서도 자기 닉네임의 대소문자만 바꾸면 성공한다")
+    void changeProfileNickname_case_only_change_end_to_end() throws Exception {
+        // given: 현재 닉네임이 Twinly인 실제 유저
+        User me = saveUser();
+        me.changeNickname("Twinly");
+        flushAndClear();
+
+        // when: 대소문자만 다른 닉네임으로 수정 API 호출
+        var result = mockMvc.perform(put("/api/v1/me/profile/nickname")
+                .header("Authorization", bearer(me.getId()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"nickname": "twinly"}
+                        """));
+
+        // then: 본인 행에 막히지 않고 200 + DB에 바뀐 대소문자가 저장됨
+        result.andExpect(status().isOk());
+        flushAndClear();
+        assertThat(userRepository.findById(me.getId()).orElseThrow().getNickname()).isEqualTo("twinly");
+    }
+
+    @Test
+    @DisplayName("닉네임 수정: 다른 유저가 대소문자만 다른 같은 닉네임을 쓰고 있으면 409를 반환하고 닉네임은 그대로다")
+    void changeProfileNickname_taken_by_other_user_ignoring_case_returns_409() throws Exception {
+        // given: 다른 유저가 Twinly를 쓰는 중
+        User me = saveUser();
+        User other = saveUser();
+        other.changeNickname("Twinly");
+        flushAndClear();
+
+        // when: 대문자로만 바꾼 TWINLY로 수정 API 호출
+        var result = mockMvc.perform(put("/api/v1/me/profile/nickname")
+                .header("Authorization", bearer(me.getId()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"nickname": "TWINLY"}
+                        """));
+
+        // then: 409 NICKNAME_ALREADY_USED + 내 닉네임은 그대로
+        result.andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value(ErrorCode.NICKNAME_ALREADY_USED.name()));
+        entityManager.clear();
+        assertThat(userRepository.findById(me.getId()).orElseThrow().getNickname()).isEqualTo(me.getNickname());
+    }
+
+    @Test
+    @DisplayName("닉네임 수정: 온보딩 중인 익명 세션이 잡아 둔 닉네임이면 409를 반환한다")
+    void changeProfileNickname_taken_by_onboarding_session_returns_409() throws Exception {
+        // given: 실제 유저 + 같은 닉네임을 잡아 둔 온보딩 중인 익명 세션
+        User me = saveUser();
+        AnonSession anonSession = AnonSession.create(UUID.randomUUID(), Instant.now().plus(Duration.ofDays(1)));
+        anonSession.changeNickname("트윈리온보딩");
+        anonSessionRepository.save(anonSession);
+        flushAndClear();
+
+        // when: 익명 세션이 잡아 둔 닉네임으로 수정 API 호출
+        var result = mockMvc.perform(put("/api/v1/me/profile/nickname")
+                .header("Authorization", bearer(me.getId()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"nickname": "트윈리온보딩"}
+                        """));
+
+        // then: 409 NICKNAME_ALREADY_USED + 내 닉네임은 그대로
+        result.andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value(ErrorCode.NICKNAME_ALREADY_USED.name()));
+        entityManager.clear();
+        assertThat(userRepository.findById(me.getId()).orElseThrow().getNickname()).isEqualTo(me.getNickname());
+    }
+
+    @Test
+    @DisplayName("닉네임 수정: 인증 헤더가 없으면 401을 반환한다")
+    void changeProfileNickname_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 닉네임 수정 API 호출
+        var result = mockMvc.perform(put("/api/v1/me/profile/nickname")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"nickname": "트윈리새닉"}
+                        """));
+
+        // then: 401 반환
+        result.andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("닉네임 중복 확인: 내 현재 닉네임은 대소문자만 달라도 사용 가능으로 응답한다")
+    void checkProfileNickname_own_nickname_is_available_end_to_end() throws Exception {
+        // given: 현재 닉네임이 Twinly인 실제 유저
+        User me = saveUser();
+        me.changeNickname("Twinly");
+        flushAndClear();
+
+        // when: 대소문자만 다른 내 닉네임으로 중복 확인 API 호출
+        var result = mockMvc.perform(post("/api/v1/me/profile/nickname/check")
+                .header("Authorization", bearer(me.getId()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"nickname": "twinly"}
+                        """));
+
+        // then: 본인 행에 막히지 않고 사용 가능
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.isAvailable").value(true));
+    }
+
+    @Test
+    @DisplayName("닉네임 중복 확인: 다른 유저가 대소문자만 다른 같은 닉네임을 쓰고 있으면 사용 불가로 응답한다")
+    void checkProfileNickname_taken_by_other_user_ignoring_case_end_to_end() throws Exception {
+        // given: 다른 유저가 Twinly를 쓰는 중
+        User me = saveUser();
+        User other = saveUser();
+        other.changeNickname("Twinly");
+        flushAndClear();
+
+        // when: 대문자로만 바꾼 TWINLY로 중복 확인 API 호출
+        var result = mockMvc.perform(post("/api/v1/me/profile/nickname/check")
+                .header("Authorization", bearer(me.getId()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"nickname": "TWINLY"}
+                        """));
+
+        // then: 사용 불가
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.isAvailable").value(false));
+    }
+
+    @Test
+    @DisplayName("닉네임 중복 확인: 인증 헤더가 없으면 401을 반환한다")
+    void checkProfileNickname_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 중복 확인 API 호출
+        var result = mockMvc.perform(post("/api/v1/me/profile/nickname/check")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"nickname": "트윈리새닉"}
+                        """));
+
+        // then: 401 반환
+        result.andExpect(status().isUnauthorized());
     }
 
     private List<Long> optionIdsOf(UserFeedback feedback) {

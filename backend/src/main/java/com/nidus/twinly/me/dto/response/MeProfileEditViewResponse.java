@@ -10,6 +10,7 @@ import java.util.List;
 public record MeProfileEditViewResponse(
         @JsonFormat(shape = JsonFormat.Shape.STRING)
         Long userId,
+        String nickname,
         String familyName,
         String givenName,
         String affiliation,
@@ -21,6 +22,6 @@ public record MeProfileEditViewResponse(
 ) {
 
     public static MeProfileEditViewResponse from(MeProfileEditViewResult result) {
-        return new MeProfileEditViewResponse(result.userId(), result.familyName(), result.givenName(), result.affiliation(), result.affiliationNumber(), result.birthDate(), result.profilePhoto(), result.interests());
+        return new MeProfileEditViewResponse(result.userId(), result.nickname(), result.familyName(), result.givenName(), result.affiliation(), result.affiliationNumber(), result.birthDate(), result.profilePhoto(), result.interests());
     }
 }

@@ -3,6 +3,7 @@ package com.nidus.twinly.me.service;
 import com.nidus.twinly.activity.domain.QuestionType;
 import com.nidus.twinly.activity.entity.Question;
 import com.nidus.twinly.activity.repository.QuestionRepository;
+import com.nidus.twinly.anon.repository.AnonSessionRepository;
 import com.nidus.twinly.app.domain.AppPlatform;
 import com.nidus.twinly.app.domain.AppVersion;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
@@ -41,6 +42,8 @@ import com.nidus.twinly.legal.service.PolicyUrlResolver;
 import com.nidus.twinly.me.domain.HesitationDuration;
 import com.nidus.twinly.me.domain.HesitationStatus;
 import com.nidus.twinly.me.dto.command.MeAppNotificationsReadAllCommand;
+import com.nidus.twinly.me.dto.command.MeChangeProfileNicknameCommand;
+import com.nidus.twinly.me.dto.command.MeCheckProfileNicknameCommand;
 import com.nidus.twinly.me.dto.command.MeChangeProfileVisibilitySettingCommand;
 import com.nidus.twinly.me.dto.command.MeChangePushNotificationsCommand;
 import com.nidus.twinly.me.dto.command.MeGrantConsentsCommand;
@@ -59,6 +62,7 @@ import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsProfileTargetResult
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsResult;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsTargetResult;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsUnreadCountResult;
+import com.nidus.twinly.me.dto.result.MeCheckProfileNicknameResult;
 import com.nidus.twinly.me.dto.result.MeConsentsItemResult;
 import com.nidus.twinly.me.dto.result.MeConsentsResult;
 import com.nidus.twinly.me.dto.result.MeFeedbackOptionsItemResult;
@@ -98,6 +102,7 @@ import com.nidus.twinly.report.entity.Report;
 import com.nidus.twinly.report.repository.ReportRepository;
 import com.nidus.twinly.season.writer.SeasonParticipationWriter;
 import com.nidus.twinly.user.domain.DisclosureField;
+import com.nidus.twinly.user.domain.NicknamePolicy;
 import com.nidus.twinly.user.entity.DisclosureAgreement;
 import com.nidus.twinly.user.entity.PersonaElement;
 import com.nidus.twinly.user.entity.Photo;
@@ -114,6 +119,7 @@ import com.nidus.twinly.user.repository.UserRepository;
 import com.nidus.twinly.user.repository.UserSurveyAnswerRepository;
 import com.nidus.twinly.user.repository.UserTendencyAnswerRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -158,6 +164,7 @@ public class MeService {
 
     private final PhotoRepository photoRepository;
     private final UserRepository userRepository;
+    private final AnonSessionRepository anonSessionRepository;
     private final PolicyNameRepository policyNameRepository;
     private final AgreementRepository agreementRepository;
     private final NotificationSettingRepository notificationSettingRepository;
@@ -241,6 +248,7 @@ public class MeService {
 
         return new MeProfileEditViewResult(
                 user.getId(),
+                user.getNickname(),
                 user.getFamilyName(),
                 user.getGivenName(),
                 user.getAffiliation(),
@@ -760,5 +768,36 @@ public class MeService {
         userFeedbackOptionRepository.saveAll(optionIds.stream()
                 .map(optionId -> UserFeedbackOption.create(feedback.getId(), optionId))
                 .toList());
+    }
+
+    @Transactional
+    public void changeProfileNickname(Long userId, MeChangeProfileNicknameCommand command) {
+        String nickname = NicknamePolicy.normalize(command.nickname());
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        if (isNicknameTakenByOthers(nickname, userId)) {
+            throw new BusinessException(ErrorCode.NICKNAME_ALREADY_USED, "이미 사용 중인 닉네임입니다: " + nickname);
+        }
+
+        user.changeNickname(nickname);
+
+        try {
+            userRepository.saveAndFlush(user);
+        } catch (DataIntegrityViolationException e) {
+            throw new BusinessException(ErrorCode.NICKNAME_ALREADY_USED, "이미 사용 중인 닉네임입니다: " + nickname);
+        }
+    }
+
+    public MeCheckProfileNicknameResult checkProfileNickname(Long userId, MeCheckProfileNicknameCommand command) {
+        String nickname = NicknamePolicy.normalize(command.nickname());
+
+        return new MeCheckProfileNicknameResult(!isNicknameTakenByOthers(nickname, userId));
+    }
+
+    private boolean isNicknameTakenByOthers(String nickname, Long userId) {
+        return userRepository.existsByNicknameAndIdNot(nickname, userId)
+                || anonSessionRepository.existsByNickname(nickname);
     }
 }

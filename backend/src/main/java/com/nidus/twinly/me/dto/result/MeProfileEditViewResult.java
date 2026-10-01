@@ -6,6 +6,7 @@ import java.util.List;
 
 public record MeProfileEditViewResult(
         Long userId,
+        String nickname,
         String familyName,
         String givenName,
         String affiliation,

@@ -187,6 +187,10 @@ public class User {
         this.affiliationHash = affiliationHash;
     }
 
+    public void changeNickname(String nickname) {
+        this.nickname = nickname;
+    }
+
     public void requestWithdrawal(Duration gracePeriod) {
         this.withdrawalRequestedAt = Instant.now();
         this.withdrawalScheduledAt = this.withdrawalRequestedAt.plus(gracePeriod);
