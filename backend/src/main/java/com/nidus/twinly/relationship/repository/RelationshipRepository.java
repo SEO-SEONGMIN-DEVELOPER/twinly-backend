@@ -17,7 +17,7 @@ public interface RelationshipRepository extends JpaRepository<Relationship, Long
         SELECT r.*
         FROM relationships r
         WHERE r.user_id = :userId AND r.partner_user_id = :partnerUserId AND r.update_time <= :now
-        ORDER BY r.date DESC
+        ORDER BY r.date DESC, r.update_time DESC
         LIMIT 1
         """, nativeQuery = true)
     Optional<Relationship> findLatestUntilByUserIdAndPartnerUserId(@Param("userId") Long userId,
@@ -28,7 +28,7 @@ public interface RelationshipRepository extends JpaRepository<Relationship, Long
         SELECT r.*
         FROM relationships r
         WHERE r.user_id = :userId AND r.partner_user_id = :partnerUserId AND r.date < :date
-        ORDER BY r.date DESC
+        ORDER BY r.date DESC, r.update_time DESC
         LIMIT 1
         """, nativeQuery = true)
     Optional<Relationship> findLatestByUserIdAndPartnerUserIdBeforeDate(@Param("userId") Long userId,
@@ -36,16 +36,14 @@ public interface RelationshipRepository extends JpaRepository<Relationship, Long
                                                                        @Param("date") LocalDate date);
 
     @Query(value = """
-            SELECT r.*
-            FROM relationships r
-            INNER JOIN (
-                SELECT partner_user_id, MAX(date) AS max_date
-                FROM relationships
-                WHERE user_id = :userId AND partner_user_id IN (:partnerUserIds) AND update_time <= :now
-                GROUP BY partner_user_id
-            ) latest ON r.user_id = :userId
-                         AND r.partner_user_id = latest.partner_user_id
-                         AND r.date = latest.max_date
+            SELECT id, user_id, date, version, partner_user_id, intimacy, partner_model, update_time, created_at
+            FROM (
+                SELECT r.*,
+                       ROW_NUMBER() OVER (PARTITION BY r.partner_user_id ORDER BY r.date DESC, r.update_time DESC) AS row_num
+                FROM relationships r
+                WHERE r.user_id = :userId AND r.partner_user_id IN (:partnerUserIds) AND r.update_time <= :now
+            ) latest
+            WHERE latest.row_num = 1
             """, nativeQuery = true)
     List<Relationship> findLatestUntilByUserIdAndPartnerUserIdIn(@Param("userId") Long userId,
                                                                @Param("partnerUserIds") List<Long> partnerUserIds,
@@ -71,7 +69,7 @@ public interface RelationshipRepository extends JpaRepository<Relationship, Long
                                           @Param("limit") Integer limit,
                                           @Param("now") LocalDateTime now);
 
-    List<Relationship> findAllByUserIdAndPartnerUserIdAndUpdateTimeLessThanEqualOrderByDateAsc(Long userId, Long partnerUserId, LocalDateTime now);
+    List<Relationship> findAllByUserIdAndPartnerUserIdAndUpdateTimeLessThanEqualOrderByDateAscUpdateTimeAsc(Long userId, Long partnerUserId, LocalDateTime now);
 
     @Modifying
     @Query("DELETE FROM Relationship r WHERE r.userId IN :userIds")
@@ -87,7 +85,7 @@ public interface RelationshipRepository extends JpaRepository<Relationship, Long
               AND (r.date >= :from OR r.date = (
                     SELECT MAX(p.date) FROM Relationship p
                     WHERE p.userId = :userId AND p.partnerUserId = :partnerUserId AND p.date < :from AND p.updateTime <= :now))
-            ORDER BY r.date ASC
+            ORDER BY r.date ASC, r.updateTime ASC
             """)
     List<Relationship> findForDeltaRange(@Param("userId") Long userId,
                                          @Param("partnerUserId") Long partnerUserId,

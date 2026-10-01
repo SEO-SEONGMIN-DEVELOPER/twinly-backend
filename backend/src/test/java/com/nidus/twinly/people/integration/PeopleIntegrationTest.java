@@ -483,6 +483,79 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.scenes[?(@.sceneId == '" + ongoing.getId() + "')]").isEmpty());
     }
 
+    @Test
+    @DisplayName("첫 만남 날 친밀도 0 기록만 지났으면 목록·프로필에는 0으로, 알게 된 사실에는 안내 문구로 보인다")
+    void first_meeting_zero_record_is_visible_before_ai_record() throws Exception {
+        // given: 같은 날짜에 한 시간 전 시작한 첫 대화의 0점 기록과, 두 시간 뒤에 보일 AI 기록
+        LocalDateTime now = KstTimes.now();
+        LocalDate today = KstTimes.today();
+        User me = saveUser();
+        User partner = saveUser();
+        saveRelationshipOn(me.getId(), partner.getId(), today, now.plusHours(2), 40, "커피를 좋아한다");
+        saveRelationshipOn(me.getId(), partner.getId(), today, now.minusHours(1), 0, "아직 알게된 점이 없습니다.");
+
+        // when & then: 첫 대화가 시작된 상대가 목록에 친밀도 0으로 보인다
+        mockMvc.perform(get("/api/v1/people")
+                        .header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.people.length()").value(1))
+                .andExpect(jsonPath("$.people[0].userId").value(partner.getId().toString()))
+                .andExpect(jsonPath("$.people[0].intimacy").value(0));
+
+        // when & then: 프로필 친밀도도 0
+        mockMvc.perform(get("/api/v1/people/{userId}/profile", partner.getId().toString())
+                        .header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.intimacy").value(0));
+
+        // when & then: 알게 된 사실은 404 가 아니라 안내 문구
+        mockMvc.perform(get("/api/v1/people/{userId}/learned-facts", partner.getId().toString())
+                        .header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.learnedFacts").value("아직 알게된 점이 없습니다."));
+    }
+
+    @Test
+    @DisplayName("같은 날짜의 0점 기록과 AI 기록이 모두 지났으면 갱신 시각이 늦은 AI 기록을 최신으로 쓰고, 첫날 변화량은 0부터 잰다")
+    void same_date_records_use_later_update_time_as_latest() throws Exception {
+        // given: 7/20 하루에 09시 0점 기록과 22시 AI 기록. id 순서가 갱신 시각 순서와 반대가 되도록 AI 기록을 먼저 저장한다
+        User me = saveUser();
+        User partner = saveUser();
+        saveRelationshipOn(me.getId(), partner.getId(), DAY_2, DAY_2.atTime(22, 0), 40, "커피를 좋아한다");
+        saveRelationshipOn(me.getId(), partner.getId(), DAY_2, DAY_2.atTime(9, 0), 0, "아직 알게된 점이 없습니다.");
+        Scene scene = saveScene(me.getId(), DAY_2, "v1", "카페", "커피를 마셨다", null);
+        saveScenePartner(scene.getId(), partner.getId());
+
+        // when & then: 목록에는 한 번만, AI 친밀도로 보인다 (상대별 한 줄을 고르지 못하면 중복 키 예외로 500)
+        mockMvc.perform(get("/api/v1/people")
+                        .header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.people.length()").value(1))
+                .andExpect(jsonPath("$.people[0].intimacy").value(40));
+
+        // when & then: 프로필·시계열·알게 된 사실도 AI 기록 기준
+        mockMvc.perform(get("/api/v1/people/{userId}/profile", partner.getId().toString())
+                        .header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.intimacy").value(40));
+        mockMvc.perform(get("/api/v1/people/{userId}/intimacy-series", partner.getId().toString())
+                        .header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currentIntimacy").value(40));
+        mockMvc.perform(get("/api/v1/people/{userId}/learned-facts", partner.getId().toString())
+                        .header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.learnedFacts").value("커피를 좋아한다"));
+
+        // when & then: 첫 만남 날 이벤트의 변화량은 0점 기록에서 AI 기록까지
+        mockMvc.perform(get("/api/v1/people/{userId}/events", partner.getId().toString())
+                        .header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.events.length()").value(1))
+                .andExpect(jsonPath("$.events[0].intimacyDelta").value(40))
+                .andExpect(jsonPath("$.events[0].relationshipChange").value("친한 사이"));
+    }
+
     // ------------------------------------------------------------------ fixtures
 
     private void savePhoto(Long userId) {
@@ -491,6 +564,11 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
     }
 
     private Relationship saveRelationship(Long userId, Long partnerUserId, LocalDate date, int intimacy, String partnerModel) {
+        return saveRelationshipOn(userId, partnerUserId, date, date.atTime(23, 0), intimacy, partnerModel);
+    }
+
+    private Relationship saveRelationshipOn(Long userId, Long partnerUserId, LocalDate date, LocalDateTime updateTime,
+                                            int intimacy, String partnerModel) {
         Relationship relationship = newInstance(Relationship.class);
         ReflectionTestUtils.setField(relationship, "userId", userId);
         ReflectionTestUtils.setField(relationship, "partnerUserId", partnerUserId);
@@ -498,15 +576,13 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
         ReflectionTestUtils.setField(relationship, "version", "v1");
         ReflectionTestUtils.setField(relationship, "intimacy", intimacy);
         ReflectionTestUtils.setField(relationship, "partnerModel", partnerModel);
-        ReflectionTestUtils.setField(relationship, "updateTime", date.atTime(23, 0));
+        ReflectionTestUtils.setField(relationship, "updateTime", updateTime);
         ReflectionTestUtils.setField(relationship, "createdAt", Instant.now());
         return relationshipRepository.saveAndFlush(relationship);
     }
 
     private Relationship saveRelationshipAt(Long userId, Long partnerUserId, LocalDateTime updateTime, int intimacy, String partnerModel) {
-        Relationship relationship = saveRelationship(userId, partnerUserId, updateTime.toLocalDate(), intimacy, partnerModel);
-        ReflectionTestUtils.setField(relationship, "updateTime", updateTime);
-        return relationshipRepository.saveAndFlush(relationship);
+        return saveRelationshipOn(userId, partnerUserId, updateTime.toLocalDate(), updateTime, intimacy, partnerModel);
     }
 
     private Scene saveSceneAt(Long userId, LocalDateTime startsAt, LocalDateTime endsAt, String place) {
