@@ -236,7 +236,7 @@ public class PeopleService {
 
     public PeopleIntimacySeriesResult intimacySeries(Long userId, Long partnerUserId) {
         List<Relationship> relationships = relationshipRepository
-                .findAllByUserIdAndPartnerUserIdAndUpdateTimeLessThanEqualOrderByDateAsc(userId, partnerUserId, KstTimes.now());
+                .findAllByUserIdAndPartnerUserIdAndUpdateTimeLessThanEqualOrderByDateAscUpdateTimeAsc(userId, partnerUserId, KstTimes.now());
 
         if (relationships.isEmpty()) {
             throw new BusinessException(ErrorCode.RELATIONSHIP_NOT_FOUND);

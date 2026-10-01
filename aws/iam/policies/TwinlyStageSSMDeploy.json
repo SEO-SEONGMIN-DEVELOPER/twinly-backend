@@ -23,6 +23,18 @@
             "Effect": "Allow",
             "Action": "elasticloadbalancing:DescribeTargetHealth",
             "Resource": "*"
+        },
+        {
+            "Sid": "RotateApiTargetsDuringDeploy",
+            "Effect": "Allow",
+            "Action": [
+                "elasticloadbalancing:DeregisterTargets",
+                "elasticloadbalancing:RegisterTargets"
+            ],
+            "Resource": [
+                "arn:aws:elasticloadbalancing:ap-northeast-2:968177690717:targetgroup/twinly-stage-api-tg/9a145ab64b8995bf",
+                "arn:aws:elasticloadbalancing:ap-northeast-2:968177690717:targetgroup/twinly-stage-internal-api-tg/ed33c8b65b383685"
+            ]
         }
     ]
 }

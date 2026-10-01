@@ -433,7 +433,7 @@ class PeopleServiceUnitTest {
     void intimacySeries_distributes_long_range_into_max_points() {
         // given: 59일 전 첫 기록(10)과 10일 전 기록(50)
         LocalDate today = KstTimes.today();
-        given(relationshipRepository.findAllByUserIdAndPartnerUserIdAndUpdateTimeLessThanEqualOrderByDateAsc(eq(ME), eq(20L), any(LocalDateTime.class)))
+        given(relationshipRepository.findAllByUserIdAndPartnerUserIdAndUpdateTimeLessThanEqualOrderByDateAscUpdateTimeAsc(eq(ME), eq(20L), any(LocalDateTime.class)))
                 .willReturn(List.of(
                         relationship(ME, 20L, today.minusDays(59), 10, "{}"),
                         relationship(ME, 20L, today.minusDays(10), 50, "{}")));
@@ -465,7 +465,7 @@ class PeopleServiceUnitTest {
     void intimacySeries_short_range_falls_back_to_daily_points() {
         // given: 2일 전 첫 기록(10)과 오늘 기록(30)
         LocalDate today = KstTimes.today();
-        given(relationshipRepository.findAllByUserIdAndPartnerUserIdAndUpdateTimeLessThanEqualOrderByDateAsc(eq(ME), eq(20L), any(LocalDateTime.class)))
+        given(relationshipRepository.findAllByUserIdAndPartnerUserIdAndUpdateTimeLessThanEqualOrderByDateAscUpdateTimeAsc(eq(ME), eq(20L), any(LocalDateTime.class)))
                 .willReturn(List.of(
                         relationship(ME, 20L, today.minusDays(2), 10, "{}"),
                         relationship(ME, 20L, today, 30, "{}")));
@@ -484,7 +484,7 @@ class PeopleServiceUnitTest {
     @DisplayName("관계 기록이 전혀 없으면 RELATIONSHIP_NOT_FOUND 예외가 발생한다")
     void intimacySeries_without_relationship_throws() {
         // given: 두 유저 사이의 관계 기록이 없음
-        given(relationshipRepository.findAllByUserIdAndPartnerUserIdAndUpdateTimeLessThanEqualOrderByDateAsc(eq(ME), eq(20L), any(LocalDateTime.class)))
+        given(relationshipRepository.findAllByUserIdAndPartnerUserIdAndUpdateTimeLessThanEqualOrderByDateAscUpdateTimeAsc(eq(ME), eq(20L), any(LocalDateTime.class)))
                 .willReturn(List.of());
 
         // when & then: 만난 첫 날을 정할 수 없으므로 RELATIONSHIP_NOT_FOUND 예외 발생

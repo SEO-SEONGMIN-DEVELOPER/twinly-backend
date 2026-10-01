@@ -66,6 +66,8 @@ public class SimulationService {
     private static final String FIRST_VERSION = "v1";
     private static final String PLACE_SEPARATOR = ":";
     private static final String PLACE_SEPARATOR_REPLACEMENT = " ";
+    private static final int FIRST_MEETING_INTIMACY = 0;
+    private static final String FIRST_MEETING_PARTNER_MODEL = "아직 알게된 점이 없습니다.";
 
     private final SceneRepository sceneRepository;
     private final ScenePartnerRepository scenePartnerRepository;
@@ -99,9 +101,10 @@ public class SimulationService {
         deletePrevious(userId, date, previousScenes);
 
         saveScenes(userId, date, version, command.scenes());
-        scheduleFirstMeetings(userId, date, command.scenes());
+        Map<Long, LocalDateTime> firstMeetingStartByPartnerUserId = firstMeetingStartByPartnerUserId(userId, date, command.scenes());
+        scheduleFirstMeetings(userId, date, firstMeetingStartByPartnerUserId);
         saveQuestions(userId, date, version, command.questions());
-        saveRelationships(userId, date, version, command.relationships());
+        saveRelationships(userId, date, version, command.relationships(), firstMeetingStartByPartnerUserId);
     }
 
     private void validatePartnersExist(SimulationsCommand command) {
@@ -235,24 +238,24 @@ public class SimulationService {
         return distinct(with);
     }
 
-    private void scheduleFirstMeetings(Long userId, LocalDate date, List<SimulationsSceneCommand> commands) {
+    private Map<Long, LocalDateTime> firstMeetingStartByPartnerUserId(Long userId, LocalDate date, List<SimulationsSceneCommand> commands) {
         Map<Long, LocalDateTime> firstDialogueStartByPartnerUserId = firstDialogueStartByPartnerUserId(userId, commands);
 
         if (firstDialogueStartByPartnerUserId.isEmpty()) {
-            return;
+            return Map.of();
         }
 
         List<Long> alreadyMetPartnerUserIds = scenePartnerRepository.findPartnerUserIdsWithDialogueBeforeDate(
                 userId, List.copyOf(firstDialogueStartByPartnerUserId.keySet()), date);
 
-        firstDialogueStartByPartnerUserId.forEach((partnerUserId, start) -> {
-            if (alreadyMetPartnerUserIds.contains(partnerUserId)) {
-                return;
-            }
+        firstDialogueStartByPartnerUserId.keySet().removeAll(alreadyMetPartnerUserIds);
+        return firstDialogueStartByPartnerUserId;
+    }
 
-            appNotificationScheduleRepository.insertIfAbsent(
-                    userId, partnerUserId, AppNotificationScheduleType.FIRST_MEETING.name(), date, KstTimes.toInstant(start));
-        });
+    private void scheduleFirstMeetings(Long userId, LocalDate date, Map<Long, LocalDateTime> firstMeetingStartByPartnerUserId) {
+        firstMeetingStartByPartnerUserId.forEach((partnerUserId, start) ->
+                appNotificationScheduleRepository.insertIfAbsent(
+                        userId, partnerUserId, AppNotificationScheduleType.FIRST_MEETING.name(), date, KstTimes.toInstant(start)));
     }
 
     private Map<Long, LocalDateTime> firstDialogueStartByPartnerUserId(Long userId, List<SimulationsSceneCommand> commands) {
@@ -281,16 +284,20 @@ public class SimulationService {
                 .toList());
     }
 
-    private void saveRelationships(Long userId, LocalDate date, String version, List<SimulationsRelationshipCommand> commands) {
+    private void saveRelationships(Long userId, LocalDate date, String version, List<SimulationsRelationshipCommand> commands,
+                                   Map<Long, LocalDateTime> firstMeetingStartByPartnerUserId) {
         Map<Long, LocalDateTime> becameFriendTimeByPartnerUserId = becameFriendTimeByPartnerUserId(userId, date, commands);
 
-        relationshipRepository.saveAll(commands.stream()
-                .map(command -> Relationship.create(userId, date, version, command.partnerId(), command.rapport(),
-                        command.partnerModel(), command.updateTime()))
-                .toList());
+        List<Relationship> relationships = Stream.concat(
+                        commands.stream()
+                                .map(command -> Relationship.create(userId, date, version, command.partnerId(), command.rapport(),
+                                        command.partnerModel(), command.updateTime())),
+                        firstMeetingRelationships(userId, date, version, commands, firstMeetingStartByPartnerUserId).stream())
+                .toList();
+        relationshipRepository.saveAll(relationships);
 
-        commands.stream()
-                .map(SimulationsRelationshipCommand::partnerId)
+        relationships.stream()
+                .map(Relationship::getPartnerUserId)
                 .distinct()
                 .forEach(partnerUserId -> encounterRepository.upsert(
                         Math.min(userId, partnerUserId), Math.max(userId, partnerUserId)));
@@ -300,6 +307,22 @@ public class SimulationService {
                         userId, partnerUserId, AppNotificationScheduleType.FRIEND.name(), date, KstTimes.toInstant(updateTime)));
 
         commands.forEach(command -> openChatRoom(userId, command.partnerId(), command.rapport(), command.updateTime()));
+    }
+
+    private List<Relationship> firstMeetingRelationships(Long userId, LocalDate date, String version,
+                                                         List<SimulationsRelationshipCommand> commands,
+                                                         Map<Long, LocalDateTime> firstMeetingStartByPartnerUserId) {
+        Map<Long, LocalDateTime> earliestUpdateTimeByPartnerUserId = commands.stream()
+                .collect(Collectors.toMap(SimulationsRelationshipCommand::partnerId,
+                        SimulationsRelationshipCommand::updateTime, this::earlier));
+
+        return firstMeetingStartByPartnerUserId.entrySet().stream()
+                .filter(entry -> !earliestUpdateTimeByPartnerUserId.containsKey(entry.getKey())
+                        || earliestUpdateTimeByPartnerUserId.get(entry.getKey()).isAfter(entry.getValue()))
+                .filter(entry -> relationshipRepository.findLatestByUserIdAndPartnerUserIdBeforeDate(userId, entry.getKey(), date).isEmpty())
+                .map(entry -> Relationship.create(userId, date, version, entry.getKey(), FIRST_MEETING_INTIMACY,
+                        FIRST_MEETING_PARTNER_MODEL, entry.getValue()))
+                .toList();
     }
 
     private Map<Long, LocalDateTime> becameFriendTimeByPartnerUserId(Long userId, LocalDate date, List<SimulationsRelationshipCommand> commands) {
