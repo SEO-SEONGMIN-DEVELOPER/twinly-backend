@@ -25,6 +25,8 @@ public class User {
 
     private static final int BIRTH_YEAR_LENGTH = 4;
 
+    private static final int SHORT_BIRTH_YEAR_LENGTH = 2;
+
     private static final String WOMENS_UNIVERSITY_SUFFIX = "여자대학교";
 
     private static final String WOMENS_UNIVERSITY_ABBREVIATION = "여대";
@@ -188,6 +190,10 @@ public class User {
 
     public String displayNickname() {
         return isWithdrawn() ? WITHDRAWN_NAME : nickname;
+    }
+
+    public String shortBirthYear() {
+        return birthDate.substring(BIRTH_YEAR_LENGTH - SHORT_BIRTH_YEAR_LENGTH, BIRTH_YEAR_LENGTH);
     }
 
     public String shortOrganization() {

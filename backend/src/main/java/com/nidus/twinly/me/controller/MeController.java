@@ -52,6 +52,7 @@ import com.nidus.twinly.me.dto.response.MePersonalityTypeResponse;
 import com.nidus.twinly.me.dto.response.MePushNotificationsResponse;
 import com.nidus.twinly.me.dto.response.MeProfileEditViewResponse;
 import com.nidus.twinly.me.dto.response.MeProfileResponse;
+import com.nidus.twinly.me.dto.response.MeProfileV2Response;
 import com.nidus.twinly.me.dto.response.MePurchasesResponse;
 import com.nidus.twinly.me.dto.response.MeInfoResponse;
 import com.nidus.twinly.me.dto.response.MeProfilePhotoCommitResponse;
@@ -387,5 +388,12 @@ public class MeController {
     public MeCheckProfileNicknameResponse checkProfileNickname(@AuthenticationPrincipal UserInfo userInfo,
                                                                @Valid @RequestBody MeCheckProfileNicknameRequest request) {
         return MeCheckProfileNicknameResponse.from(meService.checkProfileNickname(userInfo.id(), MeCheckProfileNicknameCommand.from(request)));
+    }
+
+    @Operation(summary = "내 프로필 조회 v2")
+    @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND")
+    @GetMapping("/api/v2/me/profile")
+    public MeProfileV2Response profileV2(@AuthenticationPrincipal UserInfo userInfo) {
+        return MeProfileV2Response.from(meService.profileV2(userInfo.id()));
     }
 }

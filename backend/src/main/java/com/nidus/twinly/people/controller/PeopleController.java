@@ -6,6 +6,7 @@ import com.nidus.twinly.people.dto.response.PeopleEventsResponse;
 import com.nidus.twinly.people.dto.response.PeopleIntimacySeriesResponse;
 import com.nidus.twinly.people.dto.response.PeopleLearnedFactsResponse;
 import com.nidus.twinly.people.dto.response.PeopleProfileResponse;
+import com.nidus.twinly.people.dto.response.PeopleProfileV2Response;
 import com.nidus.twinly.people.dto.response.PeopleResponse;
 import com.nidus.twinly.people.service.PeopleService;
 import com.nidus.twinly.user.dto.header.UserInfo;
@@ -97,5 +98,13 @@ public class PeopleController {
     public PeopleLearnedFactsResponse learnedFacts(@AuthenticationPrincipal UserInfo userInfo,
                                                    @PathVariable("userId") String partnerUserId) {
         return PeopleLearnedFactsResponse.from(peopleService.learnedFacts(userInfo.id(), RequestId.toLong(partnerUserId, "userId")));
+    }
+
+    @Operation(summary = "트윈 프로필 조회 v2")
+    @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND")
+    @GetMapping("/api/v2/people/{userId}/profile")
+    public PeopleProfileV2Response profileV2(@AuthenticationPrincipal UserInfo userInfo,
+                                             @PathVariable("userId") String partnerUserId) {
+        return PeopleProfileV2Response.from(peopleService.profileV2(userInfo.id(), RequestId.toLong(partnerUserId, "userId")));
     }
 }

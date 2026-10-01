@@ -74,6 +74,7 @@ import com.nidus.twinly.me.dto.result.MePushNotificationsResult;
 import com.nidus.twinly.me.dto.result.MePushNotificationsSettingsResult;
 import com.nidus.twinly.me.dto.result.MeProfileEditViewResult;
 import com.nidus.twinly.me.dto.result.MeProfileResult;
+import com.nidus.twinly.me.dto.result.MeProfileV2Result;
 import com.nidus.twinly.me.dto.result.MeProfilePhotoCommitResult;
 import com.nidus.twinly.me.dto.result.MeProfilePhotoPresignResult;
 import com.nidus.twinly.me.dto.result.MeProfileVisibilitySettingsResult;
@@ -799,5 +800,18 @@ public class MeService {
     private boolean isNicknameTakenByOthers(String nickname, Long userId) {
         return userRepository.existsByNicknameAndIdNot(nickname, userId)
                 || anonSessionRepository.existsByNickname(nickname);
+    }
+
+    public MeProfileV2Result profileV2(Long userId) {
+        MeProfileResult profile = profile(userId);
+
+        return new MeProfileV2Result(
+                profile.userId(),
+                profile.userName(),
+                profile.profilePhoto(),
+                profile.interests(),
+                profile.encounteredPeopleCount(),
+                profile.encounteredFriendCount()
+        );
     }
 }

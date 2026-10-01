@@ -60,6 +60,29 @@ class UserTest {
     }
 
     @Test
+    @DisplayName("출생 연도는 생년월일에서 연도 뒤 두 자리만 남긴다")
+    void short_birth_year_keeps_last_two_digits_of_year() {
+        // given: 1998년생 유저
+        User user = user(null);
+        ReflectionTestUtils.setField(user, "birthDate", "1998-07-15");
+
+        // then: 연도 뒤 두 자리
+        assertThat(user.shortBirthYear()).isEqualTo("98");
+    }
+
+    @Test
+    @DisplayName("파기되어 생년월일이 연도만 남아도 출생 연도 두 자리는 앞의 0을 유지한 채 그대로 나온다")
+    void short_birth_year_after_delete() {
+        // given: 2002년생 유저가 파기되어 생년월일이 연도로 일반화된 상태
+        User user = user(null);
+        ReflectionTestUtils.setField(user, "birthDate", "2002-03-15");
+        user.delete();
+
+        // then: 일반화 전과 같은 두 자리
+        assertThat(user.shortBirthYear()).isEqualTo("02");
+    }
+
+    @Test
     @DisplayName("소속이 대학교로 끝나면 학교를 떼고, 그 밖의 소속은 그대로 둔다")
     void short_organization_of_university() {
         // given: 대학교 소속 유저와 고등학교 소속 유저

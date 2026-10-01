@@ -72,6 +72,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/app/status").permitAll()
                         .requestMatchers("/internal/v1/**").permitAll()
                         .requestMatchers("/api/v1/**").authenticated()
+                        .requestMatchers("/api/v2/**").authenticated()
                         .anyRequest().permitAll())
                 .exceptionHandling(handling -> handling
                         .authenticationEntryPoint(errorResponder)

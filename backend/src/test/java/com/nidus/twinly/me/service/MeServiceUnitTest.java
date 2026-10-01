@@ -75,6 +75,7 @@ import com.nidus.twinly.me.dto.result.MePersonalityTypePartResult;
 import com.nidus.twinly.me.dto.result.MePersonalityTypeResult;
 import com.nidus.twinly.me.dto.result.MeProfileEditViewResult;
 import com.nidus.twinly.me.dto.result.MeProfileResult;
+import com.nidus.twinly.me.dto.result.MeProfileV2Result;
 import com.nidus.twinly.me.dto.result.MeProfilePhotoCommitResult;
 import com.nidus.twinly.me.dto.result.MeProfilePhotoPresignResult;
 import com.nidus.twinly.me.dto.result.MeProfileVisibilitySettingsResult;
@@ -1327,6 +1328,30 @@ class MeServiceUnitTest {
                 .isEqualTo(ErrorCode.USER_NOT_FOUND);
 
         then(photoRepository).should(never()).findByUserIdAndType(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("내 프로필 v2 는 v1 프로필에서 페르소나 요약만 빼고 나머지 값을 그대로 담는다")
+    void myProfileV2_drops_persona() {
+        // given: SUMMARY 요약과 관심사가 있고 만난 사람은 없는 유저
+        User user = user();
+        ReflectionTestUtils.setField(user, "id", ME);
+        given(userRepository.findById(ME)).willReturn(Optional.of(user));
+        given(personaElementRepository.findAllByUserIdOrderByIdAsc(ME)).willReturn(List.of(
+                personaElement(PersonaDimension.INTEREST, "등산"),
+                personaElement(PersonaDimension.SUMMARY, "주말마다 북한산에 오르며 사진으로 순간을 남기는 사람")));
+        given(encounterRepository.findAllPartnerUserIdsByUserId(ME)).willReturn(List.of());
+
+        // when: 내 프로필 v2 조회
+        MeProfileV2Result result = meService.profileV2(ME);
+
+        // then: 이름·관심사·카운트는 v1 과 같다 (persona 는 타입에서부터 없음)
+        assertThat(result.userId()).isEqualTo(ME);
+        assertThat(result.userName()).isEqualTo("홍길동");
+        assertThat(result.profilePhoto()).isNull();
+        assertThat(result.interests()).containsExactly("등산");
+        assertThat(result.encounteredPeopleCount()).isZero();
+        assertThat(result.encounteredFriendCount()).isZero();
     }
 
     // ---------------------------------------------------------------- 픽스처

@@ -1,6 +1,7 @@
 package com.nidus.twinly.people.controller;
 
 import com.nidus.twinly.anon.service.AnonService;
+import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.photo.PhotoPosInfo;
 import com.nidus.twinly.common.photo.ProfilePhotoInfo;
 import com.nidus.twinly.people.dto.result.PeopleEventActionSceneResult;
@@ -17,6 +18,7 @@ import com.nidus.twinly.people.dto.result.PeopleLearnedFactsResult;
 import com.nidus.twinly.people.dto.result.PeoplePageResult;
 import com.nidus.twinly.people.dto.result.PeopleProfileDisclosedFieldsResult;
 import com.nidus.twinly.people.dto.result.PeopleProfileResult;
+import com.nidus.twinly.people.dto.result.PeopleProfileV2Result;
 import com.nidus.twinly.people.dto.result.PeopleResult;
 import com.nidus.twinly.people.dto.result.PeopleThresholdResult;
 import com.nidus.twinly.people.service.PeopleService;
@@ -194,10 +196,13 @@ class PeopleControllerUnitTest {
         var result = mockMvc.perform(get("/api/v1/people/{userId}/profile", "42")
                 .header("Authorization", "Bearer access-token"));
 
-        // then: 200 반환 + 미동의 필드는 null인 JSON 응답 + 인증 유저 id·경로 userId로 위임
+        // then: 200 반환 + 미동의 필드는 null인 JSON 응답 + v2에서 추가된 성별·소속·출생연도는 없음 + 인증 유저 id·경로 userId로 위임
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.userId").value("42"))
                 .andExpect(jsonPath("$.userName").value("홍길동"))
+                .andExpect(jsonPath("$.gender").doesNotExist())
+                .andExpect(jsonPath("$.organization").doesNotExist())
+                .andExpect(jsonPath("$.birthYear").doesNotExist())
                 .andExpect(jsonPath("$.profilePhoto").isEmpty())
                 .andExpect(jsonPath("$.intimacy").value(80))
                 .andExpect(jsonPath("$.relationshipType").value("bestFriend"))
@@ -222,6 +227,62 @@ class PeopleControllerUnitTest {
         result.andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
         then(peopleService).should(never()).profile(any(), any());
+    }
+
+    // ------------------------------------------------- GET /api/v2/people/{userId}/profile
+
+    @Test
+    @DisplayName("프로필 조회 v2 시 200과 함께 성별·소속·출생연도를 포함한 응답 JSON을 반환한다")
+    void profileV2_success() throws Exception {
+        // given: 소속만 공개 동의된 상대의 프로필을 서비스가 반환
+        given(peopleService.profileV2(1L, 42L))
+                .willReturn(new PeopleProfileV2Result(
+                        42L,
+                        "홍길동",
+                        Gender.FEMALE,
+                        "트윈리대",
+                        "02",
+                        null,
+                        80,
+                        RelationshipType.BEST_FRIEND,
+                        RelationshipSpecificType.SPECIAL,
+                        true,
+                        new PeopleProfileDisclosedFieldsResult("트윈리대학교", null),
+                        false,
+                        true));
+
+        // when: 인증 상태로 프로필 조회 v2 API 호출
+        var result = mockMvc.perform(get("/api/v2/people/{userId}/profile", "42")
+                .header("Authorization", "Bearer access-token"));
+
+        // then: 200 반환 + v1 필드에 성별·소속·출생연도가 더해진 JSON 응답 + 인증 유저 id·경로 userId로 위임
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.userId").value("42"))
+                .andExpect(jsonPath("$.userName").value("홍길동"))
+                .andExpect(jsonPath("$.gender").value("female"))
+                .andExpect(jsonPath("$.organization").value("트윈리대"))
+                .andExpect(jsonPath("$.birthYear").value("02"))
+                .andExpect(jsonPath("$.profilePhoto").isEmpty())
+                .andExpect(jsonPath("$.intimacy").value(80))
+                .andExpect(jsonPath("$.relationshipType").value("bestFriend"))
+                .andExpect(jsonPath("$.relationshipSpecificType").value("특별한 사이"))
+                .andExpect(jsonPath("$.isFavorited").value(true))
+                .andExpect(jsonPath("$.disclosedFields.affiliation").value("트윈리대학교"))
+                .andExpect(jsonPath("$.disclosedFields.affiliationNumber").isEmpty())
+                .andExpect(jsonPath("$.isDeleted").value(false))
+                .andExpect(jsonPath("$.isBlocked").value(true));
+        then(peopleService).should().profileV2(1L, 42L);
+    }
+
+    @Test
+    @DisplayName("프로필 조회 v2 시 인증 헤더가 없으면 401을 반환하고 서비스를 호출하지 않는다")
+    void profileV2_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 프로필 조회 v2 API 호출
+        var result = mockMvc.perform(get("/api/v2/people/{userId}/profile", "42"));
+
+        // then: 401 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isUnauthorized());
+        then(peopleService).should(never()).profileV2(any(), any());
     }
 
     // ----------------------------------------------- PUT/DELETE /api/v1/people/{userId}/favorite
