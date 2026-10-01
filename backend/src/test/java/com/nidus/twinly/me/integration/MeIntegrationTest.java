@@ -6,8 +6,12 @@ import com.nidus.twinly.aichat.repository.AiChatRepository;
 import com.nidus.twinly.activity.domain.QuestionType;
 import com.nidus.twinly.activity.entity.Question;
 import com.nidus.twinly.activity.repository.QuestionRepository;
+import com.nidus.twinly.app.domain.AppPlatform;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
 import com.nidus.twinly.common.crypto.BlindIndexHasher;
+import com.nidus.twinly.common.feedback.FeedbackOption;
+import com.nidus.twinly.common.feedback.FeedbackOptionLoader;
+import com.nidus.twinly.common.feedback.FeedbackType;
 import com.nidus.twinly.common.survey.SurveyOptionName;
 import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.common.photo.PhotoType;
@@ -43,9 +47,13 @@ import com.nidus.twinly.user.domain.DisclosureField;
 import com.nidus.twinly.user.entity.PersonaElement;
 import com.nidus.twinly.user.entity.Photo;
 import com.nidus.twinly.user.entity.User;
+import com.nidus.twinly.user.entity.UserFeedback;
+import com.nidus.twinly.user.entity.UserFeedbackOption;
 import com.nidus.twinly.user.entity.UserTendencyAnswer;
 import com.nidus.twinly.user.repository.PersonaElementRepository;
 import com.nidus.twinly.user.repository.PhotoRepository;
+import com.nidus.twinly.user.repository.UserFeedbackOptionRepository;
+import com.nidus.twinly.user.repository.UserFeedbackRepository;
 import com.nidus.twinly.user.repository.UserSurveyAnswerRepository;
 import com.nidus.twinly.user.repository.UserTendencyAnswerRepository;
 import jakarta.persistence.EntityManager;
@@ -65,7 +73,9 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -123,6 +133,15 @@ class MeIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     UserTendencyAnswerRepository userTendencyAnswerRepository;
+
+    @Autowired
+    UserFeedbackRepository userFeedbackRepository;
+
+    @Autowired
+    UserFeedbackOptionRepository userFeedbackOptionRepository;
+
+    @Autowired
+    FeedbackOptionLoader feedbackOptionLoader;
 
     @Autowired
     TendencyLoader tendencyLoader;
@@ -410,6 +429,75 @@ class MeIntegrationTest extends AbstractIntegrationTest {
     void without_auth_returns_401() throws Exception {
         // when & then: 인증 헤더 없이 내 상태 조회 시 401
         mockMvc.perform(get("/api/v1/me/status"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("성격 유형 조회: DB의 설문 답 문장을 실제 설문·유형 파일로 풀어 이름·축 단어·형용사/명사 문구·그림 URL을 내려준다")
+    void personalityType_end_to_end() throws Exception {
+        // given: 외향성 10·11번과 신경성 15·16·17번만 B, 나머지는 A로 답한 페르소나 + 설문 밖 관심사 1개
+        User me = saveUser();
+        Map<Integer, SurveyOptionName> answers = Map.of(
+                10, SurveyOptionName.B,
+                11, SurveyOptionName.B,
+                15, SurveyOptionName.B,
+                16, SurveyOptionName.B,
+                17, SurveyOptionName.B);
+        personaElementRepository.saveAll(surveyLoader.getAllQuestions().stream()
+                .map(question -> PersonaElement.create(
+                        me.getId(),
+                        question.dimension(),
+                        question.traitFor(answers.getOrDefault(question.id(), SurveyOptionName.A)),
+                        Instant.now()))
+                .toList());
+        personaElementRepository.save(PersonaElement.create(me.getId(), PersonaDimension.INTEREST, "등산", Instant.now()));
+        flushAndClear();
+        given(cloudFrontService.getPublicUrl(anyString()))
+                .willAnswer(invocation -> "https://test.cloudfront.net/" + invocation.getArgument(0));
+
+        // when: 실제 액세스 토큰으로 성격 유형 조회 API 호출
+        var result = mockMvc.perform(get("/api/v1/me/personality-type")
+                .header("Authorization", bearer(me.getId())));
+
+        // then: 차분·탐험·계획·다정·안정(01110)이라 탐구적인 수호자 + 설계 문서 2장의 탐구적인·수호자 문구 + 코드로 지은 그림 URL, 유형 코드는 내려가지 않음
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("탐구적인 수호자"))
+                .andExpect(jsonPath("$.keywords.length()").value(5))
+                .andExpect(jsonPath("$.keywords[0]").value("차분"))
+                .andExpect(jsonPath("$.keywords[1]").value("탐험"))
+                .andExpect(jsonPath("$.keywords[2]").value("계획"))
+                .andExpect(jsonPath("$.keywords[3]").value("다정"))
+                .andExpect(jsonPath("$.keywords[4]").value("안정"))
+                .andExpect(jsonPath("$.adjective.tagline").value("혼자 깊이 파고들며 넓혀 가는"))
+                .andExpect(jsonPath("$.adjective.description").value(
+                        "사람이 많은 곳보다 조용한 시간에 힘을 얻어요. 궁금한 게 있으면 이것저것 찾아보고, 오래 곱씹으며 생각을 키워요."))
+                .andExpect(jsonPath("$.noun.tagline").value("한결같이 곁을 지키는 사람"))
+                .andExpect(jsonPath("$.noun.description").value(
+                        "한번 맺은 관계와 약속은 끝까지 책임져요. 웬만한 일에는 흔들리지 않고, 변함없는 모습으로 주변에 든든한 버팀목이 되어 줘요."))
+                .andExpect(jsonPath("$.imageUrl").value("https://test.cloudfront.net/personality-types/v1/01110.png"))
+                .andExpect(jsonPath("$.code").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("성격 유형 조회: 페르소나가 없는 유저는 422 PERSONA_NOT_FOUND를 받는다")
+    void personalityType_without_persona_returns_422() throws Exception {
+        // given: 설문을 하지 않아 페르소나가 없는 실제 유저
+        User me = saveUser();
+
+        // when: 실제 액세스 토큰으로 성격 유형 조회 API 호출
+        var result = mockMvc.perform(get("/api/v1/me/personality-type")
+                .header("Authorization", bearer(me.getId())));
+
+        // then: 422 PERSONA_NOT_FOUND
+        result.andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value(ErrorCode.PERSONA_NOT_FOUND.name()));
+    }
+
+    @Test
+    @DisplayName("성격 유형 조회: 인증 헤더가 없으면 실제 컨텍스트에서도 401을 반환한다")
+    void personalityType_without_auth_returns_401() throws Exception {
+        // when & then: 인증 헤더 없이 성격 유형 조회 시 401
+        mockMvc.perform(get("/api/v1/me/personality-type"))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -1445,6 +1533,180 @@ class MeIntegrationTest extends AbstractIntegrationTest {
     private List<UserTendencyAnswer> tendencyAnswersOf(User user) {
         return userTendencyAnswerRepository.findAll().stream()
                 .filter(answer -> answer.getUserId().equals(user.getId()))
+                .toList();
+    }
+
+    @Test
+    @DisplayName("피드백 선택지 조회: 실제 선택지 파일의 해당 type 목록을 순서 그대로 문자열 id로 내려준다")
+    void feedbackOptions_returns_options_from_file() throws Exception {
+        // given: 실제 유저 + 실제 파일의 탈퇴 사유 선택지
+        User me = saveUser();
+        List<FeedbackOption> options = feedbackOptionLoader.getOptions(FeedbackType.WITHDRAWAL);
+
+        // when: 실제 액세스 토큰으로 탈퇴 사유 선택지 조회
+        var result = mockMvc.perform(get("/api/v1/me/feedback/options")
+                .param("type", "withdrawal")
+                .header("Authorization", bearer(me.getId())));
+
+        // then: 200 + 파일 순서 그대로 문자열 id·문구
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.options.length()").value(options.size()))
+                .andExpect(jsonPath("$.options[0].id").value(options.getFirst().id().toString()))
+                .andExpect(jsonPath("$.options[0].label").value(options.getFirst().label()));
+    }
+
+    @Test
+    @DisplayName("피드백 선택지 조회: 탈퇴 사유와 건의하기 선택지 id는 서로 겹치지 않는다")
+    void feedbackOptions_ids_are_unique_across_types() {
+        // given: 실제 파일의 두 type 선택지 id
+        List<Long> withdrawalIds = feedbackOptionLoader.getOptions(FeedbackType.WITHDRAWAL).stream().map(FeedbackOption::id).toList();
+        List<Long> suggestionIds = feedbackOptionLoader.getOptions(FeedbackType.SUGGESTION).stream().map(FeedbackOption::id).toList();
+
+        // then: 겹치는 id가 없음
+        assertThat(withdrawalIds).doesNotContainAnyElementsOf(suggestionIds);
+    }
+
+    @Test
+    @DisplayName("피드백 선택지 조회: 인증 헤더가 없으면 401")
+    void feedbackOptions_without_auth_returns_401() throws Exception {
+        // when & then: 인증 헤더 없이 호출하면 401
+        mockMvc.perform(get("/api/v1/me/feedback/options")
+                        .param("type", "withdrawal"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("피드백 보내기: 목록에 있는 선택지만 한 번씩, 공백을 지운 내용과 앱 헤더가 실제 DB에 저장된다")
+    void sendFeedback_saves_feedback_end_to_end() throws Exception {
+        // given: 실제 유저 + 실제 파일의 건의하기 첫 선택지와 탈퇴 사유 첫 선택지
+        User me = saveUser();
+        Long suggestionOptionId = feedbackOptionLoader.getOptions(FeedbackType.SUGGESTION).getFirst().id();
+        Long withdrawalOptionId = feedbackOptionLoader.getOptions(FeedbackType.WITHDRAWAL).getFirst().id();
+
+        // when: 중복 id, 다른 type id, 없는 id를 섞어 건의하기 전송
+        mockMvc.perform(post("/api/v1/me/feedback")
+                        .header("Authorization", bearer(me.getId()))
+                        .header("X-App-Platform", "android")
+                        .header("X-App-Version", "1.4.0")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"type":"suggestion","optionIds":["%d","%d","%d","999999"],"detail":"  알림이 늦게 와요  "}
+                                """.formatted(suggestionOptionId, suggestionOptionId, withdrawalOptionId)))
+                .andExpect(status().isOk());
+        entityManager.flush();
+        entityManager.clear();
+
+        // then: 공백을 지운 내용과 플랫폼·버전으로 피드백 1건이 저장됨
+        List<UserFeedback> feedbacks = feedbacksOf(me);
+        assertThat(feedbacks).hasSize(1);
+        UserFeedback saved = feedbacks.getFirst();
+        assertThat(saved.getType()).isEqualTo(FeedbackType.SUGGESTION);
+        assertThat(saved.getDetail()).isEqualTo("알림이 늦게 와요");
+        assertThat(saved.getAppPlatform()).isEqualTo(AppPlatform.ANDROID);
+        assertThat(saved.getAppVersion()).isEqualTo("1.4.0");
+        assertThat(saved.getCreatedAt()).isNotNull();
+
+        // then: 선택지 행은 건의하기 선택지 하나만 그 피드백 id로 저장됨
+        assertThat(optionIdsOf(saved)).containsExactly(suggestionOptionId);
+    }
+
+    @Test
+    @DisplayName("피드백 보내기: 앱 흐름대로 탈퇴 사유를 보낸 뒤 탈퇴하면 둘 다 성공하고, 탈퇴 대기 중에 다시 보내도 저장된다")
+    void sendFeedback_then_withdraw_end_to_end() throws Exception {
+        // given: 실제 유저 + 실제 파일의 탈퇴 사유 첫 선택지
+        User me = saveUser();
+        Long withdrawalOptionId = feedbackOptionLoader.getOptions(FeedbackType.WITHDRAWAL).getFirst().id();
+        String body = """
+                {"type":"withdrawal","optionIds":["%d"],"detail":null}
+                """.formatted(withdrawalOptionId);
+
+        // when: 탈퇴 사유 전송 → 탈퇴 신청 → 탈퇴 대기 상태에서 다시 탈퇴 사유 전송
+        mockMvc.perform(post("/api/v1/me/feedback")
+                        .header("Authorization", bearer(me.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk());
+        mockMvc.perform(delete("/api/v1/me")
+                        .header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/me/feedback")
+                        .header("Authorization", bearer(me.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk());
+        entityManager.flush();
+        entityManager.clear();
+
+        // then: 탈퇴 사유 2건이 내용 없이 저장되고, 앱 헤더가 없으니 플랫폼·버전은 비어 있음
+        List<UserFeedback> feedbacks = feedbacksOf(me);
+        assertThat(feedbacks)
+                .extracting(UserFeedback::getType, UserFeedback::getDetail, UserFeedback::getAppPlatform, UserFeedback::getAppVersion)
+                .containsExactly(
+                        tuple(FeedbackType.WITHDRAWAL, null, null, null),
+                        tuple(FeedbackType.WITHDRAWAL, null, null, null));
+
+        // then: 두 피드백 모두 각자의 id로 같은 선택지 행이 저장됨
+        assertThat(feedbacks).allSatisfy(feedback -> assertThat(optionIdsOf(feedback)).containsExactly(withdrawalOptionId));
+    }
+
+    @Test
+    @DisplayName("피드백 보내기: 건의하기에 내용이 없으면 400 INVALID_REQUEST이고 저장되지 않는다")
+    void sendFeedback_suggestion_without_detail_returns_400() throws Exception {
+        // given: 실제 유저 + 실제 파일의 건의하기 첫 선택지
+        User me = saveUser();
+        Long suggestionOptionId = feedbackOptionLoader.getOptions(FeedbackType.SUGGESTION).getFirst().id();
+
+        // when & then: 선택지만 고르고 내용 없이 건의하기 전송하면 400
+        mockMvc.perform(post("/api/v1/me/feedback")
+                        .header("Authorization", bearer(me.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"type":"suggestion","optionIds":["%d"],"detail":null}
+                                """.formatted(suggestionOptionId)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(ErrorCode.INVALID_REQUEST.name()));
+
+        // then: 아무것도 저장되지 않음
+        assertThat(feedbacksOf(me)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("피드백 보내기: 탈퇴 사유에 선택지도 내용도 없어도 200이고 빈 피드백 1건이 저장된다")
+    void sendFeedback_withdrawal_without_options_and_detail_saves_empty() throws Exception {
+        // given: 실제 유저
+        User me = saveUser();
+
+        // when & then: 빈 선택지 + 내용 없이 탈퇴 사유 전송하면 200
+        mockMvc.perform(post("/api/v1/me/feedback")
+                        .header("Authorization", bearer(me.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"type":"withdrawal","optionIds":[],"detail":null}
+                                """))
+                .andExpect(status().isOk());
+        entityManager.flush();
+        entityManager.clear();
+
+        // then: 내용 없는 탈퇴 사유 1건이 저장되고 선택지 행은 없음
+        List<UserFeedback> feedbacks = feedbacksOf(me);
+        assertThat(feedbacks)
+                .extracting(UserFeedback::getType, UserFeedback::getDetail)
+                .containsExactly(tuple(FeedbackType.WITHDRAWAL, null));
+        assertThat(optionIdsOf(feedbacks.getFirst())).isEmpty();
+    }
+
+    private List<Long> optionIdsOf(UserFeedback feedback) {
+        return userFeedbackOptionRepository.findAll().stream()
+                .filter(option -> option.getFeedbackId().equals(feedback.getId()))
+                .sorted(Comparator.comparing(UserFeedbackOption::getId))
+                .map(UserFeedbackOption::getOptionId)
+                .toList();
+    }
+
+    private List<UserFeedback> feedbacksOf(User user) {
+        return userFeedbackRepository.findAll().stream()
+                .filter(feedback -> feedback.getUserId().equals(user.getId()))
+                .sorted(Comparator.comparing(UserFeedback::getId))
                 .toList();
     }
 }

@@ -7,6 +7,7 @@ import java.util.Map;
 public record SurveyQuestion(
         Integer id,
         PersonaDimension dimension,
+        SurveyOptionName highOption,
         String scenario,
         Map<SurveyOptionName, SurveyOption> options
 ) {

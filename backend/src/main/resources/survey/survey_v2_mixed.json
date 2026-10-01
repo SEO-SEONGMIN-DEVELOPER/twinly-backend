@@ -19,6 +19,7 @@
     {
       "id": 8,
       "dimension": "extraversion",
+      "highOption": "A",
       "scenario": "동아리 첫 모임에 12명이 모였는데, 다들 휴대폰만 보면서 어색한 침묵이 흐르고 있어요.",
       "options": {
         "A": {
@@ -49,6 +50,7 @@
     {
       "id": 4,
       "dimension": "conscientiousness",
+      "highOption": "A",
       "scenario": "3시 약속이에요. 보통 몇 시쯤 도착해요?",
       "options": {
         "A": {
@@ -64,6 +66,7 @@
     {
       "id": 15,
       "dimension": "neuroticism",
+      "highOption": "A",
       "scenario": "보낸 카톡이 읽혔는데 하루가 지나도 답장이 없어요.",
       "options": {
         "A": {
@@ -79,6 +82,7 @@
     {
       "id": 1,
       "dimension": "openness",
+      "highOption": "A",
       "scenario": "수강신청 기간, 교양 하나를 더 들어야 해요.",
       "options": {
         "A": {
@@ -109,6 +113,7 @@
     {
       "id": 12,
       "dimension": "agreeableness",
+      "highOption": "A",
       "scenario": "친한 친구가 시험 망하고 풀 죽은 카톡을 보내왔어요.",
       "options": {
         "A": {
@@ -139,6 +144,7 @@
     {
       "id": 7,
       "dimension": "extraversion",
+      "highOption": "A",
       "scenario": "토요일 저녁에 두 모임 초대를 동시에 받았어요. 한쪽만 갈 수 있는 시간이에요.",
       "options": {
         "A": {
@@ -169,6 +175,7 @@
     {
       "id": 5,
       "dimension": "conscientiousness",
+      "highOption": "A",
       "scenario": "마감이 일주일 남은 과제를 받으면 보통 어떻게 처리해요?",
       "options": {
         "A": {
@@ -184,6 +191,7 @@
     {
       "id": 2,
       "dimension": "openness",
+      "highOption": "A",
       "scenario": "친구들이랑 놀러 갈 곳을 정하고 있어요.",
       "options": {
         "A": {
@@ -199,6 +207,7 @@
     {
       "id": 16,
       "dimension": "neuroticism",
+      "highOption": "A",
       "scenario": "하루를 마치고 침대에 누웠을 때 머릿속이 어떤가요?",
       "options": {
         "A": {
@@ -229,6 +238,7 @@
     {
       "id": 13,
       "dimension": "agreeableness",
+      "highOption": "A",
       "scenario": "잘 모르는 사람과 처음 인사할 때 보통 어떻게 해요?",
       "options": {
         "A": {
@@ -274,6 +284,7 @@
     {
       "id": 9,
       "dimension": "extraversion",
+      "highOption": "B",
       "scenario": "10명쯤 모인 자리에서 누군가의 농담이 분위기를 식혀버렸어요. 어색한 침묵이 30초쯤 흐르고 있어요.",
       "options": {
         "A": {
@@ -289,6 +300,7 @@
     {
       "id": 6,
       "dimension": "conscientiousness",
+      "highOption": "A",
       "scenario": "오늘 하기로 한 약속이 갑자기 취소됐어요.",
       "options": {
         "A": {
@@ -304,6 +316,7 @@
     {
       "id": 3,
       "dimension": "openness",
+      "highOption": "A",
       "scenario": "대화 중에 내가 잘 모르는 주제가 나왔어요.",
       "options": {
         "A": {
@@ -319,6 +332,7 @@
     {
       "id": 17,
       "dimension": "neuroticism",
+      "highOption": "A",
       "scenario": "오늘 처음 보는 사람들과 만나기로 한 날 아침이에요.",
       "options": {
         "A": {
@@ -349,6 +363,7 @@
     {
       "id": 14,
       "dimension": "agreeableness",
+      "highOption": "A",
       "scenario": "별로 안 내키는 모임에 나오라고 연락이 왔어요.",
       "options": {
         "A": {
@@ -394,6 +409,7 @@
     {
       "id": 10,
       "dimension": "extraversion",
+      "highOption": "A",
       "scenario": "다음 주 일정을 정리하고 있어요.",
       "options": {
         "A": {
@@ -454,6 +470,7 @@
     {
       "id": 11,
       "dimension": "extraversion",
+      "highOption": "A",
       "scenario": "처음 만난 자리에서 얘기가 잘 통한 사람이 있어요.",
       "options": {
         "A": {
