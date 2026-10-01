@@ -1115,6 +1115,40 @@ class MeIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    @DisplayName("내 프로필 조회 v2: SUMMARY 요소가 있어도 persona는 내려가지 않고 나머지는 v1과 같다")
+    void myProfileV2_success_end_to_end() throws Exception {
+        // given: AI 채팅 요약(SUMMARY)과 관심사 2개를 가진 유저
+        User me = saveUser();
+        personaElementRepository.saveAll(List.of(
+                PersonaElement.create(me.getId(), PersonaDimension.SUMMARY, "주말마다 북한산에 오르는 사람", Instant.now()),
+                PersonaElement.create(me.getId(), PersonaDimension.INTEREST, "등산", Instant.now()),
+                PersonaElement.create(me.getId(), PersonaDimension.INTEREST, "영화", Instant.now())));
+
+        // when: 본인의 실제 액세스 토큰으로 내 프로필 조회 v2 API 호출
+        var result = mockMvc.perform(get("/api/v2/me/profile")
+                .header("Authorization", bearer(me.getId())));
+
+        // then: 200 + persona 필드는 없고 이름·관심사·카운트는 그대로
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.userId").value(me.getId().toString()))
+                .andExpect(jsonPath("$.userName").value(me.getFamilyName() + me.getGivenName()))
+                .andExpect(jsonPath("$.profilePhoto").isEmpty())
+                .andExpect(jsonPath("$.persona").doesNotExist())
+                .andExpect(jsonPath("$.interests[0]").value("등산"))
+                .andExpect(jsonPath("$.interests[1]").value("영화"))
+                .andExpect(jsonPath("$.encounteredPeopleCount").value(0))
+                .andExpect(jsonPath("$.encounteredFriendCount").value(0));
+    }
+
+    @Test
+    @DisplayName("내 프로필 조회 v2: 인증 헤더가 없으면 401을 반환한다")
+    void myProfileV2_without_auth_returns_401() throws Exception {
+        // when & then: v2 경로도 인증 헤더 없이 호출하면 필터 단계에서 막힌다
+        mockMvc.perform(get("/api/v2/me/profile"))
+                .andExpect(status().isUnauthorized());
+    }
+
     private Relationship relationship(Long userId, Long partnerUserId, LocalDate date, int intimacy) {
         return Relationship.create(userId, date, "v1", partnerUserId, intimacy, "model", date.atStartOfDay());
     }

@@ -49,6 +49,7 @@ import com.nidus.twinly.me.dto.result.MePersonalityTypePartResult;
 import com.nidus.twinly.me.dto.result.MePersonalityTypeResult;
 import com.nidus.twinly.me.dto.result.MeProfileEditViewResult;
 import com.nidus.twinly.me.dto.result.MeProfileResult;
+import com.nidus.twinly.me.dto.result.MeProfileV2Result;
 import com.nidus.twinly.me.dto.result.MeProfilePhotoCommitResult;
 import com.nidus.twinly.me.dto.result.MeProfilePhotoPresignResult;
 import com.nidus.twinly.me.dto.result.MeProfileVisibilitySettingsResult;
@@ -937,6 +938,46 @@ class MeControllerUnitTest {
         // then: 401 반환 + 서비스는 호출되지 않음
         result.andExpect(status().isUnauthorized());
         then(meService).should(never()).profile(anyLong());
+    }
+
+    // ---------------------------------------------------------------- 내 프로필 조회 v2
+
+    @Test
+    @DisplayName("내 프로필 조회 v2 성공 시 200과 함께 persona가 빠진 JSON을 반환한다")
+    void myProfileV2_success() throws Exception {
+        // given: 서비스가 페르소나 요약 없는 내 프로필 정보를 반환
+        given(meService.profileV2(ME))
+                .willReturn(new MeProfileV2Result(1L, "홍길동",
+                        new ProfilePhotoInfo("profile/1/key", "https://cdn/p.jpg", new PhotoPosInfo(new PhotoPosInfo.StartPos(10, 20), 100, 200)),
+                        List.of("등산", "영화"), 2, 1));
+
+        // when: 내 프로필 조회 v2 API 호출
+        var result = mockMvc.perform(get("/api/v2/me/profile")
+                .header("Authorization", BEARER));
+
+        // then: 200 반환 + persona는 응답에 없고 나머지 필드는 v1과 같음 + 인증 유저 id로 서비스에 위임
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.userId").value("1"))
+                .andExpect(jsonPath("$.userName").value("홍길동"))
+                .andExpect(jsonPath("$.profilePhoto.key").value("profile/1/key"))
+                .andExpect(jsonPath("$.profilePhoto.photoUrl").value("https://cdn/p.jpg"))
+                .andExpect(jsonPath("$.persona").doesNotExist())
+                .andExpect(jsonPath("$.interests[0]").value("등산"))
+                .andExpect(jsonPath("$.interests[1]").value("영화"))
+                .andExpect(jsonPath("$.encounteredPeopleCount").value(2))
+                .andExpect(jsonPath("$.encounteredFriendCount").value(1));
+        then(meService).should().profileV2(ME);
+    }
+
+    @Test
+    @DisplayName("내 프로필 조회 v2 시 인증 헤더가 없으면 401을 반환하고 서비스를 호출하지 않는다")
+    void myProfileV2_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 내 프로필 조회 v2 API 호출
+        var result = mockMvc.perform(get("/api/v2/me/profile"));
+
+        // then: 401 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isUnauthorized());
+        then(meService).should(never()).profileV2(anyLong());
     }
 
     @Test

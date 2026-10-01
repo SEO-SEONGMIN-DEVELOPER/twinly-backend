@@ -30,6 +30,7 @@ import com.nidus.twinly.people.dto.result.PeopleIntimacySeriesResult;
 import com.nidus.twinly.people.dto.result.PeopleItemResult;
 import com.nidus.twinly.people.dto.result.PeopleLearnedFactsResult;
 import com.nidus.twinly.people.dto.result.PeopleProfileResult;
+import com.nidus.twinly.people.dto.result.PeopleProfileV2Result;
 import com.nidus.twinly.people.dto.result.PeopleResult;
 import com.nidus.twinly.people.dto.result.PeopleThresholdResult;
 import com.nidus.twinly.people.entity.Encounter;
@@ -364,6 +365,53 @@ class PeopleServiceUnitTest {
         // then: 가려질 값이므로 사진·공개 동의는 조회하지 않는다
         then(photoRepository).should(never()).findByUserIdAndType(eq(20L), any());
         then(disclosureAgreementRepository).should(never()).findAllByUserId(20L);
+    }
+
+    @Test
+    @DisplayName("프로필 v2 는 v1 프로필에 상대의 성별·짧은 학교 이름·두 자리 출생연도를 더한다")
+    void profileV2_adds_basic_info() {
+        // given: 친밀도 75인 상대 (학교는 정식 이름으로 저장되어 있음)
+        User partner = user(20L, "철수");
+        ReflectionTestUtils.setField(partner, "organization", "성균관대학교");
+        given(userRepository.findById(20L)).willReturn(Optional.of(partner));
+        given(relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(eq(ME), eq(20L), any(LocalDateTime.class)))
+                .willReturn(Optional.of(relationship(ME, 20L, LocalDate.of(2026, 7, 20), 75, "{}")));
+        given(encounterRepository.findByUserAIdAndUserBId(ME, 20L)).willReturn(Optional.empty());
+
+        // when: 프로필 v2 조회
+        PeopleProfileV2Result result = peopleService.profileV2(ME, 20L);
+
+        // then: v1 값은 그대로 + 성별·짧은 학교 이름·두 자리 출생연도
+        assertThat(result.userId()).isEqualTo(20L);
+        assertThat(result.userName()).isEqualTo("철수");
+        assertThat(result.gender()).isEqualTo(Gender.MALE);
+        assertThat(result.organization()).isEqualTo("성균관대");
+        assertThat(result.birthYear()).isEqualTo("00");
+        assertThat(result.intimacy()).isEqualTo(75);
+        assertThat(result.relationshipType()).isEqualTo(RelationshipType.BEST_FRIEND);
+        assertThat(result.isDeleted()).isFalse();
+    }
+
+    @Test
+    @DisplayName("탈퇴한 상대의 프로필 v2 는 성별·학교·출생연도도 null 로 가린다")
+    void profileV2_of_withdrawn_partner_masks_basic_info() {
+        // given: 탈퇴 후에도 성별·학교·출생연도가 남아 있는 상대
+        User partner = user(20L, "철수");
+        ReflectionTestUtils.setField(partner, "organization", "성균관대학교");
+        ReflectionTestUtils.setField(partner, "deletedAt", Instant.now());
+        given(userRepository.findById(20L)).willReturn(Optional.of(partner));
+        given(relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(eq(ME), eq(20L), any(LocalDateTime.class))).willReturn(Optional.empty());
+        given(encounterRepository.findByUserAIdAndUserBId(ME, 20L)).willReturn(Optional.empty());
+
+        // when: 프로필 v2 조회
+        PeopleProfileV2Result result = peopleService.profileV2(ME, 20L);
+
+        // then: 닉네임처럼 성별·학교·출생연도도 드러나지 않는다
+        assertThat(result.userName()).isEqualTo(User.WITHDRAWN_NAME);
+        assertThat(result.isDeleted()).isTrue();
+        assertThat(result.gender()).isNull();
+        assertThat(result.organization()).isNull();
+        assertThat(result.birthYear()).isNull();
     }
 
     // ------------------------------------------------- favorite() / deleteFavorite()

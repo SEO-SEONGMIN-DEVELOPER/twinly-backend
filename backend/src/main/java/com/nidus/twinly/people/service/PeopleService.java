@@ -478,4 +478,26 @@ public class PeopleService {
 
         return new PeopleLearnedFactsResult(relationship.getPartnerModel());
     }
+
+    public PeopleProfileV2Result profileV2(Long userId, Long partnerUserId) {
+        PeopleProfileResult profile = profile(userId, partnerUserId);
+        User partner = userRepository.findById(partnerUserId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        return new PeopleProfileV2Result(
+                profile.userId(),
+                profile.userName(),
+                partner.isWithdrawn() ? null : partner.getGender(),
+                partner.isWithdrawn() ? null : partner.shortOrganization(),
+                partner.isWithdrawn() ? null : partner.shortBirthYear(),
+                profile.profilePhoto(),
+                profile.intimacy(),
+                profile.relationshipType(),
+                profile.relationshipSpecificType(),
+                profile.isFavorited(),
+                profile.disclosedFields(),
+                profile.isDeleted(),
+                profile.isBlocked()
+        );
+    }
 }

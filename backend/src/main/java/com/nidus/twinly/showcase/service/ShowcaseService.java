@@ -32,10 +32,13 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Function;
@@ -50,13 +53,14 @@ import static com.nidus.twinly.common.logging.LogField.field;
 @Transactional(readOnly = true)
 public class ShowcaseService {
 
-    private static final String WOMENS_UNIVERSITY_SUFFIX = "여자대학교";
-    private static final String WOMENS_UNIVERSITY_ABBREVIATION = "여대";
-    private static final String UNIVERSITY_SUFFIX = "대학교";
-    private static final String SCHOOL_SUFFIX = "학교";
     private static final long TARGET_USER_REF = 1L;
+    private static final String MASKED_GIVEN_NAME = "OO";
     private static final int TOTAL_USER_COUNT_OFFSET = 20;
     private static final int SAME_ORGANIZATION_USER_COUNT_OFFSET = 8;
+    private static final List<String> PSEUDONYM_FAMILY_NAMES = List.of(
+            "김", "이", "박", "최", "정", "강", "조", "윤", "장", "임",
+            "한", "오", "서", "신", "권", "황", "안", "송", "류", "홍"
+    );
 
     private final ShowcaseRepository showcaseRepository;
     private final SceneRepository sceneRepository;
@@ -85,8 +89,7 @@ public class ShowcaseService {
         Set<Long> displayedUserIds = displayedUserIds(userRefByUserId, scenes);
         Map<Long, User> userById = userRepository.findAllById(displayedUserIds).stream()
                 .collect(Collectors.toMap(User::getId, Function.identity()));
-        Map<Long, String> nameByUserId = userById.values().stream()
-                .collect(Collectors.toMap(User::getId, User::displayNickname));
+        Map<Long, String> nameByUserId = maskedNameByUserId(showcase.getId(), displayedUserIds, userById);
 
         return new ShowcaseTodayResult(
                 showcase.getId(),
@@ -168,6 +171,28 @@ public class ShowcaseService {
                 .forEach(userIds::add);
 
         return userIds;
+    }
+
+    private Map<Long, String> maskedNameByUserId(Long showcaseId, Set<Long> displayedUserIds, Map<Long, User> userById) {
+        List<String> familyNames = new ArrayList<>(PSEUDONYM_FAMILY_NAMES);
+        Collections.shuffle(familyNames, new Random(showcaseId));
+
+        Map<Long, String> maskedNameByUserId = new HashMap<>();
+        int index = 0;
+
+        for (Long userId : displayedUserIds) {
+            User user = userById.get(userId);
+
+            if (user == null) {
+                continue;
+            }
+
+            maskedNameByUserId.put(userId, user.isWithdrawn()
+                    ? User.WITHDRAWN_NAME
+                    : familyNames.get(index++ % familyNames.size()) + MASKED_GIVEN_NAME);
+        }
+
+        return maskedNameByUserId;
     }
 
     private ShowcaseSceneResult toSceneResult(Scene scene,
@@ -266,28 +291,11 @@ public class ShowcaseService {
                     userRef,
                     nameByUserId.get(userId),
                     user.getGender(),
-                    toDisplayOrganization(user.getOrganization())
+                    user.shortOrganization()
             ));
         });
 
         return userInfos;
-    }
-
-    private String toDisplayOrganization(String organization) {
-        if (organization == null) {
-            return null;
-        }
-
-        if (organization.endsWith(WOMENS_UNIVERSITY_SUFFIX)) {
-            return organization.substring(0, organization.length() - WOMENS_UNIVERSITY_SUFFIX.length())
-                    + WOMENS_UNIVERSITY_ABBREVIATION;
-        }
-
-        if (!organization.endsWith(UNIVERSITY_SUFFIX)) {
-            return organization;
-        }
-
-        return organization.substring(0, organization.length() - SCHOOL_SUFFIX.length());
     }
 
     private ShowcaseUserCountsResult toUserCountsResult(Long viewerUserId) {
@@ -301,7 +309,7 @@ public class ShowcaseService {
                         + TOTAL_USER_COUNT_OFFSET,
                 userRepository.countActiveWithEntitlementByOrganizationHash(viewer.getOrganizationHash(), EntitlementReader.SIMULATION_ACCESS, now)
                         + SAME_ORGANIZATION_USER_COUNT_OFFSET,
-                toDisplayOrganization(viewer.getOrganization())
+                viewer.shortOrganization()
         );
     }
 }

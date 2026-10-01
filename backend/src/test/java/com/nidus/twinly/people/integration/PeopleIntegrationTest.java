@@ -37,6 +37,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -193,14 +194,72 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
         var result = mockMvc.perform(get("/api/v1/people/{userId}/profile", partner.getId().toString())
                 .header("Authorization", bearer(me.getId())));
 
-        // then: 200 + 타인이므로 이름만, 공개 미동의 필드는 null, 차단/즐겨찾기는 false
+        // then: 200 + 타인이므로 이름만, 공개 미동의 필드는 null, 차단/즐겨찾기는 false, v2 필드는 없음
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.userId").value(partner.getId().toString()))
                 .andExpect(jsonPath("$.userName").value(partner.getNickname()))
+                .andExpect(jsonPath("$.gender").doesNotExist())
+                .andExpect(jsonPath("$.organization").doesNotExist())
+                .andExpect(jsonPath("$.birthYear").doesNotExist())
                 .andExpect(jsonPath("$.intimacy").value(75))
                 .andExpect(jsonPath("$.relationshipType").value("bestFriend"))
                 .andExpect(jsonPath("$.isFavorited").value(false))
                 .andExpect(jsonPath("$.isHighlighted").doesNotExist())
+                .andExpect(jsonPath("$.isBlocked").value(false))
+                .andExpect(jsonPath("$.isDeleted").value(false))
+                .andExpect(jsonPath("$.disclosedFields.affiliation").isEmpty())
+                .andExpect(jsonPath("$.disclosedFields.affiliationNumber").isEmpty());
+    }
+
+    @Test
+    @DisplayName("프로필 조회 v2: 탈퇴한 상대는 이름·사진·공개 필드와 함께 성별·소속·출생연도도 null 로 가려진다")
+    void profileV2_masks_withdrawn_partner() throws Exception {
+        // given: 사진을 가진 상대가 탈퇴한 상태 (탈퇴 후에도 DB 에는 성별·소속·출생연도가 남아 있다)
+        User me = saveUser();
+        User partner = saveUser();
+        savePhoto(partner.getId());
+        partner.delete();
+        userRepository.save(partner);
+        saveRelationship(me.getId(), partner.getId(), DAY_2, 75, "{}");
+
+        // when: 프로필 조회 v2
+        var result = mockMvc.perform(get("/api/v2/people/{userId}/profile", partner.getId().toString())
+                .header("Authorization", bearer(me.getId())));
+
+        // then: 관계는 유지되나 신원을 짐작할 수 있는 값은 키만 남고 모두 null
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.userName").value(User.WITHDRAWN_NAME))
+                .andExpect(jsonPath("$.gender").value(nullValue()))
+                .andExpect(jsonPath("$.organization").value(nullValue()))
+                .andExpect(jsonPath("$.birthYear").value(nullValue()))
+                .andExpect(jsonPath("$.profilePhoto").isEmpty())
+                .andExpect(jsonPath("$.isDeleted").value(true))
+                .andExpect(jsonPath("$.disclosedFields.affiliation").isEmpty())
+                .andExpect(jsonPath("$.disclosedFields.affiliationNumber").isEmpty());
+    }
+
+    @Test
+    @DisplayName("프로필 조회 v2: 실제 유저 데이터를 관통해 v1 필드에 성별·짧은 소속·두 자리 출생연도를 더해 내려준다")
+    void profileV2_success_end_to_end() throws Exception {
+        // given: 친밀도 75인 상대를 실제 DB에 저장
+        User me = saveUser();
+        User partner = saveUser();
+        saveRelationship(me.getId(), partner.getId(), DAY_2, 75, "{}");
+
+        // when: 나의 실제 액세스 토큰으로 프로필 조회 v2 API 호출
+        var result = mockMvc.perform(get("/api/v2/people/{userId}/profile", partner.getId().toString())
+                .header("Authorization", bearer(me.getId())));
+
+        // then: 200 + 닉네임·성별·짧은 소속·두 자리 출생연도, 관계·공개 필드는 v1과 같음
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.userId").value(partner.getId().toString()))
+                .andExpect(jsonPath("$.userName").value(partner.getNickname()))
+                .andExpect(jsonPath("$.gender").value("male"))
+                .andExpect(jsonPath("$.organization").value(partner.shortOrganization()))
+                .andExpect(jsonPath("$.birthYear").value("00"))
+                .andExpect(jsonPath("$.intimacy").value(75))
+                .andExpect(jsonPath("$.relationshipType").value("bestFriend"))
+                .andExpect(jsonPath("$.isFavorited").value(false))
                 .andExpect(jsonPath("$.isBlocked").value(false))
                 .andExpect(jsonPath("$.isDeleted").value(false))
                 .andExpect(jsonPath("$.disclosedFields.affiliation").isEmpty())
