@@ -370,6 +370,30 @@ class MeIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("앱 알림: 일회성 피드가 실제 DB 에 저장되고 oneTime 타입으로 조회·필터링된다")
+    void appNotificationsFeeds_one_time_type() throws Exception {
+        // given: 실제 유저 + 일회성 피드 1건, 친구 피드 1건 (type ENUM 에 ONE_TIME 이 없으면 저장에서 실패한다)
+        User me = saveUser();
+        User target = saveUser();
+        AppNotificationFeed oneTime = appNotificationFeedRepository.save(AppNotificationFeed.createProfileTarget(
+                me.getId(), AppNotificationFeedType.ONE_TIME, "일회성 제목", "일회성 본문", target.getId(), null));
+        appNotificationFeedRepository.save(
+                feed(me.getId(), target.getId(), "새 친구", "친구 요청이 도착했어요", Instant.now().minus(Duration.ofHours(1))));
+
+        // when & then: type=oneTime 으로 필터링하면 일회성 피드만 내려온다
+        mockMvc.perform(get("/api/v1/me/app-notifications/feeds")
+                        .param("type", "oneTime")
+                        .header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.unreadCount").value(2))
+                .andExpect(jsonPath("$.appNotificationFeeds.length()").value(1))
+                .andExpect(jsonPath("$.appNotificationFeeds[0].id").value(oneTime.getId().toString()))
+                .andExpect(jsonPath("$.appNotificationFeeds[0].type").value("oneTime"))
+                .andExpect(jsonPath("$.appNotificationFeeds[0].target.kind").value("profile"))
+                .andExpect(jsonPath("$.appNotificationFeeds[0].target.userId").value(target.getId().toString()));
+    }
+
+    @Test
     @DisplayName("인증 헤더가 없으면 실제 컨텍스트에서도 401을 반환한다")
     void without_auth_returns_401() throws Exception {
         // when & then: 인증 헤더 없이 내 상태 조회 시 401

@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -34,6 +35,20 @@ public interface ScenePartnerRepository extends JpaRepository<ScenePartner, Long
     List<SceneCountProjection> countScenesByUserIdAndPartnerUserIdIn(@Param("userId") Long userId,
                                                                @Param("partnerUserIds") List<Long> partnerUserIds,
                                                                @Param("now") LocalDateTime now);
+
+    @Query(value = """
+            SELECT DISTINCT sp.user_id
+            FROM scene_partners sp
+            JOIN scenes s
+                ON s.id = sp.scene_id
+            WHERE s.user_id = :userId
+              AND sp.user_id IN (:partnerUserIds)
+              AND s.type = 'DIALOGUE'
+              AND s.date < :date
+            """, nativeQuery = true)
+    List<Long> findPartnerUserIdsWithDialogueBeforeDate(@Param("userId") Long userId,
+                                                        @Param("partnerUserIds") List<Long> partnerUserIds,
+                                                        @Param("date") LocalDate date);
 
     interface SceneCountProjection {
         Long getPartnerUserId();

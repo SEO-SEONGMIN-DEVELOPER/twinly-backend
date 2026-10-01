@@ -11,6 +11,7 @@ import com.nidus.twinly.chat.repository.ChatRoomRepository;
 import com.nidus.twinly.match.repository.MatchRepository;
 import com.nidus.twinly.notification.domain.AppNotificationFeedType;
 import com.nidus.twinly.notification.repository.AppNotificationFeedRepository;
+import com.nidus.twinly.notification.repository.AppNotificationScheduleRepository;
 import com.nidus.twinly.people.repository.EncounterPreferenceRepository;
 import com.nidus.twinly.people.repository.EncounterRepository;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
@@ -53,6 +54,9 @@ class ScenarioCleanerUnitTest {
     AppNotificationFeedRepository appNotificationFeedRepository;
 
     @Mock
+    AppNotificationScheduleRepository appNotificationScheduleRepository;
+
+    @Mock
     ChatRoomParticipationRepository chatRoomParticipationRepository;
 
     @Mock
@@ -77,7 +81,7 @@ class ScenarioCleanerUnitTest {
     ScenarioCleaner scenarioCleaner;
 
     @Test
-    @DisplayName("시나리오 테이블과 친구 알림 피드, 쇼케이스 유저끼리의 채팅·매치·인연을 자식부터 부모 순서로 지운다")
+    @DisplayName("시나리오 테이블과 친구 알림 피드·알림 예약, 쇼케이스 유저끼리의 채팅·매치·인연을 자식부터 부모 순서로 지운다")
     void clear_deletes_scenario_tables_and_friend_feeds_in_order() {
         // given: 정리 대상 유저 목록
         List<Long> userIds = List.of(1L, 2L);
@@ -85,11 +89,11 @@ class ScenarioCleanerUnitTest {
         // when: 정리 실행
         scenarioCleaner.clear(userIds);
 
-        // then: FK 자식(partner)이 먼저, 부모가 나중에 지워지고 친구 알림 피드까지 함께 지운다
+        // then: FK 자식(partner)이 먼저, 부모가 나중에 지워지고 친구 알림 피드와 알림 예약까지 함께 지운다
         InOrder inOrder = inOrder(scenePartnerRepository, sceneRepository, questionPartnerRepository, questionRepository,
-                relationshipRepository, showcaseRepository, appNotificationFeedRepository, chatRoomParticipationRepository,
-                chatRepository, chatRoomRepository, matchRepository, chatRoomOpeningRepository, encounterPreferenceRepository,
-                encounterRepository);
+                relationshipRepository, showcaseRepository, appNotificationFeedRepository, appNotificationScheduleRepository,
+                chatRoomParticipationRepository, chatRepository, chatRoomRepository, matchRepository, chatRoomOpeningRepository,
+                encounterPreferenceRepository, encounterRepository);
         inOrder.verify(scenePartnerRepository).deleteAllBySceneUserIdIn(userIds);
         inOrder.verify(sceneRepository).deleteAllByUserIdIn(userIds);
         inOrder.verify(questionPartnerRepository).deleteAllByQuestionUserIdIn(userIds);
@@ -97,6 +101,7 @@ class ScenarioCleanerUnitTest {
         inOrder.verify(relationshipRepository).deleteAllByUserIdIn(userIds);
         inOrder.verify(showcaseRepository).deleteAllByTargetUserIdIn(userIds);
         inOrder.verify(appNotificationFeedRepository).deleteAllByUserIdInAndType(userIds, AppNotificationFeedType.FRIEND);
+        inOrder.verify(appNotificationScheduleRepository).deleteAllByUserIdIn(userIds);
 
         // then: 시나리오로 열린 채팅은 알림 → 참여자 → 메시지 → 방 → 매치 순으로, 개설 예약과 인연까지 지운다
         inOrder.verify(appNotificationFeedRepository).deleteAllByTargetChatRoomBetweenUserIdsIn(userIds);
@@ -117,8 +122,8 @@ class ScenarioCleanerUnitTest {
 
         // then: 어떤 삭제도 일어나지 않는다
         verifyNoInteractions(scenePartnerRepository, sceneRepository, questionPartnerRepository, questionRepository,
-                relationshipRepository, showcaseRepository, appNotificationFeedRepository, chatRoomParticipationRepository,
-                chatRepository, chatRoomRepository, matchRepository, chatRoomOpeningRepository, encounterPreferenceRepository,
-                encounterRepository);
+                relationshipRepository, showcaseRepository, appNotificationFeedRepository, appNotificationScheduleRepository,
+                chatRoomParticipationRepository, chatRepository, chatRoomRepository, matchRepository, chatRoomOpeningRepository,
+                encounterPreferenceRepository, encounterRepository);
     }
 }

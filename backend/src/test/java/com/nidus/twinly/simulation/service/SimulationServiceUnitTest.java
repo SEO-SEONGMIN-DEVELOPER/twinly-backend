@@ -1,5 +1,6 @@
 package com.nidus.twinly.simulation.service;
 
+import com.nidus.twinly.activity.domain.QuestionType;
 import com.nidus.twinly.activity.entity.Scene;
 import com.nidus.twinly.activity.repository.QuestionPartnerRepository;
 import com.nidus.twinly.activity.repository.QuestionRepository;
@@ -11,13 +12,16 @@ import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.chat.opener.ChatRoomOpener;
 import com.nidus.twinly.chat.repository.ChatRoomOpeningRepository;
-import com.nidus.twinly.notification.writer.AppNotificationFeedWriter;
+import com.nidus.twinly.common.time.KstTimes;
+import com.nidus.twinly.notification.domain.AppNotificationScheduleType;
+import com.nidus.twinly.notification.repository.AppNotificationScheduleRepository;
 import com.nidus.twinly.people.repository.EncounterRepository;
 import com.nidus.twinly.relationship.entity.Relationship;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
 import com.nidus.twinly.simulation.dto.command.SimulationsActionSceneCommand;
 import com.nidus.twinly.simulation.dto.command.SimulationsCommand;
 import com.nidus.twinly.simulation.dto.command.SimulationsDialogueSceneCommand;
+import com.nidus.twinly.simulation.dto.command.SimulationsQuestionCommand;
 import com.nidus.twinly.simulation.dto.command.SimulationsRelationshipCommand;
 import com.nidus.twinly.simulation.dto.command.SimulationsSceneCommand;
 import com.nidus.twinly.simulation.dto.result.SimulationPersonaResult;
@@ -44,16 +48,20 @@ import tools.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
@@ -62,6 +70,7 @@ class SimulationServiceUnitTest {
     private static final Long USER_ID = 12L;
     private static final Long PARTNER_ID = 34L;
     private static final LocalDate DATE = LocalDate.of(2026, 8, 3);
+    private static final LocalDate FUTURE_DATE = KstTimes.today().plusDays(1);
 
     @Mock
     SceneRepository sceneRepository;
@@ -88,7 +97,7 @@ class SimulationServiceUnitTest {
     ChatRoomOpeningRepository chatRoomOpeningRepository;
 
     @Mock
-    AppNotificationFeedWriter appNotificationFeedWriter;
+    AppNotificationScheduleRepository appNotificationScheduleRepository;
 
     @Mock
     UserRepository userRepository;
@@ -112,13 +121,13 @@ class SimulationServiceUnitTest {
         simulationService = new SimulationService(
                 sceneRepository, scenePartnerRepository, questionRepository, questionPartnerRepository,
                 relationshipRepository, encounterRepository, chatRoomOpener, chatRoomOpeningRepository,
-                appNotificationFeedWriter, userRepository,
+                appNotificationScheduleRepository, userRepository,
                 personaElementRepository, entitlementReader, consentReader, purchaseService, new ObjectMapper());
     }
 
     @Test
-    @DisplayName("친밀도가 친구 기준을 처음 넘으면 그 날짜로 friend 피드를 남긴다")
-    void simulations_writes_friend_feed_when_relationship_type_becomes_friend() {
+    @DisplayName("친밀도가 친구 기준을 처음 넘으면 관계가 갱신된 시각으로 친구 알림을 예약한다")
+    void simulations_schedules_friend_when_relationship_type_becomes_friend() {
         // given: 직전 관계는 지인(20)이고 이번 시뮬레이션에서 친구 기준(35)을 넘김
         givenEmptyPreviousSimulation();
         given(relationshipRepository.findLatestByUserIdAndPartnerUserIdBeforeDate(USER_ID, PARTNER_ID, DATE))
@@ -127,13 +136,14 @@ class SimulationServiceUnitTest {
         // when: 시뮬레이션 결과 저장
         simulationService.simulations(USER_ID, simulationsCommand(35));
 
-        // then: 시뮬레이션 날짜를 출처로 friend 피드를 남김
-        then(appNotificationFeedWriter).should().writeFriend(USER_ID, PARTNER_ID, DATE);
+        // then: 시각이 이미 지났어도 직접 보내지 않고 예약으로 남겨, 같은 날짜가 다시 저장돼도 두 번 나가지 않게 한다
+        then(appNotificationScheduleRepository).should().insertIfAbsent(
+                USER_ID, PARTNER_ID, AppNotificationScheduleType.FRIEND.name(), DATE, KstTimes.toInstant(DATE.atTime(21, 0)));
     }
 
     @Test
-    @DisplayName("직전 관계가 없어도 첫 시뮬레이션에서 친구 기준을 넘으면 friend 피드를 남긴다")
-    void simulations_writes_friend_feed_without_previous_relationship() {
+    @DisplayName("직전 관계가 없어도 첫 시뮬레이션에서 친구 기준을 넘으면 친구 알림을 예약한다")
+    void simulations_schedules_friend_without_previous_relationship() {
         // given: 직전 관계 기록이 없음
         givenEmptyPreviousSimulation();
         given(relationshipRepository.findLatestByUserIdAndPartnerUserIdBeforeDate(USER_ID, PARTNER_ID, DATE))
@@ -142,13 +152,14 @@ class SimulationServiceUnitTest {
         // when: 친구 기준을 넘는 친밀도로 저장
         simulationService.simulations(USER_ID, simulationsCommand(35));
 
-        // then: 지인에서 올라온 것으로 보고 피드를 남김
-        then(appNotificationFeedWriter).should().writeFriend(USER_ID, PARTNER_ID, DATE);
+        // then: 지인에서 올라온 것으로 보고 예약함
+        then(appNotificationScheduleRepository).should().insertIfAbsent(
+                USER_ID, PARTNER_ID, AppNotificationScheduleType.FRIEND.name(), DATE, KstTimes.toInstant(DATE.atTime(21, 0)));
     }
 
     @Test
-    @DisplayName("이미 친구 이상이던 상대는 친밀도가 더 올라도 friend 피드를 남기지 않는다")
-    void simulations_does_not_write_friend_feed_when_already_friend() {
+    @DisplayName("이미 친구 이상이던 상대는 친밀도가 더 올라도 친구 알림을 예약하지 않는다")
+    void simulations_does_not_schedule_friend_when_already_friend() {
         // given: 직전 관계가 이미 친구(40)
         givenEmptyPreviousSimulation();
         given(relationshipRepository.findLatestByUserIdAndPartnerUserIdBeforeDate(USER_ID, PARTNER_ID, DATE))
@@ -157,13 +168,13 @@ class SimulationServiceUnitTest {
         // when: 친밀도가 더 오른 채로 저장
         simulationService.simulations(USER_ID, simulationsCommand(60));
 
-        // then: 경계를 새로 넘은 것이 아니므로 피드 없음
-        then(appNotificationFeedWriter).should(never()).writeFriend(any(), any(), any());
+        // then: 경계를 새로 넘은 것이 아니므로 예약 없음
+        then(appNotificationScheduleRepository).should(never()).insertIfAbsent(any(), any(), any(), any(), any());
     }
 
     @Test
-    @DisplayName("친구 기준에 못 미치면 friend 피드를 남기지 않는다")
-    void simulations_does_not_write_friend_feed_below_threshold() {
+    @DisplayName("친구 기준에 못 미치면 친구 알림을 예약하지 않는다")
+    void simulations_does_not_schedule_friend_below_threshold() {
         // given: 직전 관계도 지인이고 이번에도 지인
         givenEmptyPreviousSimulation();
         given(relationshipRepository.findLatestByUserIdAndPartnerUserIdBeforeDate(USER_ID, PARTNER_ID, DATE))
@@ -172,8 +183,248 @@ class SimulationServiceUnitTest {
         // when: 친구 기준 미만으로 저장
         simulationService.simulations(USER_ID, simulationsCommand(34));
 
-        // then: 피드 없음
-        then(appNotificationFeedWriter).should(never()).writeFriend(any(), any(), any());
+        // then: 예약 없음
+        then(appNotificationScheduleRepository).should(never()).insertIfAbsent(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("친구가 되는 시각이 아직 오지 않았으면 그 미래 시각으로 예약한다")
+    void simulations_schedules_friend_when_update_time_is_future() {
+        // given: 내일 21시에 친구 기준을 넘는 결과가 미리 들어옴
+        givenEmptyPreviousSimulation(FUTURE_DATE);
+        given(relationshipRepository.findLatestByUserIdAndPartnerUserIdBeforeDate(USER_ID, PARTNER_ID, FUTURE_DATE))
+                .willReturn(Optional.of(relationship(20)));
+
+        // when: 시뮬레이션 결과 저장
+        simulationService.simulations(USER_ID, simulationsCommand(FUTURE_DATE, 35));
+
+        // then: 저장 시점에 알리면 아직 일어나지 않은 일을 미리 알리게 되므로, 관계가 갱신되는 시각으로 예약만 한다
+        then(appNotificationScheduleRepository).should().insertIfAbsent(
+                USER_ID, PARTNER_ID, AppNotificationScheduleType.FRIEND.name(), FUTURE_DATE,
+                KstTimes.toInstant(FUTURE_DATE.atTime(21, 0)));
+    }
+
+    @Test
+    @DisplayName("같은 날짜 결과를 다시 저장하면 아직 안 나간 예약을 먼저 지운다")
+    void simulations_deletes_unsent_schedules_before_saving() {
+        // given: 이전 결과가 없는 날짜
+        givenEmptyPreviousSimulation();
+
+        // when: 시뮬레이션 결과 저장
+        simulationService.simulations(USER_ID, new SimulationsCommand(USER_ID, DATE, List.of(), List.of(), List.of()));
+
+        // then: 바뀐 결과에 없는 일이 예약된 채 남아 발송되지 않도록 미발송 예약을 비운다
+        then(appNotificationScheduleRepository).should().deleteAllUnsentByUserIdAndSimulationDate(USER_ID, DATE);
+    }
+
+    @Test
+    @DisplayName("처음 대화하는 상대가 있으면 그날 가장 이른 대화 장면 시작 시각으로 첫 만남 알림을 예약한다")
+    void simulations_schedules_first_meeting_at_earliest_dialogue_start() {
+        // given: 내일 같은 상대와 대화 장면이 두 번 있고, 이전 날짜에 대화한 적은 없음
+        givenEmptyPreviousSimulation(FUTURE_DATE);
+        given(scenePartnerRepository.findPartnerUserIdsWithDialogueBeforeDate(USER_ID, List.of(PARTNER_ID), FUTURE_DATE))
+                .willReturn(List.of());
+        SimulationsCommand command = new SimulationsCommand(USER_ID, FUTURE_DATE, List.of(
+                dialogueScene(FUTURE_DATE, 15, List.of(PARTNER_ID)),
+                dialogueScene(FUTURE_DATE, 11, List.of(PARTNER_ID))
+        ), List.of(), List.of());
+
+        // when: 시뮬레이션 결과 저장
+        simulationService.simulations(USER_ID, command);
+
+        // then: 입력 순서와 무관하게 더 이른 11시 장면으로 한 번만 예약한다
+        then(appNotificationScheduleRepository).should().insertIfAbsent(
+                USER_ID, PARTNER_ID, AppNotificationScheduleType.FIRST_MEETING.name(), FUTURE_DATE,
+                KstTimes.toInstant(FUTURE_DATE.atTime(11, 0)));
+        then(appNotificationScheduleRepository).should(never()).insertIfAbsent(
+                USER_ID, PARTNER_ID, AppNotificationScheduleType.FIRST_MEETING.name(), FUTURE_DATE,
+                KstTimes.toInstant(FUTURE_DATE.atTime(15, 0)));
+    }
+
+    @Test
+    @DisplayName("이전 날짜에 이미 대화한 상대는 첫 만남 알림을 예약하지 않는다")
+    void simulations_does_not_schedule_first_meeting_for_already_met_partner() {
+        // given: 내일 대화 장면이 있지만 그 상대와는 이전 날짜에 대화한 기록이 있음
+        givenEmptyPreviousSimulation(FUTURE_DATE);
+        given(scenePartnerRepository.findPartnerUserIdsWithDialogueBeforeDate(USER_ID, List.of(PARTNER_ID), FUTURE_DATE))
+                .willReturn(List.of(PARTNER_ID));
+        SimulationsCommand command = new SimulationsCommand(USER_ID, FUTURE_DATE, List.of(
+                dialogueScene(FUTURE_DATE, 11, List.of(PARTNER_ID))
+        ), List.of(), List.of());
+
+        // when: 시뮬레이션 결과 저장
+        simulationService.simulations(USER_ID, command);
+
+        // then: 처음이 아니므로 예약 없음
+        then(appNotificationScheduleRepository).should(never()).insertIfAbsent(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("대화 장면 시작 시각이 이미 지났어도 그 시각으로 예약해 다음 발송 주기에 바로 나가게 한다")
+    void simulations_schedules_first_meeting_for_past_dialogue() {
+        // given: 이미 지난 날짜의 대화 장면, 이전 날짜에 대화한 적은 없음
+        givenEmptyPreviousSimulation();
+        given(scenePartnerRepository.findPartnerUserIdsWithDialogueBeforeDate(USER_ID, List.of(PARTNER_ID), DATE))
+                .willReturn(List.of());
+        SimulationsCommand command = new SimulationsCommand(USER_ID, DATE, List.of(dialogueScene("카페")), List.of(), List.of());
+
+        // when: 시뮬레이션 결과 저장
+        simulationService.simulations(USER_ID, command);
+
+        // then: 직접 보내지 않고 예약으로 남겨야 같은 날짜가 다시 저장돼도 두 번 나가지 않는다
+        then(appNotificationScheduleRepository).should().insertIfAbsent(
+                USER_ID, PARTNER_ID, AppNotificationScheduleType.FIRST_MEETING.name(), DATE,
+                KstTimes.toInstant(DATE.atTime(11, 0)));
+    }
+
+    @Test
+    @DisplayName("대화가 아닌 행동 장면에 함께 있던 상대와 자기 자신은 첫 만남 알림 대상이 아니다")
+    void simulations_does_not_schedule_first_meeting_for_action_scene_or_self() {
+        // given: 내일 상대와 함께한 행동 장면, 그리고 참여자에 본인만 있는 대화 장면
+        givenEmptyPreviousSimulation(FUTURE_DATE);
+        SimulationsCommand command = new SimulationsCommand(USER_ID, FUTURE_DATE, List.of(
+                new SimulationsActionSceneCommand(FUTURE_DATE.atTime(9, 0), FUTURE_DATE.atTime(10, 0), "action", "학교",
+                        List.of(PARTNER_ID), "narration", null),
+                dialogueScene(FUTURE_DATE, 11, List.of(USER_ID))
+        ), List.of(), List.of());
+
+        // when: 시뮬레이션 결과 저장
+        simulationService.simulations(USER_ID, command);
+
+        // then: 대화를 나눈 상대가 없으므로 예약 없음
+        then(appNotificationScheduleRepository).should(never()).insertIfAbsent(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("같은 상대의 관계가 여러 건 들어오면 친구 기준을 넘은 가장 이른 시각으로 한 번만 예약한다")
+    void simulations_schedules_friend_once_at_earliest_update_time() {
+        // given: 같은 상대에 대해 친구 기준을 넘는 관계가 21시, 15시 두 건
+        givenEmptyPreviousSimulation();
+        given(relationshipRepository.findLatestByUserIdAndPartnerUserIdBeforeDate(USER_ID, PARTNER_ID, DATE))
+                .willReturn(Optional.of(relationship(20)));
+        SimulationsCommand command = new SimulationsCommand(USER_ID, DATE, List.of(), List.of(), List.of(
+                new SimulationsRelationshipCommand(PARTNER_ID, DATE.atTime(21, 0), 40, "{}"),
+                new SimulationsRelationshipCommand(PARTNER_ID, DATE.atTime(15, 0), 36, "{}")
+        ));
+
+        // when: 시뮬레이션 결과 저장
+        simulationService.simulations(USER_ID, command);
+
+        // then: 입력 순서와 무관하게 더 이른 15시로 한 번만 예약한다
+        then(appNotificationScheduleRepository).should().insertIfAbsent(
+                USER_ID, PARTNER_ID, AppNotificationScheduleType.FRIEND.name(), DATE, KstTimes.toInstant(DATE.atTime(15, 0)));
+        then(appNotificationScheduleRepository).should(never()).insertIfAbsent(
+                USER_ID, PARTNER_ID, AppNotificationScheduleType.FRIEND.name(), DATE, KstTimes.toInstant(DATE.atTime(21, 0)));
+    }
+
+    @Test
+    @DisplayName("한 대화 장면에 상대가 여럿이면 처음 대화하는 상대만 첫 만남 알림을 예약한다")
+    void simulations_schedules_first_meeting_only_for_new_partner_in_group_dialogue() {
+        // given: 두 사람과 함께한 대화 장면, 그중 한 사람과는 이전 날짜에 대화한 기록이 있음
+        Long newPartnerId = 56L;
+        givenEmptyPreviousSimulation();
+        given(scenePartnerRepository.findPartnerUserIdsWithDialogueBeforeDate(USER_ID, List.of(PARTNER_ID, newPartnerId), DATE))
+                .willReturn(List.of(PARTNER_ID));
+        SimulationsCommand command = new SimulationsCommand(USER_ID, DATE, List.of(
+                dialogueScene(DATE, 11, List.of(PARTNER_ID, newPartnerId))
+        ), List.of(), List.of());
+
+        // when: 시뮬레이션 결과 저장
+        simulationService.simulations(USER_ID, command);
+
+        // then: 같은 장면에 있었어도 처음 만난 상대에 대해서만 예약한다
+        then(appNotificationScheduleRepository).should().insertIfAbsent(
+                USER_ID, newPartnerId, AppNotificationScheduleType.FIRST_MEETING.name(), DATE, KstTimes.toInstant(DATE.atTime(11, 0)));
+        then(appNotificationScheduleRepository).should(never()).insertIfAbsent(
+                eq(USER_ID), eq(PARTNER_ID), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("미발송 예약 삭제는 새 예약 저장보다 먼저 일어난다")
+    void simulations_deletes_unsent_schedules_before_inserting_new_ones() {
+        // given: 친구 기준을 넘는 결과
+        givenEmptyPreviousSimulation();
+        given(relationshipRepository.findLatestByUserIdAndPartnerUserIdBeforeDate(USER_ID, PARTNER_ID, DATE))
+                .willReturn(Optional.of(relationship(20)));
+
+        // when: 시뮬레이션 결과 저장
+        simulationService.simulations(USER_ID, simulationsCommand(35));
+
+        // then: 순서가 뒤집히면 방금 넣은 예약이 지워지거나, 남아 있던 이전 예약에 막혀 새 시각이 반영되지 않는다
+        InOrder inOrder = inOrder(appNotificationScheduleRepository);
+        inOrder.verify(appNotificationScheduleRepository).deleteAllUnsentByUserIdAndSimulationDate(USER_ID, DATE);
+        inOrder.verify(appNotificationScheduleRepository).insertIfAbsent(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("경로의 userId와 본문의 userId가 다르면 INVALID_REQUEST 예외가 발생하고 예약을 건드리지 않는다")
+    void simulations_with_mismatched_user_id_throws() {
+        // given: 본문의 userId가 경로의 userId와 다른 요청
+        SimulationsCommand command = new SimulationsCommand(PARTNER_ID, DATE, List.of(), List.of(), List.of());
+
+        // when & then: INVALID_REQUEST 예외가 나고, 다른 유저의 예약을 지우거나 새로 만들지 않는다
+        assertThatThrownBy(() -> simulationService.simulations(USER_ID, command))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_REQUEST);
+
+        then(appNotificationScheduleRepository).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 유저의 결과를 저장하려 하면 USER_NOT_FOUND 예외가 발생하고 예약을 건드리지 않는다")
+    void simulations_for_unknown_user_throws() {
+        // given: 유저 행이 없음
+        given(userRepository.existsById(USER_ID)).willReturn(false);
+
+        // when & then: USER_NOT_FOUND 예외가 나고 저장도 예약도 일어나지 않는다
+        assertThatThrownBy(() -> simulationService.simulations(USER_ID, simulationsCommand(35)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.USER_NOT_FOUND);
+
+        then(appNotificationScheduleRepository).shouldHaveNoInteractions();
+        then(sceneRepository).should(never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("장면의 상대 중 존재하지 않는 유저가 있으면 INVALID_REQUEST 예외가 발생하고 이전 결과를 지우지 않는다")
+    void simulations_with_unknown_scene_partner_throws_before_deleting() {
+        // given: 대화 상대 둘 중 한 명만 실제 유저
+        given(userRepository.existsById(USER_ID)).willReturn(true);
+        given(userRepository.countByIdIn(Set.of(PARTNER_ID, 999L))).willReturn(1L);
+        SimulationsCommand command = new SimulationsCommand(USER_ID, DATE, List.of(
+                dialogueScene(DATE, 11, List.of(PARTNER_ID, 999L))
+        ), List.of(), List.of());
+
+        // when & then: 외래 키 위반으로 서버 오류가 나기 전에 요청 오류로 끊고, 기존 결과와 예약은 그대로 둔다
+        assertThatThrownBy(() -> simulationService.simulations(USER_ID, command))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_REQUEST);
+
+        then(sceneRepository).should(never()).findAllByUserIdAndDate(any(), any());
+        then(sceneRepository).should(never()).saveAll(any());
+        then(appNotificationScheduleRepository).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("질문·관계의 상대까지 한 번에 모아 존재 여부를 확인한다")
+    void simulations_validates_partners_of_questions_and_relationships_together() {
+        // given: 장면에는 상대가 없고, 질문과 관계에만 서로 다른 상대가 있으며 그중 관계의 상대가 없는 유저
+        given(userRepository.existsById(USER_ID)).willReturn(true);
+        given(userRepository.countByIdIn(Set.of(PARTNER_ID, 999L))).willReturn(1L);
+        SimulationsCommand command = new SimulationsCommand(USER_ID, DATE, List.of(),
+                List.of(new SimulationsQuestionCommand(DATE.atTime(21, 0), QuestionType.PROMISE, List.of(PARTNER_ID), "오늘 어땠어?", List.of())),
+                List.of(new SimulationsRelationshipCommand(999L, DATE.atTime(21, 0), 40, "{}")));
+
+        // when & then: 어느 항목에서 나온 상대든 하나라도 없으면 요청 오류다
+        assertThatThrownBy(() -> simulationService.simulations(USER_ID, command))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_REQUEST);
+
+        then(relationshipRepository).should(never()).saveAll(any());
     }
 
     @Test
@@ -206,17 +457,32 @@ class SimulationServiceUnitTest {
                 DATE.atTime(11, 0), DATE.atTime(12, 0), "dialogue", place, List.of(PARTNER_ID), List.of());
     }
 
+    private SimulationsSceneCommand dialogueScene(LocalDate date, int startHour, List<Long> with) {
+        return new SimulationsDialogueSceneCommand(
+                date.atTime(startHour, 0), date.atTime(startHour + 1, 0), "dialogue", "카페", with, List.of());
+    }
+
     private void givenEmptyPreviousSimulation() {
+        givenEmptyPreviousSimulation(DATE);
+    }
+
+    private void givenEmptyPreviousSimulation(LocalDate date) {
         given(userRepository.existsById(USER_ID)).willReturn(true);
-        given(sceneRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of());
-        given(questionRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of());
+        lenient().when(userRepository.countByIdIn(any()))
+                .thenAnswer(invocation -> (long) invocation.<Collection<Long>>getArgument(0).size());
+        given(sceneRepository.findAllByUserIdAndDate(USER_ID, date)).willReturn(List.of());
+        given(questionRepository.findAllByUserIdAndDate(USER_ID, date)).willReturn(List.of());
         given(sceneRepository.saveAll(any())).willReturn(List.of());
         given(questionRepository.saveAll(any())).willReturn(List.of());
     }
 
     private SimulationsCommand simulationsCommand(Integer rapport) {
-        return new SimulationsCommand(USER_ID, DATE, List.of(), List.of(), List.of(
-                new SimulationsRelationshipCommand(PARTNER_ID, DATE.atTime(21, 0), rapport, "{}")
+        return simulationsCommand(DATE, rapport);
+    }
+
+    private SimulationsCommand simulationsCommand(LocalDate date, Integer rapport) {
+        return new SimulationsCommand(USER_ID, date, List.of(), List.of(), List.of(
+                new SimulationsRelationshipCommand(PARTNER_ID, date.atTime(21, 0), rapport, "{}")
         ));
     }
 

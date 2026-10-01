@@ -17,6 +17,7 @@ import com.nidus.twinly.device.repository.DeviceRepository;
 import com.nidus.twinly.notification.domain.AppNotificationFeedType;
 import com.nidus.twinly.notification.entity.AppNotificationFeed;
 import com.nidus.twinly.notification.repository.AppNotificationFeedRepository;
+import com.nidus.twinly.notification.repository.AppNotificationScheduleRepository;
 import com.nidus.twinly.people.repository.EncounterPreferenceRepository;
 import com.nidus.twinly.people.repository.EncounterRepository;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
@@ -73,6 +74,9 @@ class SimulationChatRoomIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     AppNotificationFeedRepository appNotificationFeedRepository;
+
+    @Autowired
+    AppNotificationScheduleRepository appNotificationScheduleRepository;
 
     @Autowired
     EncounterPreferenceRepository encounterPreferenceRepository;
@@ -146,13 +150,15 @@ class SimulationChatRoomIntegrationTest extends AbstractIntegrationTest {
         simulate(me, partner, RAPPORT_OVER_THRESHOLD);
 
         // then: 푸시 리스너는 커밋 뒤 별도 스레드에서 돌기 때문에 즉시 단언하면 간헐적으로 실패한다.
-        //       발송 횟수는 알림 피드 개수를 따르므로(매칭 2건 + 친구 1건) 여기서는 경로가 타는지만 본다
+        //       발송 횟수는 알림 피드 개수를 따르고, 친구 알림은 예약을 거쳐 따로 나가므로 여기서는 경로가 타는지만 본다
         then(firebaseMessaging).should(timeout(5_000).atLeastOnce()).sendEach(any());
     }
 
     @AfterEach
     void cleanUp() {
         // 롤백이 없으므로 직접 지운다. 순서는 FK 의존의 역방향(자식 → 부모)
+        // 친구 알림 예약은 피드보다 먼저 지운다. 실제 스케줄러가 발송 중이면 행 잠금에 걸려 기다렸다가, 그때 생긴 피드까지 아래에서 함께 지워진다
+        appNotificationScheduleRepository.deleteAll();
         appNotificationFeedRepository.deleteAll();
         deviceRepository.deleteAll();
         chatRoomParticipationRepository.deleteAll();

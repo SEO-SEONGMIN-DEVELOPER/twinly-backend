@@ -5,6 +5,8 @@ import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
+import com.nidus.twinly.simulation.dto.command.SimulationsCommand;
+import com.nidus.twinly.simulation.dto.command.SimulationsDialogueSceneCommand;
 import com.nidus.twinly.simulation.dto.result.SimulationPersonaResult;
 import com.nidus.twinly.simulation.service.SimulationService;
 import com.nidus.twinly.user.dto.result.UsersPageResult;
@@ -13,27 +15,34 @@ import com.nidus.twinly.user.service.UserService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import com.nidus.twinly.common.security.SecurityConfig;
+import org.mockito.ArgumentCaptor;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -187,5 +196,116 @@ class SimulationControllerUnitTest {
         // then: 400 반환 + 서비스는 호출되지 않음
         result.andExpect(status().isBadRequest());
         then(userService).should(never()).users(any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("시뮬레이션 결과 저장 성공 시 200을 반환하고 문자열 id와 시각을 그대로 풀어 서비스에 위임한다")
+    void simulations_success() throws Exception {
+        // when: 대화 장면 하나와 관계 하나가 담긴 결과로 저장 API 호출
+        var result = mockMvc.perform(post("/internal/v1/users/{userId}/simulations", "12")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(simulationsPayload("\"updateTime\": \"2026-10-01T21:00:00\",", "[\"34\"]")));
+
+        // then: 200 반환 + 알림 예약이 기대는 값(대화 시작 시각·상대, 관계 갱신 시각)이 그대로 전달됨
+        result.andExpect(status().isOk());
+        ArgumentCaptor<SimulationsCommand> captor = ArgumentCaptor.forClass(SimulationsCommand.class);
+        then(simulationService).should().simulations(eq(USER_ID), captor.capture());
+        SimulationsCommand command = captor.getValue();
+        assertThat(command.userId()).isEqualTo(USER_ID);
+        assertThat(command.date()).isEqualTo(LocalDate.of(2026, 10, 1));
+        assertThat(command.scenes()).singleElement()
+                .isInstanceOfSatisfying(SimulationsDialogueSceneCommand.class, dialogue -> {
+                    assertThat(dialogue.start()).isEqualTo(LocalDateTime.of(2026, 10, 1, 11, 0));
+                    assertThat(dialogue.with()).containsExactly(34L);
+                });
+        assertThat(command.relationships()).singleElement().satisfies(relationship -> {
+            assertThat(relationship.partnerId()).isEqualTo(34L);
+            assertThat(relationship.updateTime()).isEqualTo(LocalDateTime.of(2026, 10, 1, 21, 0));
+            assertThat(relationship.rapport()).isEqualTo(40);
+        });
+    }
+
+    @Test
+    @DisplayName("관계에 updateTime이 없으면 400을 반환하고 서비스를 호출하지 않는다")
+    void simulations_without_update_time_returns_400() throws Exception {
+        // when: 관계 갱신 시각을 뺀 결과로 저장 API 호출
+        var result = mockMvc.perform(post("/internal/v1/users/{userId}/simulations", "12")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(simulationsPayload("", "[\"34\"]")));
+
+        // then: 400 반환 + 친구 알림을 보낼 시각을 알 수 없으므로 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest());
+        then(simulationService).should(never()).simulations(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("대화 장면에 상대가 한 명도 없으면 400을 반환하고 서비스를 호출하지 않는다")
+    void simulations_with_empty_dialogue_partners_returns_400() throws Exception {
+        // when: 대화 장면의 with 를 빈 배열로 보낸 결과로 저장 API 호출
+        var result = mockMvc.perform(post("/internal/v1/users/{userId}/simulations", "12")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(simulationsPayload("\"updateTime\": \"2026-10-01T21:00:00\",", "[]")));
+
+        // then: 400 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest());
+        then(simulationService).should(never()).simulations(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("시뮬레이션 결과 저장에서 경로 변수 userId가 숫자가 아니면 400을 반환하고 서비스를 호출하지 않는다")
+    void simulations_with_non_numeric_userId_returns_400() throws Exception {
+        // when: 경로 변수 userId를 숫자가 아닌 값으로 저장 API 호출
+        var result = mockMvc.perform(post("/internal/v1/users/{userId}/simulations", "abc")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(simulationsPayload("\"updateTime\": \"2026-10-01T21:00:00\",", "[\"34\"]")));
+
+        // then: 400 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest());
+        then(simulationService).should(never()).simulations(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("시뮬레이션 결과 저장에서 서비스가 USER_NOT_FOUND를 던지면 404를 반환한다")
+    void simulations_user_not_found_returns_404() throws Exception {
+        // given: 저장 대상 유저가 없음
+        willThrow(new BusinessException(ErrorCode.USER_NOT_FOUND)).given(simulationService).simulations(anyLong(), any());
+
+        // when: 저장 API 호출
+        var result = mockMvc.perform(post("/internal/v1/users/{userId}/simulations", "12")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(simulationsPayload("\"updateTime\": \"2026-10-01T21:00:00\",", "[\"34\"]")));
+
+        // then: 404 반환
+        result.andExpect(status().isNotFound());
+    }
+
+    private String simulationsPayload(String updateTimeField, String with) {
+        return """
+                {
+                  "userId": "12",
+                  "date": "2026-10-01",
+                  "scenes": [
+                    {
+                      "type": "dialogue",
+                      "start": "2026-10-01T11:00:00",
+                      "end": "2026-10-01T11:30:00",
+                      "place": "카페",
+                      "with": %s,
+                      "lines": [
+                        {"t": "bubble", "userId": "34", "text": "안녕", "occursAt": "2026-10-01T11:10:00"}
+                      ]
+                    }
+                  ],
+                  "questions": [],
+                  "relationships": [
+                    {
+                      "partnerId": "34",
+                      %s
+                      "rapport": 40,
+                      "partnerModel": "model-v1"
+                    }
+                  ]
+                }
+                """.formatted(with, updateTimeField);
     }
 }

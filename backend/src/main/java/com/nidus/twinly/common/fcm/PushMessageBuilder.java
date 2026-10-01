@@ -38,7 +38,19 @@ public class PushMessageBuilder {
                         device.getUserId(),
                         type,
                         device.getPushToken(),
-                        feedMessage(device, content, data)))
+                        notificationMessage(device, content.title(), content.body(), data)))
+                .toList();
+    }
+
+    public List<PushMessage> oneTimePushOnly(List<Device> devices, OneTimePushContent content) {
+        Map<String, String> data = oneTimePushOnlyData(content);
+
+        return devices.stream()
+                .map(device -> new PushMessage(
+                        device.getUserId(),
+                        PushType.ONE_TIME_PUSH_ONLY,
+                        device.getPushToken(),
+                        notificationMessage(device, content.title(), content.body(), data)))
                 .toList();
     }
 
@@ -66,10 +78,17 @@ public class PushMessageBuilder {
                 "createdAt", content.createdAt().toString());
     }
 
-    private Message feedMessage(Device device, FeedPushContent content, Map<String, String> data) {
+    private Map<String, String> oneTimePushOnlyData(OneTimePushContent content) {
+        return Map.of(
+                "version", VERSION,
+                "type", EnumJsonNames.of(PushType.ONE_TIME_PUSH_ONLY),
+                "createdAt", content.createdAt().toString());
+    }
+
+    private Message notificationMessage(Device device, String title, String body, Map<String, String> data) {
         return Message.builder()
                 .setToken(device.getPushToken())
-                .setNotification(notification(content.title(), content.body()))
+                .setNotification(notification(title, body))
                 .putAllData(data)
                 .setApnsConfig(ApnsConfig.builder()
                         .setAps(Aps.builder().setSound(DEFAULT_SOUND).build())
