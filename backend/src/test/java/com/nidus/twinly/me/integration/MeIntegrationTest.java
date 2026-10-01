@@ -43,9 +43,11 @@ import com.nidus.twinly.user.domain.DisclosureField;
 import com.nidus.twinly.user.entity.PersonaElement;
 import com.nidus.twinly.user.entity.Photo;
 import com.nidus.twinly.user.entity.User;
+import com.nidus.twinly.user.entity.UserTendencyAnswer;
 import com.nidus.twinly.user.repository.PersonaElementRepository;
 import com.nidus.twinly.user.repository.PhotoRepository;
 import com.nidus.twinly.user.repository.UserSurveyAnswerRepository;
+import com.nidus.twinly.user.repository.UserTendencyAnswerRepository;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -69,6 +71,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import com.nidus.twinly.common.survey.SurveyLoader;
 import com.nidus.twinly.common.survey.SurveyQuestion;
+import com.nidus.twinly.common.tendency.TendencyLoader;
+import com.nidus.twinly.common.tendency.TendencyOption;
+import com.nidus.twinly.common.tendency.TendencyQuestion;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
@@ -86,6 +91,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -114,6 +120,12 @@ class MeIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     SurveyLoader surveyLoader;
+
+    @Autowired
+    UserTendencyAnswerRepository userTendencyAnswerRepository;
+
+    @Autowired
+    TendencyLoader tendencyLoader;
 
     @Autowired
     EncounterRepository encounterRepository;
@@ -1276,5 +1288,163 @@ class MeIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.length()").value(questions.size()))
                 .andExpect(jsonPath("$[0].id").value(questions.getFirst().id()))
                 .andExpect(jsonPath("$[0].options.A").isNotEmpty());
+    }
+
+    @Test
+    @DisplayName("성향 문항 목록: 로그인 유저에게 실제 성향 문항 파일의 전 문항을 순서대로, id는 문자열로 내려준다")
+    void tendencyQuestions_end_to_end() throws Exception {
+        // given: 실제 유저 + 실제 성향 문항 파일의 문항들
+        User me = saveUser();
+        List<TendencyQuestion> questions = tendencyLoader.getAllQuestions();
+        TendencyQuestion firstQuestion = questions.getFirst();
+        TendencyOption firstOption = firstQuestion.options().getFirst();
+
+        // when & then: 문항 수·첫 문항·첫 선택지가 파일과 일치하고 id는 문자열
+        mockMvc.perform(get("/api/v1/me/tendency-questions")
+                        .header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.questions.length()").value(questions.size()))
+                .andExpect(jsonPath("$.questions[0].id").value(firstQuestion.id().toString()))
+                .andExpect(jsonPath("$.questions[0].text").value(firstQuestion.text()))
+                .andExpect(jsonPath("$.questions[0].options.length()").value(firstQuestion.options().size()))
+                .andExpect(jsonPath("$.questions[0].options[0].id").value(firstOption.id().toString()))
+                .andExpect(jsonPath("$.questions[0].options[0].label").value(firstOption.label()));
+    }
+
+    @Test
+    @DisplayName("성향 문항 목록: 인증 헤더가 없으면 401")
+    void tendencyQuestions_without_auth_returns_401() throws Exception {
+        // when & then: 인증 헤더 없이 호출하면 401
+        mockMvc.perform(get("/api/v1/me/tendency-questions"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("성향 응답 제출: 실제 유저·JWT 인증·DB까지 관통하여 user_tendency_answers 행이 생성된다")
+    void submitTendencyAnswer_end_to_end() throws Exception {
+        // given: 실제 유저 + 실제 파일의 첫 문항과 그 마지막 선택지
+        User me = saveUser();
+        TendencyQuestion question = tendencyLoader.getAllQuestions().getFirst();
+        Long optionId = question.options().getLast().id();
+
+        // when: 문항 id는 경로에, 선택지 id는 문자열로 본문에 담아 제출
+        mockMvc.perform(put("/api/v1/me/tendency-answers/{questionId}", question.id().toString())
+                        .header("Authorization", bearer(me.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"optionId": "%d"}
+                                """.formatted(optionId)))
+                .andExpect(status().isOk());
+
+        // then: DB에 유저·문항·선택지 id로 답변 1행이 저장됨
+        flushAndClear();
+        assertThat(tendencyAnswersOf(me))
+                .extracting(UserTendencyAnswer::getQuestionId, UserTendencyAnswer::getOptionId)
+                .containsExactly(tuple(question.id(), optionId));
+    }
+
+    @Test
+    @DisplayName("성향 응답 제출: 같은 문항에 다시 답하면 행을 새로 만들지 않고 선택지만 바뀌며, 다른 유저의 답은 그대로다")
+    void submitTendencyAnswer_resubmit_updates_existing_row() throws Exception {
+        // given: 같은 문항에 나는 첫 선택지로, 다른 유저는 마지막 선택지로 답한 상태
+        User me = saveUser();
+        User other = saveUser();
+        TendencyQuestion question = tendencyLoader.getAllQuestions().getFirst();
+        Long firstOptionId = question.options().getFirst().id();
+        Long lastOptionId = question.options().getLast().id();
+        submitTendencyAnswer(me, question.id(), firstOptionId);
+        submitTendencyAnswer(other, question.id(), lastOptionId);
+
+        // when: 내가 같은 문항에 마지막 선택지로 다시 답변
+        submitTendencyAnswer(me, question.id(), lastOptionId);
+
+        // then: 유니크 제약 위반 없이 내 행은 1개로 유지되고 선택지만 바뀌며, 다른 유저의 행은 영향받지 않음
+        flushAndClear();
+        assertThat(tendencyAnswersOf(me))
+                .extracting(UserTendencyAnswer::getQuestionId, UserTendencyAnswer::getOptionId)
+                .containsExactly(tuple(question.id(), lastOptionId));
+        assertThat(tendencyAnswersOf(other))
+                .extracting(UserTendencyAnswer::getQuestionId, UserTendencyAnswer::getOptionId)
+                .containsExactly(tuple(question.id(), lastOptionId));
+    }
+
+    @Test
+    @DisplayName("성향 응답 제출: 파일에 없는 문항이면 404 TENDENCY_QUESTION_NOT_FOUND이고 저장되지 않는다")
+    void submitTendencyAnswer_with_unknown_question_returns_404() throws Exception {
+        // given: 실제 유저 + 파일의 어떤 문항 id보다 큰 id
+        User me = saveUser();
+        long unknownQuestionId = tendencyLoader.getAllQuestions().stream()
+                .mapToLong(TendencyQuestion::id)
+                .max()
+                .orElseThrow() + 1;
+
+        // when & then: 없는 문항에 답하면 404
+        mockMvc.perform(put("/api/v1/me/tendency-answers/{questionId}", String.valueOf(unknownQuestionId))
+                        .header("Authorization", bearer(me.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"optionId": "1"}
+                                """))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(ErrorCode.TENDENCY_QUESTION_NOT_FOUND.name()));
+
+        // then: 답변이 저장되지 않음
+        assertThat(tendencyAnswersOf(me)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("성향 응답 제출: 그 문항에 없는 선택지면 422 TENDENCY_OPTION_NOT_IN_QUESTION이고 저장되지 않는다")
+    void submitTendencyAnswer_with_option_not_in_question_returns_422() throws Exception {
+        // given: 실제 유저 + 실제 파일의 첫 문항과, 그 문항의 어떤 선택지 id보다 큰 id
+        User me = saveUser();
+        TendencyQuestion question = tendencyLoader.getAllQuestions().getFirst();
+        long unknownOptionId = question.options().stream()
+                .mapToLong(TendencyOption::id)
+                .max()
+                .orElseThrow() + 1;
+
+        // when & then: 문항에 없는 선택지로 답하면 422
+        mockMvc.perform(put("/api/v1/me/tendency-answers/{questionId}", question.id().toString())
+                        .header("Authorization", bearer(me.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"optionId": "%d"}
+                                """.formatted(unknownOptionId)))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value(ErrorCode.TENDENCY_OPTION_NOT_IN_QUESTION.name()));
+
+        // then: 답변이 저장되지 않음
+        assertThat(tendencyAnswersOf(me)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("성향 응답 제출: 인증 헤더가 없으면 401")
+    void submitTendencyAnswer_without_auth_returns_401() throws Exception {
+        // given: 실제 파일의 첫 문항
+        TendencyQuestion question = tendencyLoader.getAllQuestions().getFirst();
+
+        // when & then: 인증 헤더 없이 호출하면 401
+        mockMvc.perform(put("/api/v1/me/tendency-answers/{questionId}", question.id().toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"optionId": "%d"}
+                                """.formatted(question.options().getFirst().id())))
+                .andExpect(status().isUnauthorized());
+    }
+
+    private void submitTendencyAnswer(User user, Long questionId, Long optionId) throws Exception {
+        mockMvc.perform(put("/api/v1/me/tendency-answers/{questionId}", questionId.toString())
+                        .header("Authorization", bearer(user.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"optionId": "%d"}
+                                """.formatted(optionId)))
+                .andExpect(status().isOk());
+    }
+
+    private List<UserTendencyAnswer> tendencyAnswersOf(User user) {
+        return userTendencyAnswerRepository.findAll().stream()
+                .filter(answer -> answer.getUserId().equals(user.getId()))
+                .toList();
     }
 }

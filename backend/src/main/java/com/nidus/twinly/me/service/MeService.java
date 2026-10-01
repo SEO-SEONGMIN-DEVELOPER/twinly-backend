@@ -17,6 +17,8 @@ import com.nidus.twinly.common.presign.PresignService;
 import com.nidus.twinly.common.survey.SurveyLoader;
 import com.nidus.twinly.common.survey.SurveyOptionName;
 import com.nidus.twinly.common.survey.SurveyQuestion;
+import com.nidus.twinly.common.tendency.TendencyLoader;
+import com.nidus.twinly.common.tendency.TendencyQuestion;
 import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
@@ -40,6 +42,7 @@ import com.nidus.twinly.me.dto.command.MeProfileCommand;
 import com.nidus.twinly.me.dto.command.MeProfilePhotoCommitCommand;
 import com.nidus.twinly.me.dto.command.MeProfilePhotoPresignCommand;
 import com.nidus.twinly.me.dto.command.MeRevokeConsentsCommand;
+import com.nidus.twinly.me.dto.command.MeSubmitTendencyAnswerCommand;
 import com.nidus.twinly.me.dto.command.MeSurveyAnswerCommand;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsChatTargetResult;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsItemResult;
@@ -63,6 +66,9 @@ import com.nidus.twinly.me.dto.result.MeStatusReportResult;
 import com.nidus.twinly.me.dto.result.MeStatusResult;
 import com.nidus.twinly.me.dto.result.MeStatusWithdrawalResult;
 import com.nidus.twinly.me.dto.result.MeInfoResult;
+import com.nidus.twinly.me.dto.result.MeTendencyQuestionsItemResult;
+import com.nidus.twinly.me.dto.result.MeTendencyQuestionsOptionResult;
+import com.nidus.twinly.me.dto.result.MeTendencyQuestionsResult;
 import com.nidus.twinly.me.dto.result.MeWithdrawResult;
 import com.nidus.twinly.notification.domain.AppNotificationFeedType;
 import com.nidus.twinly.notification.domain.NotificationChannel;
@@ -89,6 +95,7 @@ import com.nidus.twinly.user.repository.PersonaElementRepository;
 import com.nidus.twinly.user.repository.PhotoRepository;
 import com.nidus.twinly.user.repository.UserRepository;
 import com.nidus.twinly.user.repository.UserSurveyAnswerRepository;
+import com.nidus.twinly.user.repository.UserTendencyAnswerRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -145,11 +152,13 @@ public class MeService {
     private final EncounterRepository encounterRepository;
     private final RelationshipRepository relationshipRepository;
     private final UserSurveyAnswerRepository userSurveyAnswerRepository;
+    private final UserTendencyAnswerRepository userTendencyAnswerRepository;
 
     private final PolicyCatalog policyCatalog;
     private final PolicyUrlResolver policyUrlResolver;
     private final SeasonParticipationWriter seasonParticipationWriter;
     private final SurveyLoader surveyLoader;
+    private final TendencyLoader tendencyLoader;
 
     public MeProfilePhotoPresignResult profilePhotoPresign(Long userId, MeProfilePhotoPresignCommand command) {
         PhotoPresignResult presign = presignService.presignPhoto(userId, command.contentType(), PhotoType.PROFILE);
@@ -645,5 +654,33 @@ public class MeService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
         return new MePurchasesResult(user.getRevenueCatUserId());
+    }
+
+    public MeTendencyQuestionsResult tendencyQuestions() {
+        List<MeTendencyQuestionsItemResult> questions = tendencyLoader.getAllQuestions().stream()
+                .map(question -> new MeTendencyQuestionsItemResult(
+                        question.id(),
+                        question.text(),
+                        question.options().stream()
+                                .map(option -> new MeTendencyQuestionsOptionResult(option.id(), option.label()))
+                                .toList()
+                ))
+                .toList();
+
+        return new MeTendencyQuestionsResult(questions);
+    }
+
+    @Transactional
+    public void submitTendencyAnswer(Long userId, Long questionId, MeSubmitTendencyAnswerCommand command) {
+        Long optionId = command.optionId();
+
+        TendencyQuestion question = tendencyLoader.findQuestion(questionId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.TENDENCY_QUESTION_NOT_FOUND, "존재하지 않는 성향 문항입니다: " + questionId));
+
+        if (!question.hasOption(optionId)) {
+            throw new BusinessException(ErrorCode.TENDENCY_OPTION_NOT_IN_QUESTION, "문항 " + questionId + "에 없는 선택지입니다: " + optionId);
+        }
+
+        userTendencyAnswerRepository.upsert(userId, questionId, optionId);
     }
 }

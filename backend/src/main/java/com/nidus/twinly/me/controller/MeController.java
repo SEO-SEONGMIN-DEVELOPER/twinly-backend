@@ -15,6 +15,7 @@ import com.nidus.twinly.me.dto.command.MeProfileCommand;
 import com.nidus.twinly.me.dto.command.MeProfilePhotoCommitCommand;
 import com.nidus.twinly.me.dto.command.MeProfilePhotoPresignCommand;
 import com.nidus.twinly.me.dto.command.MeRevokeConsentsCommand;
+import com.nidus.twinly.me.dto.command.MeSubmitTendencyAnswerCommand;
 import com.nidus.twinly.me.dto.command.MeSurveyAnswerCommand;
 import com.nidus.twinly.me.dto.request.MeAiChatMessageRequest;
 import com.nidus.twinly.me.dto.request.MeAppNotificationsReadAllRequest;
@@ -27,6 +28,7 @@ import com.nidus.twinly.me.dto.request.MeProfileRequest;
 import com.nidus.twinly.me.dto.request.MeProfilePhotoCommitRequest;
 import com.nidus.twinly.me.dto.request.MeProfilePhotoPresignRequest;
 import com.nidus.twinly.me.dto.request.MeRevokeConsentsRequest;
+import com.nidus.twinly.me.dto.request.MeSubmitTendencyAnswerRequest;
 import com.nidus.twinly.me.dto.request.MeSurveyAnswerRequest;
 import com.nidus.twinly.me.dto.response.MeAiChatMessageResponse;
 import com.nidus.twinly.me.dto.response.MeAiChatStartResponse;
@@ -44,6 +46,7 @@ import com.nidus.twinly.me.dto.response.MeProfilePhotoPresignResponse;
 import com.nidus.twinly.me.dto.response.MeProfileVisibilitySettingsResponse;
 import com.nidus.twinly.me.dto.response.MeStatusResponse;
 import com.nidus.twinly.me.dto.response.MeSurveyQuestionResponse;
+import com.nidus.twinly.me.dto.response.MeTendencyQuestionsResponse;
 import com.nidus.twinly.me.dto.response.MeWithdrawResponse;
 import com.nidus.twinly.me.service.MeService;
 import com.nidus.twinly.notification.domain.AppNotificationFeedType;
@@ -64,6 +67,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -307,5 +311,23 @@ public class MeController {
     @GetMapping("/api/v1/me/purchases")
     public MePurchasesResponse purchases(@AuthenticationPrincipal UserInfo userInfo) {
         return MePurchasesResponse.from(meService.purchases(userInfo.id()));
+    }
+
+    @Operation(summary = "성향 문항 목록 조회")
+    @GetMapping("/api/v1/me/tendency-questions")
+    public MeTendencyQuestionsResponse tendencyQuestions() {
+        return MeTendencyQuestionsResponse.from(meService.tendencyQuestions());
+    }
+
+    @Operation(summary = "성향 응답 제출")
+    @ApiResponses({
+            @ApiResponse(responseCode = "404", description = "TENDENCY_QUESTION_NOT_FOUND"),
+            @ApiResponse(responseCode = "422", description = "TENDENCY_OPTION_NOT_IN_QUESTION")
+    })
+    @PutMapping("/api/v1/me/tendency-answers/{questionId}")
+    public void submitTendencyAnswer(@AuthenticationPrincipal UserInfo userInfo,
+                                     @PathVariable String questionId,
+                                     @Valid @RequestBody MeSubmitTendencyAnswerRequest request) {
+        meService.submitTendencyAnswer(userInfo.id(), RequestId.toLong(questionId, "questionId"), MeSubmitTendencyAnswerCommand.from(request));
     }
 }
