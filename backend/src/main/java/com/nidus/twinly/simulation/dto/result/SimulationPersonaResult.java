@@ -11,6 +11,7 @@ public record SimulationPersonaResult(
         Long userId,
         String familyName,
         String givenName,
+        String nickname,
         Gender gender,
         String organization,
         String affiliation,

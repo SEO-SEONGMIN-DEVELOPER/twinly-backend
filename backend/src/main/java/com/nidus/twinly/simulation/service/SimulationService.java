@@ -400,6 +400,7 @@ public class SimulationService {
                 user.getId(),
                 user.getFamilyName(),
                 user.getGivenName(),
+                user.getNickname(),
                 user.getGender(),
                 user.getOrganization(),
                 user.getAffiliation(),

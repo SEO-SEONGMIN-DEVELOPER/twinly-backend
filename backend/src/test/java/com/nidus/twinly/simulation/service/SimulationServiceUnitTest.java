@@ -590,6 +590,7 @@ class SimulationServiceUnitTest {
         assertThat(result.userId()).isEqualTo(USER_ID);
         assertThat(result.familyName()).isEqualTo("서");
         assertThat(result.givenName()).isEqualTo("성민");
+        assertThat(result.nickname()).isEqualTo("nickname");
         assertThat(result.gender()).isEqualTo(Gender.MALE);
         assertThat(result.organization()).isEqualTo("성균관대학교");
         assertThat(result.affiliation()).isEqualTo("컴퓨터공학과");
