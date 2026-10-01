@@ -29,6 +29,7 @@ jobs:
       API_INSTANCE_IDS: i-0373d39748d04d49b i-09ddde9020d7a94ca
       MONITORING_INSTANCE_ID: i-0373d39748d04d49b
       TARGET_GROUP_ARN: arn:aws:elasticloadbalancing:ap-northeast-2:968177690717:targetgroup/twinly-stage-api-tg/9a145ab64b8995bf
+      INTERNAL_TARGET_GROUP_ARN: arn:aws:elasticloadbalancing:ap-northeast-2:968177690717:targetgroup/twinly-stage-internal-api-tg/ed33c8b65b383685
       DRAINING_RETRY_AFTER_MS: 60000
 
     steps:
@@ -77,8 +78,28 @@ jobs:
           }
           EOF
 
+          set_targets() {
+            for tg in "$TARGET_GROUP_ARN" "$INTERNAL_TARGET_GROUP_ARN"; do
+              aws elbv2 "$1" --target-group-arn "$tg" --targets Id="$2",Port=8080
+            done
+          }
+
+          target_states() {
+            local public internal
+            public=$(aws elbv2 describe-target-health --target-group-arn "$TARGET_GROUP_ARN" --targets Id="$1",Port=8080 \
+              --query 'TargetHealthDescriptions[0].TargetHealth.State' --output text) || return 1
+            internal=$(aws elbv2 describe-target-health --target-group-arn "$INTERNAL_TARGET_GROUP_ARN" --targets Id="$1",Port=8080 \
+              --query 'TargetHealthDescriptions[0].TargetHealth.State' --output text) || return 1
+            echo "${public}/${internal}"
+          }
+
           for id in $API_INSTANCE_IDS; do
             echo "::group::${id} 배포"
+
+            trap 'set_targets register-targets "$id"' EXIT
+            set_targets deregister-targets "$id"
+            echo "${id} 를 공개·내부 타겟 그룹에서 해제 (공개/내부 $(target_states "$id")) — 처리 중인 요청이 끝나도록 30초 대기"
+            sleep 30
 
             COMMAND_ID=$(aws ssm send-command \
               --instance-ids "$id" \
@@ -98,28 +119,28 @@ jobs:
             jq -r '.StandardErrorContent // ""' <<< "$invocation"
             echo "::endgroup::"
 
+            set_targets register-targets "$id"
+            trap - EXIT
+
             if [ "$status" != "Success" ]; then
-              echo "::error::${id} 배포 실패 (${status}). 나머지 인스턴스는 이전 버전으로 유지됩니다."
+              echo "::error::${id} 배포 실패 (${status}). 타겟은 다시 등록했으며 헬스체크를 통과해야만 트래픽을 받습니다. 나머지 인스턴스는 이전 버전으로 유지됩니다."
               exit 1
             fi
 
-            echo "${id} ALB 타겟이 healthy 가 될 때까지 대기"
+            echo "${id} 공개·내부 타겟이 모두 healthy 가 될 때까지 대기"
             for _ in $(seq 1 40); do
-              if ! health=$(aws elbv2 describe-target-health \
-                --target-group-arn "$TARGET_GROUP_ARN" \
-                --targets Id="$id",Port=8080 \
-                --query 'TargetHealthDescriptions[0].TargetHealth.State' --output text); then
+              if ! states=$(target_states "$id"); then
                 echo "::error::${id} 타겟 상태 조회에 실패했습니다. 권한(elasticloadbalancing:DescribeTargetHealth) 또는 타겟 등록 여부를 확인하십시오."
                 exit 1
               fi
 
-              [ "$health" = "healthy" ] && break
-              echo "  현재 ${health} — 재확인 대기"
+              [ "$states" = "healthy/healthy" ] && break
+              echo "  현재 공개/내부 ${states} — 재확인 대기"
               sleep 10
             done
 
-            if [ "$health" != "healthy" ]; then
-              echo "::error::${id} 가 400초 안에 healthy 가 되지 않았습니다 (마지막 상태: ${health}). 다음 인스턴스 배포를 중단합니다."
+            if [ "$states" != "healthy/healthy" ]; then
+              echo "::error::${id} 가 400초 안에 healthy 가 되지 않았습니다 (마지막 상태 공개/내부: ${states}). 다음 인스턴스 배포를 중단합니다."
               exit 1
             fi
 
@@ -268,6 +289,7 @@ jobs:
       API_INSTANCE_IDS: i-08903483652243fec i-027f1e44635da471e
       MONITORING_INSTANCE_ID: i-0f9ae4a42137c72f9
       TARGET_GROUP_ARN: arn:aws:elasticloadbalancing:ap-northeast-2:968177690717:targetgroup/twinly-prod-api-tg/fdacee5d47c53f21
+      INTERNAL_TARGET_GROUP_ARN: arn:aws:elasticloadbalancing:ap-northeast-2:968177690717:targetgroup/twinly-prod-internal-api-tg/1677147b0715e856
       DRAINING_RETRY_AFTER_MS: 60000
 
     steps:
@@ -315,8 +337,28 @@ jobs:
           }
           EOF
 
+          set_targets() {
+            for tg in "$TARGET_GROUP_ARN" "$INTERNAL_TARGET_GROUP_ARN"; do
+              aws elbv2 "$1" --target-group-arn "$tg" --targets Id="$2",Port=8080
+            done
+          }
+
+          target_states() {
+            local public internal
+            public=$(aws elbv2 describe-target-health --target-group-arn "$TARGET_GROUP_ARN" --targets Id="$1",Port=8080 \
+              --query 'TargetHealthDescriptions[0].TargetHealth.State' --output text) || return 1
+            internal=$(aws elbv2 describe-target-health --target-group-arn "$INTERNAL_TARGET_GROUP_ARN" --targets Id="$1",Port=8080 \
+              --query 'TargetHealthDescriptions[0].TargetHealth.State' --output text) || return 1
+            echo "${public}/${internal}"
+          }
+
           for id in $API_INSTANCE_IDS; do
             echo "::group::${id} 배포"
+
+            trap 'set_targets register-targets "$id"' EXIT
+            set_targets deregister-targets "$id"
+            echo "${id} 를 공개·내부 타겟 그룹에서 해제 (공개/내부 $(target_states "$id")) — 처리 중인 요청이 끝나도록 30초 대기"
+            sleep 30
 
             COMMAND_ID=$(aws ssm send-command \
               --instance-ids "$id" \
@@ -336,28 +378,28 @@ jobs:
             jq -r '.StandardErrorContent // ""' <<< "$invocation"
             echo "::endgroup::"
 
+            set_targets register-targets "$id"
+            trap - EXIT
+
             if [ "$status" != "Success" ]; then
-              echo "::error::${id} 배포 실패 (${status}). 나머지 인스턴스는 이전 버전으로 유지됩니다."
+              echo "::error::${id} 배포 실패 (${status}). 타겟은 다시 등록했으며 헬스체크를 통과해야만 트래픽을 받습니다. 나머지 인스턴스는 이전 버전으로 유지됩니다."
               exit 1
             fi
 
-            echo "${id} ALB 타겟이 healthy 가 될 때까지 대기"
+            echo "${id} 공개·내부 타겟이 모두 healthy 가 될 때까지 대기"
             for _ in $(seq 1 40); do
-              if ! health=$(aws elbv2 describe-target-health \
-                --target-group-arn "$TARGET_GROUP_ARN" \
-                --targets Id="$id",Port=8080 \
-                --query 'TargetHealthDescriptions[0].TargetHealth.State' --output text); then
+              if ! states=$(target_states "$id"); then
                 echo "::error::${id} 타겟 상태 조회에 실패했습니다. 권한(elasticloadbalancing:DescribeTargetHealth) 또는 타겟 등록 여부를 확인하십시오."
                 exit 1
               fi
 
-              [ "$health" = "healthy" ] && break
-              echo "  현재 ${health} — 재확인 대기"
+              [ "$states" = "healthy/healthy" ] && break
+              echo "  현재 공개/내부 ${states} — 재확인 대기"
               sleep 10
             done
 
-            if [ "$health" != "healthy" ]; then
-              echo "::error::${id} 가 400초 안에 healthy 가 되지 않았습니다 (마지막 상태: ${health}). 다음 인스턴스 배포를 중단합니다."
+            if [ "$states" != "healthy/healthy" ]; then
+              echo "::error::${id} 가 400초 안에 healthy 가 되지 않았습니다 (마지막 상태 공개/내부: ${states}). 다음 인스턴스 배포를 중단합니다."
               exit 1
             fi
 
