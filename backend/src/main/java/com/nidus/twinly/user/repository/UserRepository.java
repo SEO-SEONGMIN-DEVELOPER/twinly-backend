@@ -24,6 +24,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     boolean existsByDiHash(String diHash);
 
+    long countByIdIn(Collection<Long> ids);
+
     Optional<User> findByPhoneNumberHash(String phoneNumberHash);
 
     Optional<User> findByEmailHash(String emailHash);

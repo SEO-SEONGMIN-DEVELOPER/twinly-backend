@@ -177,6 +177,63 @@ class PushMessageBuilderUnitTest {
         assertThat(messages).extracting(PushMessage::type).containsExactly(PushType.MATCH);
     }
 
+    @Test
+    @DisplayName("알림 피드: 일회성 피드는 oneTime 타입으로 나간다")
+    void feed_one_time() throws IOException {
+        // given: 프로필을 가리키는 일회성 피드
+        FeedPushContent content = new FeedPushContent(
+                1003L, AppNotificationFeedType.ONE_TIME, "제목", "본문",
+                AppNotificationFeedTargetType.PROFILE, 77L, CREATED_AT);
+
+        // when: 피드 푸시 생성
+        List<PushMessage> messages = pushMessageBuilder.feed(
+                List.of(device(DevicePlatform.IOS, "token-ios")), content);
+
+        // then: 피드에 남는 알림이므로 읽음 처리에 쓸 appNotificationId 가 함께 실린다
+        String json = toJson(messages.get(0));
+        assertThat(json).contains("\"type\":\"oneTime\"");
+        assertThat(json).contains("\"appNotificationId\":\"1003\"");
+        assertThat(messages).extracting(PushMessage::type).containsExactly(PushType.ONE_TIME);
+    }
+
+    @Test
+    @DisplayName("일회성 푸시 전용: 피드가 없으므로 appNotificationId 와 target 없이 나간다")
+    void oneTimePushOnly_has_no_feed_fields() throws IOException {
+        // given: 피드에 남기지 않는 일회성 알림
+        OneTimePushContent content = new OneTimePushContent("제목", "본문", CREATED_AT);
+
+        // when: 푸시 전용 메시지 생성
+        List<PushMessage> messages = pushMessageBuilder.oneTimePushOnly(
+                List.of(device(DevicePlatform.IOS, "token-ios")), content);
+
+        // then: 앱이 없는 피드를 읽음 처리하려 들지 않도록 피드 관련 키 자체가 없어야 한다
+        String json = toJson(messages.get(0));
+        assertThat(json).contains("\"type\":\"oneTimePushOnly\"");
+        assertThat(json).contains("\"title\":\"제목\"");
+        assertThat(json).contains("\"body\":\"본문\"");
+        assertThat(json).contains("\"createdAt\":\"2026-07-26T05:25:00Z\"");
+        assertThat(json).doesNotContain("appNotificationId");
+        assertThat(json).doesNotContain("targetKind");
+        assertThat(json).doesNotContain("targetId");
+        assertThat(messages).extracting(PushMessage::type).containsExactly(PushType.ONE_TIME_PUSH_ONLY);
+    }
+
+    @Test
+    @DisplayName("일회성 푸시 전용: 플랫폼이 달라도 notification 블록으로 나간다")
+    void oneTimePushOnly_is_platform_agnostic() throws IOException {
+        // given: 아이폰과 안드로이드
+        List<Device> devices = List.of(device(DevicePlatform.IOS, "token-ios"), device(DevicePlatform.ANDROID, "token-android"));
+
+        // when: 푸시 전용 메시지 생성
+        List<PushMessage> messages = pushMessageBuilder.oneTimePushOnly(
+                devices, new OneTimePushContent("제목", "본문", CREATED_AT));
+
+        // then: 앱이 모르는 타입이어도 OS 가 배너를 그리려면 notification 블록이 있어야 한다
+        assertThat(messages).extracting(PushMessage::token).containsExactly("token-ios", "token-android");
+        assertThat(toJson(messages.get(0))).contains("\"notification\"");
+        assertThat(toJson(messages.get(1))).contains("\"notification\"");
+    }
+
     private Device device(DevicePlatform platform, String token) {
         return Device.create(1L, UUID.randomUUID(), platform, token);
     }

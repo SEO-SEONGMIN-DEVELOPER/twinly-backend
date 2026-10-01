@@ -5,5 +5,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 public enum AppNotificationFeedType {
     @JsonProperty("friend")   FRIEND,
     @JsonProperty("match")    MATCH,
-    @JsonProperty("twinView") TWIN_VIEW
+    @JsonProperty("twinView") TWIN_VIEW,
+    @JsonProperty("oneTime")  ONE_TIME
 }

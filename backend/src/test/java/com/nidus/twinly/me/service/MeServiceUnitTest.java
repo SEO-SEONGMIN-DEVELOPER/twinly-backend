@@ -20,6 +20,9 @@ import com.nidus.twinly.common.survey.SurveyLoader;
 import com.nidus.twinly.common.survey.SurveyOption;
 import com.nidus.twinly.common.survey.SurveyOptionName;
 import com.nidus.twinly.common.survey.SurveyQuestion;
+import com.nidus.twinly.common.tendency.TendencyLoader;
+import com.nidus.twinly.common.tendency.TendencyOption;
+import com.nidus.twinly.common.tendency.TendencyQuestion;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.legal.entity.Agreement;
@@ -45,6 +48,7 @@ import com.nidus.twinly.me.dto.command.MeProfilePhotoCommitCommand;
 import com.nidus.twinly.me.dto.command.MeProfilePhotoPresignCommand;
 import com.nidus.twinly.me.dto.command.MeRevokeConsentsCommand;
 import com.nidus.twinly.me.dto.command.MeRevokeConsentsItemCommand;
+import com.nidus.twinly.me.dto.command.MeSubmitTendencyAnswerCommand;
 import com.nidus.twinly.me.dto.command.MeSurveyAnswerCommand;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsChatTargetResult;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsProfileTargetResult;
@@ -60,6 +64,9 @@ import com.nidus.twinly.me.dto.result.MePurchasesResult;
 import com.nidus.twinly.me.dto.result.MePushNotificationsResult;
 import com.nidus.twinly.me.dto.result.MeStatusPersonaResult;
 import com.nidus.twinly.me.dto.result.MeStatusResult;
+import com.nidus.twinly.me.dto.result.MeTendencyQuestionsItemResult;
+import com.nidus.twinly.me.dto.result.MeTendencyQuestionsOptionResult;
+import com.nidus.twinly.me.dto.result.MeTendencyQuestionsResult;
 import com.nidus.twinly.me.dto.result.MeWithdrawResult;
 import com.nidus.twinly.notification.domain.AppNotificationFeedTargetType;
 import com.nidus.twinly.notification.domain.AppNotificationFeedType;
@@ -88,6 +95,7 @@ import com.nidus.twinly.user.repository.PersonaElementRepository;
 import com.nidus.twinly.user.repository.PhotoRepository;
 import com.nidus.twinly.user.repository.UserRepository;
 import com.nidus.twinly.user.repository.UserSurveyAnswerRepository;
+import com.nidus.twinly.user.repository.UserTendencyAnswerRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -108,6 +116,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
@@ -195,6 +204,12 @@ class MeServiceUnitTest {
 
     @Mock
     SurveyLoader surveyLoader;
+
+    @Mock
+    UserTendencyAnswerRepository userTendencyAnswerRepository;
+
+    @Mock
+    TendencyLoader tendencyLoader;
 
     @InjectMocks
     MeService meService;
@@ -1509,5 +1524,85 @@ class MeServiceUnitTest {
         // then: INTEREST 차원만 삭제되고 저장은 호출되지 않음
         then(personaElementRepository).should().deleteByUserIdAndDimension(ME, PersonaDimension.INTEREST);
         then(personaElementRepository).should(never()).save(any());
+    }
+
+    // ---------------------------------------------------------------- 성향 질문
+
+    @Test
+    @DisplayName("성향 문항 목록은 로더의 문항과 선택지를 순서 그대로 id·문구만 옮겨 담는다")
+    void tendencyQuestions_maps_questions_in_order() {
+        // given: 로더가 선택지 개수가 서로 다른 문항 2개를 반환
+        given(tendencyLoader.getAllQuestions()).willReturn(List.of(
+                new TendencyQuestion(2L, "두 번째로 적힌 id가 먼저 오는 문항", List.of(
+                        new TendencyOption(1L, "가"),
+                        new TendencyOption(2L, "나"))),
+                new TendencyQuestion(1L, "선택지가 3개인 문항", List.of(
+                        new TendencyOption(3L, "다"),
+                        new TendencyOption(1L, "라"),
+                        new TendencyOption(2L, "마")))));
+
+        // when: 성향 문항 목록 조회
+        MeTendencyQuestionsResult result = meService.tendencyQuestions();
+
+        // then: id 크기로 재정렬하지 않고 로더가 준 순서대로 문항·선택지가 담김
+        assertThat(result).isEqualTo(new MeTendencyQuestionsResult(List.of(
+                new MeTendencyQuestionsItemResult(2L, "두 번째로 적힌 id가 먼저 오는 문항", List.of(
+                        new MeTendencyQuestionsOptionResult(1L, "가"),
+                        new MeTendencyQuestionsOptionResult(2L, "나"))),
+                new MeTendencyQuestionsItemResult(1L, "선택지가 3개인 문항", List.of(
+                        new MeTendencyQuestionsOptionResult(3L, "다"),
+                        new MeTendencyQuestionsOptionResult(1L, "라"),
+                        new MeTendencyQuestionsOptionResult(2L, "마"))))));
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 성향 문항에 답하면 TENDENCY_QUESTION_NOT_FOUND 예외가 발생하고 저장하지 않는다")
+    void submitTendencyAnswer_when_question_not_found_throws() {
+        // given: 로더에 해당 id 문항이 없음
+        given(tendencyLoader.findQuestion(999L)).willReturn(Optional.empty());
+
+        // when & then: TENDENCY_QUESTION_NOT_FOUND 예외 발생 + 저장 안 함
+        assertThatThrownBy(() -> meService.submitTendencyAnswer(ME, 999L, new MeSubmitTendencyAnswerCommand(1L)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.TENDENCY_QUESTION_NOT_FOUND);
+
+        then(userTendencyAnswerRepository).should(never()).upsert(anyLong(), anyLong(), anyLong());
+    }
+
+    @Test
+    @DisplayName("문항에 없는 선택지로 답하면 TENDENCY_OPTION_NOT_IN_QUESTION 예외가 발생하고 저장하지 않는다")
+    void submitTendencyAnswer_when_option_not_in_question_throws() {
+        // given: 문항 1에는 선택지 1, 2만 있음
+        given(tendencyLoader.findQuestion(1L)).willReturn(Optional.of(tendencyQuestion(1L, 1L, 2L)));
+
+        // when & then: 선택지 3으로 답하면 TENDENCY_OPTION_NOT_IN_QUESTION 예외 발생 + 저장 안 함
+        assertThatThrownBy(() -> meService.submitTendencyAnswer(ME, 1L, new MeSubmitTendencyAnswerCommand(3L)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.TENDENCY_OPTION_NOT_IN_QUESTION);
+
+        then(userTendencyAnswerRepository).should(never()).upsert(anyLong(), anyLong(), anyLong());
+    }
+
+    @Test
+    @DisplayName("문항에 있는 선택지로 답하면 유저·문항·선택지 id로 답변을 upsert한다")
+    void submitTendencyAnswer_upserts_answer() {
+        // given: 문항 1에 선택지 1, 2, 3이 있음
+        given(tendencyLoader.findQuestion(1L)).willReturn(Optional.of(tendencyQuestion(1L, 1L, 2L, 3L)));
+
+        // when: 마지막 선택지로 답변
+        meService.submitTendencyAnswer(ME, 1L, new MeSubmitTendencyAnswerCommand(3L));
+
+        // then: 유저·문항·선택지 id로 upsert가 한 번 호출됨
+        then(userTendencyAnswerRepository).should().upsert(ME, 1L, 3L);
+    }
+
+    private TendencyQuestion tendencyQuestion(Long id, Long... optionIds) {
+        List<TendencyOption> options = Stream.of(optionIds)
+                .map(optionId -> new TendencyOption(optionId, "선택지 " + optionId))
+                .toList();
+
+        return new TendencyQuestion(id, "문항 " + id, options);
     }
 }

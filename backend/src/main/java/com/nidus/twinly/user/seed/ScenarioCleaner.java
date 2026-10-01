@@ -11,6 +11,7 @@ import com.nidus.twinly.chat.repository.ChatRoomRepository;
 import com.nidus.twinly.match.repository.MatchRepository;
 import com.nidus.twinly.notification.domain.AppNotificationFeedType;
 import com.nidus.twinly.notification.repository.AppNotificationFeedRepository;
+import com.nidus.twinly.notification.repository.AppNotificationScheduleRepository;
 import com.nidus.twinly.people.repository.EncounterPreferenceRepository;
 import com.nidus.twinly.people.repository.EncounterRepository;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
@@ -34,6 +35,7 @@ public class ScenarioCleaner {
     private final RelationshipRepository relationshipRepository;
     private final ShowcaseRepository showcaseRepository;
     private final AppNotificationFeedRepository appNotificationFeedRepository;
+    private final AppNotificationScheduleRepository appNotificationScheduleRepository;
     private final ChatRoomParticipationRepository chatRoomParticipationRepository;
     private final ChatRepository chatRepository;
     private final ChatRoomRepository chatRoomRepository;
@@ -55,6 +57,7 @@ public class ScenarioCleaner {
         relationshipRepository.deleteAllByUserIdIn(userIds);
         showcaseRepository.deleteAllByTargetUserIdIn(userIds);
         appNotificationFeedRepository.deleteAllByUserIdInAndType(userIds, AppNotificationFeedType.FRIEND);
+        appNotificationScheduleRepository.deleteAllByUserIdIn(userIds);
 
         appNotificationFeedRepository.deleteAllByTargetChatRoomBetweenUserIdsIn(userIds);
         chatRoomParticipationRepository.deleteAllByRoomBetweenUserIdsIn(userIds);

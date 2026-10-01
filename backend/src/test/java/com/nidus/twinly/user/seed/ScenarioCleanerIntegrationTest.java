@@ -16,8 +16,11 @@ import com.nidus.twinly.chat.repository.ChatRoomRepository;
 import com.nidus.twinly.match.entity.Match;
 import com.nidus.twinly.match.repository.MatchRepository;
 import com.nidus.twinly.notification.domain.AppNotificationFeedType;
+import com.nidus.twinly.notification.domain.AppNotificationScheduleType;
 import com.nidus.twinly.notification.entity.AppNotificationFeed;
+import com.nidus.twinly.notification.entity.AppNotificationSchedule;
 import com.nidus.twinly.notification.repository.AppNotificationFeedRepository;
+import com.nidus.twinly.notification.repository.AppNotificationScheduleRepository;
 import com.nidus.twinly.people.entity.Encounter;
 import com.nidus.twinly.people.entity.EncounterPreference;
 import com.nidus.twinly.people.repository.EncounterPreferenceRepository;
@@ -36,6 +39,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -50,6 +54,7 @@ class ScenarioCleanerIntegrationTest extends AbstractIntegrationTest {
     @Autowired RelationshipRepository relationshipRepository;
     @Autowired ShowcaseRepository showcaseRepository;
     @Autowired AppNotificationFeedRepository appNotificationFeedRepository;
+    @Autowired AppNotificationScheduleRepository appNotificationScheduleRepository;
     @Autowired ChatRoomParticipationRepository chatRoomParticipationRepository;
     @Autowired ChatRepository chatRepository;
     @Autowired ChatRoomRepository chatRoomRepository;
@@ -69,8 +74,8 @@ class ScenarioCleanerIntegrationTest extends AbstractIntegrationTest {
         // given: 운영 프로필 전용 빈이라 테스트 프로필에서는 실제 리포지토리로 직접 조립한다
         scenarioCleaner = new ScenarioCleaner(scenePartnerRepository, sceneRepository, questionPartnerRepository,
                 questionRepository, relationshipRepository, showcaseRepository, appNotificationFeedRepository,
-                chatRoomParticipationRepository, chatRepository, chatRoomRepository, matchRepository,
-                chatRoomOpeningRepository, encounterPreferenceRepository, encounterRepository);
+                appNotificationScheduleRepository, chatRoomParticipationRepository, chatRepository, chatRoomRepository,
+                matchRepository, chatRoomOpeningRepository, encounterPreferenceRepository, encounterRepository);
         season = seasonRepository.save(Season.create(Instant.now().minus(Duration.ofDays(1)), Instant.now().plus(Duration.ofDays(30))));
     }
 
@@ -112,6 +117,30 @@ class ScenarioCleanerIntegrationTest extends AbstractIntegrationTest {
         assertThat(chatRoomOpeningRepository.findById(mixedPair.openingId())).isPresent();
         assertThat(encounterPreferenceRepository.findById(mixedPair.encounterPreferenceId())).isPresent();
         assertThat(encounterRepository.findById(mixedPair.encounterId())).isPresent();
+    }
+
+    @Test
+    @DisplayName("쇼케이스 유저의 알림 예약은 지우고, 실제 사용자의 예약은 상대가 쇼케이스 유저여도 남긴다")
+    void clear_deletes_schedules_of_showcase_users_only() {
+        // given: 쇼케이스 유저와 실제 사용자가 서로를 상대로 건 예약
+        User showcase = saveUser();
+        User realUser = saveUser();
+        Instant scheduledAt = Instant.now().plus(Duration.ofDays(1));
+        AppNotificationSchedule showcaseSchedule = appNotificationScheduleRepository.save(AppNotificationSchedule.create(
+                showcase.getId(), realUser.getId(), AppNotificationScheduleType.FRIEND, LocalDate.of(2026, 9, 14), scheduledAt));
+        AppNotificationSchedule realUserSchedule = appNotificationScheduleRepository.save(AppNotificationSchedule.create(
+                realUser.getId(), showcase.getId(), AppNotificationScheduleType.FRIEND, LocalDate.of(2026, 9, 14), scheduledAt));
+        entityManager.flush();
+        entityManager.clear();
+
+        // when: 쇼케이스 유저만 정리
+        scenarioCleaner.clear(List.of(showcase.getId()));
+        entityManager.flush();
+        entityManager.clear();
+
+        // then: 시나리오를 다시 채울 쇼케이스 유저의 예약만 사라진다
+        assertThat(appNotificationScheduleRepository.findById(showcaseSchedule.getId())).isEmpty();
+        assertThat(appNotificationScheduleRepository.findById(realUserSchedule.getId())).isPresent();
     }
 
     private PairData createPairData(User user, User partner) {

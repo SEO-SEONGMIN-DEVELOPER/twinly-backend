@@ -27,6 +27,7 @@ import com.nidus.twinly.me.dto.command.MeRevokeConsentsCommand;
 import com.nidus.twinly.me.dto.command.MeRevokeConsentsItemCommand;
 import com.nidus.twinly.me.dto.result.MeAiChatMessageResult;
 import com.nidus.twinly.me.dto.result.MeAiChatStartResult;
+import com.nidus.twinly.me.dto.command.MeSubmitTendencyAnswerCommand;
 import com.nidus.twinly.me.dto.command.MeSurveyAnswerCommand;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsItemResult;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsProfileTargetResult;
@@ -48,6 +49,9 @@ import com.nidus.twinly.me.dto.result.MeStatusReportResult;
 import com.nidus.twinly.me.dto.result.MeStatusResult;
 import com.nidus.twinly.me.dto.result.MeInfoResult;
 import com.nidus.twinly.me.dto.result.MeStatusWithdrawalResult;
+import com.nidus.twinly.me.dto.result.MeTendencyQuestionsItemResult;
+import com.nidus.twinly.me.dto.result.MeTendencyQuestionsOptionResult;
+import com.nidus.twinly.me.dto.result.MeTendencyQuestionsResult;
 import com.nidus.twinly.me.dto.result.MeWithdrawResult;
 import com.nidus.twinly.me.service.MeService;
 import com.nidus.twinly.notification.domain.AppNotificationFeedType;
@@ -87,6 +91,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -1141,5 +1146,162 @@ class MeControllerUnitTest {
         // then: 401 반환 + 서비스는 호출되지 않음
         result.andExpect(status().isUnauthorized());
         then(meService).should(never()).surveyQuestions();
+    }
+
+    // ---------------------------------------------------------------- 성향 질문
+
+    @Test
+    @DisplayName("성향 문항 목록 조회 시 200과 questions 배열을 반환하고 문항·선택지 id는 문자열로 내려간다")
+    void tendencyQuestions_success() throws Exception {
+        // given: 서비스가 선택지 3개짜리 문항 1개를 반환
+        given(meService.tendencyQuestions()).willReturn(new MeTendencyQuestionsResult(List.of(
+                new MeTendencyQuestionsItemResult(1L, "어떤 성격의 인연을 원하나요?", List.of(
+                        new MeTendencyQuestionsOptionResult(1L, "동성 친구"),
+                        new MeTendencyQuestionsOptionResult(2L, "상관없음"),
+                        new MeTendencyQuestionsOptionResult(3L, "이성 친구"))))));
+
+        // when: 인증 상태로 성향 문항 목록 API 호출
+        var result = mockMvc.perform(get("/api/v1/me/tendency-questions")
+                .header("Authorization", BEARER));
+
+        // then: 200 반환 + id는 숫자가 아닌 문자열이고 선택지는 서비스가 준 순서 그대로
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.questions.length()").value(1))
+                .andExpect(jsonPath("$.questions[0].id").value("1"))
+                .andExpect(jsonPath("$.questions[0].text").value("어떤 성격의 인연을 원하나요?"))
+                .andExpect(jsonPath("$.questions[0].options.length()").value(3))
+                .andExpect(jsonPath("$.questions[0].options[0].id").value("1"))
+                .andExpect(jsonPath("$.questions[0].options[0].label").value("동성 친구"))
+                .andExpect(jsonPath("$.questions[0].options[2].id").value("3"))
+                .andExpect(jsonPath("$.questions[0].options[2].label").value("이성 친구"));
+    }
+
+    @Test
+    @DisplayName("성향 문항 목록 조회 시 인증 헤더가 없으면 401을 반환하고 서비스를 호출하지 않는다")
+    void tendencyQuestions_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 성향 문항 목록 API 호출
+        var result = mockMvc.perform(get("/api/v1/me/tendency-questions"));
+
+        // then: 401 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isUnauthorized());
+        then(meService).should(never()).tendencyQuestions();
+    }
+
+    @Test
+    @DisplayName("성향 응답 제출 성공 시 200을 반환하고 인증 유저 id·경로의 questionId·본문의 optionId로 서비스를 호출한다")
+    void submitTendencyAnswer_success() throws Exception {
+        // when: 인증 상태로 문항 1에 선택지 3을 문자열 id로 제출
+        var result = mockMvc.perform(put("/api/v1/me/tendency-answers/{questionId}", "1")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"optionId":"3"}
+                        """));
+
+        // then: 200 반환 + 문자열 id가 Long으로 변환되어 서비스에 위임
+        result.andExpect(status().isOk());
+        then(meService).should().submitTendencyAnswer(ME, 1L, new MeSubmitTendencyAnswerCommand(3L));
+    }
+
+    @Test
+    @DisplayName("성향 응답 제출 시 optionId가 없으면 400을 반환하고 서비스를 호출하지 않는다")
+    void submitTendencyAnswer_without_optionId_returns_400() throws Exception {
+        // when: optionId 없이 성향 응답 제출 API 호출
+        var result = mockMvc.perform(put("/api/v1/me/tendency-answers/{questionId}", "1")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"));
+
+        // then: 400 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest());
+        then(meService).should(never()).submitTendencyAnswer(anyLong(), anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("성향 응답 제출 시 optionId가 숫자 문자열이 아니면 400을 반환하고 서비스를 호출하지 않는다")
+    void submitTendencyAnswer_with_non_numeric_optionId_returns_400() throws Exception {
+        // when: optionId를 숫자가 아닌 값으로 성향 응답 제출 API 호출
+        var result = mockMvc.perform(put("/api/v1/me/tendency-answers/{questionId}", "1")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"optionId":"abc"}
+                        """));
+
+        // then: 400 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest());
+        then(meService).should(never()).submitTendencyAnswer(anyLong(), anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("성향 응답 제출 시 경로 변수 questionId가 숫자가 아니면 400을 반환하고 서비스를 호출하지 않는다")
+    void submitTendencyAnswer_with_non_numeric_questionId_returns_400() throws Exception {
+        // when: 경로 변수 questionId를 숫자가 아닌 값으로 성향 응답 제출 API 호출
+        var result = mockMvc.perform(put("/api/v1/me/tendency-answers/{questionId}", "abc")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"optionId":"3"}
+                        """));
+
+        // then: 400 INVALID_REQUEST 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        then(meService).should(never()).submitTendencyAnswer(anyLong(), anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("성향 응답 제출 시 인증 헤더가 없으면 401을 반환하고 서비스를 호출하지 않는다")
+    void submitTendencyAnswer_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 성향 응답 제출 API 호출
+        var result = mockMvc.perform(put("/api/v1/me/tendency-answers/{questionId}", "1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"optionId":"3"}
+                        """));
+
+        // then: 401 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isUnauthorized());
+        then(meService).should(never()).submitTendencyAnswer(anyLong(), anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("없는 문항이라 서비스가 TENDENCY_QUESTION_NOT_FOUND를 던지면 404를 반환한다")
+    void submitTendencyAnswer_question_not_found_returns_404() throws Exception {
+        // given: 서비스가 TENDENCY_QUESTION_NOT_FOUND 예외를 던짐
+        willThrow(new BusinessException(ErrorCode.TENDENCY_QUESTION_NOT_FOUND))
+                .given(meService).submitTendencyAnswer(anyLong(), anyLong(), any());
+
+        // when: 없는 문항으로 성향 응답 제출 API 호출
+        var result = mockMvc.perform(put("/api/v1/me/tendency-answers/{questionId}", "999")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"optionId":"1"}
+                        """));
+
+        // then: 404 TENDENCY_QUESTION_NOT_FOUND 반환
+        result.andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("TENDENCY_QUESTION_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("문항에 없는 선택지라 서비스가 TENDENCY_OPTION_NOT_IN_QUESTION을 던지면 422를 반환한다")
+    void submitTendencyAnswer_option_not_in_question_returns_422() throws Exception {
+        // given: 서비스가 TENDENCY_OPTION_NOT_IN_QUESTION 예외를 던짐
+        willThrow(new BusinessException(ErrorCode.TENDENCY_OPTION_NOT_IN_QUESTION))
+                .given(meService).submitTendencyAnswer(anyLong(), anyLong(), any());
+
+        // when: 문항에 없는 선택지로 성향 응답 제출 API 호출
+        var result = mockMvc.perform(put("/api/v1/me/tendency-answers/{questionId}", "1")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"optionId":"99"}
+                        """));
+
+        // then: 422 TENDENCY_OPTION_NOT_IN_QUESTION 반환
+        result.andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("TENDENCY_OPTION_NOT_IN_QUESTION"));
     }
 }

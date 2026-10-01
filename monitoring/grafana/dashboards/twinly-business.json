@@ -358,7 +358,7 @@
       "description": "유효한 권한을 가진 유저 중 PRODUCTION 결제 이벤트가 있는 유저 수. 시드·부하 테스트가 결제 없이 넣은 권한과 샌드박스 결제는 제외합니다. 시간 범위·환경 필터와 무관합니다.",
       "gridPos": {
         "h": 4,
-        "w": 12,
+        "w": 8,
         "x": 0,
         "y": 14
       },
@@ -405,14 +405,67 @@
       ]
     },
     {
+      "id": 15,
+      "type": "stat",
+      "title": "시즌 참가 유저 (현재)",
+      "description": "현재 활성 시즌에 참가한 유저 수. 권한을 얻은 경로(결제·선착순)와 무관하며, 시즌 중에 권한이 만료돼도 시즌이 끝날 때까지 남습니다. 쇼케이스·AI 테스트 시드 계정과 탈퇴 신청·확정 유저는 제외합니다. 시간 범위·환경 필터와 무관합니다.",
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 8,
+        "y": 14
+      },
+      "datasource": {
+        "type": "mysql",
+        "uid": "mysql"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "light-purple"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mysql",
+            "uid": "mysql"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT COUNT(*) AS `시즌 참가 유저` FROM season_participations sp JOIN users u ON u.id = sp.user_id WHERE sp.season_id = (SELECT id FROM seasons WHERE is_active = 1 ORDER BY id DESC LIMIT 1) AND u.is_seed = 0 AND u.withdrawal_requested_at IS NULL AND u.deleted_at IS NULL"
+        }
+      ]
+    },
+    {
       "id": 14,
       "type": "stat",
       "title": "결제액 (원)",
-      "description": "유료 유저 (현재) × 5,500원. 스토어 수수료·부가세를 빼기 전 금액이며, 가격이 바뀌면 쿼리의 5500 을 함께 고쳐야 합니다. 유료 유저 조건을 바꿀 때도 두 패널을 같이 고칩니다.",
+      "description": "시즌 참가 유저 (현재) × 5,500원. 스토어 수수료·부가세를 빼기 전 금액이며, 가격이 바뀌면 쿼리의 5500 을 함께 고쳐야 합니다. 시즌 참가 유저 조건을 바꿀 때도 두 패널을 같이 고칩니다.",
       "gridPos": {
         "h": 4,
-        "w": 12,
-        "x": 12,
+        "w": 8,
+        "x": 16,
         "y": 14
       },
       "datasource": {
@@ -453,7 +506,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT COUNT(DISTINCT e.user_id) * 5500 AS `결제액` FROM user_entitlements e WHERE (e.expires_at IS NULL OR e.expires_at > UTC_TIMESTAMP(6)) AND EXISTS (SELECT 1 FROM revenue_cat_events r WHERE r.user_id = e.user_id AND r.environment = 'PRODUCTION')"
+          "rawSql": "SELECT COUNT(*) * 5500 AS `결제액` FROM season_participations sp JOIN users u ON u.id = sp.user_id WHERE sp.season_id = (SELECT id FROM seasons WHERE is_active = 1 ORDER BY id DESC LIMIT 1) AND u.is_seed = 0 AND u.withdrawal_requested_at IS NULL AND u.deleted_at IS NULL"
         }
       ]
     },

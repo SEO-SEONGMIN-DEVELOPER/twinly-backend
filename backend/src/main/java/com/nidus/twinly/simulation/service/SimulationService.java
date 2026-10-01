@@ -18,7 +18,8 @@ import com.nidus.twinly.common.scene.StoredSceneNarrationLine;
 import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
-import com.nidus.twinly.notification.writer.AppNotificationFeedWriter;
+import com.nidus.twinly.notification.domain.AppNotificationScheduleType;
+import com.nidus.twinly.notification.repository.AppNotificationScheduleRepository;
 import com.nidus.twinly.people.repository.EncounterRepository;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.legal.domain.PolicyKind;
@@ -47,8 +48,11 @@ import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static com.nidus.twinly.common.logging.LogField.field;
 
@@ -71,7 +75,7 @@ public class SimulationService {
     private final EncounterRepository encounterRepository;
     private final ChatRoomOpener chatRoomOpener;
     private final ChatRoomOpeningRepository chatRoomOpeningRepository;
-    private final AppNotificationFeedWriter appNotificationFeedWriter;
+    private final AppNotificationScheduleRepository appNotificationScheduleRepository;
     private final UserRepository userRepository;
     private final PersonaElementRepository personaElementRepository;
     private final EntitlementReader entitlementReader;
@@ -86,6 +90,7 @@ public class SimulationService {
         if (!userRepository.existsById(userId)) {
             throw new BusinessException(ErrorCode.USER_NOT_FOUND);
         }
+        validatePartnersExist(command);
 
         LocalDate date = command.date();
         List<Scene> previousScenes = sceneRepository.findAllByUserIdAndDate(userId, date);
@@ -94,8 +99,26 @@ public class SimulationService {
         deletePrevious(userId, date, previousScenes);
 
         saveScenes(userId, date, version, command.scenes());
+        scheduleFirstMeetings(userId, date, command.scenes());
         saveQuestions(userId, date, version, command.questions());
         saveRelationships(userId, date, version, command.relationships());
+    }
+
+    private void validatePartnersExist(SimulationsCommand command) {
+        Set<Long> partnerUserIds = Stream.of(
+                        command.scenes().stream().flatMap(scene -> partnerUserIds(scene).stream()),
+                        command.questions().stream().flatMap(question -> distinct(question.partnerId()).stream()),
+                        command.relationships().stream().map(SimulationsRelationshipCommand::partnerId))
+                .flatMap(Function.identity())
+                .collect(Collectors.toSet());
+
+        if (partnerUserIds.isEmpty()) {
+            return;
+        }
+
+        if (userRepository.countByIdIn(partnerUserIds) != partnerUserIds.size()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
     }
 
     private String nextVersion(List<Scene> previousScenes) {
@@ -132,6 +155,8 @@ public class SimulationService {
 
         relationshipRepository.deleteAllByUserIdAndDate(userId, date);
         relationshipRepository.flush();
+
+        appNotificationScheduleRepository.deleteAllUnsentByUserIdAndSimulationDate(userId, date);
     }
 
     private void saveScenes(Long userId, LocalDate date, String version, List<SimulationsSceneCommand> commands) {
@@ -210,6 +235,40 @@ public class SimulationService {
         return distinct(with);
     }
 
+    private void scheduleFirstMeetings(Long userId, LocalDate date, List<SimulationsSceneCommand> commands) {
+        Map<Long, LocalDateTime> firstDialogueStartByPartnerUserId = firstDialogueStartByPartnerUserId(userId, commands);
+
+        if (firstDialogueStartByPartnerUserId.isEmpty()) {
+            return;
+        }
+
+        List<Long> alreadyMetPartnerUserIds = scenePartnerRepository.findPartnerUserIdsWithDialogueBeforeDate(
+                userId, List.copyOf(firstDialogueStartByPartnerUserId.keySet()), date);
+
+        firstDialogueStartByPartnerUserId.forEach((partnerUserId, start) -> {
+            if (alreadyMetPartnerUserIds.contains(partnerUserId)) {
+                return;
+            }
+
+            appNotificationScheduleRepository.insertIfAbsent(
+                    userId, partnerUserId, AppNotificationScheduleType.FIRST_MEETING.name(), date, KstTimes.toInstant(start));
+        });
+    }
+
+    private Map<Long, LocalDateTime> firstDialogueStartByPartnerUserId(Long userId, List<SimulationsSceneCommand> commands) {
+        return commands.stream()
+                .filter(SimulationsDialogueSceneCommand.class::isInstance)
+                .map(SimulationsDialogueSceneCommand.class::cast)
+                .flatMap(dialogue -> distinct(dialogue.with()).stream()
+                        .filter(partnerUserId -> !partnerUserId.equals(userId))
+                        .map(partnerUserId -> Map.entry(partnerUserId, dialogue.start())))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, this::earlier, LinkedHashMap::new));
+    }
+
+    private LocalDateTime earlier(LocalDateTime first, LocalDateTime second) {
+        return first.isBefore(second) ? first : second;
+    }
+
     private void saveQuestions(Long userId, LocalDate date, String version, List<SimulationsQuestionCommand> commands) {
         List<Question> questions = questionRepository.saveAll(commands.stream()
                 .map(command -> Question.create(userId, date, version, command.time(), command.qtype(), command.text(), command.options()))
@@ -223,7 +282,7 @@ public class SimulationService {
     }
 
     private void saveRelationships(Long userId, LocalDate date, String version, List<SimulationsRelationshipCommand> commands) {
-        List<Long> becameFriendPartnerUserIds = becameFriendPartnerUserIds(userId, date, commands);
+        Map<Long, LocalDateTime> becameFriendTimeByPartnerUserId = becameFriendTimeByPartnerUserId(userId, date, commands);
 
         relationshipRepository.saveAll(commands.stream()
                 .map(command -> Relationship.create(userId, date, version, command.partnerId(), command.rapport(),
@@ -236,17 +295,18 @@ public class SimulationService {
                 .forEach(partnerUserId -> encounterRepository.upsert(
                         Math.min(userId, partnerUserId), Math.max(userId, partnerUserId)));
 
-        becameFriendPartnerUserIds.forEach(partnerUserId -> appNotificationFeedWriter.writeFriend(userId, partnerUserId, date));
+        becameFriendTimeByPartnerUserId.forEach((partnerUserId, updateTime) ->
+                appNotificationScheduleRepository.insertIfAbsent(
+                        userId, partnerUserId, AppNotificationScheduleType.FRIEND.name(), date, KstTimes.toInstant(updateTime)));
 
         commands.forEach(command -> openChatRoom(userId, command.partnerId(), command.rapport(), command.updateTime()));
     }
 
-    private List<Long> becameFriendPartnerUserIds(Long userId, LocalDate date, List<SimulationsRelationshipCommand> commands) {
+    private Map<Long, LocalDateTime> becameFriendTimeByPartnerUserId(Long userId, LocalDate date, List<SimulationsRelationshipCommand> commands) {
         return commands.stream()
                 .filter(command -> becameFriend(userId, date, command))
-                .map(SimulationsRelationshipCommand::partnerId)
-                .distinct()
-                .toList();
+                .collect(Collectors.toMap(SimulationsRelationshipCommand::partnerId,
+                        SimulationsRelationshipCommand::updateTime, this::earlier, LinkedHashMap::new));
     }
 
     private boolean becameFriend(Long userId, LocalDate date, SimulationsRelationshipCommand command) {
