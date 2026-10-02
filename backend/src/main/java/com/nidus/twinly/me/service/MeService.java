@@ -773,7 +773,8 @@ public class MeService {
 
     @Transactional
     public void changeProfileNickname(Long userId, MeChangeProfileNicknameCommand command) {
-        String nickname = NicknamePolicy.normalize(command.nickname());
+        String nickname = command.nickname();
+        NicknamePolicy.validate(nickname);
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
@@ -792,7 +793,8 @@ public class MeService {
     }
 
     public MeCheckProfileNicknameResult checkProfileNickname(Long userId, MeCheckProfileNicknameCommand command) {
-        String nickname = NicknamePolicy.normalize(command.nickname());
+        String nickname = command.nickname();
+        NicknamePolicy.validate(nickname);
 
         return new MeCheckProfileNicknameResult(!isNicknameTakenByOthers(nickname, userId));
     }

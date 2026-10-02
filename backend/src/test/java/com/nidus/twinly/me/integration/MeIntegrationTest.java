@@ -1737,22 +1737,22 @@ class MeIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("닉네임 수정: 앞뒤 공백을 뺀 닉네임이 DB에 저장되고 프로필 수정 화면 조회에 그대로 나온다")
+    @DisplayName("닉네임 수정: 바꾼 닉네임이 DB에 저장되고 프로필 수정 화면 조회에 그대로 나온다")
     void changeProfileNickname_end_to_end() throws Exception {
         // given: 실제 유저 저장
         User me = saveUser();
         flushAndClear();
 
-        // when: 실제 액세스 토큰으로 앞뒤 공백이 있는 닉네임 수정 API 호출
+        // when: 실제 액세스 토큰으로 닉네임 수정 API 호출
         mockMvc.perform(put("/api/v1/me/profile/nickname")
                         .header("Authorization", bearer(me.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"nickname": "  트윈리새닉  "}
+                                {"nickname": "트윈리새닉"}
                                 """))
                 .andExpect(status().isOk());
 
-        // then: DB에 공백이 제거된 닉네임이 저장되고, 프로필 수정 화면에도 바뀐 값이 나온다
+        // then: DB에 닉네임이 저장되고, 프로필 수정 화면에도 바뀐 값이 나온다
         flushAndClear();
         assertThat(userRepository.findById(me.getId()).orElseThrow().getNickname()).isEqualTo("트윈리새닉");
         mockMvc.perform(get("/api/v1/me/profile-edit-view")
