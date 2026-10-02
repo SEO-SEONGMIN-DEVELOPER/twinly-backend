@@ -1892,20 +1892,33 @@ class MeServiceUnitTest {
     // ---------------------------------------------------------------- 닉네임 수정
 
     @Test
-    @DisplayName("닉네임 수정은 앞뒤 공백을 제거한 값으로 유저 닉네임을 바꾸고 즉시 flush한다")
-    void changeProfileNickname_trims_and_updates_user() {
+    @DisplayName("닉네임 수정은 유저 닉네임을 바꾸고 즉시 flush한다")
+    void changeProfileNickname_updates_user() {
         // given: 유저가 존재하고 다른 유저·온보딩 세션 어디에도 같은 닉네임이 없음
         User user = user();
         given(userRepository.findById(ME)).willReturn(Optional.of(user));
         given(userRepository.existsByNicknameAndIdNot("트윈이", ME)).willReturn(false);
         given(anonSessionRepository.existsByNickname("트윈이")).willReturn(false);
 
-        // when: 앞뒤 공백이 있는 닉네임으로 수정
-        meService.changeProfileNickname(ME, new MeChangeProfileNicknameCommand("  트윈이  "));
+        // when: 규칙에 맞는 닉네임으로 수정
+        meService.changeProfileNickname(ME, new MeChangeProfileNicknameCommand("트윈이"));
 
-        // then: 공백이 제거된 닉네임이 반영되고 유니크 위반을 잡기 위해 flush까지 수행
+        // then: 닉네임이 반영되고 유니크 위반을 잡기 위해 flush까지 수행
         assertThat(user.getNickname()).isEqualTo("트윈이");
         then(userRepository).should().saveAndFlush(user);
+    }
+
+    @Test
+    @DisplayName("닉네임 앞뒤에 공백이 있으면 잘라내지 않고 INVALID_NICKNAME 예외가 발생한다")
+    void changeProfileNickname_with_surrounding_spaces_throws() {
+        // when & then: 앞뒤 공백이 있는 닉네임은 INVALID_NICKNAME으로 거절 + 유저·중복 조회 없음
+        assertThatThrownBy(() -> meService.changeProfileNickname(ME, new MeChangeProfileNicknameCommand("  트윈이  ")))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_NICKNAME);
+
+        then(userRepository).should(never()).findById(anyLong());
+        then(anonSessionRepository).should(never()).existsByNickname(any());
     }
 
     @Test
@@ -2009,14 +2022,14 @@ class MeServiceUnitTest {
     // ---------------------------------------------------------------- 닉네임 중복 확인
 
     @Test
-    @DisplayName("닉네임 중복 확인은 앞뒤 공백을 제거한 값이 다른 유저·온보딩 세션 어디에도 없으면 사용 가능으로 응답한다")
+    @DisplayName("닉네임 중복 확인은 다른 유저·온보딩 세션 어디에도 없으면 사용 가능으로 응답한다")
     void checkProfileNickname_available() {
         // given: 본인을 뺀 유저와 온보딩 세션 어디에도 같은 닉네임이 없음
         given(userRepository.existsByNicknameAndIdNot("트윈이", ME)).willReturn(false);
         given(anonSessionRepository.existsByNickname("트윈이")).willReturn(false);
 
-        // when: 앞뒤 공백이 있는 닉네임으로 중복 확인
-        MeCheckProfileNicknameResult result = meService.checkProfileNickname(ME, new MeCheckProfileNicknameCommand("  트윈이  "));
+        // when: 닉네임 중복 확인
+        MeCheckProfileNicknameResult result = meService.checkProfileNickname(ME, new MeCheckProfileNicknameCommand("트윈이"));
 
         // then: 사용 가능
         assertThat(result.isAvailable()).isTrue();

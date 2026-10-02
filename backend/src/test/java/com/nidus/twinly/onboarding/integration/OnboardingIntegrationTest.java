@@ -536,10 +536,10 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("닉네임 중복 확인: 이미 익명 세션이 쓰는 닉네임이면 isAvailable=false로 응답한다")
     void profileNicknameCheck_end_to_end() throws Exception {
-        // given: 다른 익명 세션이 'taken-nick'을 이미 사용 중
+        // given: 다른 익명 세션이 'takenNick'을 이미 사용 중
         AnonSession session = saveAnonSession();
         AnonSession other = saveAnonSession();
-        other.changeNickname("taken-nick");
+        other.changeNickname("takenNick");
         flushAndClear();
 
         // when: 사용 중인 닉네임과 비어 있는 닉네임을 각각 확인
@@ -547,7 +547,7 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
                         .header("Authorization", anonBearer(session))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"nickname": "taken-nick"}
+                                {"nickname": "takenNick"}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.isAvailable").value(false));
@@ -557,7 +557,7 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
                         .header("Authorization", anonBearer(session))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"nickname": "free-nick"}
+                                {"nickname": "freeNick"}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.isAvailable").value(true));
@@ -574,14 +574,14 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
                         .header("Authorization", anonBearer(session))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"nickname": "new-nick"}
+                                {"nickname": "newNick"}
                                 """))
                 .andExpect(status().isOk());
 
         // then: DB에서 다시 읽어도 닉네임이 반영되어 있음
         flushAndClear();
         assertThat(anonSessionRepository.findById(session.getId()).orElseThrow().getNickname())
-                .isEqualTo("new-nick");
+                .isEqualTo("newNick");
     }
 
     @Test
@@ -590,7 +590,7 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
         // given: 다른 익명 세션이 이미 같은 닉네임을 사용 중
         AnonSession session = saveAnonSession();
         AnonSession other = saveAnonSession();
-        other.changeNickname("dup-nick");
+        other.changeNickname("dupNick");
         flushAndClear();
 
         // when: 같은 닉네임으로 등록 API 호출
@@ -598,7 +598,7 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
                 .header("Authorization", anonBearer(session))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                        {"nickname": "dup-nick"}
+                        {"nickname": "dupNick"}
                         """));
 
         // then: 도메인 예외가 409 + NICKNAME_ALREADY_USED로 매핑됨

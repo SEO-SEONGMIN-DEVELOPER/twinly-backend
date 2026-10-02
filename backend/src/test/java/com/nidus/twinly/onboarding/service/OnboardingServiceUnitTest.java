@@ -674,18 +674,18 @@ class OnboardingServiceUnitTest {
     }
 
     @Test
-    @DisplayName("닉네임 설정은 앞뒤 공백을 제거한 값으로 익명 세션에 반영한다")
-    void profileNickname_trims_and_updates_session() {
+    @DisplayName("닉네임 설정은 익명 세션에 반영한다")
+    void profileNickname_updates_session() {
         // given: 중복이 없고 익명 세션이 존재
         AnonSession anonSession = AnonSession.create(UUID.randomUUID(), Instant.now().plusSeconds(3600));
         given(userRepository.existsByNickname("twinly")).willReturn(false);
         given(anonSessionRepository.existsByNicknameAndIdNot("twinly", ANON_SESSION_ID)).willReturn(false);
         given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(anonSession));
 
-        // when: 앞뒤 공백이 있는 닉네임으로 설정
-        onboardingService.profileNickname(ANON_SESSION, new OnboardingProfileNicknameCommand("  twinly  "));
+        // when: 규칙에 맞는 닉네임으로 설정
+        onboardingService.profileNickname(ANON_SESSION, new OnboardingProfileNicknameCommand("twinly"));
 
-        // then: 공백이 제거된 닉네임이 세션에 반영됨
+        // then: 닉네임이 세션에 반영됨
         assertThat(anonSession.getNickname()).isEqualTo("twinly");
     }
 
@@ -914,8 +914,8 @@ class OnboardingServiceUnitTest {
     @Test
     @DisplayName("닉네임이 길이(2~20자)나 허용 문자 규칙을 벗어나면 INVALID_NICKNAME 예외가 발생한다")
     void profileNickname_when_violates_policy_throws() {
-        // given: 규칙을 벗어나는 닉네임들 (한 글자 / 21자 / 허용되지 않는 문자)
-        List<String> invalid = List.of("a", "a".repeat(21), "twin ly", "twin!ly");
+        // given: 규칙을 벗어나는 닉네임들 (한 글자 / 21자 / 가운데·앞·뒤 공백 / 숫자 / 밑줄 / 하이픈 / 자모 / 그 외 특수문자)
+        List<String> invalid = List.of("a", "a".repeat(21), "twin ly", " twinly", "twinly ", "twinly1", "twin_ly", "twin-ly", "트윈ㅋㅋ", "twin!ly");
 
         // when & then: 모두 INVALID_NICKNAME으로 거절되고 중복 검사까지 가지 않는다
         for (String nickname : invalid) {

@@ -214,7 +214,8 @@ public class OnboardingService {
 
     public OnboardingProfileNicknameCheckResult profileNicknameCheck(AnonSessionSnapshot anonSessionSnapshot, OnboardingProfileNicknameCheckCommand command) {
         Long anonSessionId = anonSessionSnapshot.id();
-        String nickname = NicknamePolicy.normalize(command.nickname());
+        String nickname = command.nickname();
+        NicknamePolicy.validate(nickname);
 
         boolean isAvailable = !userRepository.existsByNickname(nickname)
                 && !anonSessionRepository.existsByNicknameAndIdNot(nickname, anonSessionId);
@@ -225,7 +226,8 @@ public class OnboardingService {
     @Transactional
     public void profileNickname(AnonSessionSnapshot anonSessionSnapshot, OnboardingProfileNicknameCommand command) {
         Long anonSessionId = anonSessionSnapshot.id();
-        String nickname = NicknamePolicy.normalize(command.nickname());
+        String nickname = command.nickname();
+        NicknamePolicy.validate(nickname);
 
         if (userRepository.existsByNickname(nickname)
                 || anonSessionRepository.existsByNicknameAndIdNot(nickname, anonSessionId)) {
