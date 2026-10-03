@@ -118,6 +118,7 @@ public class ActivityService {
                     startsAt,
                     endsAt,
                     scene.getPlace(),
+                    scene.getPlaceCode(),
                     with,
                     sceneNameRenderer.render(scene.getNarration(), nameByUserId),
                     sceneNameRenderer.render(scene.getMind(), nameByUserId)
@@ -128,6 +129,7 @@ public class ActivityService {
                     startsAt,
                     endsAt,
                     scene.getPlace(),
+                    scene.getPlaceCode(),
                     with,
                     toSceneLines(scene, nameByUserId)
             );

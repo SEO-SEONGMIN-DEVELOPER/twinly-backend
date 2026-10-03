@@ -336,6 +336,7 @@ public class PeopleService {
                             changeByDate.get(date),
                             deltaByDate.get(date),
                             firstScene.getPlace(),
+                            firstScene.getPlaceCode(),
                             preview(firstScene, nameByUserId)
                     );
                 })
@@ -468,6 +469,7 @@ public class PeopleService {
                     startsAt,
                     endsAt,
                     scene.getPlace(),
+                    scene.getPlaceCode(),
                     with,
                     sceneNameRenderer.render(scene.getNarration(), nameByUserId),
                     sceneNameRenderer.render(scene.getMind(), nameByUserId)
@@ -478,6 +480,7 @@ public class PeopleService {
                     startsAt,
                     endsAt,
                     scene.getPlace(),
+                    scene.getPlaceCode(),
                     with,
                     toSceneLines(scene, nameByUserId)
             );

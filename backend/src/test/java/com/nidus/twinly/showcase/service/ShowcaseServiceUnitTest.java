@@ -461,7 +461,7 @@ class ShowcaseServiceUnitTest {
     }
 
     private Scene actionScene(Long id, String narration, String mind) {
-        Scene scene = Scene.createAction(TARGET_ID, LocalDate.parse("2026-08-18"), "v1", "학교 정문",
+        Scene scene = Scene.createAction(TARGET_ID, LocalDate.parse("2026-08-18"), "v1", "학교 정문", null,
                 LocalDateTime.parse("2026-08-18T09:00:00"), LocalDateTime.parse("2026-08-18T09:40:00"), narration, mind);
         ReflectionTestUtils.setField(scene, "id", id);
 
@@ -469,7 +469,7 @@ class ShowcaseServiceUnitTest {
     }
 
     private Scene dialogueScene(Long id, String lines) {
-        Scene scene = Scene.createDialogue(TARGET_ID, LocalDate.parse("2026-08-18"), "v1", "식당",
+        Scene scene = Scene.createDialogue(TARGET_ID, LocalDate.parse("2026-08-18"), "v1", "식당", null,
                 LocalDateTime.parse("2026-08-18T12:10:00"), LocalDateTime.parse("2026-08-18T12:50:00"), lines);
         ReflectionTestUtils.setField(scene, "id", id);
 

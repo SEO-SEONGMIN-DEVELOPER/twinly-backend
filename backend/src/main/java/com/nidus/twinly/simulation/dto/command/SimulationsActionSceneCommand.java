@@ -10,6 +10,7 @@ public record SimulationsActionSceneCommand(
         LocalDateTime end,
         String type,
         String place,
+        String placeCode,
         List<Long> with,
         String narration,
         String mind
@@ -21,6 +22,7 @@ public record SimulationsActionSceneCommand(
                 request.end(),
                 request.type(),
                 request.place(),
+                request.placeCode(),
                 request.with(),
                 request.narration(),
                 request.mind()

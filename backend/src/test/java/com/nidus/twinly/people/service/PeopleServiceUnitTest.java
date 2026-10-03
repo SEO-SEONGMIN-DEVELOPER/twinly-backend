@@ -653,7 +653,7 @@ class PeopleServiceUnitTest {
                 .willReturn(List.of(day2, day1));
         given(sceneRepository.findAllByUserIdAndWithPartnerUserIdAndDateIn(eq(ME), eq(20L), eq(List.of(day2, day1)), any(LocalDateTime.class)))
                 .willReturn(List.of(
-                        scene(100L, ME, day2, "v1", "카페", SceneType.ACTION, "커피를 마셨다", "즐거웠다", null),
+                        sceneWithPlaceCode(scene(100L, ME, day2, "v1", "카페", SceneType.ACTION, "커피를 마셨다", "즐거웠다", null), "CAFE"),
                         scene(200L, ME, day1, "v1", "학교 복도", SceneType.DIALOGUE, null, null, linesJson)));
         given(relationshipRepository.findForDeltaRange(eq(ME), eq(20L), eq(day1), eq(day2), any(LocalDateTime.class)))
                 .willReturn(List.of(
@@ -675,6 +675,7 @@ class PeopleServiceUnitTest {
         assertThat(result.events().get(0).intimacyDelta()).isEqualTo(25);
         assertThat(result.events().get(0).relationshipChange()).isEqualTo(RelationshipSpecificType.CLOSE);
         assertThat(result.events().get(0).place()).isEqualTo("카페");
+        assertThat(result.events().get(0).placeCode()).isEqualTo("CAFE");
         assertThat(result.events().get(0).preview()).isEqualTo("커피를 마셨다");
 
         assertThat(result.events().get(1).date()).isEqualTo(day1);
@@ -751,8 +752,9 @@ class PeopleServiceUnitTest {
         // given: 상대(20)가 참여한 씬만 조인 쿼리가 돌려준다. 그날 다른 씬은 애초에 로드되지 않는다
         LocalDate date = LocalDate.of(2026, 7, 20);
         given(sceneRepository.findAllByUserIdAndWithPartnerUserIdAndDateIn(eq(ME), eq(20L), eq(List.of(date)), any(LocalDateTime.class)))
-                .willReturn(List.of(
-                        scene(100L, ME, date, "v1", "학교 복도", SceneType.ACTION, "복도를 함께 걸었다", "설렜다", null)));
+                .willReturn(List.of(sceneWithPlaceCode(
+                        scene(100L, ME, date, "v1", "학교 복도", SceneType.ACTION, "복도를 함께 걸었다", "설렜다", null),
+                        "SCHOOL_HALLWAY")));
         given(scenePartnerRepository.findAllBySceneIdIn(List.of(100L)))
                 .willReturn(List.of(scenePartner(100L, 20L)));
         given(userRepository.findAllById(List.of(ME, 20L)))
@@ -772,6 +774,7 @@ class PeopleServiceUnitTest {
         assertThat(actionScene.sceneId()).isEqualTo(100L);
         assertThat(actionScene.type()).isEqualTo("action");
         assertThat(actionScene.place()).isEqualTo("학교 복도");
+        assertThat(actionScene.placeCode()).isEqualTo("SCHOOL_HALLWAY");
         assertThat(actionScene.narration()).isEqualTo("복도를 함께 걸었다");
         assertThat(actionScene.mind()).isEqualTo("설렜다");
         assertThat(actionScene.with()).containsExactly(20L);
@@ -891,6 +894,11 @@ class PeopleServiceUnitTest {
         ReflectionTestUtils.setField(scene, "narration", narration);
         ReflectionTestUtils.setField(scene, "mind", mind);
         ReflectionTestUtils.setField(scene, "lines", lines);
+        return scene;
+    }
+
+    private Scene sceneWithPlaceCode(Scene scene, String placeCode) {
+        ReflectionTestUtils.setField(scene, "placeCode", placeCode);
         return scene;
     }
 

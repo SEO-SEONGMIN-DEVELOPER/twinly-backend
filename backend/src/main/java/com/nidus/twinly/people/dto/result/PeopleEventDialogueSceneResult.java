@@ -11,6 +11,7 @@ public record PeopleEventDialogueSceneResult(
         OffsetDateTime startsAt,
         OffsetDateTime endsAt,
         String place,
+        String placeCode,
         List<Long> with,
         List<SceneLine> lines
 ) implements PeopleEventSceneResult {

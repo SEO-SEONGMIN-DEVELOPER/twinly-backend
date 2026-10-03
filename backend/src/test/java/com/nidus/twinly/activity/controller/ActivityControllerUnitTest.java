@@ -91,6 +91,7 @@ class ActivityControllerUnitTest {
                 .andExpect(jsonPath("$.scenes[0].startsAt", startsWith("2026-07-26T09:00")))
                 .andExpect(jsonPath("$.scenes[0].endsAt", startsWith("2026-07-26T10:00")))
                 .andExpect(jsonPath("$.scenes[0].place").value("학교 복도"))
+                .andExpect(jsonPath("$.scenes[0].placeCode").value("SCHOOL_HALLWAY"))
                 .andExpect(jsonPath("$.scenes[0].narration").value("복도를 천천히 걸었다"))
                 .andExpect(jsonPath("$.scenes[0].mind").value("조금 설레었다"))
                 .andExpect(jsonPath("$.scenes[0].with", hasSize(1)))
@@ -157,6 +158,7 @@ class ActivityControllerUnitTest {
                 OffsetDateTime.of(2026, 7, 26, 9, 0, 0, 0, KST),
                 OffsetDateTime.of(2026, 7, 26, 10, 0, 0, 0, KST),
                 "학교 복도",
+                "SCHOOL_HALLWAY",
                 List.of(userId),
                 "복도를 천천히 걸었다",
                 "조금 설레었다"
@@ -168,6 +170,7 @@ class ActivityControllerUnitTest {
                 OffsetDateTime.of(2026, 7, 26, 12, 0, 0, 0, KST),
                 OffsetDateTime.of(2026, 7, 26, 12, 30, 0, 0, KST),
                 "교실",
+                null,
                 List.of(userId),
                 List.of(
                         new SceneNarrationLine("narr", "교실이 조용해졌다",

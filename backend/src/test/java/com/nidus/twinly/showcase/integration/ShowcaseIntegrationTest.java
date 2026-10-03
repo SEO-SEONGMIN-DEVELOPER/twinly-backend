@@ -75,6 +75,7 @@ class ShowcaseIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.userRef").value("1"))
                 .andExpect(jsonPath("$.date").value(KstTimes.today().toString()))
                 .andExpect(jsonPath("$.scenes[0].narration").value(matchesPattern("[가-힣]OO이 뛰어서 등교했다\\.")))
+                .andExpect(jsonPath("$.scenes[0].placeCode").value("SCHOOL_GATE"))
                 .andExpect(jsonPath("$.scenes[0].with[0]").value("2"))
                 .andExpect(jsonPath("$.userInfos[0].userRef").value("1"))
                 .andExpect(jsonPath("$.userInfos[0].userName").value(matchesPattern("[가-힣]OO")))
@@ -238,7 +239,7 @@ class ShowcaseIntegrationTest extends AbstractIntegrationTest {
         LocalDate today = KstTimes.today();
 
         return sceneRepository.save(Scene.createAction(
-                user.getId(), today, "v1", "학교 정문",
+                user.getId(), today, "v1", "학교 정문", "SCHOOL_GATE",
                 LocalDateTime.of(today, java.time.LocalTime.of(9, 0)),
                 LocalDateTime.of(today, java.time.LocalTime.of(9, 40)),
                 narration, "아슬아슬했다."));

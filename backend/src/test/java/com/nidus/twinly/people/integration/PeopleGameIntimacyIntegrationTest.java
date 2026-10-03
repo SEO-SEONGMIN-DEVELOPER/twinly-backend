@@ -133,7 +133,7 @@ class PeopleGameIntimacyIntegrationTest extends AbstractIntegrationTest {
     }
 
     private void saveSceneWithPartner(LocalDate date) {
-        Scene scene = sceneRepository.save(Scene.createAction(me.getId(), date, "v1", "카페",
+        Scene scene = sceneRepository.save(Scene.createAction(me.getId(), date, "v1", "카페", null,
                 date.atTime(9, 0), date.atTime(10, 0), "커피를 마셨다", null));
         scenePartnerRepository.save(ScenePartner.create(scene.getId(), partner.getId()));
     }

@@ -357,6 +357,7 @@ class PeopleControllerUnitTest {
                                 RelationshipSpecificType.CLOSE,
                                 5,
                                 "카페",
+                                "CAFE",
                                 "커피를 마셨다")),
                         new PeopleEventsPageResult(LocalDate.of(2026, 7, 19), true)));
 
@@ -377,6 +378,7 @@ class PeopleControllerUnitTest {
                 .andExpect(jsonPath("$.events[0].relationshipChange").value("친한 사이"))
                 .andExpect(jsonPath("$.events[0].intimacyDelta").value(5))
                 .andExpect(jsonPath("$.events[0].place").value("카페"))
+                .andExpect(jsonPath("$.events[0].placeCode").value("CAFE"))
                 .andExpect(jsonPath("$.events[0].preview").value("커피를 마셨다"))
                 .andExpect(jsonPath("$.page.nextCursor").value("2026-07-19"))
                 .andExpect(jsonPath("$.page.hasMore").value(true));
@@ -400,6 +402,7 @@ class PeopleControllerUnitTest {
                                 OffsetDateTime.of(2026, 7, 20, 9, 0, 0, 0, ZoneOffset.ofHours(9)),
                                 OffsetDateTime.of(2026, 7, 20, 10, 0, 0, 0, ZoneOffset.ofHours(9)),
                                 "학교 복도",
+                                "SCHOOL_HALLWAY",
                                 List.of(42L),
                                 "복도를 함께 걸었다",
                                 "조금 설렜다")),
@@ -419,6 +422,7 @@ class PeopleControllerUnitTest {
                 .andExpect(jsonPath("$.scenes[0].sceneId").value("100"))
                 .andExpect(jsonPath("$.scenes[0].type").value("action"))
                 .andExpect(jsonPath("$.scenes[0].place").value("학교 복도"))
+                .andExpect(jsonPath("$.scenes[0].placeCode").value("SCHOOL_HALLWAY"))
                 .andExpect(jsonPath("$.scenes[0].with[0]", is("42")))
                 .andExpect(jsonPath("$.scenes[0].narration").value("복도를 함께 걸었다"))
                 .andExpect(jsonPath("$.scenes[0].mind").value("조금 설렜다"))

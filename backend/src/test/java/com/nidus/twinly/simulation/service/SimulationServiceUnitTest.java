@@ -295,7 +295,7 @@ class SimulationServiceUnitTest {
         givenEmptyPreviousSimulation(FUTURE_DATE);
         SimulationsCommand command = new SimulationsCommand(USER_ID, FUTURE_DATE, List.of(
                 new SimulationsActionSceneCommand(FUTURE_DATE.atTime(9, 0), FUTURE_DATE.atTime(10, 0), "action", "학교",
-                        List.of(PARTNER_ID), "narration", null),
+                        null, List.of(PARTNER_ID), "narration", null),
                 dialogueScene(FUTURE_DATE, 11, List.of(USER_ID))
         ), List.of(), List.of(), null);
 
@@ -559,19 +559,40 @@ class SimulationServiceUnitTest {
                 .containsExactly("학교 정문 앞", "카페 2층");
     }
 
+    @Test
+    @DisplayName("장면 장소 코드는 받은 그대로 저장하고, 보내지 않은 장면은 null로 저장한다")
+    void simulations_saves_place_code_as_is() {
+        // given: 장소 코드가 있는 행동 장면과 장소 코드가 없는 대화 장면
+        givenEmptyPreviousSimulation();
+        SimulationsCommand command = new SimulationsCommand(USER_ID, DATE, List.of(
+                new SimulationsActionSceneCommand(DATE.atTime(9, 0), DATE.atTime(10, 0), "action", "학교 정문",
+                        "SCHOOL_GATE", List.of(), "narration", null),
+                dialogueScene("카페")
+        ), List.of(), List.of(), null);
+
+        // when: 시뮬레이션 결과 저장
+        simulationService.simulations(USER_ID, command);
+
+        // then: 저장되는 Scene의 placeCode는 가공 없이 그대로, 없으면 null
+        ArgumentCaptor<List<Scene>> captor = ArgumentCaptor.captor();
+        then(sceneRepository).should().saveAll(captor.capture());
+        assertThat(captor.getValue()).extracting(Scene::getPlaceCode)
+                .containsExactly("SCHOOL_GATE", null);
+    }
+
     private SimulationsSceneCommand actionScene(String place) {
         return new SimulationsActionSceneCommand(
-                DATE.atTime(9, 0), DATE.atTime(10, 0), "action", place, List.of(), "narration", null);
+                DATE.atTime(9, 0), DATE.atTime(10, 0), "action", place, null, List.of(), "narration", null);
     }
 
     private SimulationsSceneCommand dialogueScene(String place) {
         return new SimulationsDialogueSceneCommand(
-                DATE.atTime(11, 0), DATE.atTime(12, 0), "dialogue", place, List.of(PARTNER_ID), List.of());
+                DATE.atTime(11, 0), DATE.atTime(12, 0), "dialogue", place, null, List.of(PARTNER_ID), List.of());
     }
 
     private SimulationsSceneCommand dialogueScene(LocalDate date, int startHour, List<Long> with) {
         return new SimulationsDialogueSceneCommand(
-                date.atTime(startHour, 0), date.atTime(startHour + 1, 0), "dialogue", "카페", with, List.of());
+                date.atTime(startHour, 0), date.atTime(startHour + 1, 0), "dialogue", "카페", null, with, List.of());
     }
 
     private void givenEmptyPreviousSimulation() {

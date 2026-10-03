@@ -160,11 +160,11 @@ class AppNotificationScheduleIntegrationTest extends AbstractIntegrationTest {
         Long talkedBefore = saveUser().getId();
         Long actedBefore = saveUser().getId();
         Long talksToday = saveUser().getId();
-        saveScene(Scene.createDialogue(userId, DATE.minusDays(1), "v1", "카페",
+        saveScene(Scene.createDialogue(userId, DATE.minusDays(1), "v1", "카페", null,
                 DATE.minusDays(1).atTime(11, 0), DATE.minusDays(1).atTime(12, 0), "[]"), talkedBefore);
-        saveScene(Scene.createAction(userId, DATE.minusDays(1), "v1", "학교",
+        saveScene(Scene.createAction(userId, DATE.minusDays(1), "v1", "학교", null,
                 DATE.minusDays(1).atTime(9, 0), DATE.minusDays(1).atTime(10, 0), "narration", null), actedBefore);
-        saveScene(Scene.createDialogue(userId, DATE, "v1", "카페",
+        saveScene(Scene.createDialogue(userId, DATE, "v1", "카페", null,
                 DATE.atTime(11, 0), DATE.atTime(12, 0), "[]"), talksToday);
         entityManager.flush();
 

@@ -9,6 +9,7 @@ public record PeopleEventsItemResult(
         RelationshipSpecificType relationshipChange,
         Integer intimacyDelta,
         String place,
+        String placeCode,
         String preview
 ) {
 }

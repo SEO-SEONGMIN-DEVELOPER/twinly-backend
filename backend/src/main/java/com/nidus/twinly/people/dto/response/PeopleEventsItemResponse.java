@@ -14,6 +14,8 @@ public record PeopleEventsItemResponse(
         Integer intimacyDelta,
         String place,
         @Schema(nullable = true)
+        String placeCode,
+        @Schema(nullable = true)
         String preview
 ) {
 
@@ -23,6 +25,7 @@ public record PeopleEventsItemResponse(
                 result.relationshipChange(),
                 result.intimacyDelta(),
                 result.place(),
+                result.placeCode(),
                 result.preview()
         );
     }

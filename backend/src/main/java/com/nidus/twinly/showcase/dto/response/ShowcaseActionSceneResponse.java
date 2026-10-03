@@ -14,6 +14,8 @@ public record ShowcaseActionSceneResponse(
         OffsetDateTime startsAt,
         OffsetDateTime endsAt,
         String place,
+        @Schema(nullable = true)
+        String placeCode,
         @JsonFormat(shape = JsonFormat.Shape.STRING)
         List<Long> with,
         String narration,
@@ -28,6 +30,7 @@ public record ShowcaseActionSceneResponse(
                 result.startsAt(),
                 result.endsAt(),
                 result.place(),
+                result.placeCode(),
                 result.with(),
                 result.narration(),
                 result.mind()

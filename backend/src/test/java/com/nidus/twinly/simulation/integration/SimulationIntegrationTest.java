@@ -87,6 +87,22 @@ class SimulationIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("장면의 장소 코드를 받으면 장소와 함께 저장한다")
+    void simulations_saves_place_code_with_place() throws Exception {
+        // given: 장소 코드가 담긴 대화 장면을 보낼 유저와 상대
+        User me = saveUser();
+        User partner = saveUser();
+
+        // when: 시뮬레이션 결과 저장
+        simulateDay(me, DATE, List.of(partner.getId()), partner.getId(), 20).andExpect(status().isOk());
+
+        // then: 장소 코드가 실제 컬럼에 장소와 함께 저장된다
+        assertThat(sceneRepository.findAllByUserIdAndDate(me.getId(), DATE))
+                .extracting(Scene::getPlace, Scene::getPlaceCode)
+                .containsExactly(tuple("카페", "CAFE"));
+    }
+
+    @Test
     @DisplayName("이틀치 결과를 차례로 저장하면 첫 만남 알림은 처음 대화한 날에만, 새로 만난 상대에게만 예약된다")
     void simulations_schedules_first_meeting_only_for_first_dialogue_across_dates() throws Exception {
         // given: 첫날 한 상대와 대화한 결과가 저장돼 있다
@@ -297,6 +313,7 @@ class SimulationIntegrationTest extends AbstractIntegrationTest {
                       "start": "%sT09:00:00",
                       "end": "%sT09:30:00",
                       "place": "카페",
+                      "placeCode": "CAFE",
                       "with": %s,
                       "lines": [
                         {"t": "bubble", "userId": "%d", "text": "안녕", "occursAt": "%sT09:10:00"}

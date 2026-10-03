@@ -9,6 +9,7 @@ public record PeopleEventActionSceneResult(
         OffsetDateTime startsAt,
         OffsetDateTime endsAt,
         String place,
+        String placeCode,
         List<Long> with,
         String narration,
         String mind

@@ -56,9 +56,11 @@ class ActivityIntegrationTest extends AbstractIntegrationTest {
         User me = saveUser();
         User partner = saveUser();
 
-        Scene scene = sceneRepository.save(actionScene(me.getId(), "v1", "학교 복도",
+        Scene scene = actionScene(me.getId(), "v1", "학교 복도",
                 DATE.atTime(9, 0), DATE.atTime(10, 0),
-                "복도를 천천히 걸었다", "조금 설레었다"));
+                "복도를 천천히 걸었다", "조금 설레었다");
+        ReflectionTestUtils.setField(scene, "placeCode", "SCHOOL_HALLWAY");
+        sceneRepository.save(scene);
         scenePartnerRepository.save(scenePartner(scene.getId(), partner.getId()));
         Question question = questionRepository.save(question(me.getId(), DATE.atTime(21, 30),
                 QuestionType.PROMISE, "오늘 어땠어?", List.of("좋았어", "별로야")));
@@ -81,6 +83,7 @@ class ActivityIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.scenes[0].startsAt", startsWith("2026-07-26T09:00")))
                 .andExpect(jsonPath("$.scenes[0].endsAt", startsWith("2026-07-26T10:00")))
                 .andExpect(jsonPath("$.scenes[0].place").value("학교 복도"))
+                .andExpect(jsonPath("$.scenes[0].placeCode").value("SCHOOL_HALLWAY"))
                 .andExpect(jsonPath("$.scenes[0].narration").value("복도를 천천히 걸었다"))
                 .andExpect(jsonPath("$.scenes[0].mind").value("조금 설레었다"))
                 .andExpect(jsonPath("$.scenes[0].with", hasSize(1)))

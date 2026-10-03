@@ -91,6 +91,7 @@ class ActivityServiceUnitTest {
         Scene scene = actionScene(10L, "v1", "학교 복도",
                 DATE.atTime(9, 0), DATE.atTime(10, 0),
                 "복도를 천천히 걸었다", "조금 설레었다");
+        ReflectionTestUtils.setField(scene, "placeCode", "SCHOOL_HALLWAY");
         given(sceneRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of(scene));
         given(scenePartnerRepository.findAllBySceneIdIn(List.of(10L))).willReturn(List.of(scenePartner(10L, 100L)));
         given(userRepository.findAllById(List.of(USER_ID, 100L)))
@@ -113,6 +114,7 @@ class ActivityServiceUnitTest {
         assertThat(action.startsAt()).isEqualTo(OffsetDateTime.of(2026, 7, 26, 9, 0, 0, 0, KST));
         assertThat(action.endsAt()).isEqualTo(OffsetDateTime.of(2026, 7, 26, 10, 0, 0, 0, KST));
         assertThat(action.place()).isEqualTo("학교 복도");
+        assertThat(action.placeCode()).isEqualTo("SCHOOL_HALLWAY");
         assertThat(action.narration()).isEqualTo("복도를 천천히 걸었다");
         assertThat(action.mind()).isEqualTo("조금 설레었다");
         assertThat(action.with()).containsExactly(100L);

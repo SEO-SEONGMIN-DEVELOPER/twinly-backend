@@ -190,6 +190,7 @@ public class SimulationService {
                     date,
                     version,
                     normalizePlace(action.place()),
+                    action.placeCode(),
                     action.start(),
                     action.end(),
                     action.narration(),
@@ -200,6 +201,7 @@ public class SimulationService {
                     date,
                     version,
                     normalizePlace(dialogue.place()),
+                    dialogue.placeCode(),
                     dialogue.start(),
                     dialogue.end(),
                     writeLines(dialogue.lines())

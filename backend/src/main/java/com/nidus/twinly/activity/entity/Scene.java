@@ -34,6 +34,8 @@ public class Scene {
     @Column(columnDefinition = "TEXT")
     private String place;
 
+    private String placeCode;
+
     private LocalDateTime startsAt;
 
     private LocalDateTime endsAt;
@@ -53,9 +55,9 @@ public class Scene {
 
     private Instant createdAt;
 
-    public static Scene createAction(Long userId, LocalDate date, String version, String place,
+    public static Scene createAction(Long userId, LocalDate date, String version, String place, String placeCode,
                                      LocalDateTime startsAt, LocalDateTime endsAt, String narration, String mind) {
-        Scene scene = newScene(userId, date, version, place, startsAt, endsAt, SceneType.ACTION);
+        Scene scene = newScene(userId, date, version, place, placeCode, startsAt, endsAt, SceneType.ACTION);
 
         scene.narration = narration;
         scene.mind = mind;
@@ -63,16 +65,16 @@ public class Scene {
         return scene;
     }
 
-    public static Scene createDialogue(Long userId, LocalDate date, String version, String place,
+    public static Scene createDialogue(Long userId, LocalDate date, String version, String place, String placeCode,
                                        LocalDateTime startsAt, LocalDateTime endsAt, String lines) {
-        Scene scene = newScene(userId, date, version, place, startsAt, endsAt, SceneType.DIALOGUE);
+        Scene scene = newScene(userId, date, version, place, placeCode, startsAt, endsAt, SceneType.DIALOGUE);
 
         scene.lines = lines;
 
         return scene;
     }
 
-    private static Scene newScene(Long userId, LocalDate date, String version, String place,
+    private static Scene newScene(Long userId, LocalDate date, String version, String place, String placeCode,
                                   LocalDateTime startsAt, LocalDateTime endsAt, SceneType type) {
         Scene scene = new Scene();
 
@@ -80,6 +82,7 @@ public class Scene {
         scene.date = date;
         scene.version = version;
         scene.place = place;
+        scene.placeCode = placeCode;
         scene.startsAt = startsAt;
         scene.endsAt = endsAt;
         scene.type = type;

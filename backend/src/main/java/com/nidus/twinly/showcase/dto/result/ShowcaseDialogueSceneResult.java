@@ -9,6 +9,7 @@ public record ShowcaseDialogueSceneResult(
         OffsetDateTime startsAt,
         OffsetDateTime endsAt,
         String place,
+        String placeCode,
         List<Long> with,
         List<ShowcaseLineResult> lines
 ) implements ShowcaseSceneResult {
