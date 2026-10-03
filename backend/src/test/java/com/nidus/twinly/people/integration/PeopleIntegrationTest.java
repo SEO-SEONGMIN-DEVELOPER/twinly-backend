@@ -129,7 +129,7 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("사람 목록 조회: 탈퇴한 파트너는 목록에 남되 이름이 가려지고 사진은 내려가지 않는다")
+    @DisplayName("사람 목록 조회: 탈퇴한 파트너는 목록에 남아 닉네임은 그대로 내려가고 사진은 내려가지 않는다")
     void people_masks_withdrawn_partner() throws Exception {
         // given: 파트너 둘 다 프로필 사진을 가진 상태에서 한 명만 탈퇴시킨다.
         //        사진 행이 있어야 "사진이 빠졌다"가 필터의 결과임이 증명된다 (없으면 어차피 null이라 무의미)
@@ -147,19 +147,19 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
         var result = mockMvc.perform(get("/api/v1/people")
                 .header("Authorization", bearer(me.getId())));
 
-        // then: 탈퇴자도 목록에는 남는다 (관계 이력이 사라지면 안 되므로) 대신 이름과 사진이 가려진다
+        // then: 탈퇴자도 목록에는 남는다 (관계 이력이 사라지면 안 되므로) 닉네임은 그대로, 사진은 가려진다
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.people.length()").value(2))
                 .andExpect(jsonPath("$.people[0].userId").value(active.getId().toString()))
                 .andExpect(jsonPath("$.people[0].userName").value(active.getNickname()))
                 .andExpect(jsonPath("$.people[0].profilePhoto").exists())
                 .andExpect(jsonPath("$.people[1].userId").value(withdrawn.getId().toString()))
-                .andExpect(jsonPath("$.people[1].userName").value(User.WITHDRAWN_NAME))
+                .andExpect(jsonPath("$.people[1].userName").value(withdrawn.getNickname()))
                 .andExpect(jsonPath("$.people[1].profilePhoto").isEmpty());
     }
 
     @Test
-    @DisplayName("프로필 조회: 탈퇴한 상대는 이름·사진·공개 필드가 모두 가려지고 isDeleted로 표시된다")
+    @DisplayName("프로필 조회: 탈퇴한 상대는 닉네임은 그대로, 사진·공개 필드는 가려지고 isDeleted로 표시된다")
     void profile_masks_withdrawn_partner() throws Exception {
         // given: 사진을 가진 상대가 탈퇴한 상태
         User me = saveUser();
@@ -173,9 +173,9 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
         var result = mockMvc.perform(get("/api/v1/people/{userId}/profile", partner.getId().toString())
                 .header("Authorization", bearer(me.getId())));
 
-        // then: 관계는 유지되나 신원은 드러나지 않는다
+        // then: 관계와 닉네임은 유지되나 사진·공개 필드는 드러나지 않는다
         result.andExpect(status().isOk())
-                .andExpect(jsonPath("$.userName").value(User.WITHDRAWN_NAME))
+                .andExpect(jsonPath("$.userName").value(partner.getNickname()))
                 .andExpect(jsonPath("$.profilePhoto").isEmpty())
                 .andExpect(jsonPath("$.isDeleted").value(true))
                 .andExpect(jsonPath("$.disclosedFields.affiliation").isEmpty())
@@ -212,7 +212,7 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("프로필 조회 v2: 탈퇴한 상대는 이름·사진·공개 필드와 함께 성별·소속·출생연도도 null 로 가려진다")
+    @DisplayName("프로필 조회 v2: 탈퇴한 상대는 닉네임은 그대로, 사진·공개 필드와 성별·소속·출생연도는 null 로 가려진다")
     void profileV2_masks_withdrawn_partner() throws Exception {
         // given: 사진을 가진 상대가 탈퇴한 상태 (탈퇴 후에도 DB 에는 성별·소속·출생연도가 남아 있다)
         User me = saveUser();
@@ -226,9 +226,9 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
         var result = mockMvc.perform(get("/api/v2/people/{userId}/profile", partner.getId().toString())
                 .header("Authorization", bearer(me.getId())));
 
-        // then: 관계는 유지되나 신원을 짐작할 수 있는 값은 키만 남고 모두 null
+        // then: 관계와 닉네임은 유지되나 신원을 짐작할 수 있는 나머지 값은 키만 남고 모두 null
         result.andExpect(status().isOk())
-                .andExpect(jsonPath("$.userName").value(User.WITHDRAWN_NAME))
+                .andExpect(jsonPath("$.userName").value(partner.getNickname()))
                 .andExpect(jsonPath("$.gender").value(nullValue()))
                 .andExpect(jsonPath("$.organization").value(nullValue()))
                 .andExpect(jsonPath("$.birthYear").value(nullValue()))

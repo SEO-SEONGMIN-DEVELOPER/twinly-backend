@@ -226,9 +226,9 @@ class PeopleServiceUnitTest {
         // when: 사람 목록 조회
         PeopleResult result = peopleService.people(ME, null, null);
 
-        // then: 탈퇴한 파트너는 목록에 남되 닉네임·사진이 가려진다
+        // then: 탈퇴한 파트너는 목록에 남아 닉네임은 그대로, 사진만 가려진다
         assertThat(result.people()).extracting(PeopleItemResult::userName)
-                .containsExactly("길동", User.WITHDRAWN_NAME);
+                .containsExactly("길동", "철수");
         assertThat(result.people().get(0).profilePhoto()).isNotNull();
         assertThat(result.people().get(1).profilePhoto()).isNull();
     }
@@ -342,7 +342,7 @@ class PeopleServiceUnitTest {
     }
 
     @Test
-    @DisplayName("탈퇴한 상대의 프로필은 닉네임·사진·공개 필드를 모두 가리고 조회조차 하지 않는다")
+    @DisplayName("탈퇴한 상대의 프로필은 닉네임은 그대로 두고 사진·공개 필드는 가리며 조회조차 하지 않는다")
     void profile_of_withdrawn_partner_is_masked() {
         // given: 소속을 공개 동의했지만 탈퇴한 상대
         User partner = user(20L, "철수");
@@ -355,8 +355,8 @@ class PeopleServiceUnitTest {
         // when: 프로필 조회
         PeopleProfileResult result = peopleService.profile(ME, 20L);
 
-        // then: block 도메인과 같은 문구로 마스킹되고 isDeleted로도 구분할 수 있다
-        assertThat(result.userName()).isEqualTo(User.WITHDRAWN_NAME);
+        // then: 닉네임은 그대로이고 isDeleted로 탈퇴를 구분할 수 있다
+        assertThat(result.userName()).isEqualTo("철수");
         assertThat(result.isDeleted()).isTrue();
         assertThat(result.profilePhoto()).isNull();
         assertThat(result.disclosedFields().affiliation()).isNull();
@@ -406,8 +406,8 @@ class PeopleServiceUnitTest {
         // when: 프로필 v2 조회
         PeopleProfileV2Result result = peopleService.profileV2(ME, 20L);
 
-        // then: 닉네임처럼 성별·학교·출생연도도 드러나지 않는다
-        assertThat(result.userName()).isEqualTo(User.WITHDRAWN_NAME);
+        // then: 닉네임은 그대로이고 성별·학교·출생연도는 드러나지 않는다
+        assertThat(result.userName()).isEqualTo("철수");
         assertThat(result.isDeleted()).isTrue();
         assertThat(result.gender()).isNull();
         assertThat(result.organization()).isNull();

@@ -129,7 +129,7 @@ class BlockIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("차단 목록 조회: 탈퇴한 유저는 '탈퇴한 사용자'로 응답된다")
+    @DisplayName("차단 목록 조회: 탈퇴한 유저도 닉네임으로 응답된다")
     void blockList_with_withdrawn_user_end_to_end() throws Exception {
         // given: 차단 대상이 탈퇴(deletedAt 세팅) 처리된 상태 — 세터가 없어 리플렉션으로 세팅
         User me = saveUser();
@@ -143,9 +143,9 @@ class BlockIntegrationTest extends AbstractIntegrationTest {
         var result = mockMvc.perform(get("/api/v1/blocks")
                 .header("Authorization", bearer(me.getId())));
 
-        // then: 이름이 '탈퇴한 사용자'로 마스킹되어 응답됨
+        // then: 탈퇴 전과 같은 닉네임으로 응답됨
         result.andExpect(status().isOk())
-                .andExpect(jsonPath("$.blocks[0].blockedUserName").value("탈퇴한 사용자"));
+                .andExpect(jsonPath("$.blocks[0].blockedUserName").value(target.getNickname()));
     }
 
     @Test

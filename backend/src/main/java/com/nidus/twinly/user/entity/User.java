@@ -184,12 +184,16 @@ public class User {
         return withdrawalRequestedAt != null || deletedAt != null;
     }
 
+    public boolean isDeleted() {
+        return deletedAt != null;
+    }
+
     public String displayFullName() {
-        return isWithdrawn() ? WITHDRAWN_NAME : familyName + givenName;
+        return isDeleted() ? WITHDRAWN_NAME : familyName + givenName;
     }
 
     public String displayNickname() {
-        return isWithdrawn() ? WITHDRAWN_NAME : nickname;
+        return nickname;
     }
 
     public String shortBirthYear() {
@@ -234,7 +238,6 @@ public class User {
     }
 
     public void delete() {
-        this.nickname = null;
         this.familyName = null;
         this.familyNameHash = null;
         this.givenName = null;
