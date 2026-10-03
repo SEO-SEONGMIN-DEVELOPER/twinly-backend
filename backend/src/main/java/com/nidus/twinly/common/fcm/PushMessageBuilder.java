@@ -54,6 +54,18 @@ public class PushMessageBuilder {
                 .toList();
     }
 
+    public List<PushMessage> balanceGameSummary(List<Device> devices, BalanceGameSummaryPushContent content) {
+        Map<String, String> data = balanceGameSummaryData(content);
+
+        return devices.stream()
+                .map(device -> new PushMessage(
+                        device.getUserId(),
+                        PushType.INTIMACY_QUIZ,
+                        device.getPushToken(),
+                        notificationMessage(device, content.title(), content.body(), data)))
+                .toList();
+    }
+
     public List<PushMessage> chatMessage(List<Device> devices, ChatMessagePushContent content) {
         Map<String, String> data = chatData(content);
 
@@ -82,6 +94,15 @@ public class PushMessageBuilder {
         return Map.of(
                 "version", VERSION,
                 "type", EnumJsonNames.of(PushType.ONE_TIME_PUSH_ONLY),
+                "createdAt", content.createdAt().toString());
+    }
+
+    private Map<String, String> balanceGameSummaryData(BalanceGameSummaryPushContent content) {
+        return Map.of(
+                "version", VERSION,
+                "type", EnumJsonNames.of(PushType.INTIMACY_QUIZ),
+                "roundId", String.valueOf(content.roundId()),
+                "matchedCount", String.valueOf(content.matchedCount()),
                 "createdAt", content.createdAt().toString());
     }
 
