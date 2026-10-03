@@ -175,7 +175,7 @@ class ChatControllerUnitTest {
                 10L,
                 100L,
                 new ChatRoomEntryStatusResult(true, false),
-                new ChatRoomPartnerResult(2L, "partner", null, 30, false),
+                new ChatRoomPartnerResult(2L, "partner", null, 30, 4, false),
                 "hello",
                 new ChatRoomMessagesResult(3, new ChatRoomLastMessageResult("hello", SENT_AT)),
                 null,
@@ -194,6 +194,8 @@ class ChatControllerUnitTest {
                 .andExpect(jsonPath("$.rooms[0].matchId").value("100"))
                 .andExpect(jsonPath("$.rooms[0].entryStatus.myEntryAgreed").value(true))
                 .andExpect(jsonPath("$.rooms[0].partner.userId").value("2"))
+                .andExpect(jsonPath("$.rooms[0].partner.intimacy").value(30))
+                .andExpect(jsonPath("$.rooms[0].partner.gameIntimacy").value(4))
                 .andExpect(jsonPath("$.rooms[0].preview").value("hello"))
                 .andExpect(jsonPath("$.rooms[0].messages.unreadCount").value(3))
                 .andExpect(jsonPath("$.rooms[0].messages.lastMessage.text").value("hello"))
@@ -217,6 +219,7 @@ class ChatControllerUnitTest {
                 .andExpect(jsonPath("$.matchId").value("100"))
                 .andExpect(jsonPath("$.partner.userId").value("2"))
                 .andExpect(jsonPath("$.partner.intimacy").value(45))
+                .andExpect(jsonPath("$.partner.gameIntimacy").value(6))
                 .andExpect(jsonPath("$.partner.relationshipSpecificType").value("친한 사이"))
                 .andExpect(jsonPath("$.partner.disclosedFields.affiliation").value("aff"))
                 .andExpect(jsonPath("$.partner.disclosedFields.affiliationNumber").isEmpty())
@@ -399,6 +402,7 @@ class ChatControllerUnitTest {
                         "partner",
                         null,
                         45,
+                        6,
                         RelationshipSpecificType.CLOSE,
                         new ChatRoomDetailDisclosedFieldsResult("aff", null),
                         List.of("등산", "재즈")

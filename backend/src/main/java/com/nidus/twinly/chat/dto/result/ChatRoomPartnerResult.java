@@ -7,6 +7,7 @@ public record ChatRoomPartnerResult(
         String userName,
         ProfilePhotoInfo profilePhoto,
         Integer intimacy,
+        Integer gameIntimacy,
         Boolean isDeleted
 ) {
 }

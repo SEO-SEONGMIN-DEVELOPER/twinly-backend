@@ -14,6 +14,7 @@ public record PeopleProfileResponse(
         @Schema(nullable = true)
         ProfilePhotoInfo profilePhoto,
         Integer intimacy,
+        Integer gameIntimacy,
         RelationshipType relationshipType,
         RelationshipSpecificType relationshipSpecificType,
         Boolean isFavorited,
@@ -28,6 +29,7 @@ public record PeopleProfileResponse(
                 result.userName(),
                 result.profilePhoto(),
                 result.intimacy(),
+                result.gameIntimacy(),
                 result.relationshipType(),
                 result.relationshipSpecificType(),
                 result.isFavorited(),

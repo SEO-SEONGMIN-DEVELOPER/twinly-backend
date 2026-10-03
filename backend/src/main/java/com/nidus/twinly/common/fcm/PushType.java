@@ -9,7 +9,8 @@ public enum PushType {
     @JsonProperty("chatMessage")     CHAT_MESSAGE,
     @JsonProperty("twinView")        TWIN_VIEW,
     @JsonProperty("oneTime")         ONE_TIME,
-    @JsonProperty("oneTimePushOnly") ONE_TIME_PUSH_ONLY;
+    @JsonProperty("oneTimePushOnly") ONE_TIME_PUSH_ONLY,
+    @JsonProperty("intimacyQuiz")    INTIMACY_QUIZ;
 
     public static PushType from(AppNotificationFeedType feedType) {
         return switch (feedType) {

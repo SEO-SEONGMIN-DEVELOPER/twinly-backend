@@ -4,6 +4,7 @@ import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.persona.PersonaDimension;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -17,6 +18,8 @@ public record SimulationPersonaResult(
         String affiliation,
         LocalDate birthDate,
         Map<PersonaDimension, List<String>> personaElements,
-        Integer poolNumber
+        Integer poolNumber,
+        LocalDateTime intimacyAsOf,
+        List<SimulationPersonaIntimacyResult> intimacies
 ) {
 }

@@ -189,7 +189,8 @@ class SimulationChatRoomIntegrationTest extends AbstractIntegrationTest {
                       "rapport": %d,
                       "partnerModel": "model-v1"
                     }
-                  ]
+                  ],
+                  "intimacyAsOf": "2026-08-18T06:00:00"
                 }
                 """.formatted(me.getId(), partner.getId(), rapport);
 

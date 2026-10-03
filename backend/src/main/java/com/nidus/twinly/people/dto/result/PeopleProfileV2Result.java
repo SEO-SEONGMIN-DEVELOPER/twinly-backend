@@ -13,6 +13,7 @@ public record PeopleProfileV2Result(
         String birthYear,
         ProfilePhotoInfo profilePhoto,
         Integer intimacy,
+        Integer gameIntimacy,
         RelationshipType relationshipType,
         RelationshipSpecificType relationshipSpecificType,
         Boolean isFavorited,

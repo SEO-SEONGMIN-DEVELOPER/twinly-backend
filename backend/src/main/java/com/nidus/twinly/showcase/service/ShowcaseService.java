@@ -181,15 +181,11 @@ public class ShowcaseService {
         int index = 0;
 
         for (Long userId : displayedUserIds) {
-            User user = userById.get(userId);
-
-            if (user == null) {
+            if (!userById.containsKey(userId)) {
                 continue;
             }
 
-            maskedNameByUserId.put(userId, user.isWithdrawn()
-                    ? User.WITHDRAWN_NAME
-                    : familyNames.get(index++ % familyNames.size()) + MASKED_GIVEN_NAME);
+            maskedNameByUserId.put(userId, familyNames.get(index++ % familyNames.size()) + MASKED_GIVEN_NAME);
         }
 
         return maskedNameByUserId;
@@ -211,6 +207,7 @@ public class ShowcaseService {
                     startsAt,
                     endsAt,
                     scene.getPlace(),
+                    scene.getPlaceCode(),
                     with,
                     sceneNameRenderer.render(scene.getNarration(), nameByUserId),
                     sceneNameRenderer.render(scene.getMind(), nameByUserId)
@@ -221,6 +218,7 @@ public class ShowcaseService {
                     startsAt,
                     endsAt,
                     scene.getPlace(),
+                    scene.getPlaceCode(),
                     with,
                     toLineResults(sceneLines, userRefByUserId, nameByUserId)
             );

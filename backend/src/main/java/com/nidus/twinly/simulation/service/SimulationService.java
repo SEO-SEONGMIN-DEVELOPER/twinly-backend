@@ -27,8 +27,10 @@ import com.nidus.twinly.legal.reader.ConsentReader;
 import com.nidus.twinly.purchase.service.PurchaseService;
 import com.nidus.twinly.relationship.domain.RelationshipType;
 import com.nidus.twinly.relationship.entity.Relationship;
+import com.nidus.twinly.relationship.reader.IntimacyReader;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
 import com.nidus.twinly.simulation.dto.command.*;
+import com.nidus.twinly.simulation.dto.result.SimulationPersonaIntimacyResult;
 import com.nidus.twinly.simulation.dto.result.SimulationPersonaResult;
 import com.nidus.twinly.user.entity.PersonaElement;
 import com.nidus.twinly.user.entity.User;
@@ -42,9 +44,11 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -68,6 +72,7 @@ public class SimulationService {
     private static final String PLACE_SEPARATOR_REPLACEMENT = " ";
     private static final int FIRST_MEETING_INTIMACY = 0;
     private static final String FIRST_MEETING_PARTNER_MODEL = "아직 알게된 점이 없습니다.";
+    private static final Duration INTIMACY_AS_OF_MARGIN = Duration.ofSeconds(5);
 
     private final SceneRepository sceneRepository;
     private final ScenePartnerRepository scenePartnerRepository;
@@ -84,9 +89,13 @@ public class SimulationService {
     private final ConsentReader consentReader;
     private final PurchaseService purchaseService;
     private final ObjectMapper objectMapper;
+    private final IntimacyReader intimacyReader;
 
     public void simulations(Long userId, SimulationsCommand command) {
         if (!userId.equals(command.userId())) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+        if (command.intimacyAsOf() != null && command.intimacyAsOf().isAfter(Instant.now())) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST);
         }
         if (!userRepository.existsById(userId)) {
@@ -104,7 +113,7 @@ public class SimulationService {
         Map<Long, LocalDateTime> firstMeetingStartByPartnerUserId = firstMeetingStartByPartnerUserId(userId, date, command.scenes());
         scheduleFirstMeetings(userId, date, firstMeetingStartByPartnerUserId);
         saveQuestions(userId, date, version, command.questions());
-        saveRelationships(userId, date, version, command.relationships(), firstMeetingStartByPartnerUserId);
+        saveRelationships(userId, date, version, command.relationships(), firstMeetingStartByPartnerUserId, command.intimacyAsOf());
     }
 
     private void validatePartnersExist(SimulationsCommand command) {
@@ -181,6 +190,7 @@ public class SimulationService {
                     date,
                     version,
                     normalizePlace(action.place()),
+                    action.placeCode(),
                     action.start(),
                     action.end(),
                     action.narration(),
@@ -191,6 +201,7 @@ public class SimulationService {
                     date,
                     version,
                     normalizePlace(dialogue.place()),
+                    dialogue.placeCode(),
                     dialogue.start(),
                     dialogue.end(),
                     writeLines(dialogue.lines())
@@ -285,14 +296,16 @@ public class SimulationService {
     }
 
     private void saveRelationships(Long userId, LocalDate date, String version, List<SimulationsRelationshipCommand> commands,
-                                   Map<Long, LocalDateTime> firstMeetingStartByPartnerUserId) {
+                                   Map<Long, LocalDateTime> firstMeetingStartByPartnerUserId, Instant intimacyAsOf) {
         Map<Long, LocalDateTime> becameFriendTimeByPartnerUserId = becameFriendTimeByPartnerUserId(userId, date, commands);
 
+        List<Relationship> aiRelationships = commands.stream()
+                .map(command -> Relationship.create(userId, date, version, command.partnerId(), command.rapport(),
+                        command.partnerModel(), command.updateTime(), intimacyAsOf))
+                .toList();
         List<Relationship> relationships = Stream.concat(
-                        commands.stream()
-                                .map(command -> Relationship.create(userId, date, version, command.partnerId(), command.rapport(),
-                                        command.partnerModel(), command.updateTime())),
-                        firstMeetingRelationships(userId, date, version, commands, firstMeetingStartByPartnerUserId).stream())
+                        aiRelationships.stream(),
+                        firstMeetingRelationships(userId, date, version, commands, firstMeetingStartByPartnerUserId, intimacyAsOf).stream())
                 .toList();
         relationshipRepository.saveAll(relationships);
 
@@ -306,12 +319,15 @@ public class SimulationService {
                 appNotificationScheduleRepository.insertIfAbsent(
                         userId, partnerUserId, AppNotificationScheduleType.FRIEND.name(), date, KstTimes.toInstant(updateTime)));
 
-        commands.forEach(command -> openChatRoom(userId, command.partnerId(), command.rapport(), command.updateTime()));
+        aiRelationships.forEach(relationship -> openChatRoom(userId, relationship.getPartnerUserId(),
+                intimacyReader.readBonuses(userId, relationship.getPartnerUserId()).intimacyOf(relationship, Instant.now()).value(),
+                relationship.getUpdateTime()));
     }
 
     private List<Relationship> firstMeetingRelationships(Long userId, LocalDate date, String version,
                                                          List<SimulationsRelationshipCommand> commands,
-                                                         Map<Long, LocalDateTime> firstMeetingStartByPartnerUserId) {
+                                                         Map<Long, LocalDateTime> firstMeetingStartByPartnerUserId,
+                                                         Instant intimacyAsOf) {
         Map<Long, LocalDateTime> earliestUpdateTimeByPartnerUserId = commands.stream()
                 .collect(Collectors.toMap(SimulationsRelationshipCommand::partnerId,
                         SimulationsRelationshipCommand::updateTime, this::earlier));
@@ -321,7 +337,7 @@ public class SimulationService {
                         || earliestUpdateTimeByPartnerUserId.get(entry.getKey()).isAfter(entry.getValue()))
                 .filter(entry -> relationshipRepository.findLatestByUserIdAndPartnerUserIdBeforeDate(userId, entry.getKey(), date).isEmpty())
                 .map(entry -> Relationship.create(userId, date, version, entry.getKey(), FIRST_MEETING_INTIMACY,
-                        FIRST_MEETING_PARTNER_MODEL, entry.getValue()))
+                        FIRST_MEETING_PARTNER_MODEL, entry.getValue(), intimacyAsOf))
                 .toList();
     }
 
@@ -371,7 +387,7 @@ public class SimulationService {
     }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public SimulationPersonaResult persona(Long userId) {
+    public SimulationPersonaResult persona(Long userId, LocalDate date) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
         if (user.isWithdrawn()) {
@@ -396,6 +412,13 @@ public class SimulationService {
                         Collectors.mapping(PersonaElement::getExplanation, Collectors.toList())
                 ));
 
+        LocalDateTime intimacyAsOf = KstTimes.now().minus(INTIMACY_AS_OF_MARGIN).truncatedTo(ChronoUnit.SECONDS);
+        List<SimulationPersonaIntimacyResult> intimacies = intimacyReader
+                .readForSimulation(userId, date, KstTimes.toInstant(intimacyAsOf)).entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(entry -> new SimulationPersonaIntimacyResult(entry.getKey(), entry.getValue()))
+                .toList();
+
         return new SimulationPersonaResult(
                 user.getId(),
                 user.getFamilyName(),
@@ -406,7 +429,9 @@ public class SimulationService {
                 user.getAffiliation(),
                 birthDate(user),
                 personaElements,
-                user.getPoolNumber()
+                user.getPoolNumber(),
+                intimacyAsOf,
+                intimacies
         );
     }
 

@@ -24,26 +24,29 @@ class UserTest {
     }
 
     @Test
-    @DisplayName("탈퇴한 유저는 두 표기 모두 '탈퇴한 사용자'로 마스킹된다")
-    void display_names_of_withdrawn_user() {
-        // given: deletedAt이 채워진 유저
-        User user = user(Instant.now());
+    @DisplayName("파기되어도 닉네임은 남아 그대로 표시되고, 지워진 실명은 '탈퇴한 사용자'로 표시된다")
+    void display_names_of_deleted_user() {
+        // given: 파기된 유저
+        User user = user(null);
+        user.delete();
 
-        // then: 표기 형식과 무관하게 실명이 노출되지 않는다
+        // then: 닉네임은 탈퇴 전과 같고, 실명 자리만 '탈퇴한 사용자'
+        assertThat(user.displayNickname()).isEqualTo("nick");
         assertThat(user.displayFullName()).isEqualTo(User.WITHDRAWN_NAME);
-        assertThat(user.displayNickname()).isEqualTo(User.WITHDRAWN_NAME);
     }
 
     @Test
-    @DisplayName("탈퇴 유예 기간 중인 유저도 파기 전부터 탈퇴한 유저로 간주된다")
-    void withdrawal_requested_user_is_withdrawn() {
+    @DisplayName("탈퇴 유예 기간 중인 유저는 탈퇴로 판정되지만 파기 전까지 이름은 그대로 표시된다")
+    void withdrawal_requested_user_keeps_display_names() {
         // given: 탈퇴를 신청했지만 아직 파기되지 않은 유저
         User user = user(null);
         user.requestWithdrawal(Duration.ofDays(15));
 
-        // then: 탈퇴로 판정되고 닉네임이 노출되지 않는다
+        // then: 탈퇴로 판정되지만 이름은 탈퇴 전과 같다
         assertThat(user.isWithdrawn()).isTrue();
-        assertThat(user.displayNickname()).isEqualTo(User.WITHDRAWN_NAME);
+        assertThat(user.isDeleted()).isFalse();
+        assertThat(user.displayFullName()).isEqualTo("홍길동");
+        assertThat(user.displayNickname()).isEqualTo("nick");
     }
 
     @Test

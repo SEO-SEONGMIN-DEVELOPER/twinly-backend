@@ -4,6 +4,7 @@ import java.util.List;
 
 public record PeopleIntimacySeriesResult(
         Integer currentIntimacy,
+        Integer currentGameIntimacy,
         List<PeopleIntimacySeriesItemResult> intimacySeries
 ) {
 }

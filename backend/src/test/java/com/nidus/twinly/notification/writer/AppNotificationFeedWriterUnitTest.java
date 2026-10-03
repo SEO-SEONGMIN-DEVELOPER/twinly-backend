@@ -108,8 +108,8 @@ class AppNotificationFeedWriterUnitTest {
     }
 
     @Test
-    @DisplayName("탈퇴한 상대의 닉네임은 제목·본문 어디에도 노출되지 않는다")
-    void writeFriend_uses_withdrawn_display_name() {
+    @DisplayName("탈퇴한 상대도 탈퇴 전과 같은 닉네임으로 제목·본문을 채운다")
+    void writeFriend_uses_nickname_of_withdrawn_partner() {
         // given: 탈퇴한 상대
         User withdrawn = user(PARTNER, "상대");
         ReflectionTestUtils.setField(withdrawn, "deletedAt", java.time.Instant.now());
@@ -120,11 +120,11 @@ class AppNotificationFeedWriterUnitTest {
 
         appNotificationFeedWriter.writeFriend(ME, PARTNER, DATE);
 
-        // then: 제목·본문 어디에도 원래 닉네임이 노출되지 않음
+        // then: 제목·본문에 원래 닉네임이 들어감
         ArgumentCaptor<AppNotificationFeed> captor = ArgumentCaptor.forClass(AppNotificationFeed.class);
         then(appNotificationFeedRepository).should().save(captor.capture());
-        assertThat(captor.getValue().getTitle()).doesNotContain("상대");
-        assertThat(captor.getValue().getBody()).doesNotContain("상대");
+        assertThat(captor.getValue().getTitle()).contains("상대");
+        assertThat(captor.getValue().getBody()).contains("상대");
     }
 
     @Test

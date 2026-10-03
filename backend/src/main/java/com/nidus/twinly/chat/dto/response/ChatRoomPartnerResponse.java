@@ -12,10 +12,11 @@ public record ChatRoomPartnerResponse(
         @Schema(nullable = true)
         ProfilePhotoInfo profilePhoto,
         Integer intimacy,
+        Integer gameIntimacy,
         Boolean isDeleted
 ) {
 
     public static ChatRoomPartnerResponse from(ChatRoomPartnerResult result) {
-        return new ChatRoomPartnerResponse(result.userId(), result.userName(), result.profilePhoto(), result.intimacy(), result.isDeleted());
+        return new ChatRoomPartnerResponse(result.userId(), result.userName(), result.profilePhoto(), result.intimacy(), result.gameIntimacy(), result.isDeleted());
     }
 }

@@ -14,6 +14,8 @@ public record PeopleEventActionSceneResponse(
         OffsetDateTime startsAt,
         OffsetDateTime endsAt,
         String place,
+        @Schema(nullable = true)
+        String placeCode,
         @JsonFormat(shape = JsonFormat.Shape.STRING)
         @Schema(nullable = true)
         List<Long> with,
@@ -29,6 +31,7 @@ public record PeopleEventActionSceneResponse(
                 result.startsAt(),
                 result.endsAt(),
                 result.place(),
+                result.placeCode(),
                 result.with(),
                 result.narration(),
                 result.mind()

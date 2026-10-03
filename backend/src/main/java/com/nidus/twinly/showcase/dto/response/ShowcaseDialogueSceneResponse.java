@@ -2,6 +2,7 @@ package com.nidus.twinly.showcase.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.nidus.twinly.showcase.dto.result.ShowcaseDialogueSceneResult;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -13,6 +14,8 @@ public record ShowcaseDialogueSceneResponse(
         OffsetDateTime startsAt,
         OffsetDateTime endsAt,
         String place,
+        @Schema(nullable = true)
+        String placeCode,
         @JsonFormat(shape = JsonFormat.Shape.STRING)
         List<Long> with,
         List<ShowcaseLineResponse> lines
@@ -25,6 +28,7 @@ public record ShowcaseDialogueSceneResponse(
                 result.startsAt(),
                 result.endsAt(),
                 result.place(),
+                result.placeCode(),
                 result.with(),
                 result.lines().stream().map(ShowcaseLineResponse::from).toList()
         );

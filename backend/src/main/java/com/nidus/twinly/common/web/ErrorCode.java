@@ -121,6 +121,11 @@ public enum ErrorCode {
     // 하루 관람
     SHOWCASE_TARGET_NOT_FOUND(HttpStatus.NOT_FOUND, "오늘 관람할 수 있는 대상이 없습니다."),
 
+    // 친밀도 퀴즈
+    INTIMACY_QUIZ_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 친밀도 퀴즈입니다."),
+    INTIMACY_QUIZ_EXPIRED(HttpStatus.GONE, "답변 시간이 지난 친밀도 퀴즈입니다."),
+    INTIMACY_QUIZ_ALREADY_ANSWERED(HttpStatus.CONFLICT, "이미 답변한 친밀도 퀴즈입니다."),
+
     // 외부 연동
     EMAIL_SEND_FAILED(HttpStatus.BAD_GATEWAY, "이메일 발송에 실패했습니다."),
     SMS_SEND_FAILED(HttpStatus.BAD_GATEWAY, "SMS 발송에 실패했습니다."),

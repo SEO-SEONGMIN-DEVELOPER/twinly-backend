@@ -94,7 +94,7 @@ class BlockServiceUnitTest {
     }
 
     @Test
-    @DisplayName("차단 목록은 닉네임만 반환하고, 탈퇴한 유저는 '탈퇴한 사용자'로 표기한다")
+    @DisplayName("차단 목록은 탈퇴 여부와 무관하게 닉네임만 반환한다")
     void blockList_maps_names_and_withdrawn_user() {
         // given: 차단 대상 2명 (정상 유저 10, 탈퇴 유저 20)
         given(blockRepository.findAllByUserId(1L))
@@ -109,10 +109,10 @@ class BlockServiceUnitTest {
         // when: 차단 목록 조회
         BlockListResult result = blockService.blockList(1L);
 
-        // then: 정상 유저는 닉네임만, 탈퇴 유저는 '탈퇴한 사용자'
+        // then: 정상 유저와 탈퇴 유저 모두 닉네임만
         assertThat(result.blocks())
                 .extracting(item -> item.blockedUserId() + ":" + item.blockedUserName())
-                .containsExactly("10:길동", "20:탈퇴한 사용자");
+                .containsExactly("10:길동", "20:철수");
     }
 
     private User user(String nickname, Instant deletedAt) {

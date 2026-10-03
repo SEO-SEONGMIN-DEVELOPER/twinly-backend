@@ -10,6 +10,7 @@ public record SimulationsDialogueSceneCommand(
         LocalDateTime end,
         String type,
         String place,
+        String placeCode,
         List<Long> with,
         List<SimulationsLineCommand> lines
 ) implements SimulationsSceneCommand {
@@ -20,6 +21,7 @@ public record SimulationsDialogueSceneCommand(
                 request.end(),
                 request.type(),
                 request.place(),
+                request.placeCode(),
                 request.with(),
                 request.lines().stream().map(SimulationsLineCommand::from).toList()
         );

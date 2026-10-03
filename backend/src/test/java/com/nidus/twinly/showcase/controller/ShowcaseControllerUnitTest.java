@@ -26,6 +26,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
@@ -75,6 +76,8 @@ class ShowcaseControllerUnitTest {
                 .andExpect(jsonPath("$.date").value("2026-08-18"))
                 .andExpect(jsonPath("$.scenes[0].type").value("action"))
                 .andExpect(jsonPath("$.scenes[0].sceneId").value("88101"))
+                .andExpect(jsonPath("$.scenes[0].placeCode").value("SCHOOL_GATE"))
+                .andExpect(jsonPath("$.scenes[1].placeCode").value(nullValue()))
                 .andExpect(jsonPath("$.scenes[1].type").value("dialogue"))
                 .andExpect(jsonPath("$.scenes[1].with[0]").value("2"))
                 .andExpect(jsonPath("$.scenes[1].lines[0].t").value("bubble"))
@@ -110,8 +113,8 @@ class ShowcaseControllerUnitTest {
                 LocalDate.parse("2026-08-18"),
                 Instant.parse("2026-08-18T04:20:11Z"),
                 List.of(
-                        new ShowcaseActionSceneResult(88101L, "action", startsAt, endsAt, "학교 정문", List.of(), "김OO이 뛰었다.", "아슬아슬했다."),
-                        new ShowcaseDialogueSceneResult(88102L, "dialogue", startsAt, endsAt, "식당", List.of(2L),
+                        new ShowcaseActionSceneResult(88101L, "action", startsAt, endsAt, "학교 정문", "SCHOOL_GATE", List.of(), "김OO이 뛰었다.", "아슬아슬했다."),
+                        new ShowcaseDialogueSceneResult(88102L, "dialogue", startsAt, endsAt, "식당", null, List.of(2L),
                                 List.of(new ShowcaseBubbleLineResult("bubble", 2L, "웃으며", "여기 앉아.", startsAt)))
                 ),
                 List.of(new ShowcaseUserInfoResult(1L, "김OO", Gender.MALE, "한국대")),

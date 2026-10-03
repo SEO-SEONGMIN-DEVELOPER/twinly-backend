@@ -6,12 +6,14 @@ import java.util.List;
 
 public record PeopleIntimacySeriesResponse(
         Integer currentIntimacy,
+        Integer currentGameIntimacy,
         List<PeopleIntimacySeriesItemResponse> intimacySeries
 ) {
 
     public static PeopleIntimacySeriesResponse from(PeopleIntimacySeriesResult result) {
         return new PeopleIntimacySeriesResponse(
                 result.currentIntimacy(),
+                result.currentGameIntimacy(),
                 result.intimacySeries().stream().map(PeopleIntimacySeriesItemResponse::from).toList()
         );
     }

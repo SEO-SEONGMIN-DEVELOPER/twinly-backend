@@ -32,9 +32,9 @@ import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.match.entity.Match;
 import com.nidus.twinly.match.repository.MatchRepository;
 import com.nidus.twinly.notification.writer.AppNotificationFeedWriter;
+import com.nidus.twinly.relationship.domain.Intimacy;
 import com.nidus.twinly.relationship.domain.RelationshipSpecificType;
-import com.nidus.twinly.relationship.entity.Relationship;
-import com.nidus.twinly.relationship.repository.RelationshipRepository;
+import com.nidus.twinly.relationship.reader.IntimacyReader;
 import com.nidus.twinly.season.entity.Season;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.user.domain.DisclosureField;
@@ -60,6 +60,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -103,7 +104,7 @@ class ChatServiceUnitTest {
     ChatRoomParticipationRepository chatRoomParticipationRepository;
 
     @Mock
-    RelationshipRepository relationshipRepository;
+    IntimacyReader intimacyReader;
 
     @Mock
     PhotoRepository photoRepository;
@@ -655,7 +656,7 @@ class ChatServiceUnitTest {
         given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, PARTNER)).willReturn(Optional.empty());
         given(userRepository.findById(PARTNER)).willReturn(Optional.of(user(PARTNER, "partnerNick")));
         given(photoRepository.findByUserIdAndType(PARTNER, PhotoType.PROFILE)).willReturn(Optional.empty());
-        given(relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(eq(ME), eq(PARTNER), any(LocalDateTime.class))).willReturn(Optional.empty());
+        given(intimacyReader.read(eq(ME), eq(PARTNER), any(LocalDateTime.class))).willReturn(Intimacy.ZERO);
         given(disclosureAgreementRepository.findAllByUserId(PARTNER)).willReturn(List.of());
         given(currentSeasonReader.read()).willReturn(currentSeason());
 
@@ -684,7 +685,7 @@ class ChatServiceUnitTest {
         given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, PARTNER)).willReturn(Optional.of(partner));
         given(userRepository.findById(PARTNER)).willReturn(Optional.of(user(PARTNER, "partnerNick")));
         given(photoRepository.findByUserIdAndType(PARTNER, PhotoType.PROFILE)).willReturn(Optional.empty());
-        given(relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(eq(ME), eq(PARTNER), any(LocalDateTime.class))).willReturn(Optional.empty());
+        given(intimacyReader.read(eq(ME), eq(PARTNER), any(LocalDateTime.class))).willReturn(Intimacy.ZERO);
         given(disclosureAgreementRepository.findAllByUserId(PARTNER)).willReturn(List.of());
         given(currentSeasonReader.read()).willReturn(currentSeason());
 
@@ -860,7 +861,7 @@ class ChatServiceUnitTest {
 
         given(userRepository.findAllById(List.of(PARTNER))).willReturn(List.of(user(PARTNER, "partnerNick")));
         given(photoRepository.findAllByUserIdInAndType(List.of(PARTNER), PhotoType.PROFILE)).willReturn(List.of());
-        given(relationshipRepository.findLatestUntilByUserIdAndPartnerUserIdIn(eq(ME), eq(List.of(PARTNER)), any(LocalDateTime.class))).willReturn(List.of());
+        given(intimacyReader.readAll(eq(ME), eq(List.of(PARTNER)), any(LocalDateTime.class))).willReturn(Map.of(PARTNER, new Intimacy(45, 6)));
         given(chatRepository.findLatestByRoomIdIn(List.of(ROOM_ID)))
                 .willReturn(List.of(chat(55L, ROOM_ID, PARTNER, ME, "hello", "client-55")));
         given(chatRepository.countUnreadByRoomIdIn(ME, List.of(ROOM_ID))).willReturn(List.of());
@@ -873,7 +874,8 @@ class ChatServiceUnitTest {
         ChatRoomResult only = result.rooms().getFirst();
         assertThat(only.roomId()).isEqualTo(ROOM_ID);
         assertThat(only.partner().userId()).isEqualTo(PARTNER);
-        assertThat(only.partner().intimacy()).isZero();
+        assertThat(only.partner().intimacy()).isEqualTo(45);
+        assertThat(only.partner().gameIntimacy()).isEqualTo(6);
         assertThat(only.preview()).isEqualTo("hello");
         assertThat(only.messages().unreadCount()).isZero();
         assertThat(only.messages().lastMessage().text()).isEqualTo("hello");
@@ -897,7 +899,7 @@ class ChatServiceUnitTest {
 
         given(userRepository.findAllById(List.of(PARTNER))).willReturn(List.of(user(PARTNER, "partnerNick")));
         given(photoRepository.findAllByUserIdInAndType(List.of(PARTNER), PhotoType.PROFILE)).willReturn(List.of());
-        given(relationshipRepository.findLatestUntilByUserIdAndPartnerUserIdIn(eq(ME), eq(List.of(PARTNER)), any(LocalDateTime.class))).willReturn(List.of());
+        given(intimacyReader.readAll(eq(ME), eq(List.of(PARTNER)), any(LocalDateTime.class))).willReturn(Map.of());
         given(chatRepository.findLatestByRoomIdIn(List.of(ROOM_ID))).willReturn(List.of());
         given(chatRepository.countUnreadByRoomIdIn(ME, List.of(ROOM_ID))).willReturn(List.of());
 
@@ -930,7 +932,7 @@ class ChatServiceUnitTest {
         given(userRepository.findAllById(List.of(PARTNER, 3L, 4L)))
                 .willReturn(List.of(user(PARTNER, "p1"), user(3L, "p2"), user(4L, "p3")));
         given(photoRepository.findAllByUserIdInAndType(List.of(PARTNER, 3L, 4L), PhotoType.PROFILE)).willReturn(List.of());
-        given(relationshipRepository.findLatestUntilByUserIdAndPartnerUserIdIn(eq(ME), eq(List.of(PARTNER, 3L, 4L)), any(LocalDateTime.class))).willReturn(List.of());
+        given(intimacyReader.readAll(eq(ME), eq(List.of(PARTNER, 3L, 4L)), any(LocalDateTime.class))).willReturn(Map.of());
         Chat oldChat = chat(55L, ROOM_ID, PARTNER, ME, "old", "client-55");
         ReflectionTestUtils.setField(oldChat, "sentAt", base.plusSeconds(60));
         Chat newChat = chat(56L, 20L, 3L, ME, "new", "client-56");
@@ -958,8 +960,7 @@ class ChatServiceUnitTest {
         given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, ME)).willReturn(Optional.of(mine));
         given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, PARTNER)).willReturn(Optional.empty());
         given(photoRepository.findByUserIdAndType(PARTNER, PhotoType.PROFILE)).willReturn(Optional.empty());
-        given(relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(eq(ME), eq(PARTNER), any(LocalDateTime.class)))
-                .willReturn(Optional.of(relationship(ME, PARTNER, 45)));
+        given(intimacyReader.read(eq(ME), eq(PARTNER), any(LocalDateTime.class))).willReturn(new Intimacy(45, 6));
         given(disclosureAgreementRepository.findAllByUserId(PARTNER))
                 .willReturn(List.of(DisclosureAgreement.create(PARTNER, DisclosureField.AFFILIATION)));
 
@@ -970,6 +971,7 @@ class ChatServiceUnitTest {
         assertThat(result.partner().disclosedFields().affiliation()).isEqualTo("aff");
         assertThat(result.partner().disclosedFields().affiliationNumber()).isNull();
         assertThat(result.partner().intimacy()).isEqualTo(45);
+        assertThat(result.partner().gameIntimacy()).isEqualTo(6);
         assertThat(result.partner().relationshipSpecificType())
                 .isEqualTo(RelationshipSpecificType.CLOSE);
         assertThat(result.entryStatus().myEntryAgreed()).isTrue();
@@ -977,7 +979,7 @@ class ChatServiceUnitTest {
     }
 
     @Test
-    @DisplayName("채팅방 상세에서 탈퇴한 상대는 닉네임·사진·공개 필드를 모두 가리고 조회하지 않는다")
+    @DisplayName("채팅방 상세에서 탈퇴한 상대는 닉네임은 그대로 두고 사진·공개 필드는 가리며 조회하지 않는다")
     void roomDetail_of_withdrawn_partner_is_masked() {
         // given: 탈퇴한 상대와의 채팅방
         given(currentSeasonReader.read()).willReturn(currentSeason());
@@ -990,13 +992,13 @@ class ChatServiceUnitTest {
         mine.agree();
         given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, ME)).willReturn(Optional.of(mine));
         given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, PARTNER)).willReturn(Optional.empty());
-        given(relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(eq(ME), eq(PARTNER), any(LocalDateTime.class))).willReturn(Optional.empty());
+        given(intimacyReader.read(eq(ME), eq(PARTNER), any(LocalDateTime.class))).willReturn(Intimacy.ZERO);
 
         // when: 채팅방 상세 조회
         ChatRoomDetailResult result = chatService.roomDetail(ME, ROOM_ID);
 
-        // then: 실명 도메인과 같은 문구로 닉네임까지 가려진다
-        assertThat(result.partner().userName()).isEqualTo(User.WITHDRAWN_NAME);
+        // then: 닉네임은 그대로, 사진·공개 필드는 가려진다
+        assertThat(result.partner().userName()).isEqualTo("partnerNick");
         assertThat(result.partner().profilePhoto()).isNull();
         assertThat(result.partner().disclosedFields().affiliation()).isNull();
 
@@ -1155,14 +1157,6 @@ class ChatServiceUnitTest {
 
     private PersonaElement personaElement(Long userId, PersonaDimension dimension, String explanation) {
         return PersonaElement.create(userId, dimension, explanation, Instant.parse("2026-08-01T00:00:00Z"));
-    }
-
-    private Relationship relationship(Long userId, Long partnerUserId, Integer intimacy) {
-        Relationship relationship = BeanUtils.instantiateClass(Relationship.class);
-        ReflectionTestUtils.setField(relationship, "userId", userId);
-        ReflectionTestUtils.setField(relationship, "partnerUserId", partnerUserId);
-        ReflectionTestUtils.setField(relationship, "intimacy", intimacy);
-        return relationship;
     }
 
     private User user(Long id, String nickname) {

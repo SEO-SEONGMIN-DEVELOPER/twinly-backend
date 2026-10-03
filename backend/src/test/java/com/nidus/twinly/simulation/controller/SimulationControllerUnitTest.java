@@ -3,10 +3,12 @@ package com.nidus.twinly.simulation.controller;
 import com.nidus.twinly.anon.service.AnonService;
 import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.persona.PersonaDimension;
+import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.simulation.dto.command.SimulationsCommand;
 import com.nidus.twinly.simulation.dto.command.SimulationsDialogueSceneCommand;
+import com.nidus.twinly.simulation.dto.result.SimulationPersonaIntimacyResult;
 import com.nidus.twinly.simulation.dto.result.SimulationPersonaResult;
 import com.nidus.twinly.simulation.service.SimulationService;
 import com.nidus.twinly.user.dto.result.UsersPageResult;
@@ -51,6 +53,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class SimulationControllerUnitTest {
 
     private static final Long USER_ID = 12L;
+    private static final LocalDate DATE = LocalDate.of(2026, 10, 1);
 
     @Autowired
     MockMvc mockMvc;
@@ -73,11 +76,12 @@ class SimulationControllerUnitTest {
         personaElements.put(PersonaDimension.OPENNESS, List.of("새로운 시도를 즐긴다"));
         personaElements.put(PersonaDimension.CONFLICT_STYLE, List.of("직접 말하기보다 시간을 둔다"));
         personaElements.put(PersonaDimension.INTEREST, List.of("등산", "재즈"));
-        given(simulationService.persona(USER_ID)).willReturn(new SimulationPersonaResult(
-                USER_ID, "서", "성민", "성민이", Gender.MALE, "성균관대학교", "컴퓨터공학과", LocalDate.of(1999, 3, 21), personaElements, 3));
+        given(simulationService.persona(USER_ID, DATE)).willReturn(new SimulationPersonaResult(
+                USER_ID, "서", "성민", "성민이", Gender.MALE, "성균관대학교", "컴퓨터공학과", LocalDate.of(1999, 3, 21), personaElements, 3,
+                LocalDateTime.of(2026, 10, 3, 10, 30, 0), List.of(new SimulationPersonaIntimacyResult(34L, 46))));
 
         // when: 경로 변수 userId로 페르소나 조회 API 호출
-        var result = mockMvc.perform(get("/internal/v1/users/{userId}/persona", "12"));
+        var result = mockMvc.perform(get("/internal/v1/users/{userId}/persona", "12").param("date", "2026-10-01"));
 
         // then: 200 반환 + 숫자 id는 문자열로, 성향은 차원별 키로 직렬화
         result.andExpect(status().isOk())
@@ -93,19 +97,47 @@ class SimulationControllerUnitTest {
                 .andExpect(jsonPath("$.personaElements.openness[0]", is("새로운 시도를 즐긴다")))
                 .andExpect(jsonPath("$.personaElements.conflictStyle[0]", is("직접 말하기보다 시간을 둔다")))
                 .andExpect(jsonPath("$.personaElements.interest", hasSize(2)))
-                .andExpect(jsonPath("$.poolNumber", is(3)));
-        then(simulationService).should().persona(USER_ID);
+                .andExpect(jsonPath("$.poolNumber", is(3)))
+                .andExpect(jsonPath("$.intimacyAsOf", is("2026-10-03T10:30:00")))
+                .andExpect(jsonPath("$.intimacies", hasSize(1)))
+                .andExpect(jsonPath("$.intimacies[0].partnerId", is("34")))
+                .andExpect(jsonPath("$.intimacies[0].intimacy", is(46)));
+        then(simulationService).should().persona(USER_ID, DATE);
+    }
+
+    @Test
+    @DisplayName("시뮬레이션할 날짜 date 가 없으면 400을 반환하고 서비스를 호출하지 않는다")
+    void persona_without_date_returns_400() throws Exception {
+        // when: date 없이 페르소나 조회 API 호출
+        var result = mockMvc.perform(get("/internal/v1/users/{userId}/persona", "12"));
+
+        // then: 400 반환 + 이전 회차 기준을 알 수 없으므로 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code", is("INVALID_REQUEST")));
+        then(simulationService).should(never()).persona(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("date 가 날짜 형식이 아니면 400을 반환하고 서비스를 호출하지 않는다")
+    void persona_with_invalid_date_returns_400() throws Exception {
+        // when: 날짜가 아닌 date 로 페르소나 조회 API 호출
+        var result = mockMvc.perform(get("/internal/v1/users/{userId}/persona", "12").param("date", "10월 1일"));
+
+        // then: 400 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest());
+        then(simulationService).should(never()).persona(anyLong(), any());
     }
 
     @Test
     @DisplayName("성향이 하나도 없으면 personaElements를 빈 객체로 반환한다")
     void persona_without_elements_returns_empty_object() throws Exception {
         // given: 성향이 하나도 없는 유저의 페르소나 조회 결과
-        given(simulationService.persona(USER_ID)).willReturn(new SimulationPersonaResult(
-                USER_ID, "서", "성민", "성민이", Gender.MALE, "성균관대학교", "컴퓨터공학과", LocalDate.of(1999, 3, 21), Map.of(), 1));
+        given(simulationService.persona(USER_ID, DATE)).willReturn(new SimulationPersonaResult(
+                USER_ID, "서", "성민", "성민이", Gender.MALE, "성균관대학교", "컴퓨터공학과", LocalDate.of(1999, 3, 21), Map.of(), 1,
+                LocalDateTime.of(2026, 10, 3, 10, 30, 0), List.of()));
 
         // when: 페르소나 조회 API 호출
-        var result = mockMvc.perform(get("/internal/v1/users/{userId}/persona", "12"));
+        var result = mockMvc.perform(get("/internal/v1/users/{userId}/persona", "12").param("date", "2026-10-01"));
 
         // then: 200 반환 + personaElements는 빈 객체
         result.andExpect(status().isOk())
@@ -116,21 +148,21 @@ class SimulationControllerUnitTest {
     @DisplayName("경로 변수 userId가 숫자가 아니면 400을 반환하고 서비스를 호출하지 않는다")
     void persona_with_non_numeric_userId_returns_400() throws Exception {
         // when: 경로 변수 userId를 숫자가 아닌 값으로 페르소나 조회 API 호출
-        var result = mockMvc.perform(get("/internal/v1/users/{userId}/persona", "abc"));
+        var result = mockMvc.perform(get("/internal/v1/users/{userId}/persona", "abc").param("date", "2026-10-01"));
 
         // then: 400 반환 + 서비스는 호출되지 않음
         result.andExpect(status().isBadRequest());
-        then(simulationService).should(never()).persona(anyLong());
+        then(simulationService).should(never()).persona(anyLong(), any());
     }
 
     @Test
     @DisplayName("서비스가 USER_NOT_FOUND를 던지면 404를 반환한다")
     void persona_user_not_found_returns_404() throws Exception {
         // given: 조회 대상이 없거나 탈퇴한 유저
-        given(simulationService.persona(USER_ID)).willThrow(new BusinessException(ErrorCode.USER_NOT_FOUND));
+        given(simulationService.persona(USER_ID, DATE)).willThrow(new BusinessException(ErrorCode.USER_NOT_FOUND));
 
         // when: 페르소나 조회 API 호출
-        var result = mockMvc.perform(get("/internal/v1/users/{userId}/persona", "12"));
+        var result = mockMvc.perform(get("/internal/v1/users/{userId}/persona", "12").param("date", "2026-10-01"));
 
         // then: 404 반환
         result.andExpect(status().isNotFound());
@@ -214,6 +246,7 @@ class SimulationControllerUnitTest {
         SimulationsCommand command = captor.getValue();
         assertThat(command.userId()).isEqualTo(USER_ID);
         assertThat(command.date()).isEqualTo(LocalDate.of(2026, 10, 1));
+        assertThat(command.intimacyAsOf()).isEqualTo(KstTimes.toInstant(LocalDateTime.of(2026, 10, 1, 10, 30)));
         assertThat(command.scenes()).singleElement()
                 .isInstanceOfSatisfying(SimulationsDialogueSceneCommand.class, dialogue -> {
                     assertThat(dialogue.start()).isEqualTo(LocalDateTime.of(2026, 10, 1, 11, 0));
@@ -235,6 +268,19 @@ class SimulationControllerUnitTest {
                 .content(simulationsPayload("", "[\"34\"]")));
 
         // then: 400 반환 + 친구 알림을 보낼 시각을 알 수 없으므로 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest());
+        then(simulationService).should(never()).simulations(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("친밀도 기준 시각 intimacyAsOf 가 없으면 400을 반환하고 서비스를 호출하지 않는다")
+    void simulations_without_intimacy_as_of_returns_400() throws Exception {
+        // when: persona 응답의 기준 시각을 빠뜨린 결과로 저장 API 호출
+        var result = mockMvc.perform(post("/internal/v1/users/{userId}/simulations", "12")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(simulationsPayload("\"updateTime\": \"2026-10-01T21:00:00\",", "[\"34\"]", "")));
+
+        // then: 400 반환 + 이미 반영된 게임 보너스가 두 번 더해지지 않도록 서비스는 호출되지 않음
         result.andExpect(status().isBadRequest());
         then(simulationService).should(never()).simulations(anyLong(), any());
     }
@@ -281,10 +327,15 @@ class SimulationControllerUnitTest {
     }
 
     private String simulationsPayload(String updateTimeField, String with) {
+        return simulationsPayload(updateTimeField, with, "\"intimacyAsOf\": \"2026-10-01T10:30:00\",");
+    }
+
+    private String simulationsPayload(String updateTimeField, String with, String intimacyAsOfField) {
         return """
                 {
                   "userId": "12",
                   "date": "2026-10-01",
+                  %s
                   "scenes": [
                     {
                       "type": "dialogue",
@@ -307,6 +358,6 @@ class SimulationControllerUnitTest {
                     }
                   ]
                 }
-                """.formatted(with, updateTimeField);
+                """.formatted(intimacyAsOfField, with, updateTimeField);
     }
 }

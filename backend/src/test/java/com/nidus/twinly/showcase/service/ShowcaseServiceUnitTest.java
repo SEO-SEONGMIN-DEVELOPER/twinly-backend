@@ -32,6 +32,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.ObjectMapper;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -318,6 +319,30 @@ class ShowcaseServiceUnitTest {
     }
 
     @Test
+    @DisplayName("탈퇴 유예 중이거나 파기된 등장인물도 다른 사람과 같은 가명을 받는다")
+    void today_names_withdrawal_requested_and_deleted_users() {
+        // given: 대상은 탈퇴 유예 중이고, 동행자는 파기된 상태
+        given(showcaseRepository.findByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(showcase()));
+        given(sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(anyLong(), any()))
+                .willReturn(List.of(actionScene(88101L, "{user_204}와 {user_311}이 등교했다.", null)));
+        given(scenePartnerRepository.findAllBySceneIdIn(anyList()))
+                .willReturn(List.of(ScenePartner.create(88101L, PARTNER_ID)));
+        User withdrawalRequested = user(TARGET_ID, "김", "민수");
+        withdrawalRequested.requestWithdrawal(Duration.ofDays(15));
+        User deleted = user(PARTNER_ID, "박", "지훈");
+        deleted.delete();
+        given(userRepository.findAllById(any())).willReturn(List.of(withdrawalRequested, deleted));
+        givenViewerCounts();
+
+        // when: 오늘 관람 조회
+        ShowcaseTodayResult result = showcaseService.today(VIEWER_ID);
+
+        // then: 유예 중인 대상과 파기된 동행자 모두 성+OO 가명
+        assertThat(result.userInfos()).extracting(ShowcaseUserInfoResult::userName)
+                .allMatch(userName -> userName.matches("[가-힣]OO"));
+    }
+
+    @Test
     @DisplayName("같은 관람을 다시 조회해도 가명이 유지되고, 한 관람 안의 서로 다른 유저는 서로 다른 가명을 받는다")
     void today_pseudonyms_are_stable_and_distinct() {
         // given: 대상과 동행자가 함께 나오는 씬
@@ -436,7 +461,7 @@ class ShowcaseServiceUnitTest {
     }
 
     private Scene actionScene(Long id, String narration, String mind) {
-        Scene scene = Scene.createAction(TARGET_ID, LocalDate.parse("2026-08-18"), "v1", "학교 정문",
+        Scene scene = Scene.createAction(TARGET_ID, LocalDate.parse("2026-08-18"), "v1", "학교 정문", null,
                 LocalDateTime.parse("2026-08-18T09:00:00"), LocalDateTime.parse("2026-08-18T09:40:00"), narration, mind);
         ReflectionTestUtils.setField(scene, "id", id);
 
@@ -444,7 +469,7 @@ class ShowcaseServiceUnitTest {
     }
 
     private Scene dialogueScene(Long id, String lines) {
-        Scene scene = Scene.createDialogue(TARGET_ID, LocalDate.parse("2026-08-18"), "v1", "식당",
+        Scene scene = Scene.createDialogue(TARGET_ID, LocalDate.parse("2026-08-18"), "v1", "식당", null,
                 LocalDateTime.parse("2026-08-18T12:10:00"), LocalDateTime.parse("2026-08-18T12:50:00"), lines);
         ReflectionTestUtils.setField(scene, "id", id);
 

@@ -14,6 +14,7 @@ public record PeopleItemResponse(
         @Schema(nullable = true)
         ProfilePhotoInfo profilePhoto,
         Integer intimacy,
+        Integer gameIntimacy,
         RelationshipType relationshipType,
         RelationshipSpecificType relationshipSpecificType,
         Integer sceneElementCount,
@@ -29,6 +30,7 @@ public record PeopleItemResponse(
                 result.userName(),
                 result.profilePhoto(),
                 result.intimacy(),
+                result.gameIntimacy(),
                 result.relationshipType(),
                 result.relationshipSpecificType(),
                 result.sceneElementCount(),

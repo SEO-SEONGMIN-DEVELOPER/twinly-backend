@@ -234,8 +234,8 @@ class ChatIntegrationTest extends AbstractIntegrationTest {
         Fixture fixture = saveChatRoomFixture();
         LocalDateTime now = KstTimes.now();
         relationshipRepository.saveAll(List.of(
-                Relationship.create(fixture.me().getId(), now.minusDays(1).toLocalDate(), "v1", fixture.partner().getId(), 72, "model", now.minusDays(1)),
-                Relationship.create(fixture.me().getId(), now.plusHours(2).toLocalDate(), "v1", fixture.partner().getId(), 100, "model", now.plusHours(2))));
+                Relationship.create(fixture.me().getId(), now.minusDays(1).toLocalDate(), "v1", fixture.partner().getId(), 72, "model", now.minusDays(1), null),
+                Relationship.create(fixture.me().getId(), now.plusHours(2).toLocalDate(), "v1", fixture.partner().getId(), 100, "model", now.plusHours(2), null)));
         flushAndClear();
 
         // when & then: 목록의 상대 친밀도는 어제 기록 기준

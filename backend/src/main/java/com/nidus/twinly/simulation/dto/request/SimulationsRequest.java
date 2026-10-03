@@ -5,6 +5,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 public record SimulationsRequest(
@@ -13,6 +14,7 @@ public record SimulationsRequest(
         @NotNull LocalDate date,
         @Valid @NotNull List<SimulationsSceneRequest> scenes,
         @Valid @NotNull List<SimulationsQuestionRequest> questions,
-        @Valid @NotNull List<SimulationsRelationshipRequest> relationships
+        @Valid @NotNull List<SimulationsRelationshipRequest> relationships,
+        @NotNull LocalDateTime intimacyAsOf
 ) {
 }

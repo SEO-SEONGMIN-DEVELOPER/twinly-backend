@@ -234,6 +234,26 @@ class PushMessageBuilderUnitTest {
         assertThat(toJson(messages.get(1))).contains("\"notification\"");
     }
 
+    @Test
+    @DisplayName("친밀도 퀴즈 요약: 회차 id 와 같은 답을 고른 인원 수를 담아 notification 블록으로 나간다")
+    void balanceGameSummary_carries_round_and_matched_count() throws IOException {
+        // given: 이번 질문에서 3명과 같은 답을 고른 유저
+        BalanceGameSummaryPushContent content = new BalanceGameSummaryPushContent(
+                100L, 3L, "밸런스 게임 결과가 나왔어요", "이번 질문에서 3명과 같은 답을 골랐어요! 친밀도가 올랐어요", CREATED_AT);
+
+        // when
+        List<PushMessage> messages = pushMessageBuilder.balanceGameSummary(List.of(device(DevicePlatform.ANDROID, "token-android")), content);
+
+        // then: 플랫폼과 무관하게 notification 블록으로 나간다
+        String json = toJson(messages.get(0));
+        assertThat(json).contains("\"type\":\"intimacyQuiz\"");
+        assertThat(json).contains("\"roundId\":\"100\"");
+        assertThat(json).contains("\"matchedCount\":\"3\"");
+        assertThat(json).contains("\"notification\"");
+        assertThat(json).contains("\"title\":\"밸런스 게임 결과가 나왔어요\"");
+        assertThat(messages).extracting(PushMessage::type).containsExactly(PushType.INTIMACY_QUIZ);
+    }
+
     private Device device(DevicePlatform platform, String token) {
         return Device.create(1L, UUID.randomUUID(), platform, token);
     }

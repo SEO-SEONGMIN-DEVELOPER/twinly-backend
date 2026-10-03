@@ -9,6 +9,7 @@ public record PeopleProfileResult(
         String userName,
         ProfilePhotoInfo profilePhoto,
         Integer intimacy,
+        Integer gameIntimacy,
         RelationshipType relationshipType,
         RelationshipSpecificType relationshipSpecificType,
         Boolean isFavorited,

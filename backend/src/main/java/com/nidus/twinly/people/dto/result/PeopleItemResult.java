@@ -9,6 +9,7 @@ public record PeopleItemResult(
         String userName,
         ProfilePhotoInfo profilePhoto,
         Integer intimacy,
+        Integer gameIntimacy,
         RelationshipType relationshipType,
         RelationshipSpecificType relationshipSpecificType,
         Integer sceneElementCount,

@@ -13,6 +13,7 @@ public record PeopleEventsPartnerResponse(
         @Schema(nullable = true)
         ProfilePhotoInfo profilePhoto,
         Integer intimacy,
+        Integer gameIntimacy,
         RelationshipSpecificType relationshipSpecificType
 ) {
 
@@ -22,6 +23,7 @@ public record PeopleEventsPartnerResponse(
                 result.userName(),
                 result.profilePhoto(),
                 result.intimacy(),
+                result.gameIntimacy(),
                 result.relationshipSpecificType()
         );
     }

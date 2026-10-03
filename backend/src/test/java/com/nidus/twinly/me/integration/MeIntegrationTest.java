@@ -314,7 +314,8 @@ class MeIntegrationTest extends AbstractIntegrationTest {
         // given: AI 서버처럼 선생성 요청을 받자마자 페르소나를 조회한다
         CompletableFuture<Integer> personaStatus = new CompletableFuture<>();
         willAnswer(invocation -> {
-            personaStatus.complete(mockMvc.perform(get("/internal/v1/users/{userId}/persona", me.getId()))
+            personaStatus.complete(mockMvc.perform(get("/internal/v1/users/{userId}/persona", me.getId())
+                            .param("date", KstTimes.today().toString()))
                     .andReturn().getResponse().getStatus());
             return null;
         }).given(simulationPreloadClient).preload(eq(me.getId()), any(), anyList());
@@ -1094,8 +1095,8 @@ class MeIntegrationTest extends AbstractIntegrationTest {
         encounterRepository.save(Encounter.create(me.getId(), partner.getId()));
         LocalDateTime now = KstTimes.now();
         relationshipRepository.saveAll(List.of(
-                Relationship.create(me.getId(), now.minusDays(1).toLocalDate(), "v1", partner.getId(), 10, "model", now.minusDays(1)),
-                Relationship.create(me.getId(), now.plusHours(2).toLocalDate(), "v1", partner.getId(), 80, "model", now.plusHours(2))));
+                Relationship.create(me.getId(), now.minusDays(1).toLocalDate(), "v1", partner.getId(), 10, "model", now.minusDays(1), null),
+                Relationship.create(me.getId(), now.plusHours(2).toLocalDate(), "v1", partner.getId(), 80, "model", now.plusHours(2), null)));
 
         // when: 내 프로필 조회
         var result = mockMvc.perform(get("/api/v1/me/profile")
@@ -1150,7 +1151,7 @@ class MeIntegrationTest extends AbstractIntegrationTest {
     }
 
     private Relationship relationship(Long userId, Long partnerUserId, LocalDate date, int intimacy) {
-        return Relationship.create(userId, date, "v1", partnerUserId, intimacy, "model", date.atStartOfDay());
+        return Relationship.create(userId, date, "v1", partnerUserId, intimacy, "model", date.atStartOfDay(), null);
     }
 
     /**

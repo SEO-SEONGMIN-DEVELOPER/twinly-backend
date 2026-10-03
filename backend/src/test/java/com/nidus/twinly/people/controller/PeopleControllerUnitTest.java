@@ -90,6 +90,7 @@ class PeopleControllerUnitTest {
                                 new ProfilePhotoInfo("profile/42/key", "https://cdn.example.com/signed",
                                         new PhotoPosInfo(new PhotoPosInfo.StartPos(10, 20), 100, 200)),
                                 55,
+                                12,
                                 RelationshipType.FRIEND,
                                 RelationshipSpecificType.GO_TO,
                                 3,
@@ -113,6 +114,7 @@ class PeopleControllerUnitTest {
                 .andExpect(jsonPath("$.people[0].profilePhoto.position.width").value(100))
                 .andExpect(jsonPath("$.people[0].profilePhoto.position.height").value(200))
                 .andExpect(jsonPath("$.people[0].intimacy").value(55))
+                .andExpect(jsonPath("$.people[0].gameIntimacy").value(12))
                 .andExpect(jsonPath("$.people[0].relationshipType").value("friend"))
                 .andExpect(jsonPath("$.people[0].relationshipSpecificType").value("자주 찾는 사이"))
                 .andExpect(jsonPath("$.people[0].sceneElementCount").value(3))
@@ -185,6 +187,7 @@ class PeopleControllerUnitTest {
                         "홍길동",
                         null,
                         80,
+                        20,
                         RelationshipType.BEST_FRIEND,
                         RelationshipSpecificType.SPECIAL,
                         true,
@@ -205,6 +208,7 @@ class PeopleControllerUnitTest {
                 .andExpect(jsonPath("$.birthYear").doesNotExist())
                 .andExpect(jsonPath("$.profilePhoto").isEmpty())
                 .andExpect(jsonPath("$.intimacy").value(80))
+                .andExpect(jsonPath("$.gameIntimacy").value(20))
                 .andExpect(jsonPath("$.relationshipType").value("bestFriend"))
                 .andExpect(jsonPath("$.relationshipSpecificType").value("특별한 사이"))
                 .andExpect(jsonPath("$.isFavorited").value(true))
@@ -244,6 +248,7 @@ class PeopleControllerUnitTest {
                         "02",
                         null,
                         80,
+                        20,
                         RelationshipType.BEST_FRIEND,
                         RelationshipSpecificType.SPECIAL,
                         true,
@@ -264,6 +269,7 @@ class PeopleControllerUnitTest {
                 .andExpect(jsonPath("$.birthYear").value("02"))
                 .andExpect(jsonPath("$.profilePhoto").isEmpty())
                 .andExpect(jsonPath("$.intimacy").value(80))
+                .andExpect(jsonPath("$.gameIntimacy").value(20))
                 .andExpect(jsonPath("$.relationshipType").value("bestFriend"))
                 .andExpect(jsonPath("$.relationshipSpecificType").value("특별한 사이"))
                 .andExpect(jsonPath("$.isFavorited").value(true))
@@ -320,7 +326,8 @@ class PeopleControllerUnitTest {
         given(peopleService.intimacySeries(1L, 42L))
                 .willReturn(new PeopleIntimacySeriesResult(
                         55,
-                        List.of(new PeopleIntimacySeriesItemResult(LocalDate.of(2026, 7, 1), 40))));
+                        10,
+                        List.of(new PeopleIntimacySeriesItemResult(LocalDate.of(2026, 7, 1), 40, 5))));
 
         // when: 인증 상태로 친밀도 시계열 조회 API 호출
         var result = mockMvc.perform(get("/api/v1/people/{userId}/intimacy-series", "42")
@@ -329,8 +336,10 @@ class PeopleControllerUnitTest {
         // then: 200 반환 + 시계열 JSON 응답 + 인증 유저 id·경로 userId로 서비스에 위임
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.currentIntimacy").value(55))
+                .andExpect(jsonPath("$.currentGameIntimacy").value(10))
                 .andExpect(jsonPath("$.intimacySeries[0].date").value("2026-07-01"))
-                .andExpect(jsonPath("$.intimacySeries[0].intimacy").value(40));
+                .andExpect(jsonPath("$.intimacySeries[0].intimacy").value(40))
+                .andExpect(jsonPath("$.intimacySeries[0].gameIntimacy").value(5));
         then(peopleService).should().intimacySeries(1L, 42L);
     }
 
@@ -342,12 +351,13 @@ class PeopleControllerUnitTest {
         // given: 서비스가 상대 정보와 이벤트 1건, 다음 커서를 반환
         given(peopleService.events(1L, 42L, LocalDate.of(2026, 7, 20), 5))
                 .willReturn(new PeopleEventsResult(
-                        new PeopleEventsPartnerResult(42L, "홍길동", null, 45, RelationshipSpecificType.CLOSE),
+                        new PeopleEventsPartnerResult(42L, "홍길동", null, 45, 6, RelationshipSpecificType.CLOSE),
                         List.of(new PeopleEventsItemResult(
                                 LocalDate.of(2026, 7, 19),
                                 RelationshipSpecificType.CLOSE,
                                 5,
                                 "카페",
+                                "CAFE",
                                 "커피를 마셨다")),
                         new PeopleEventsPageResult(LocalDate.of(2026, 7, 19), true)));
 
@@ -362,11 +372,13 @@ class PeopleControllerUnitTest {
                 .andExpect(jsonPath("$.partner.userId").value("42"))
                 .andExpect(jsonPath("$.partner.userName").value("홍길동"))
                 .andExpect(jsonPath("$.partner.intimacy").value(45))
+                .andExpect(jsonPath("$.partner.gameIntimacy").value(6))
                 .andExpect(jsonPath("$.partner.relationshipSpecificType").value("친한 사이"))
                 .andExpect(jsonPath("$.events[0].date").value("2026-07-19"))
                 .andExpect(jsonPath("$.events[0].relationshipChange").value("친한 사이"))
                 .andExpect(jsonPath("$.events[0].intimacyDelta").value(5))
                 .andExpect(jsonPath("$.events[0].place").value("카페"))
+                .andExpect(jsonPath("$.events[0].placeCode").value("CAFE"))
                 .andExpect(jsonPath("$.events[0].preview").value("커피를 마셨다"))
                 .andExpect(jsonPath("$.page.nextCursor").value("2026-07-19"))
                 .andExpect(jsonPath("$.page.hasMore").value(true));
@@ -390,6 +402,7 @@ class PeopleControllerUnitTest {
                                 OffsetDateTime.of(2026, 7, 20, 9, 0, 0, 0, ZoneOffset.ofHours(9)),
                                 OffsetDateTime.of(2026, 7, 20, 10, 0, 0, 0, ZoneOffset.ofHours(9)),
                                 "학교 복도",
+                                "SCHOOL_HALLWAY",
                                 List.of(42L),
                                 "복도를 함께 걸었다",
                                 "조금 설렜다")),
@@ -409,6 +422,7 @@ class PeopleControllerUnitTest {
                 .andExpect(jsonPath("$.scenes[0].sceneId").value("100"))
                 .andExpect(jsonPath("$.scenes[0].type").value("action"))
                 .andExpect(jsonPath("$.scenes[0].place").value("학교 복도"))
+                .andExpect(jsonPath("$.scenes[0].placeCode").value("SCHOOL_HALLWAY"))
                 .andExpect(jsonPath("$.scenes[0].with[0]", is("42")))
                 .andExpect(jsonPath("$.scenes[0].narration").value("복도를 함께 걸었다"))
                 .andExpect(jsonPath("$.scenes[0].mind").value("조금 설렜다"))

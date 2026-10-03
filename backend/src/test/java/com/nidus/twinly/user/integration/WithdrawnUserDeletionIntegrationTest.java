@@ -38,10 +38,11 @@ class WithdrawnUserDeletionIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("유예 만료 유저 파기: 식별 정보는 지워지고 생년월일은 연도만 남으며 학과·성별은 보존된다")
+    @DisplayName("유예 만료 유저 파기: 식별 정보는 지워지고 생년월일은 연도만 남으며 닉네임·학과·성별은 보존된다")
     void deletes_identifiers_of_expired_user() {
         // given: 유예 기간이 만료된 탈퇴 신청 유저
         User expired = saveWithdrawalExpiredUser();
+        String nickname = expired.getNickname();
 
         // when: 파기 배치 실행
         withdrawnUserDeletionService.deleteAll();
@@ -50,7 +51,6 @@ class WithdrawnUserDeletionIntegrationTest extends AbstractIntegrationTest {
         User deleted = reload(expired.getId());
         assertThat(deleted.getDeletedAt()).isNotNull();
         assertThat(deleted.isWithdrawn()).isTrue();
-        assertThat(deleted.getNickname()).isNull();
         assertThat(deleted.getFamilyName()).isNull();
         assertThat(deleted.getFamilyNameHash()).isNull();
         assertThat(deleted.getGivenName()).isNull();
@@ -65,6 +65,7 @@ class WithdrawnUserDeletionIntegrationTest extends AbstractIntegrationTest {
 
         // then: 생년월일은 연도까지만 일반화되고, 보존 대상은 그대로 남는다
         assertThat(deleted.getBirthDate()).isEqualTo("2000");
+        assertThat(deleted.getNickname()).isEqualTo(nickname);
         assertThat(deleted.getGender()).isEqualTo(Gender.MALE);
         assertThat(deleted.getAffiliation()).isNotNull();
         assertThat(deleted.getCreatedAt()).isNotNull();

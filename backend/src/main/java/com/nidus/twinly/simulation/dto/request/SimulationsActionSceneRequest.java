@@ -13,6 +13,8 @@ public record SimulationsActionSceneRequest(
         @NotNull LocalDateTime end,
         @NotBlank String type,
         @NotBlank String place,
+        @Schema(nullable = true)
+        String placeCode,
         @JsonFormat(shape = JsonFormat.Shape.STRING)
         @Schema(nullable = true)
         List<Long> with,

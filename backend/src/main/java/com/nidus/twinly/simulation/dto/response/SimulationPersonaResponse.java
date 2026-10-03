@@ -6,6 +6,7 @@ import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.simulation.dto.result.SimulationPersonaResult;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -20,10 +21,13 @@ public record SimulationPersonaResponse(
         String affiliation,
         LocalDate birthDate,
         Map<PersonaDimension, List<String>> personaElements,
-        Integer poolNumber
+        Integer poolNumber,
+        LocalDateTime intimacyAsOf,
+        List<SimulationPersonaIntimacyResponse> intimacies
 ) {
 
     public static SimulationPersonaResponse from(SimulationPersonaResult result) {
-        return new SimulationPersonaResponse(result.userId(), result.familyName(), result.givenName(), result.nickname(), result.gender(), result.organization(), result.affiliation(), result.birthDate(), result.personaElements(), result.poolNumber());
+        return new SimulationPersonaResponse(result.userId(), result.familyName(), result.givenName(), result.nickname(), result.gender(), result.organization(), result.affiliation(), result.birthDate(), result.personaElements(), result.poolNumber(),
+                result.intimacyAsOf(), result.intimacies().stream().map(SimulationPersonaIntimacyResponse::from).toList());
     }
 }

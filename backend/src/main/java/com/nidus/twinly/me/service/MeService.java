@@ -97,7 +97,7 @@ import com.nidus.twinly.notification.repository.AppNotificationFeedRepository;
 import com.nidus.twinly.notification.repository.NotificationSettingRepository;
 import com.nidus.twinly.people.repository.EncounterRepository;
 import com.nidus.twinly.relationship.domain.RelationshipType;
-import com.nidus.twinly.relationship.repository.RelationshipRepository;
+import com.nidus.twinly.relationship.reader.IntimacyReader;
 import com.nidus.twinly.report.domain.ReportStatus;
 import com.nidus.twinly.report.entity.Report;
 import com.nidus.twinly.report.repository.ReportRepository;
@@ -175,7 +175,6 @@ public class MeService {
     private final QuestionRepository questionRepository;
     private final PersonaElementRepository personaElementRepository;
     private final EncounterRepository encounterRepository;
-    private final RelationshipRepository relationshipRepository;
     private final UserSurveyAnswerRepository userSurveyAnswerRepository;
     private final UserTendencyAnswerRepository userTendencyAnswerRepository;
     private final UserFeedbackRepository userFeedbackRepository;
@@ -189,6 +188,7 @@ public class MeService {
     private final PersonalityTypeLoader personalityTypeLoader;
     private final TendencyLoader tendencyLoader;
     private final FeedbackOptionLoader feedbackOptionLoader;
+    private final IntimacyReader intimacyReader;
 
     public MeProfilePhotoPresignResult profilePhotoPresign(Long userId, MeProfilePhotoPresignCommand command) {
         PhotoPresignResult presign = presignService.presignPhoto(userId, command.contentType(), PhotoType.PROFILE);
@@ -686,8 +686,8 @@ public class MeService {
             return 0;
         }
 
-        return (int) relationshipRepository.findLatestUntilByUserIdAndPartnerUserIdIn(userId, partnerUserIds, KstTimes.now()).stream()
-                .filter(relationship -> RelationshipType.fromIntimacy(relationship.getIntimacy()) != RelationshipType.ACQUAINTANCE)
+        return (int) intimacyReader.readAll(userId, partnerUserIds, KstTimes.now()).values().stream()
+                .filter(intimacy -> RelationshipType.fromIntimacy(intimacy.value()) != RelationshipType.ACQUAINTANCE)
                 .count();
     }
 
