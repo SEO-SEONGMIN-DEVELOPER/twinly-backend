@@ -6,10 +6,11 @@ import java.time.LocalDate;
 
 public record PeopleIntimacySeriesItemResponse(
         LocalDate date,
-        Integer intimacy
+        Integer intimacy,
+        Integer gameIntimacy
 ) {
 
     public static PeopleIntimacySeriesItemResponse from(PeopleIntimacySeriesItemResult result) {
-        return new PeopleIntimacySeriesItemResponse(result.date(), result.intimacy());
+        return new PeopleIntimacySeriesItemResponse(result.date(), result.intimacy(), result.gameIntimacy());
     }
 }

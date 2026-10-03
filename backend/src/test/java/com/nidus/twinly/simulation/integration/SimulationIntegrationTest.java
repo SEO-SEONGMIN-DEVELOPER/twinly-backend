@@ -20,6 +20,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.ResultActions;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -33,6 +34,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class SimulationIntegrationTest extends AbstractIntegrationTest {
 
     private static final LocalDate DATE = LocalDate.of(2026, 8, 18);
+    private static final String INTIMACY_AS_OF = "2026-08-18T06:00:00";
 
     @Autowired
     SceneRepository sceneRepository;
@@ -135,6 +137,50 @@ class SimulationIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("AI가 돌려준 KST 벽시계 기준 시각은 같은 순간의 절대시각으로 AI 관계와 첫 만남 관계에 저장된다")
+    void simulations_saves_kst_intimacy_as_of_as_instant() throws Exception {
+        // given: 처음 대화한 상대와의 결과에 페르소나 조회 때 받은 KST 09:30 기준 시각이 실려 온다
+        User me = saveUser();
+        User partner = saveUser();
+        String intimacyAsOf = "2026-08-18T09:30:00";
+
+        // when: 시뮬레이션 결과 저장
+        ResultActions result = mockMvc.perform(post("/internal/v1/users/{userId}/simulations", me.getId())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(withIntimacyAsOf(payload(me, DATE, List.of(partner.getId()), partner.getId(), 20), intimacyAsOf)));
+
+        // then: 게임 점수 시각(UTC)과 같은 기준으로 비교되도록 UTC 00:30 으로 저장되고, DB 를 왕복해도 어긋나지 않는다
+        result.andExpect(status().isOk());
+        assertThat(relationshipRepository.findAll().stream()
+                .filter(relationship -> relationship.getUserId().equals(me.getId()))
+                .toList())
+                .extracting(Relationship::getIntimacy, Relationship::getIntimacyAsOf)
+                .containsExactlyInAnyOrder(
+                        tuple(0, Instant.parse("2026-08-18T00:30:00Z")),
+                        tuple(20, Instant.parse("2026-08-18T00:30:00Z")));
+    }
+
+    @Test
+    @DisplayName("친밀도 기준 시각이 미래면 400 INVALID_REQUEST를 반환하고 아무것도 저장하지 않는다")
+    void simulations_with_future_intimacy_as_of_returns_400() throws Exception {
+        // given: 우리 서버가 준 값이라면 나올 수 없는 미래 기준 시각
+        User me = saveUser();
+        User partner = saveUser();
+        String future = KstTimes.now().plusHours(1).toString();
+
+        // when: 시뮬레이션 결과 저장
+        ResultActions result = mockMvc.perform(post("/internal/v1/users/{userId}/simulations", me.getId())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(withIntimacyAsOf(payload(me, DATE, List.of(partner.getId()), partner.getId(), 20), future)));
+
+        // then: 연동 버그가 조용히 친밀도 계산을 틀리게 하지 않도록 요청 오류로 끊는다
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        assertThat(relationshipRepository.findAll())
+                .noneMatch(relationship -> relationship.getUserId().equals(me.getId()));
+    }
+
+    @Test
     @DisplayName("친구 기준을 넘은 날에만 친구 알림이 예약되고, 다음 날 친밀도가 더 올라도 다시 예약되지 않는다")
     void simulations_schedules_friend_only_on_the_day_threshold_is_crossed() throws Exception {
         // given: 첫날 지인(20), 둘째 날 친구 기준(35)을 넘긴 결과가 저장돼 있다
@@ -234,6 +280,10 @@ class SimulationIntegrationTest extends AbstractIntegrationTest {
         return payload(me.getId(), date, with, partnerId, rapport);
     }
 
+    private String withIntimacyAsOf(String payload, String intimacyAsOf) {
+        return payload.replace("\"intimacyAsOf\": \"" + INTIMACY_AS_OF + "\"", "\"intimacyAsOf\": \"" + intimacyAsOf + "\"");
+    }
+
     private String payload(Long userId, LocalDate date, List<Long> with, Long partnerId, int rapport) {
         String withJson = with.stream().map(id -> "\"" + id + "\"").collect(Collectors.joining(", ", "[", "]"));
 
@@ -261,9 +311,10 @@ class SimulationIntegrationTest extends AbstractIntegrationTest {
                       "rapport": %d,
                       "partnerModel": "model-v1"
                     }
-                  ]
+                  ],
+                  "intimacyAsOf": "%s"
                 }
-                """.formatted(userId, date, date, date, withJson, partnerId, date, partnerId, date, rapport);
+                """.formatted(userId, date, date, date, withJson, partnerId, date, partnerId, date, rapport, INTIMACY_AS_OF);
     }
 
     private void simulate(User me, User partner, String place, String line) throws Exception {
@@ -299,10 +350,11 @@ class SimulationIntegrationTest extends AbstractIntegrationTest {
                       "rapport": 20,
                       "partnerModel": "model-v1"
                     }
-                  ]
+                  ],
+                  "intimacyAsOf": "%s"
                 }
                 """.formatted(me.getId(), place, partner.getId(), partner.getId(), line,
-                partner.getId(), partner.getId());
+                partner.getId(), partner.getId(), INTIMACY_AS_OF);
 
         mockMvc.perform(post("/internal/v1/users/{userId}/simulations", me.getId())
                         .contentType(MediaType.APPLICATION_JSON)

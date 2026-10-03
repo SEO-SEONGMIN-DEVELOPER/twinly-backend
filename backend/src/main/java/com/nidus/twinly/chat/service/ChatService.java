@@ -26,9 +26,9 @@ import com.nidus.twinly.chat.event.ChatReadAdvancedEvent;
 import com.nidus.twinly.match.entity.Match;
 import com.nidus.twinly.match.repository.MatchRepository;
 import com.nidus.twinly.notification.writer.AppNotificationFeedWriter;
+import com.nidus.twinly.relationship.domain.Intimacy;
 import com.nidus.twinly.relationship.domain.RelationshipSpecificType;
-import com.nidus.twinly.relationship.entity.Relationship;
-import com.nidus.twinly.relationship.repository.RelationshipRepository;
+import com.nidus.twinly.relationship.reader.IntimacyReader;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.user.domain.DisclosureField;
 import com.nidus.twinly.user.entity.DisclosureAgreement;
@@ -72,13 +72,13 @@ public class ChatService {
     private final MatchRepository matchRepository;
     private final ChatRepository chatRepository;
     private final ChatRoomParticipationRepository chatRoomParticipationRepository;
-    private final RelationshipRepository relationshipRepository;
     private final PhotoRepository photoRepository;
     private final DisclosureAgreementRepository disclosureAgreementRepository;
     private final PersonaElementRepository personaElementRepository;
     private final BlockRepository blockRepository;
     private final CurrentSeasonReader currentSeasonReader;
     private final AppNotificationFeedWriter appNotificationFeedWriter;
+    private final IntimacyReader intimacyReader;
 
     private final ApplicationEventPublisher eventPublisher;
 
@@ -220,8 +220,7 @@ public class ChatService {
                 photoRepository.findAllByUserIdInAndType(partnerIds, PhotoType.PROFILE).stream()
                         .collect(Collectors.toMap(Photo::getUserId, Function.identity())),
 
-                relationshipRepository.findLatestUntilByUserIdAndPartnerUserIdIn(userId, partnerIds, KstTimes.now()).stream()
-                        .collect(Collectors.toMap(Relationship::getPartnerUserId, Function.identity())),
+                intimacyReader.readAll(userId, partnerIds, KstTimes.now()),
 
                 chatRepository.findLatestByRoomIdIn(visibleRoomIds).stream()
                         .collect(Collectors.toMap(Chat::getRoomId, Function.identity())),
@@ -247,7 +246,7 @@ public class ChatService {
             Map<Long, ChatRoomParticipation> myParticipationByRoomId,
             Map<Long, ChatRoomParticipation> partnerParticipationByRoomId,
             Map<Long, Photo> partnerPhotoById,
-            Map<Long, Relationship> relationshipByPartnerId,
+            Map<Long, Intimacy> intimacyByPartnerId,
             Map<Long, Chat> lastChatByRoomId,
             Map<Long, Long> unreadCountByRoomId
     ) {
@@ -280,9 +279,9 @@ public class ChatService {
         ChatRoomParticipation myParticipation = context.myParticipationByRoomId().get(room.getId());
         ChatRoomParticipation partnerParticipation = context.partnerParticipationByRoomId().get(room.getId());
         Photo partnerPhoto = context.partnerPhotoById().get(partnerId);
-        Relationship relationship = context.relationshipByPartnerId().get(partnerId);
         Chat lastChat = context.lastChatByRoomId().get(room.getId());
         Long unreadCount = context.unreadCountByRoomId().getOrDefault(room.getId(), 0L);
+        Intimacy intimacy = context.intimacyByPartnerId().getOrDefault(partnerId, Intimacy.ZERO);
 
         return new ChatRoomResult(
                 room.getId(),
@@ -295,7 +294,8 @@ public class ChatService {
                         partner.getId(),
                         partner.displayNickname(),
                         toProfilePhotoInfo(partner, partnerPhoto),
-                        relationship != null ? relationship.getIntimacy() : 0,
+                        intimacy.value(),
+                        intimacy.game(),
                         partner.isWithdrawn()
                 ),
                 lastChat != null ? lastChat.getMessage() : null,
@@ -328,9 +328,7 @@ public class ChatService {
                 : photoRepository.findByUserIdAndType(partnerId, PhotoType.PROFILE)
                         .orElse(null);
 
-        Integer intimacy = relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(userId, partnerId, KstTimes.now())
-                .map(Relationship::getIntimacy)
-                .orElse(0);
+        Intimacy intimacy = intimacyReader.read(userId, partnerId, KstTimes.now());
 
         Set<DisclosureField> agreedFields = partner.isWithdrawn() ? Set.of()
                 : disclosureAgreementRepository.findAllByUserId(partnerId).stream()
@@ -355,8 +353,9 @@ public class ChatService {
                         partner.getId(),
                         partner.displayNickname(),
                         toProfilePhotoInfo(partner, partnerPhoto),
-                        intimacy,
-                        RelationshipSpecificType.fromIntimacy(intimacy),
+                        intimacy.value(),
+                        intimacy.game(),
+                        RelationshipSpecificType.fromIntimacy(intimacy.value()),
                         new ChatRoomDetailDisclosedFieldsResult(
                                 agreedFields.contains(DisclosureField.AFFILIATION) ? partner.getAffiliation() : null,
                                 agreedFields.contains(DisclosureField.AFFILIATION_NUMBER) ? partner.getAffiliationNumber() : null

@@ -4,6 +4,7 @@ import java.time.LocalDate;
 
 public record PeopleIntimacySeriesItemResult(
         LocalDate date,
-        Integer intimacy
+        Integer intimacy,
+        Integer gameIntimacy
 ) {
 }

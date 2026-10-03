@@ -99,8 +99,8 @@ import com.nidus.twinly.report.domain.ReportReason;
 import com.nidus.twinly.report.domain.ReportStatus;
 import com.nidus.twinly.report.entity.Report;
 import com.nidus.twinly.people.repository.EncounterRepository;
-import com.nidus.twinly.relationship.entity.Relationship;
-import com.nidus.twinly.relationship.repository.RelationshipRepository;
+import com.nidus.twinly.relationship.domain.Intimacy;
+import com.nidus.twinly.relationship.reader.IntimacyReader;
 import com.nidus.twinly.report.repository.ReportRepository;
 import com.nidus.twinly.season.writer.SeasonParticipationWriter;
 import com.nidus.twinly.user.domain.DisclosureField;
@@ -224,7 +224,7 @@ class MeServiceUnitTest {
     EncounterRepository encounterRepository;
 
     @Mock
-    RelationshipRepository relationshipRepository;
+    IntimacyReader intimacyReader;
 
     @Mock
     UserSurveyAnswerRepository userSurveyAnswerRepository;
@@ -1223,8 +1223,8 @@ class MeServiceUnitTest {
                 personaElement(PersonaDimension.SUMMARY, "주말마다 북한산에 오르며 사진으로 순간을 남기는 사람")));
 
         given(encounterRepository.findAllPartnerUserIdsByUserId(ME)).willReturn(List.of(10L, 20L));
-        given(relationshipRepository.findLatestUntilByUserIdAndPartnerUserIdIn(eq(ME), eq(List.of(10L, 20L)), any(LocalDateTime.class)))
-                .willReturn(List.of(relationship(10L, 75), relationship(20L, 10)));
+        given(intimacyReader.readAll(eq(ME), eq(List.of(10L, 20L)), any(LocalDateTime.class)))
+                .willReturn(Map.of(10L, new Intimacy(75, 0), 20L, new Intimacy(10, 0)));
 
         // when: 내 프로필 조회
         MeProfileResult result = meService.profile(ME);
@@ -1312,7 +1312,7 @@ class MeServiceUnitTest {
         // then: 카운트는 0이고 불필요한 관계 조회는 일어나지 않음
         assertThat(result.encounteredPeopleCount()).isZero();
         assertThat(result.encounteredFriendCount()).isZero();
-        then(relationshipRepository).should(never()).findLatestUntilByUserIdAndPartnerUserIdIn(anyLong(), anyList(), any(LocalDateTime.class));
+        then(intimacyReader).should(never()).readAll(anyLong(), anyList(), any(LocalDateTime.class));
     }
 
     @Test
@@ -1358,10 +1358,6 @@ class MeServiceUnitTest {
 
     private PersonaElement personaElement(PersonaDimension dimension, String explanation) {
         return PersonaElement.create(ME, dimension, explanation, Instant.now());
-    }
-
-    private Relationship relationship(Long partnerUserId, int intimacy) {
-        return Relationship.create(ME, LocalDate.of(2026, 7, 26), "v1", partnerUserId, intimacy, "model", null);
     }
 
     // ---------------------------------------------------------------- 구매 상태

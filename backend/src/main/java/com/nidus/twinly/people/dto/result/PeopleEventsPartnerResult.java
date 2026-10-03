@@ -8,6 +8,7 @@ public record PeopleEventsPartnerResult(
         String userName,
         ProfilePhotoInfo profilePhoto,
         Integer intimacy,
+        Integer gameIntimacy,
         RelationshipSpecificType relationshipSpecificType
 ) {
 }

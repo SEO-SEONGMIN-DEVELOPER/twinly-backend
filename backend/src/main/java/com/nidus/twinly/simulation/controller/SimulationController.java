@@ -22,6 +22,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
+
 @Tag(name = "시뮬레이션")
 @RestController
 @RequiredArgsConstructor
@@ -50,7 +52,8 @@ public class SimulationController {
             @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND")
     })
     @GetMapping("/internal/v1/users/{userId}/persona")
-    public SimulationPersonaResponse persona(@PathVariable("userId") String userId) {
-        return SimulationPersonaResponse.from(simulationService.persona(RequestId.toLong(userId, "userId")));
+    public SimulationPersonaResponse persona(@PathVariable("userId") String userId,
+                                             @RequestParam LocalDate date) {
+        return SimulationPersonaResponse.from(simulationService.persona(RequestId.toLong(userId, "userId"), date));
     }
 }

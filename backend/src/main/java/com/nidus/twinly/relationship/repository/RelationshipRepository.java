@@ -36,7 +36,7 @@ public interface RelationshipRepository extends JpaRepository<Relationship, Long
                                                                        @Param("date") LocalDate date);
 
     @Query(value = """
-            SELECT id, user_id, date, version, partner_user_id, intimacy, partner_model, update_time, created_at
+            SELECT id, user_id, date, version, partner_user_id, intimacy, partner_model, update_time, intimacy_as_of, created_at
             FROM (
                 SELECT r.*,
                        ROW_NUMBER() OVER (PARTITION BY r.partner_user_id ORDER BY r.date DESC, r.update_time DESC) AS row_num
@@ -48,6 +48,18 @@ public interface RelationshipRepository extends JpaRepository<Relationship, Long
     List<Relationship> findLatestUntilByUserIdAndPartnerUserIdIn(@Param("userId") Long userId,
                                                                @Param("partnerUserIds") List<Long> partnerUserIds,
                                                                @Param("now") LocalDateTime now);
+
+    @Query(value = """
+            SELECT latest.*
+            FROM (
+                SELECT r.*,
+                       ROW_NUMBER() OVER (PARTITION BY r.partner_user_id ORDER BY r.date DESC, r.update_time DESC) AS row_num
+                FROM relationships r
+                WHERE r.user_id = :userId AND r.date < :date
+            ) latest
+            WHERE latest.row_num = 1
+            """, nativeQuery = true)
+    List<Relationship> findLatestBeforeDateByUserId(@Param("userId") Long userId, @Param("date") LocalDate date);
 
     @Query(value = """
             SELECT DISTINCT r.partner_user_id

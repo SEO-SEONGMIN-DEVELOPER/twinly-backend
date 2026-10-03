@@ -29,9 +29,12 @@ import com.nidus.twinly.people.entity.EncounterPreference;
 import com.nidus.twinly.people.repository.EncounterPreferenceRepository;
 import com.nidus.twinly.people.repository.EncounterRepository;
 import com.nidus.twinly.people.writer.TwinViewWriter;
+import com.nidus.twinly.relationship.domain.Intimacy;
+import com.nidus.twinly.relationship.domain.IntimacyBonuses;
 import com.nidus.twinly.relationship.domain.RelationshipSpecificType;
 import com.nidus.twinly.relationship.domain.RelationshipType;
 import com.nidus.twinly.relationship.entity.Relationship;
+import com.nidus.twinly.relationship.reader.IntimacyReader;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
 import com.nidus.twinly.user.domain.DisclosureField;
 import com.nidus.twinly.user.entity.DisclosureAgreement;
@@ -48,6 +51,7 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -90,6 +94,7 @@ public class PeopleService {
     private final SceneNameRenderer sceneNameRenderer;
     private final ObjectMapper objectMapper;
     private final TwinViewWriter twinViewWriter;
+    private final IntimacyReader intimacyReader;
 
     public PeopleResult people(Long userId, Long cursor, Integer limit) {
         int effectiveLimit = (limit != null && limit > 0) ? limit : DEFAULT_PEOPLE_LIMIT;
@@ -114,8 +119,7 @@ public class PeopleService {
         Map<Long, ProfilePhotoInfo> profilePhotoByPartnerUserId = photoRepository.findAllByUserIdInAndType(visiblePartnerUserIds, PhotoType.PROFILE).stream()
                 .collect(Collectors.toMap(Photo::getUserId, photo -> new ProfilePhotoInfo(photo.getKey(), cloudFrontService.getSignedUrl(photo.getKey()), photo.position())));
 
-        Map<Long, Integer> intimacyByPartnerUserId = relationshipRepository.findLatestUntilByUserIdAndPartnerUserIdIn(userId, partnerUserIds, now).stream()
-                .collect(Collectors.toMap(Relationship::getPartnerUserId, Relationship::getIntimacy));
+        Map<Long, Intimacy> intimacyByPartnerUserId = intimacyReader.readAll(userId, partnerUserIds, now);
 
         List<Match> matches = matchRepository.findAllByUserIdAndPartnerUserIdIn(userId, partnerUserIds);
         Map<Long, Long> matchIdByPartnerUserId = matches.stream()
@@ -137,7 +141,7 @@ public class PeopleService {
         List<PeopleItemResult> people = partnerUserIds.stream()
                 .map(partnerUserId -> {
                     User user = userByPartnerUserId.get(partnerUserId);
-                    Integer intimacy = intimacyByPartnerUserId.getOrDefault(partnerUserId, 0);
+                    Intimacy intimacy = intimacyByPartnerUserId.getOrDefault(partnerUserId, Intimacy.ZERO);
 
                     Long matchId = matchIdByPartnerUserId.get(partnerUserId);
                     Long chatRoomId = matchId != null ? roomIdByMatchId.get(matchId) : null;
@@ -149,9 +153,10 @@ public class PeopleService {
                             partnerUserId,
                             user.displayNickname(),
                             profilePhotoByPartnerUserId.get(partnerUserId),
-                            intimacy,
-                            RelationshipType.fromIntimacy(intimacy),
-                            RelationshipSpecificType.fromIntimacy(intimacy),
+                            intimacy.value(),
+                            intimacy.game(),
+                            RelationshipType.fromIntimacy(intimacy.value()),
+                            RelationshipSpecificType.fromIntimacy(intimacy.value()),
                             sceneCountByPartnerUserId.getOrDefault(partnerUserId, 0),
                             chatRoomId,
                             isFavorited
@@ -174,9 +179,7 @@ public class PeopleService {
 
         twinViewWriter.write(partnerUserId, userId, TwinViewKind.PROFILE);
 
-        int intimacy = relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(userId, partnerUserId, KstTimes.now())
-                .map(Relationship::getIntimacy)
-                .orElse(0);
+        Intimacy intimacy = intimacyReader.read(userId, partnerUserId, KstTimes.now());
 
         boolean isFavorited = encounterRepository.findByUserAIdAndUserBId(Math.min(userId, partnerUserId), Math.max(userId, partnerUserId))
                 .flatMap(encounter -> encounterPreferenceRepository.findByEncounterIdAndUserId(encounter.getId(), userId))
@@ -204,9 +207,10 @@ public class PeopleService {
                 partnerUserId,
                 partner.displayNickname(),
                 profilePhoto,
-                intimacy,
-                RelationshipType.fromIntimacy(intimacy),
-                RelationshipSpecificType.fromIntimacy(intimacy),
+                intimacy.value(),
+                intimacy.game(),
+                RelationshipType.fromIntimacy(intimacy.value()),
+                RelationshipSpecificType.fromIntimacy(intimacy.value()),
                 isFavorited,
                 disclosed,
                 partner.isWithdrawn(),
@@ -242,12 +246,14 @@ public class PeopleService {
             throw new BusinessException(ErrorCode.RELATIONSHIP_NOT_FOUND);
         }
 
-        List<PeopleIntimacySeriesItemResult> series = distribute(relationships, KstTimes.today());
+        IntimacyBonuses bonuses = intimacyReader.readBonuses(userId, partnerUserId);
+        List<PeopleIntimacySeriesItemResult> series = distribute(relationships, bonuses, KstTimes.today());
+        Intimacy current = bonuses.intimacyOf(relationships.getLast(), Instant.now());
 
-        return new PeopleIntimacySeriesResult(relationships.getLast().getIntimacy(), series);
+        return new PeopleIntimacySeriesResult(current.value(), current.game(), series);
     }
 
-    private List<PeopleIntimacySeriesItemResult> distribute(List<Relationship> relationships, LocalDate to) {
+    private List<PeopleIntimacySeriesItemResult> distribute(List<Relationship> relationships, IntimacyBonuses bonuses, LocalDate to) {
         LocalDate from = relationships.getFirst().getDate();
         long span = Math.max(ChronoUnit.DAYS.between(from, to), 0);
         int points = (int) Math.min(span + 1, INTIMACY_SERIES_MAX_POINTS);
@@ -259,7 +265,8 @@ public class PeopleService {
             while (index + 1 < relationships.size() && !relationships.get(index + 1).getDate().isAfter(date)) {
                 index++;
             }
-            series.add(new PeopleIntimacySeriesItemResult(date, relationships.get(index).getIntimacy()));
+            Intimacy intimacy = bonuses.intimacyOf(relationships.get(index), endOf(date));
+            series.add(new PeopleIntimacySeriesItemResult(date, intimacy.value(), intimacy.game()));
         }
         return series;
     }
@@ -271,9 +278,7 @@ public class PeopleService {
         twinViewWriter.write(partnerUserId, userId, TwinViewKind.EVENT);
 
         LocalDateTime now = KstTimes.now();
-        int intimacy = relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(userId, partnerUserId, now)
-                .map(Relationship::getIntimacy)
-                .orElse(0);
+        Intimacy intimacy = intimacyReader.read(userId, partnerUserId, now);
 
         ProfilePhotoInfo profilePhoto = partner.isWithdrawn() ? null
                 : photoRepository.findByUserIdAndType(partnerUserId, PhotoType.PROFILE)
@@ -284,8 +289,9 @@ public class PeopleService {
                 partnerUserId,
                 partner.displayNickname(),
                 profilePhoto,
-                intimacy,
-                RelationshipSpecificType.fromIntimacy(intimacy)
+                intimacy.value(),
+                intimacy.game(),
+                RelationshipSpecificType.fromIntimacy(intimacy.value())
         );
 
         int effectiveLimit = (limit != null && limit > 0) ? limit : DEFAULT_EVENTS_LIMIT;
@@ -301,15 +307,17 @@ public class PeopleService {
 
         Map<LocalDate, Integer> deltaByDate = new HashMap<>();
         Map<LocalDate, RelationshipSpecificType> changeByDate = new HashMap<>();
-        Relationship previous = null;
-        for (Relationship current : relationshipsForDelta(userId, partnerUserId, pageDates, now)) {
+        IntimacyBonuses bonuses = intimacyReader.readBonuses(userId, partnerUserId);
+        Integer previous = null;
+        for (Relationship relationship : relationshipsForDelta(userId, partnerUserId, pageDates, now)) {
+            int current = bonuses.intimacyOf(relationship, endOf(relationship.getDate())).value();
             if (previous != null) {
-                deltaByDate.put(current.getDate(), current.getIntimacy() - previous.getIntimacy());
+                deltaByDate.put(relationship.getDate(), current - previous);
 
-                RelationshipSpecificType previousType = RelationshipSpecificType.fromIntimacy(previous.getIntimacy());
-                RelationshipSpecificType currentType = RelationshipSpecificType.fromIntimacy(current.getIntimacy());
+                RelationshipSpecificType previousType = RelationshipSpecificType.fromIntimacy(previous);
+                RelationshipSpecificType currentType = RelationshipSpecificType.fromIntimacy(current);
                 if (currentType != previousType) {
-                    changeByDate.put(current.getDate(), currentType);
+                    changeByDate.put(relationship.getDate(), currentType);
                 }
             }
             previous = current;
@@ -336,6 +344,10 @@ public class PeopleService {
         LocalDate nextCursor = hasMore ? pageDates.get(pageDates.size() - 1) : null;
 
         return new PeopleEventsResult(partnerResult, events, new PeopleEventsPageResult(nextCursor, hasMore));
+    }
+
+    private Instant endOf(LocalDate date) {
+        return KstTimes.toInstant(date.plusDays(1).atStartOfDay());
     }
 
     private List<Relationship> relationshipsForDelta(Long userId, Long partnerUserId, List<LocalDate> pageDates, LocalDateTime now) {
@@ -492,6 +504,7 @@ public class PeopleService {
                 partner.isWithdrawn() ? null : partner.shortBirthYear(),
                 profile.profilePhoto(),
                 profile.intimacy(),
+                profile.gameIntimacy(),
                 profile.relationshipType(),
                 profile.relationshipSpecificType(),
                 profile.isFavorited(),

@@ -37,9 +37,11 @@ public class Relationship {
 
     private LocalDateTime updateTime;
 
+    private Instant intimacyAsOf;
+
     private Instant createdAt;
 
-    public static Relationship create(Long userId, LocalDate date, String version, Long partnerUserId, Integer intimacy, String partnerModel, LocalDateTime updateTime) {
+    public static Relationship create(Long userId, LocalDate date, String version, Long partnerUserId, Integer intimacy, String partnerModel, LocalDateTime updateTime, Instant intimacyAsOf) {
         Relationship relationship = new Relationship();
 
         relationship.userId = userId;
@@ -49,6 +51,7 @@ public class Relationship {
         relationship.intimacy = intimacy;
         relationship.partnerModel = partnerModel;
         relationship.updateTime = updateTime;
+        relationship.intimacyAsOf = intimacyAsOf;
         relationship.createdAt = Instant.now();
 
         return relationship;

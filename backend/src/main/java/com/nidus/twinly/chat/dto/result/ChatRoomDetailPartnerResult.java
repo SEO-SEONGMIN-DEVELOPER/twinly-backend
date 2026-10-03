@@ -10,6 +10,7 @@ public record ChatRoomDetailPartnerResult(
         String userName,
         ProfilePhotoInfo profilePhoto,
         Integer intimacy,
+        Integer gameIntimacy,
         RelationshipSpecificType relationshipSpecificType,
         ChatRoomDetailDisclosedFieldsResult disclosedFields,
         List<String> interests

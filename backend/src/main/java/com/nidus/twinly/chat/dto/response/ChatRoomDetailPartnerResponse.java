@@ -15,6 +15,7 @@ public record ChatRoomDetailPartnerResponse(
         @Schema(nullable = true)
         ProfilePhotoInfo profilePhoto,
         Integer intimacy,
+        Integer gameIntimacy,
         RelationshipSpecificType relationshipSpecificType,
         ChatRoomDetailDisclosedFieldsResponse disclosedFields,
         List<String> interests
@@ -26,6 +27,7 @@ public record ChatRoomDetailPartnerResponse(
                 result.userName(),
                 result.profilePhoto(),
                 result.intimacy(),
+                result.gameIntimacy(),
                 result.relationshipSpecificType(),
                 ChatRoomDetailDisclosedFieldsResponse.from(result.disclosedFields()),
                 result.interests()

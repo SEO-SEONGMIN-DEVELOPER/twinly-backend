@@ -309,7 +309,8 @@ class SimulationScheduledNotificationIntegrationTest extends AbstractIntegration
                       "rapport": 40,
                       "partnerModel": "model-v1"
                     }
-                  ]
+                  ],
+                  "intimacyAsOf": "2026-08-18T06:00:00"
                 }
                 """.formatted(me.getId(), date, date, date, partner.getId(), partner.getId(), date,
                 partner.getId(), date);
@@ -324,7 +325,8 @@ class SimulationScheduledNotificationIntegrationTest extends AbstractIntegration
                   "date": "%s",
                   "scenes": [],
                   "questions": [],
-                  "relationships": []
+                  "relationships": [],
+                  "intimacyAsOf": "2026-08-18T06:00:00"
                 }
                 """.formatted(me.getId(), TOMORROW);
 
