@@ -56,21 +56,53 @@ public class BalanceGameService {
     private final ChatRoomOpener chatRoomOpener;
 
     public BalanceGameResult current(Long userId, Long partnerUserId) {
+        LocalDateTime now = KstTimes.now();
+        validatePartner(userId, partnerUserId, now);
+
+        return toResult(currentRound(now), userId, partnerUserId);
+    }
+
+    public BalanceGameResult answer(Long userId, Long roundId, BalanceGameAnswerCommand command) {
+        BalanceGameRound round = balanceGameRoundRepository.findByIdForUpdate(roundId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.INTIMACY_QUIZ_NOT_FOUND));
+        Long partnerUserId = command.partnerId();
+        validatePartner(userId, partnerUserId, KstTimes.now());
+        if (!questionOf(round).hasOption(command.optionId())) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+        if (round.isEnded(Instant.now())) {
+            throw new BusinessException(ErrorCode.INTIMACY_QUIZ_EXPIRED);
+        }
+        if (optionIdOf(round, userId, partnerUserId).isPresent()) {
+            throw new BusinessException(ErrorCode.INTIMACY_QUIZ_ALREADY_ANSWERED);
+        }
+
+        balanceGameAnswerRepository.save(BalanceGameAnswer.create(roundId, userId, partnerUserId, command.optionId()));
+
+        if (optionIdOf(round, partnerUserId, userId).filter(command.optionId()::equals).isPresent()) {
+            intimacyBonusRepository.save(IntimacyBonus.create(userId, partnerUserId, MATCH_BONUS));
+            openChatRoomIfBestFriend(userId, partnerUserId);
+        }
+
+        return toResult(round, userId, partnerUserId);
+    }
+
+    private void validatePartner(Long userId, Long partnerUserId, LocalDateTime now) {
         User partner = userRepository.findById(partnerUserId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
         if (partner.isWithdrawn()) {
             throw new BusinessException(ErrorCode.USER_NOT_FOUND);
         }
 
-        LocalDateTime now = KstTimes.now();
         if (relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(userId, partnerUserId, now).isEmpty()
                 || isBlockedEitherWay(userId, partnerUserId)) {
             throw new BusinessException(ErrorCode.RELATIONSHIP_NOT_FOUND);
         }
+    }
 
-        BalanceGameRound round = currentRound(now);
-        Optional<Long> myOptionId = optionIdOf(round, userId);
-        Optional<Long> partnerOptionId = optionIdOf(round, partnerUserId);
+    private BalanceGameResult toResult(BalanceGameRound round, Long userId, Long partnerUserId) {
+        Optional<Long> myOptionId = optionIdOf(round, userId, partnerUserId);
+        Optional<Long> partnerOptionId = optionIdOf(round, partnerUserId, userId);
         boolean completed = myOptionId.isPresent() && partnerOptionId.isPresent();
         boolean matched = completed && myOptionId.get().equals(partnerOptionId.get());
 
@@ -87,28 +119,6 @@ public class BalanceGameService {
         );
     }
 
-    public void answer(Long userId, Long roundId, BalanceGameAnswerCommand command) {
-        BalanceGameRound round = balanceGameRoundRepository.findByIdForUpdate(roundId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.INTIMACY_QUIZ_NOT_FOUND));
-        if (!questionOf(round).hasOption(command.optionId())) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST);
-        }
-        if (round.isEnded(Instant.now())) {
-            throw new BusinessException(ErrorCode.INTIMACY_QUIZ_EXPIRED);
-        }
-        if (balanceGameAnswerRepository.findByRoundIdAndUserId(roundId, userId).isPresent()) {
-            throw new BusinessException(ErrorCode.INTIMACY_QUIZ_ALREADY_ANSWERED);
-        }
-
-        balanceGameAnswerRepository.save(BalanceGameAnswer.create(roundId, userId, command.optionId()));
-
-        balanceGameAnswerRepository.findMatchedPartnerUserIds(roundId, command.optionId(), userId, KstTimes.now())
-                .forEach(partnerUserId -> {
-                    intimacyBonusRepository.save(IntimacyBonus.create(userId, partnerUserId, MATCH_BONUS));
-                    openChatRoomIfBestFriend(userId, partnerUserId);
-                });
-    }
-
     private BalanceGameRound currentRound(LocalDateTime now) {
         Instant startsAt = BalanceGameSchedule.roundStartOf(now);
 
@@ -119,8 +129,8 @@ public class BalanceGameService {
                 .orElseThrow(() -> new IllegalStateException("방금 만든 밸런스 게임 회차를 찾을 수 없습니다."));
     }
 
-    private Optional<Long> optionIdOf(BalanceGameRound round, Long userId) {
-        return balanceGameAnswerRepository.findByRoundIdAndUserId(round.getId(), userId)
+    private Optional<Long> optionIdOf(BalanceGameRound round, Long userId, Long partnerUserId) {
+        return balanceGameAnswerRepository.findByRoundIdAndUserIdAndPartnerUserId(round.getId(), userId, partnerUserId)
                 .map(BalanceGameAnswer::getOptionId);
     }
 

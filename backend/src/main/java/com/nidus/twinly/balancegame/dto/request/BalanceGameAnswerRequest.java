@@ -5,6 +5,8 @@ import jakarta.validation.constraints.NotNull;
 
 public record BalanceGameAnswerRequest(
         @JsonFormat(shape = JsonFormat.Shape.STRING)
+        @NotNull Long partnerId,
+        @JsonFormat(shape = JsonFormat.Shape.STRING)
         @NotNull Long optionId
 ) {
 }

@@ -42,19 +42,16 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 
 @ExtendWith(MockitoExtension.class)
 class BalanceGameServiceUnitTest {
 
     private static final Long ME = 10L;
     private static final Long PARTNER = 20L;
-    private static final Long OTHER = 30L;
     private static final Long ROUND_ID = 100L;
     private static final BalanceGameQuestion QUESTION = new BalanceGameQuestion(7L, "평생 하나만 먹어야 한다면?",
             List.of(new BalanceGameOption(1L, "평생 라면"), new BalanceGameOption(2L, "평생 치킨")));
@@ -89,13 +86,14 @@ class BalanceGameServiceUnitTest {
     @InjectMocks
     BalanceGameService balanceGameService;
 
-    // ---------------------------------------------------------------- 이번 시간 조회
+    // ---------------------------------------------------------------- 이번 회차 조회
 
     @Test
-    @DisplayName("이번 회차(KST 12시·18시 출제)를 모두가 공유하도록 만들고, 아직 아무도 안 답했으면 내 답을 기다린다")
-    void current_creates_shared_round_of_this_hour() {
-        // given: 사람 목록에 있는 상대
+    @DisplayName("이번 회차(KST 12시·18시 출제)를 모두가 공유하도록 만들고, 이 트윈에게 아직 안 답했으면 내 답을 기다린다")
+    void current_creates_shared_round_and_waits_for_me() {
+        // given: 사람 목록에 있는 트윈
         Instant startsAt = givenVisiblePartnerAndRound();
+        givenAnswers(null, null);
 
         // when
         BalanceGameResult result = balanceGameService.current(ME, PARTNER);
@@ -112,12 +110,11 @@ class BalanceGameServiceUnitTest {
     }
 
     @Test
-    @DisplayName("상대가 먼저 답했어도 내가 답하기 전에는 상대의 선택을 보여주지 않는다")
+    @DisplayName("트윈이 나에게 먼저 답했어도 내가 답하기 전에는 트윈의 선택을 보여주지 않는다")
     void current_hides_partner_option_until_i_answer() {
-        // given: 상대만 2번
+        // given: 트윈만 나에게 2번
         givenVisiblePartnerAndRound();
-        given(balanceGameAnswerRepository.findByRoundIdAndUserId(ROUND_ID, ME)).willReturn(Optional.empty());
-        given(balanceGameAnswerRepository.findByRoundIdAndUserId(ROUND_ID, PARTNER)).willReturn(Optional.of(answer(PARTNER, 2L)));
+        givenAnswers(null, 2L);
 
         // when
         BalanceGameResult result = balanceGameService.current(ME, PARTNER);
@@ -129,11 +126,11 @@ class BalanceGameServiceUnitTest {
     }
 
     @Test
-    @DisplayName("나만 답했으면 상대를 기다린다")
+    @DisplayName("나만 이 트윈에게 답했으면 트윈을 기다린다")
     void current_waits_for_partner_after_my_answer() {
-        // given: 나만 1번
+        // given: 나만 트윈에게 1번
         givenVisiblePartnerAndRound();
-        given(balanceGameAnswerRepository.findByRoundIdAndUserId(ROUND_ID, ME)).willReturn(Optional.of(answer(ME, 1L)));
+        givenAnswers(1L, null);
 
         // when
         BalanceGameResult result = balanceGameService.current(ME, PARTNER);
@@ -145,12 +142,11 @@ class BalanceGameServiceUnitTest {
     }
 
     @Test
-    @DisplayName("둘 다 같은 답이면 일치 결과와 상대의 선택, 오른 점수를 보여준다")
+    @DisplayName("서로에게 같은 답을 했으면 일치 결과와 트윈의 선택, 오른 점수를 보여준다")
     void current_shows_matched_result() {
-        // given: 둘 다 2번
+        // given: 서로에게 2번
         givenVisiblePartnerAndRound();
-        given(balanceGameAnswerRepository.findByRoundIdAndUserId(ROUND_ID, ME)).willReturn(Optional.of(answer(ME, 2L)));
-        given(balanceGameAnswerRepository.findByRoundIdAndUserId(ROUND_ID, PARTNER)).willReturn(Optional.of(answer(PARTNER, 2L)));
+        givenAnswers(2L, 2L);
 
         // when
         BalanceGameResult result = balanceGameService.current(ME, PARTNER);
@@ -162,12 +158,11 @@ class BalanceGameServiceUnitTest {
     }
 
     @Test
-    @DisplayName("둘 다 답했지만 다르면 불일치 결과를 보여주고 점수는 없다")
+    @DisplayName("서로에게 다른 답을 했으면 불일치 결과를 보여주고 점수는 없다")
     void current_shows_mismatched_result() {
-        // given: 나는 1번, 상대는 2번
+        // given: 나는 1번, 트윈은 2번
         givenVisiblePartnerAndRound();
-        given(balanceGameAnswerRepository.findByRoundIdAndUserId(ROUND_ID, ME)).willReturn(Optional.of(answer(ME, 1L)));
-        given(balanceGameAnswerRepository.findByRoundIdAndUserId(ROUND_ID, PARTNER)).willReturn(Optional.of(answer(PARTNER, 2L)));
+        givenAnswers(1L, 2L);
 
         // when
         BalanceGameResult result = balanceGameService.current(ME, PARTNER);
@@ -179,9 +174,9 @@ class BalanceGameServiceUnitTest {
     }
 
     @Test
-    @DisplayName("상대가 없거나 탈퇴했으면 USER_NOT_FOUND 이고 회차를 만들지 않는다")
+    @DisplayName("트윈이 없거나 탈퇴했으면 USER_NOT_FOUND 이고 회차를 만들지 않는다")
     void current_for_withdrawn_partner_throws() {
-        // given: 탈퇴 신청한 상대
+        // given: 탈퇴 신청한 트윈
         User partner = user(PARTNER);
         ReflectionTestUtils.setField(partner, "withdrawalRequestedAt", Instant.now());
         given(userRepository.findById(PARTNER)).willReturn(Optional.of(partner));
@@ -210,7 +205,7 @@ class BalanceGameServiceUnitTest {
     }
 
     @Test
-    @DisplayName("상대가 나를 차단했으면 RELATIONSHIP_NOT_FOUND 다")
+    @DisplayName("트윈이 나를 차단했으면 RELATIONSHIP_NOT_FOUND 다")
     void current_blocked_by_partner_throws() {
         // given
         given(userRepository.findById(PARTNER)).willReturn(Optional.of(user(PARTNER)));
@@ -229,63 +224,71 @@ class BalanceGameServiceUnitTest {
     // ---------------------------------------------------------------- 답변
 
     @Test
-    @DisplayName("한 번 답하면 이미 같은 답을 고른 목록의 상대마다 쌍에 2점씩 쌓는다")
-    void answer_grants_bonus_to_every_matched_partner() {
-        // given: 같은 2번을 먼저 고른 상대 둘, 점수를 더해도 70 미만
-        givenOpenRound();
-        given(balanceGameAnswerRepository.findMatchedPartnerUserIds(eq(ROUND_ID), eq(2L), eq(ME), any(LocalDateTime.class)))
-                .willReturn(List.of(PARTNER, OTHER));
-        given(intimacyReader.read(anyLong(), anyLong(), any(LocalDateTime.class))).willReturn(new Intimacy(42, 2));
+    @DisplayName("트윈에게 먼저 답하면 내 답만 남기고 점수는 쌓지 않은 채 트윈을 기다린다")
+    void answer_first_waits_for_partner() {
+        // given: 아직 서로 안 답한 회차
+        givenOpenRoundAndVisiblePartner();
+        givenAnswers(null, null);
 
-        // when: 내가 2번
-        balanceGameService.answer(ME, ROUND_ID, new BalanceGameAnswerCommand(2L));
+        // when: 트윈에게 1번
+        BalanceGameResult result = balanceGameService.answer(ME, ROUND_ID, new BalanceGameAnswerCommand(PARTNER, 1L));
 
-        // then: 내 답 하나를 남기고
+        // then: 이 트윈에게 한 답 하나를 남긴다
         ArgumentCaptor<BalanceGameAnswer> answer = ArgumentCaptor.forClass(BalanceGameAnswer.class);
         then(balanceGameAnswerRepository).should().save(answer.capture());
         assertThat(answer.getValue().getRoundId()).isEqualTo(ROUND_ID);
         assertThat(answer.getValue().getUserId()).isEqualTo(ME);
-        assertThat(answer.getValue().getOptionId()).isEqualTo(2L);
+        assertThat(answer.getValue().getPartnerUserId()).isEqualTo(PARTNER);
+        assertThat(answer.getValue().getOptionId()).isEqualTo(1L);
+        then(intimacyBonusRepository).should(never()).save(any());
+        assertThat(result.partnerId()).isEqualTo(PARTNER);
+    }
 
-        // then: 일치한 두 쌍에 각각 2점, 70 미만이라 채팅방은 열지 않는다
-        ArgumentCaptor<IntimacyBonus> bonuses = ArgumentCaptor.forClass(IntimacyBonus.class);
-        then(intimacyBonusRepository).should(times(2)).save(bonuses.capture());
-        assertThat(bonuses.getAllValues())
-                .extracting(IntimacyBonus::getUserAId, IntimacyBonus::getUserBId, IntimacyBonus::getAmount)
-                .containsExactly(
-                        org.assertj.core.groups.Tuple.tuple(ME, PARTNER, 2),
-                        org.assertj.core.groups.Tuple.tuple(ME, OTHER, 2));
+    @Test
+    @DisplayName("트윈이 나에게 한 답과 같은 답을 하면 쌍에 2점을 쌓는다")
+    void answer_matching_partner_answer_grants_bonus() {
+        // given: 트윈이 나에게 이미 2번, 점수를 더해도 70 미만
+        givenOpenRoundAndVisiblePartner();
+        givenAnswers(null, 2L);
+        given(intimacyReader.read(any(), any(), any(LocalDateTime.class))).willReturn(new Intimacy(42, 2));
+
+        // when: 나도 트윈에게 2번
+        balanceGameService.answer(ME, ROUND_ID, new BalanceGameAnswerCommand(PARTNER, 2L));
+
+        // then: 쌍 단위 2점 한 건, 70 미만이라 채팅방은 열지 않는다
+        ArgumentCaptor<IntimacyBonus> bonus = ArgumentCaptor.forClass(IntimacyBonus.class);
+        then(intimacyBonusRepository).should().save(bonus.capture());
+        assertThat(bonus.getValue().getUserAId()).isEqualTo(ME);
+        assertThat(bonus.getValue().getUserBId()).isEqualTo(PARTNER);
+        assertThat(bonus.getValue().getAmount()).isEqualTo(2);
         then(chatRoomOpener).should(never()).open(any(), any());
     }
 
     @Test
-    @DisplayName("아직 같은 답을 고른 상대가 없으면 답만 남기고 점수는 쌓지 않는다")
-    void answer_without_match_grants_nothing() {
-        // given
-        givenOpenRound();
-        given(balanceGameAnswerRepository.findMatchedPartnerUserIds(eq(ROUND_ID), eq(1L), eq(ME), any(LocalDateTime.class)))
-                .willReturn(List.of());
+    @DisplayName("트윈이 나에게 한 답과 다르면 점수를 쌓지 않는다")
+    void answer_different_from_partner_answer_grants_nothing() {
+        // given: 트윈이 나에게 이미 2번
+        givenOpenRoundAndVisiblePartner();
+        givenAnswers(null, 2L);
 
-        // when
-        balanceGameService.answer(ME, ROUND_ID, new BalanceGameAnswerCommand(1L));
+        // when: 나는 트윈에게 1번
+        balanceGameService.answer(ME, ROUND_ID, new BalanceGameAnswerCommand(PARTNER, 1L));
 
         // then
-        then(balanceGameAnswerRepository).should().save(any());
         then(intimacyBonusRepository).should(never()).save(any());
     }
 
     @Test
     @DisplayName("게임 점수로 어느 한쪽 친밀도가 70 이 되면 그 자리에서 채팅방을 연다")
     void answer_opens_chat_room_at_best_friend() {
-        // given: 같은 답을 고른 상대 쪽 친밀도가 70 이 된다
-        givenOpenRound();
-        given(balanceGameAnswerRepository.findMatchedPartnerUserIds(eq(ROUND_ID), eq(1L), eq(ME), any(LocalDateTime.class)))
-                .willReturn(List.of(PARTNER));
+        // given: 같은 답을 하면 트윈 쪽 친밀도가 70 이 된다
+        givenOpenRoundAndVisiblePartner();
+        givenAnswers(null, 1L);
         given(intimacyReader.read(eq(ME), eq(PARTNER), any(LocalDateTime.class))).willReturn(new Intimacy(69, 2));
         given(intimacyReader.read(eq(PARTNER), eq(ME), any(LocalDateTime.class))).willReturn(new Intimacy(70, 2));
 
         // when
-        balanceGameService.answer(ME, ROUND_ID, new BalanceGameAnswerCommand(1L));
+        balanceGameService.answer(ME, ROUND_ID, new BalanceGameAnswerCommand(PARTNER, 1L));
 
         // then
         then(chatRoomOpener).should().open(ME, PARTNER);
@@ -298,21 +301,37 @@ class BalanceGameServiceUnitTest {
         given(balanceGameRoundRepository.findByIdForUpdate(ROUND_ID)).willReturn(Optional.empty());
 
         // when & then
-        assertThatThrownBy(() -> balanceGameService.answer(ME, ROUND_ID, new BalanceGameAnswerCommand(1L)))
+        assertThatThrownBy(() -> balanceGameService.answer(ME, ROUND_ID, new BalanceGameAnswerCommand(PARTNER, 1L)))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.INTIMACY_QUIZ_NOT_FOUND);
     }
 
     @Test
+    @DisplayName("사람 목록에 없는 상대에게는 답할 수 없다 (RELATIONSHIP_NOT_FOUND)")
+    void answer_to_stranger_throws() {
+        // given: 열린 회차, 관계 기록이 없는 상대
+        given(balanceGameRoundRepository.findByIdForUpdate(ROUND_ID)).willReturn(Optional.of(round(thisRound())));
+        given(userRepository.findById(PARTNER)).willReturn(Optional.of(user(PARTNER)));
+        given(relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(eq(ME), eq(PARTNER), any(LocalDateTime.class)))
+                .willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> balanceGameService.answer(ME, ROUND_ID, new BalanceGameAnswerCommand(PARTNER, 1L)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.RELATIONSHIP_NOT_FOUND);
+        then(balanceGameAnswerRepository).should(never()).save(any());
+    }
+
+    @Test
     @DisplayName("질문에 없는 선택지는 INVALID_REQUEST 이고 답을 남기지 않는다")
     void answer_with_unknown_option_throws() {
         // given
-        given(balanceGameRoundRepository.findByIdForUpdate(ROUND_ID)).willReturn(Optional.of(round(thisRound())));
-        given(balanceGameQuestionLoader.findQuestion(7L)).willReturn(Optional.of(QUESTION));
+        givenOpenRoundAndVisiblePartner();
 
         // when & then
-        assertThatThrownBy(() -> balanceGameService.answer(ME, ROUND_ID, new BalanceGameAnswerCommand(3L)))
+        assertThatThrownBy(() -> balanceGameService.answer(ME, ROUND_ID, new BalanceGameAnswerCommand(PARTNER, 3L)))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.INVALID_REQUEST);
@@ -324,10 +343,11 @@ class BalanceGameServiceUnitTest {
     void answer_after_end_throws() {
         // given: 2026-01-01 12시 회차
         given(balanceGameRoundRepository.findByIdForUpdate(ROUND_ID)).willReturn(Optional.of(round(Instant.parse("2026-01-01T03:00:00Z"))));
+        givenVisiblePartner();
         given(balanceGameQuestionLoader.findQuestion(7L)).willReturn(Optional.of(QUESTION));
 
         // when & then
-        assertThatThrownBy(() -> balanceGameService.answer(ME, ROUND_ID, new BalanceGameAnswerCommand(1L)))
+        assertThatThrownBy(() -> balanceGameService.answer(ME, ROUND_ID, new BalanceGameAnswerCommand(PARTNER, 1L)))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.INTIMACY_QUIZ_EXPIRED);
@@ -335,14 +355,15 @@ class BalanceGameServiceUnitTest {
     }
 
     @Test
-    @DisplayName("이미 답한 회차에 다시 답하면 INTIMACY_QUIZ_ALREADY_ANSWERED 이고 점수도 다시 쌓지 않는다")
-    void answer_twice_throws() {
-        // given: 이번 회차에 이미 1번
-        givenOpenRoundWithoutAnswer();
-        given(balanceGameAnswerRepository.findByRoundIdAndUserId(ROUND_ID, ME)).willReturn(Optional.of(answer(ME, 1L)));
+    @DisplayName("이번 회차에 이 트윈에게 이미 답했으면 INTIMACY_QUIZ_ALREADY_ANSWERED 이고 점수도 다시 쌓지 않는다")
+    void answer_twice_to_same_partner_throws() {
+        // given: 이 트윈에게 이미 1번
+        givenOpenRoundAndVisiblePartner();
+        given(balanceGameAnswerRepository.findByRoundIdAndUserIdAndPartnerUserId(ROUND_ID, ME, PARTNER))
+                .willReturn(Optional.of(answer(ME, PARTNER, 1L)));
 
         // when & then
-        assertThatThrownBy(() -> balanceGameService.answer(ME, ROUND_ID, new BalanceGameAnswerCommand(2L)))
+        assertThatThrownBy(() -> balanceGameService.answer(ME, ROUND_ID, new BalanceGameAnswerCommand(PARTNER, 2L)))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.INTIMACY_QUIZ_ALREADY_ANSWERED);
@@ -351,9 +372,7 @@ class BalanceGameServiceUnitTest {
     }
 
     private Instant givenVisiblePartnerAndRound() {
-        given(userRepository.findById(PARTNER)).willReturn(Optional.of(user(PARTNER)));
-        given(relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(eq(ME), eq(PARTNER), any(LocalDateTime.class)))
-                .willReturn(Optional.of(BeanUtils.instantiateClass(Relationship.class)));
+        givenVisiblePartner();
         Instant startsAt = thisRound();
         given(balanceGameQuestionLoader.questionFor(BalanceGameSchedule.sequenceOf(startsAt))).willReturn(QUESTION);
         given(balanceGameQuestionLoader.findQuestion(7L)).willReturn(Optional.of(QUESTION));
@@ -361,14 +380,23 @@ class BalanceGameServiceUnitTest {
         return startsAt;
     }
 
-    private void givenOpenRound() {
-        givenOpenRoundWithoutAnswer();
-        given(balanceGameAnswerRepository.findByRoundIdAndUserId(ROUND_ID, ME)).willReturn(Optional.empty());
+    private void givenOpenRoundAndVisiblePartner() {
+        given(balanceGameRoundRepository.findByIdForUpdate(ROUND_ID)).willReturn(Optional.of(round(thisRound())));
+        givenVisiblePartner();
+        given(balanceGameQuestionLoader.findQuestion(7L)).willReturn(Optional.of(QUESTION));
     }
 
-    private void givenOpenRoundWithoutAnswer() {
-        given(balanceGameRoundRepository.findByIdForUpdate(ROUND_ID)).willReturn(Optional.of(round(thisRound())));
-        given(balanceGameQuestionLoader.findQuestion(7L)).willReturn(Optional.of(QUESTION));
+    private void givenVisiblePartner() {
+        given(userRepository.findById(PARTNER)).willReturn(Optional.of(user(PARTNER)));
+        given(relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(eq(ME), eq(PARTNER), any(LocalDateTime.class)))
+                .willReturn(Optional.of(BeanUtils.instantiateClass(Relationship.class)));
+    }
+
+    private void givenAnswers(Long myOptionId, Long partnerOptionId) {
+        given(balanceGameAnswerRepository.findByRoundIdAndUserIdAndPartnerUserId(ROUND_ID, ME, PARTNER))
+                .willReturn(Optional.ofNullable(myOptionId).map(optionId -> answer(ME, PARTNER, optionId)));
+        given(balanceGameAnswerRepository.findByRoundIdAndUserIdAndPartnerUserId(ROUND_ID, PARTNER, ME))
+                .willReturn(Optional.ofNullable(partnerOptionId).map(optionId -> answer(PARTNER, ME, optionId)));
     }
 
     private Instant thisRound() {
@@ -383,8 +411,8 @@ class BalanceGameServiceUnitTest {
         return round;
     }
 
-    private BalanceGameAnswer answer(Long userId, Long optionId) {
-        return BalanceGameAnswer.create(ROUND_ID, userId, optionId);
+    private BalanceGameAnswer answer(Long userId, Long partnerUserId, Long optionId) {
+        return BalanceGameAnswer.create(ROUND_ID, userId, partnerUserId, optionId);
     }
 
     private User user(Long id) {

@@ -10,7 +10,7 @@ import java.time.Instant;
 
 @Entity
 @DynamicUpdate
-@Table(name = "balance_game_answers")
+@Table(name = "balance_game_partner_answers")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class BalanceGameAnswer {
@@ -23,15 +23,18 @@ public class BalanceGameAnswer {
 
     private Long userId;
 
+    private Long partnerUserId;
+
     private Long optionId;
 
     private Instant createdAt;
 
-    public static BalanceGameAnswer create(Long roundId, Long userId, Long optionId) {
+    public static BalanceGameAnswer create(Long roundId, Long userId, Long partnerUserId, Long optionId) {
         BalanceGameAnswer answer = new BalanceGameAnswer();
 
         answer.roundId = roundId;
         answer.userId = userId;
+        answer.partnerUserId = partnerUserId;
         answer.optionId = optionId;
         answer.createdAt = Instant.now();
 

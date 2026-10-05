@@ -16,14 +16,12 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
@@ -52,7 +50,7 @@ class BalanceGameSummaryServiceUnitTest {
         // given: 방금 끝난 회차, 10번은 3명·20번은 1명과 일치
         givenEndedRound();
         given(balanceGameRoundRepository.markSummarySent(ROUND_ID, NOW)).willReturn(1);
-        given(balanceGameAnswerRepository.countMatchesByUserInRound(eq(ROUND_ID), any(LocalDateTime.class)))
+        given(balanceGameAnswerRepository.countMatchesByUserInRound(ROUND_ID))
                 .willReturn(List.of(count(10L, 3L), count(20L, 1L)));
 
         // when
@@ -73,7 +71,7 @@ class BalanceGameSummaryServiceUnitTest {
         balanceGameSummaryService.sendEndedRound(NOW);
 
         // then
-        then(balanceGameAnswerRepository).should(never()).countMatchesByUserInRound(anyLong(), any());
+        then(balanceGameAnswerRepository).should(never()).countMatchesByUserInRound(anyLong());
         then(eventPublisher).should(never()).publishEvent(any());
     }
 
@@ -83,7 +81,7 @@ class BalanceGameSummaryServiceUnitTest {
         // given
         givenEndedRound();
         given(balanceGameRoundRepository.markSummarySent(ROUND_ID, NOW)).willReturn(1);
-        given(balanceGameAnswerRepository.countMatchesByUserInRound(eq(ROUND_ID), any(LocalDateTime.class))).willReturn(List.of());
+        given(balanceGameAnswerRepository.countMatchesByUserInRound(ROUND_ID)).willReturn(List.of());
 
         // when
         balanceGameSummaryService.sendEndedRound(NOW);
