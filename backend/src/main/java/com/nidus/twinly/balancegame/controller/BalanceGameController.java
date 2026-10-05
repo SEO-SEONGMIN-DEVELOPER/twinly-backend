@@ -34,17 +34,18 @@ public class BalanceGameController {
         return BalanceGameResponse.from(balanceGameService.current(userInfo.id(), RequestId.toLong(partnerUserId, "userId")));
     }
 
-    @Operation(summary = "친밀도 퀴즈 답변", description = "한 번 답하면 사람 목록의 모든 트윈과 비교된다")
+    @Operation(summary = "트윈에게 친밀도 퀴즈 답변", description = "같은 질문이라도 트윈마다 따로 답한다")
     @ApiResponses({
             @ApiResponse(responseCode = "400", description = "INVALID_REQUEST"),
-            @ApiResponse(responseCode = "404", description = "INTIMACY_QUIZ_NOT_FOUND"),
+            @ApiResponse(responseCode = "404", description = "INTIMACY_QUIZ_NOT_FOUND, USER_NOT_FOUND, RELATIONSHIP_NOT_FOUND"),
             @ApiResponse(responseCode = "409", description = "INTIMACY_QUIZ_ALREADY_ANSWERED"),
             @ApiResponse(responseCode = "410", description = "INTIMACY_QUIZ_EXPIRED")
     })
     @PostMapping("/api/v1/intimacy-quizzes/{roundId}/answers")
-    public void answer(@AuthenticationPrincipal UserInfo userInfo,
-                       @PathVariable("roundId") String roundId,
-                       @Valid @RequestBody BalanceGameAnswerRequest request) {
-        balanceGameService.answer(userInfo.id(), RequestId.toLong(roundId, "roundId"), BalanceGameAnswerCommand.from(request));
+    public BalanceGameResponse answer(@AuthenticationPrincipal UserInfo userInfo,
+                                      @PathVariable("roundId") String roundId,
+                                      @Valid @RequestBody BalanceGameAnswerRequest request) {
+        return BalanceGameResponse.from(balanceGameService.answer(
+                userInfo.id(), RequestId.toLong(roundId, "roundId"), BalanceGameAnswerCommand.from(request)));
     }
 }

@@ -97,8 +97,39 @@ class BalanceGameControllerUnitTest {
     }
 
     @Test
-    @DisplayName("답변 시 문자열 optionId 를 숫자로 바꿔 위임하고 200을 반환한다")
+    @DisplayName("트윈에게 답하면 문자열 id 들을 숫자로 바꿔 위임하고, 그 트윈과의 결과를 내려준다")
     void answer_success() throws Exception {
+        // given: 답한 뒤 상대를 기다리는 결과
+        given(balanceGameService.answer(1L, 100L, new BalanceGameAnswerCommand(42L, 2L))).willReturn(new BalanceGameResult(
+                100L,
+                42L,
+                new BalanceGameQuestionResult(7L, "평생 하나만 먹어야 한다면?", List.of(
+                        new BalanceGameOptionResult(1L, "평생 라면"),
+                        new BalanceGameOptionResult(2L, "평생 치킨"))),
+                Instant.parse("2026-10-03T09:00:00Z"),
+                BalanceGameStatus.WAITING_PARTNER,
+                2L,
+                null,
+                false,
+                0));
+
+        // when
+        var result = mockMvc.perform(post("/api/v1/intimacy-quizzes/{roundId}/answers", "100")
+                .header("Authorization", "Bearer access-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"partnerId\": \"42\", \"optionId\": \"2\"}"));
+
+        // then
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.partnerId").value("42"))
+                .andExpect(jsonPath("$.status").value("waitingPartner"))
+                .andExpect(jsonPath("$.myOptionId").value("2"));
+        then(balanceGameService).should().answer(1L, 100L, new BalanceGameAnswerCommand(42L, 2L));
+    }
+
+    @Test
+    @DisplayName("partnerId 없이 답하면 400을 반환하고 서비스를 호출하지 않는다")
+    void answer_without_partner_returns_400() throws Exception {
         // when
         var result = mockMvc.perform(post("/api/v1/intimacy-quizzes/{roundId}/answers", "100")
                 .header("Authorization", "Bearer access-token")
@@ -106,8 +137,8 @@ class BalanceGameControllerUnitTest {
                 .content("{\"optionId\": \"2\"}"));
 
         // then
-        result.andExpect(status().isOk());
-        then(balanceGameService).should().answer(1L, 100L, new BalanceGameAnswerCommand(2L));
+        result.andExpect(status().isBadRequest());
+        then(balanceGameService).should(never()).answer(anyLong(), anyLong(), any());
     }
 
     @Test
@@ -117,7 +148,7 @@ class BalanceGameControllerUnitTest {
         var result = mockMvc.perform(post("/api/v1/intimacy-quizzes/{roundId}/answers", "100")
                 .header("Authorization", "Bearer access-token")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{}"));
+                .content("{\"partnerId\": \"42\"}"));
 
         // then
         result.andExpect(status().isBadRequest());
@@ -131,7 +162,7 @@ class BalanceGameControllerUnitTest {
         var result = mockMvc.perform(post("/api/v1/intimacy-quizzes/{roundId}/answers", "abc")
                 .header("Authorization", "Bearer access-token")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"optionId\": \"2\"}"));
+                .content("{\"partnerId\": \"42\", \"optionId\": \"2\"}"));
 
         // then
         result.andExpect(status().isBadRequest());

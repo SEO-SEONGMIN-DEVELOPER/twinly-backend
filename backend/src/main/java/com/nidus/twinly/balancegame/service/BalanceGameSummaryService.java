@@ -38,7 +38,7 @@ public class BalanceGameSummaryService {
         }
 
         Map<Long, Long> matchedCountByUserId = balanceGameAnswerRepository
-                .countMatchesByUserInRound(round.getId(), KstTimes.now()).stream()
+                .countMatchesByUserInRound(round.getId()).stream()
                 .collect(Collectors.toMap(MatchedCountProjection::getUserId, MatchedCountProjection::getMatchedCount));
 
         if (matchedCountByUserId.isEmpty()) {

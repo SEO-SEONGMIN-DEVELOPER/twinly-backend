@@ -3,6 +3,7 @@ package com.nidus.twinly.people.controller;
 import com.nidus.twinly.common.web.RequestId;
 import com.nidus.twinly.people.dto.response.PeopleEventResponse;
 import com.nidus.twinly.people.dto.response.PeopleEventsResponse;
+import com.nidus.twinly.people.dto.response.PeopleIntimacyQuizMatchRateResponse;
 import com.nidus.twinly.people.dto.response.PeopleIntimacySeriesResponse;
 import com.nidus.twinly.people.dto.response.PeopleLearnedFactsResponse;
 import com.nidus.twinly.people.dto.response.PeopleProfileResponse;
@@ -106,5 +107,13 @@ public class PeopleController {
     public PeopleProfileV2Response profileV2(@AuthenticationPrincipal UserInfo userInfo,
                                              @PathVariable("userId") String partnerUserId) {
         return PeopleProfileV2Response.from(peopleService.profileV2(userInfo.id(), RequestId.toLong(partnerUserId, "userId")));
+    }
+
+    @Operation(summary = "트윈과의 친밀도 퀴즈 역대 일치도 조회")
+    @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND")
+    @GetMapping("/api/v1/people/{userId}/intimacy-quiz/match-rate")
+    public PeopleIntimacyQuizMatchRateResponse intimacyQuizMatchRate(@AuthenticationPrincipal UserInfo userInfo,
+                                                                     @PathVariable("userId") String partnerUserId) {
+        return PeopleIntimacyQuizMatchRateResponse.from(peopleService.intimacyQuizMatchRate(userInfo.id(), RequestId.toLong(partnerUserId, "userId")));
     }
 }

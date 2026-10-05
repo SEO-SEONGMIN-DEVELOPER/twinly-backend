@@ -19,6 +19,7 @@ import com.nidus.twinly.people.dto.result.PeoplePageResult;
 import com.nidus.twinly.people.dto.result.PeopleProfileDisclosedFieldsResult;
 import com.nidus.twinly.people.dto.result.PeopleProfileResult;
 import com.nidus.twinly.people.dto.result.PeopleProfileV2Result;
+import com.nidus.twinly.people.dto.result.PeopleIntimacyQuizMatchRateResult;
 import com.nidus.twinly.people.dto.result.PeopleResult;
 import com.nidus.twinly.people.dto.result.PeopleThresholdResult;
 import com.nidus.twinly.people.service.PeopleService;
@@ -479,5 +480,41 @@ class PeopleControllerUnitTest {
                     .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
         }
         then(peopleService).should(never()).people(any(), any(), any());
+    }
+
+    // ------------------------------------- GET /api/v1/people/{userId}/intimacy-quiz/match-rate
+
+    @Test
+    @DisplayName("친밀도 퀴즈 일치도 조회 시 200과 함께 비교 회차·일치 회차·일치도를 내려준다")
+    void intimacyQuizMatchRate_success() throws Exception {
+        // given
+        given(peopleService.intimacyQuizMatchRate(1L, 42L)).willReturn(new PeopleIntimacyQuizMatchRateResult(12, 7, 58.3));
+
+        // when
+        var result = mockMvc.perform(get("/api/v1/people/{userId}/intimacy-quiz/match-rate", "42")
+                .header("Authorization", "Bearer access-token"));
+
+        // then
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.comparedCount").value(12))
+                .andExpect(jsonPath("$.matchedCount").value(7))
+                .andExpect(jsonPath("$.matchRate").value(58.3));
+        then(peopleService).should().intimacyQuizMatchRate(1L, 42L);
+    }
+
+    @Test
+    @DisplayName("비교한 회차가 없으면 matchRate 를 null 로 내려준다")
+    void intimacyQuizMatchRate_without_comparison() throws Exception {
+        // given
+        given(peopleService.intimacyQuizMatchRate(1L, 42L)).willReturn(new PeopleIntimacyQuizMatchRateResult(0, 0, null));
+
+        // when
+        var result = mockMvc.perform(get("/api/v1/people/{userId}/intimacy-quiz/match-rate", "42")
+                .header("Authorization", "Bearer access-token"));
+
+        // then
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.comparedCount").value(0))
+                .andExpect(jsonPath("$.matchRate").isEmpty());
     }
 }

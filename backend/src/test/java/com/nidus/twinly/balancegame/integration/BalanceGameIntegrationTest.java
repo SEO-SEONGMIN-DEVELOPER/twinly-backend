@@ -67,7 +67,7 @@ class BalanceGameIntegrationTest extends AbstractIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        // given: 나는 상대·다른 상대와 서로 아는 사이(친밀도 40), 상대와 다른 상대는 서로 모른다
+        // given: 나는 트윈·다른 트윈과 서로 아는 사이(친밀도 40), 트윈과 다른 트윈은 서로 모른다
         me = saveUser();
         partner = saveUser();
         other = saveUser();
@@ -78,7 +78,7 @@ class BalanceGameIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("이번 회차에는 누구의 프로필에서 조회하든 모두 같은 회차·같은 질문을 받는다")
     void everyone_gets_the_same_round_and_question() throws Exception {
-        // when: 서로 다른 사람·다른 상대 프로필에서 조회
+        // when: 서로 다른 사람·다른 트윈 프로필에서 조회
         String mine = body(current(me, partner).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("waitingMe")));
         String partners = body(current(partner, me).andExpect(status().isOk()));
         String others = body(current(other, me).andExpect(status().isOk()));
@@ -92,90 +92,83 @@ class BalanceGameIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("한 번 답하면 먼저 같은 답을 고른 목록의 모든 상대와 각각 2점이 쌓이고, 서로 모르는 사람끼리는 쌓이지 않는다")
-    void one_answer_is_compared_with_everyone_in_my_list() throws Exception {
-        // given: 상대와 다른 상대가 먼저 같은 1번을 골랐다 (둘은 서로 모르는 사이)
+    @DisplayName("같은 질문이라도 트윈마다 따로 답하고, 서로에게 같은 답을 한 쌍에만 2점이 쌓인다")
+    void answers_are_separate_per_partner() throws Exception {
+        // given: 이번 회차
         String round = body(current(me, partner));
         String roundId = JsonPath.read(round, "$.roundId");
-        String optionId = JsonPath.read(round, "$.question.options[0].id");
-        answer(partner, roundId, optionId).andExpect(status().isOk());
-        answer(other, roundId, optionId).andExpect(status().isOk());
+        String first = JsonPath.read(round, "$.question.options[0].id");
+        String second = JsonPath.read(round, "$.question.options[1].id");
 
-        // when: 나도 1번
-        answer(me, roundId, optionId).andExpect(status().isOk());
-
-        // then: 나와 두 상대 각각의 쌍에만 2점, 서로 모르는 상대·다른 상대 사이에는 없다
-        assertThat(bonusesBetween(me, partner)).containsExactly(2);
-        assertThat(bonusesBetween(me, other)).containsExactly(2);
-        assertThat(bonusesBetween(partner, other)).isEmpty();
-
-        // then: 각 상대의 프로필에서 일치 결과와 오른 친밀도가 보인다
-        current(me, partner)
+        // when: 나는 트윈에게 1번, 다른 트윈에게 2번. 두 트윈은 모두 나에게 1번
+        answer(me, roundId, partner, first).andExpect(status().isOk());
+        answer(me, roundId, other, second).andExpect(status().isOk());
+        answer(partner, roundId, me, first).andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("matched"))
-                .andExpect(jsonPath("$.partnerOptionId").value(optionId))
                 .andExpect(jsonPath("$.intimacyBonus").value(2));
-        current(partner, me).andExpect(jsonPath("$.status").value("matched"));
+        answer(other, roundId, me, first).andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("mismatched"))
+                .andExpect(jsonPath("$.partnerOptionId").value(second));
+
+        // then: 트윈과는 일치해 2점, 다른 트윈과는 불일치라 점수 없음
+        assertThat(bonusesBetween(me, partner)).containsExactly(2);
+        assertThat(bonusesBetween(me, other)).isEmpty();
+        current(me, partner).andExpect(jsonPath("$.status").value("matched"));
+        current(me, other).andExpect(jsonPath("$.status").value("mismatched"));
         profile(me, partner).andExpect(jsonPath("$.intimacy").value(42)).andExpect(jsonPath("$.gameIntimacy").value(2));
-        profile(other, me).andExpect(jsonPath("$.intimacy").value(42)).andExpect(jsonPath("$.gameIntimacy").value(2));
+        profile(me, other).andExpect(jsonPath("$.intimacy").value(40)).andExpect(jsonPath("$.gameIntimacy").value(0));
     }
 
     @Test
-    @DisplayName("상대가 아직 답하지 않았으면 기다리는 상태이고, 상대가 다른 답을 고르면 불일치로 점수 없이 끝난다")
-    void waits_for_partner_then_mismatches() throws Exception {
-        // given: 내가 먼저 1번
+    @DisplayName("한 트윈에게 한 답은 다른 트윈과의 비교에 쓰이지 않는다")
+    void answer_to_one_partner_is_not_used_for_another() throws Exception {
+        // given: 나는 트윈에게만 1번을 답했다
         String round = body(current(me, partner));
         String roundId = JsonPath.read(round, "$.roundId");
-        answer(me, roundId, JsonPath.read(round, "$.question.options[0].id")).andExpect(status().isOk());
+        String first = JsonPath.read(round, "$.question.options[0].id");
+        answer(me, roundId, partner, first).andExpect(status().isOk());
 
-        // then: 내 쪽은 상대를 기다리고, 상대 쪽은 내가 답했다는 것만 안다
-        current(me, partner)
-                .andExpect(jsonPath("$.status").value("waitingPartner"))
-                .andExpect(jsonPath("$.partnerOptionId").isEmpty());
-        current(partner, me)
+        // when: 다른 트윈이 나에게 같은 1번
+        answer(other, roundId, me, first).andExpect(status().isOk());
+
+        // then: 내가 다른 트윈에게는 아직 답하지 않았으므로 기다리는 상태이고 점수도 없다
+        current(other, me).andExpect(jsonPath("$.status").value("waitingPartner"));
+        current(me, other)
                 .andExpect(jsonPath("$.status").value("waitingMe"))
                 .andExpect(jsonPath("$.partnerAnswered").value(true))
                 .andExpect(jsonPath("$.partnerOptionId").isEmpty());
-
-        // when: 상대는 2번
-        answer(partner, roundId, JsonPath.read(round, "$.question.options[1].id")).andExpect(status().isOk());
-
-        // then
-        current(me, partner)
-                .andExpect(jsonPath("$.status").value("mismatched"))
-                .andExpect(jsonPath("$.intimacyBonus").value(0));
-        assertThat(bonusesBetween(me, partner)).isEmpty();
-    }
-
-    @Test
-    @DisplayName("차단한 상대와는 같은 답을 골라도 점수가 쌓이지 않는다")
-    void blocked_partner_gets_no_bonus() throws Exception {
-        // given: 내가 다른 상대를 차단했고, 다른 상대가 먼저 1번
-        blockRepository.save(Block.create(me.getId(), other.getId()));
-        String round = body(current(me, partner));
-        String roundId = JsonPath.read(round, "$.roundId");
-        String optionId = JsonPath.read(round, "$.question.options[0].id");
-        answer(other, roundId, optionId).andExpect(status().isOk());
-
-        // when: 나도 1번
-        answer(me, roundId, optionId).andExpect(status().isOk());
-
-        // then
         assertThat(bonusesBetween(me, other)).isEmpty();
     }
 
     @Test
-    @DisplayName("이미 답한 회차에 다시 답하면 409, 없는 회차면 404 다")
-    void rejects_second_answer_and_unknown_round() throws Exception {
-        // given: 내가 이미 답했다
+    @DisplayName("차단한 상대에게는 답할 수 없다 (404 RELATIONSHIP_NOT_FOUND)")
+    void cannot_answer_to_blocked_partner() throws Exception {
+        // given: 내가 다른 트윈을 차단했다
         String round = body(current(me, partner));
         String roundId = JsonPath.read(round, "$.roundId");
-        answer(me, roundId, JsonPath.read(round, "$.question.options[0].id")).andExpect(status().isOk());
+        blockRepository.save(Block.create(me.getId(), other.getId()));
 
         // when & then
-        answer(me, roundId, JsonPath.read(round, "$.question.options[1].id"))
+        answer(me, roundId, other, JsonPath.read(round, "$.question.options[0].id"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RELATIONSHIP_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("같은 트윈에게 다시 답하면 409 지만, 다른 트윈에게는 답할 수 있다. 없는 회차면 404 다")
+    void rejects_second_answer_to_same_partner_only() throws Exception {
+        // given: 트윈에게 이미 답했다
+        String round = body(current(me, partner));
+        String roundId = JsonPath.read(round, "$.roundId");
+        String first = JsonPath.read(round, "$.question.options[0].id");
+        answer(me, roundId, partner, first).andExpect(status().isOk());
+
+        // when & then
+        answer(me, roundId, partner, JsonPath.read(round, "$.question.options[1].id"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("INTIMACY_QUIZ_ALREADY_ANSWERED"));
-        answer(me, String.valueOf(Long.parseLong(roundId) + 1_000_000L), "1")
+        answer(me, roundId, other, first).andExpect(status().isOk());
+        answer(me, String.valueOf(Long.parseLong(roundId) + 1_000_000L), partner, "1")
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("INTIMACY_QUIZ_NOT_FOUND"));
     }
@@ -183,36 +176,85 @@ class BalanceGameIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("사람 목록에 없는 상대의 프로필에서는 게임을 볼 수 없다 (404 RELATIONSHIP_NOT_FOUND)")
     void stranger_has_no_game() throws Exception {
-        // when & then: 상대와 다른 상대는 서로 모른다
+        // when & then: 트윈과 다른 트윈은 서로 모른다
         current(partner, other)
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("RELATIONSHIP_NOT_FOUND"));
     }
 
     @Test
-    @DisplayName("지난 회차가 끝나면 같은 답을 고른 상대가 있는 유저별 인원을 한 번만 요약한다")
+    @DisplayName("지난 회차가 끝나면 서로에게 같은 답을 한 트윈 수를 유저별로 한 번만 요약한다")
     void summarizes_ended_round_once() {
-        // given: 지난 회차에 나·상대·다른 상대가 모두 1번
+        // given: 지난 회차에 나와 트윈은 서로 1번(일치), 나는 다른 트윈에게 1번·다른 트윈은 나에게 2번(불일치)
         Instant lastRound = BalanceGameSchedule.previousRoundStartOf(KstTimes.now());
         balanceGameRoundRepository.upsert(lastRound, 1L);
         BalanceGameRound round = balanceGameRoundRepository.findByStartsAt(lastRound).orElseThrow();
         balanceGameAnswerRepository.saveAll(List.of(
-                BalanceGameAnswer.create(round.getId(), me.getId(), 1L),
-                BalanceGameAnswer.create(round.getId(), partner.getId(), 1L),
-                BalanceGameAnswer.create(round.getId(), other.getId(), 1L)));
+                BalanceGameAnswer.create(round.getId(), me.getId(), partner.getId(), 1L),
+                BalanceGameAnswer.create(round.getId(), partner.getId(), me.getId(), 1L),
+                BalanceGameAnswer.create(round.getId(), me.getId(), other.getId(), 1L),
+                BalanceGameAnswer.create(round.getId(), other.getId(), me.getId(), 2L)));
 
         // when: 이번 회차 시작 10초에 도는 요약을 (서버 재시도처럼) 두 번 실행
         balanceGameSummaryService.sendEndedRound(thisRound().plusSeconds(10));
         balanceGameSummaryService.sendEndedRound(thisRound().plusSeconds(10));
 
-        // then: 나는 2명, 서로 모르는 상대·다른 상대는 각자 나 1명과만 일치했고, 요약은 한 번만 나간다
+        // then: 나와 트윈만 1명씩, 다른 트윈은 일치한 상대가 없어 빠지고, 요약은 한 번만 나간다
         assertThat(applicationEvents.stream(BalanceGameSummaryEvent.class).toList())
                 .singleElement()
                 .satisfies(event -> {
                     assertThat(event.roundId()).isEqualTo(round.getId());
                     assertThat(event.matchedCountByUserId()).containsExactlyInAnyOrderEntriesOf(Map.of(
-                            me.getId(), 2L, partner.getId(), 1L, other.getId(), 1L));
+                            me.getId(), 1L, partner.getId(), 1L));
                 });
+    }
+
+    @Test
+    @DisplayName("역대 일치도는 서로에게 답한 회차만 세고, 한쪽만 답한 회차와 다른 트윈과의 답은 섞지 않는다")
+    void match_rate_counts_only_rounds_answered_by_both() throws Exception {
+        // given: 지난 세 회차 — 1회차 서로 1번(일치), 2회차 나 1번·트윈 2번(불일치), 3회차 나만 답함. 다른 트윈과는 1회차에 서로 1번
+        BalanceGameRound first = pastRound("2026-09-01T03:00:00Z");
+        BalanceGameRound second = pastRound("2026-09-01T09:00:00Z");
+        BalanceGameRound third = pastRound("2026-09-02T03:00:00Z");
+        balanceGameAnswerRepository.saveAll(List.of(
+                BalanceGameAnswer.create(first.getId(), me.getId(), partner.getId(), 1L),
+                BalanceGameAnswer.create(first.getId(), partner.getId(), me.getId(), 1L),
+                BalanceGameAnswer.create(second.getId(), me.getId(), partner.getId(), 1L),
+                BalanceGameAnswer.create(second.getId(), partner.getId(), me.getId(), 2L),
+                BalanceGameAnswer.create(third.getId(), me.getId(), partner.getId(), 1L),
+                BalanceGameAnswer.create(first.getId(), me.getId(), other.getId(), 1L),
+                BalanceGameAnswer.create(first.getId(), other.getId(), me.getId(), 1L)));
+
+        // when & then: 비교 2회 중 일치 1회
+        matchRate(me, partner).andExpect(status().isOk())
+                .andExpect(jsonPath("$.comparedCount").value(2))
+                .andExpect(jsonPath("$.matchedCount").value(1))
+                .andExpect(jsonPath("$.matchRate").value(50.0));
+
+        // then: 트윈 쪽에서 봐도 같다
+        matchRate(partner, me)
+                .andExpect(jsonPath("$.comparedCount").value(2))
+                .andExpect(jsonPath("$.matchRate").value(50.0));
+    }
+
+    @Test
+    @DisplayName("아직 서로 답한 회차가 없으면 일치도는 null 이다")
+    void match_rate_is_null_without_comparison() throws Exception {
+        // when & then
+        matchRate(me, partner).andExpect(status().isOk())
+                .andExpect(jsonPath("$.comparedCount").value(0))
+                .andExpect(jsonPath("$.matchedCount").value(0))
+                .andExpect(jsonPath("$.matchRate").isEmpty());
+    }
+
+    private BalanceGameRound pastRound(String startsAt) {
+        balanceGameRoundRepository.upsert(Instant.parse(startsAt), 1L);
+        return balanceGameRoundRepository.findByStartsAt(Instant.parse(startsAt)).orElseThrow();
+    }
+
+    private ResultActions matchRate(User user, User partner) throws Exception {
+        return mockMvc.perform(get("/api/v1/people/{userId}/intimacy-quiz/match-rate", partner.getId().toString())
+                .header("Authorization", bearer(user.getId())));
     }
 
     private void knowEachOther(User user1, User user2) {
@@ -243,11 +285,11 @@ class BalanceGameIntegrationTest extends AbstractIntegrationTest {
                 .header("Authorization", bearer(user.getId())));
     }
 
-    private ResultActions answer(User user, String roundId, String optionId) throws Exception {
+    private ResultActions answer(User user, String roundId, User partner, String optionId) throws Exception {
         return mockMvc.perform(post("/api/v1/intimacy-quizzes/{roundId}/answers", roundId)
                 .header("Authorization", bearer(user.getId()))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"optionId\": \"" + optionId + "\"}"));
+                .content("{\"partnerId\": \"" + partner.getId() + "\", \"optionId\": \"" + optionId + "\"}"));
     }
 
     private ResultActions profile(User user, User partner) throws Exception {
