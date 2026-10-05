@@ -14,6 +14,8 @@ import com.nidus.twinly.common.photo.PhotoPosInfo;
 import com.nidus.twinly.common.photo.PhotoType;
 import com.nidus.twinly.common.photo.ProfilePhotoInfo;
 import com.nidus.twinly.common.time.KstTimes;
+import com.nidus.twinly.balancegame.repository.BalanceGameAnswerRepository;
+import com.nidus.twinly.balancegame.repository.BalanceGameAnswerRepository.MatchRateProjection;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.match.entity.Match;
@@ -30,6 +32,7 @@ import com.nidus.twinly.people.dto.result.PeopleIntimacySeriesResult;
 import com.nidus.twinly.people.dto.result.PeopleItemResult;
 import com.nidus.twinly.people.dto.result.PeopleLearnedFactsResult;
 import com.nidus.twinly.people.dto.result.PeopleProfileResult;
+import com.nidus.twinly.people.dto.result.PeopleIntimacyQuizMatchRateResult;
 import com.nidus.twinly.people.dto.result.PeopleProfileV2Result;
 import com.nidus.twinly.people.dto.result.PeopleResult;
 import com.nidus.twinly.people.dto.result.PeopleThresholdResult;
@@ -136,6 +139,9 @@ class PeopleServiceUnitTest {
 
     @Mock
     IntimacyReader intimacyReader;
+
+    @Mock
+    BalanceGameAnswerRepository balanceGameAnswerRepository;
 
     @Spy
     SceneNameRenderer sceneNameRenderer = new SceneNameRenderer();
@@ -952,5 +958,63 @@ class PeopleServiceUnitTest {
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("테스트 엔티티 생성 실패: " + type.getName(), e);
         }
+    }
+
+    // ---------------------------------------------------------------- 친밀도 퀴즈 일치도
+
+    @Test
+    @DisplayName("서로에게 답한 회차 중 같은 답이었던 비율을 소수 첫째 자리까지 반올림해 돌려준다")
+    void intimacyQuizMatchRate_rounds_rate() {
+        // given: 서로 답한 3회차 중 2회 일치
+        given(userRepository.existsById(20L)).willReturn(true);
+        given(balanceGameAnswerRepository.countMatchRate(ME, 20L)).willReturn(matchRate(3L, 2L));
+
+        // when
+        PeopleIntimacyQuizMatchRateResult result = peopleService.intimacyQuizMatchRate(ME, 20L);
+
+        // then: 66.666...% 는 66.7
+        assertThat(result).isEqualTo(new PeopleIntimacyQuizMatchRateResult(3, 2, 66.7));
+    }
+
+    @Test
+    @DisplayName("아직 서로 답한 회차가 없으면 일치도는 0% 가 아니라 null 이다")
+    void intimacyQuizMatchRate_is_null_without_comparison() {
+        // given
+        given(userRepository.existsById(20L)).willReturn(true);
+        given(balanceGameAnswerRepository.countMatchRate(ME, 20L)).willReturn(matchRate(0L, 0L));
+
+        // when
+        PeopleIntimacyQuizMatchRateResult result = peopleService.intimacyQuizMatchRate(ME, 20L);
+
+        // then: 0% 는 "다 엇갈렸다"로 읽히므로 비교 전에는 값을 주지 않는다
+        assertThat(result).isEqualTo(new PeopleIntimacyQuizMatchRateResult(0, 0, null));
+    }
+
+    @Test
+    @DisplayName("없는 상대면 USER_NOT_FOUND 이고 기록을 조회하지 않는다")
+    void intimacyQuizMatchRate_unknown_partner_throws() {
+        // given
+        given(userRepository.existsById(20L)).willReturn(false);
+
+        // when & then
+        assertThatThrownBy(() -> peopleService.intimacyQuizMatchRate(ME, 20L))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.USER_NOT_FOUND);
+        then(balanceGameAnswerRepository).should(never()).countMatchRate(any(), any());
+    }
+
+    private MatchRateProjection matchRate(Long comparedCount, Long matchedCount) {
+        return new MatchRateProjection() {
+            @Override
+            public Long getComparedCount() {
+                return comparedCount;
+            }
+
+            @Override
+            public Long getMatchedCount() {
+                return matchedCount;
+            }
+        };
     }
 }

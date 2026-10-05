@@ -29,6 +29,9 @@ import com.nidus.twinly.people.entity.EncounterPreference;
 import com.nidus.twinly.people.repository.EncounterPreferenceRepository;
 import com.nidus.twinly.people.repository.EncounterRepository;
 import com.nidus.twinly.people.writer.TwinViewWriter;
+import com.nidus.twinly.balancegame.repository.BalanceGameAnswerRepository;
+import com.nidus.twinly.balancegame.repository.BalanceGameAnswerRepository.MatchRateProjection;
+import com.nidus.twinly.people.dto.result.PeopleIntimacyQuizMatchRateResult;
 import com.nidus.twinly.relationship.domain.Intimacy;
 import com.nidus.twinly.relationship.domain.IntimacyBonuses;
 import com.nidus.twinly.relationship.domain.RelationshipSpecificType;
@@ -95,6 +98,7 @@ public class PeopleService {
     private final ObjectMapper objectMapper;
     private final TwinViewWriter twinViewWriter;
     private final IntimacyReader intimacyReader;
+    private final BalanceGameAnswerRepository balanceGameAnswerRepository;
 
     public PeopleResult people(Long userId, Long cursor, Integer limit) {
         int effectiveLimit = (limit != null && limit > 0) ? limit : DEFAULT_PEOPLE_LIMIT;
@@ -514,6 +518,22 @@ public class PeopleService {
                 profile.disclosedFields(),
                 profile.isDeleted(),
                 profile.isBlocked()
+        );
+    }
+
+    public PeopleIntimacyQuizMatchRateResult intimacyQuizMatchRate(Long userId, Long partnerUserId) {
+        if (!userRepository.existsById(partnerUserId)) {
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+        }
+
+        MatchRateProjection counts = balanceGameAnswerRepository.countMatchRate(userId, partnerUserId);
+        int comparedCount = counts.getComparedCount().intValue();
+        int matchedCount = counts.getMatchedCount().intValue();
+
+        return new PeopleIntimacyQuizMatchRateResult(
+                comparedCount,
+                matchedCount,
+                comparedCount == 0 ? null : Math.round(matchedCount * 1000.0 / comparedCount) / 10.0
         );
     }
 }

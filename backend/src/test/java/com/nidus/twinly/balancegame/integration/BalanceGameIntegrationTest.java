@@ -209,6 +209,54 @@ class BalanceGameIntegrationTest extends AbstractIntegrationTest {
                 });
     }
 
+    @Test
+    @DisplayName("역대 일치도는 서로에게 답한 회차만 세고, 한쪽만 답한 회차와 다른 트윈과의 답은 섞지 않는다")
+    void match_rate_counts_only_rounds_answered_by_both() throws Exception {
+        // given: 지난 세 회차 — 1회차 서로 1번(일치), 2회차 나 1번·트윈 2번(불일치), 3회차 나만 답함. 다른 트윈과는 1회차에 서로 1번
+        BalanceGameRound first = pastRound("2026-09-01T03:00:00Z");
+        BalanceGameRound second = pastRound("2026-09-01T09:00:00Z");
+        BalanceGameRound third = pastRound("2026-09-02T03:00:00Z");
+        balanceGameAnswerRepository.saveAll(List.of(
+                BalanceGameAnswer.create(first.getId(), me.getId(), partner.getId(), 1L),
+                BalanceGameAnswer.create(first.getId(), partner.getId(), me.getId(), 1L),
+                BalanceGameAnswer.create(second.getId(), me.getId(), partner.getId(), 1L),
+                BalanceGameAnswer.create(second.getId(), partner.getId(), me.getId(), 2L),
+                BalanceGameAnswer.create(third.getId(), me.getId(), partner.getId(), 1L),
+                BalanceGameAnswer.create(first.getId(), me.getId(), other.getId(), 1L),
+                BalanceGameAnswer.create(first.getId(), other.getId(), me.getId(), 1L)));
+
+        // when & then: 비교 2회 중 일치 1회
+        matchRate(me, partner).andExpect(status().isOk())
+                .andExpect(jsonPath("$.comparedCount").value(2))
+                .andExpect(jsonPath("$.matchedCount").value(1))
+                .andExpect(jsonPath("$.matchRate").value(50.0));
+
+        // then: 트윈 쪽에서 봐도 같다
+        matchRate(partner, me)
+                .andExpect(jsonPath("$.comparedCount").value(2))
+                .andExpect(jsonPath("$.matchRate").value(50.0));
+    }
+
+    @Test
+    @DisplayName("아직 서로 답한 회차가 없으면 일치도는 null 이다")
+    void match_rate_is_null_without_comparison() throws Exception {
+        // when & then
+        matchRate(me, partner).andExpect(status().isOk())
+                .andExpect(jsonPath("$.comparedCount").value(0))
+                .andExpect(jsonPath("$.matchedCount").value(0))
+                .andExpect(jsonPath("$.matchRate").isEmpty());
+    }
+
+    private BalanceGameRound pastRound(String startsAt) {
+        balanceGameRoundRepository.upsert(Instant.parse(startsAt), 1L);
+        return balanceGameRoundRepository.findByStartsAt(Instant.parse(startsAt)).orElseThrow();
+    }
+
+    private ResultActions matchRate(User user, User partner) throws Exception {
+        return mockMvc.perform(get("/api/v1/people/{userId}/intimacy-quiz/match-rate", partner.getId().toString())
+                .header("Authorization", bearer(user.getId())));
+    }
+
     private void knowEachOther(User user1, User user2) {
         LocalDate yesterday = KstTimes.today().minusDays(1);
         relationshipRepository.save(Relationship.create(user1.getId(), yesterday, "v1", user2.getId(), 40, "model",
