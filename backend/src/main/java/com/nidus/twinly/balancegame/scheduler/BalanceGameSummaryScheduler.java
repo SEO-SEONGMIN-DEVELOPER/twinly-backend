@@ -14,9 +14,9 @@ public class BalanceGameSummaryScheduler {
 
     private final BalanceGameSummaryService balanceGameSummaryService;
 
-    @Scheduled(cron = "10 0 * * * *", zone = "Asia/Seoul")
+    @Scheduled(cron = "10 0 12,18 * * *", zone = "Asia/Seoul")
     @SchedulerLock(name = "sendBalanceGameSummaries", lockAtMostFor = "PT5M")
     public void sendSummaries() {
-        balanceGameSummaryService.sendEndedWithinLastHour(Instant.now());
+        balanceGameSummaryService.sendEndedRound(Instant.now());
     }
 }

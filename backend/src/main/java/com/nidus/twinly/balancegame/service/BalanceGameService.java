@@ -1,5 +1,6 @@
 package com.nidus.twinly.balancegame.service;
 
+import com.nidus.twinly.balancegame.domain.BalanceGameSchedule;
 import com.nidus.twinly.balancegame.domain.BalanceGameStatus;
 import com.nidus.twinly.balancegame.dto.command.BalanceGameAnswerCommand;
 import com.nidus.twinly.balancegame.dto.result.BalanceGameQuestionResult;
@@ -31,7 +32,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -110,9 +110,10 @@ public class BalanceGameService {
     }
 
     private BalanceGameRound currentRound(LocalDateTime now) {
-        Instant startsAt = KstTimes.toInstant(now.truncatedTo(ChronoUnit.HOURS));
+        Instant startsAt = BalanceGameSchedule.roundStartOf(now);
 
-        balanceGameRoundRepository.upsert(startsAt, balanceGameQuestionLoader.questionFor(startsAt).id());
+        balanceGameRoundRepository.upsert(startsAt,
+                balanceGameQuestionLoader.questionFor(BalanceGameSchedule.sequenceOf(startsAt)).id());
 
         return balanceGameRoundRepository.findByStartsAt(startsAt)
                 .orElseThrow(() -> new IllegalStateException("방금 만든 밸런스 게임 회차를 찾을 수 없습니다."));

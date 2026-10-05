@@ -8,7 +8,6 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
-import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,7 +21,6 @@ public class BalanceGameQuestionLoader {
 
     private static final String RESOURCE_PATH = "balancegame/balance_game_v1.json";
     private static final int OPTION_COUNT = 2;
-    private static final long SECONDS_PER_HOUR = 3600;
 
     private final ObjectMapper objectMapper;
 
@@ -73,9 +71,7 @@ public class BalanceGameQuestionLoader {
         return Optional.ofNullable(questionMap.get(id));
     }
 
-    public BalanceGameQuestion questionFor(Instant startsAt) {
-        long hour = startsAt.getEpochSecond() / SECONDS_PER_HOUR;
-
-        return questions.get((int) Math.floorMod(hour, (long) questions.size()));
+    public BalanceGameQuestion questionFor(long sequence) {
+        return questions.get((int) Math.floorMod(sequence, (long) questions.size()));
     }
 }

@@ -9,7 +9,6 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.Optional;
 
 public interface BalanceGameRoundRepository extends JpaRepository<BalanceGameRound, Long> {
@@ -27,8 +26,6 @@ public interface BalanceGameRoundRepository extends JpaRepository<BalanceGameRou
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT r FROM BalanceGameRound r WHERE r.id = :id")
     Optional<BalanceGameRound> findByIdForUpdate(@Param("id") Long id);
-
-    List<BalanceGameRound> findAllBySummarySentAtIsNullAndStartsAtBetween(Instant from, Instant to);
 
     @Modifying
     @Query("UPDATE BalanceGameRound r SET r.summarySentAt = :now WHERE r.id = :id AND r.summarySentAt IS NULL")
