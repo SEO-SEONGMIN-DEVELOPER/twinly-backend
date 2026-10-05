@@ -198,6 +198,25 @@ class IntimacyReaderIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("다음 날을 시뮬레이션할 때는 아직 화면에 보이지 않는 마지막 기록에서 출발해, 그 기준 시각 이후 게임 점수를 더한다")
+    void readForSimulation_starts_from_relationship_not_yet_visible() {
+        // given: 화면에 보이는 기록 38과 2시간 뒤에야 보일 마지막 기록 40(둘 다 09시 기준), 기준 이후 퀴즈 +2
+        User me = saveUser();
+        User partner = saveUser();
+        saveRelationshipOn(me, partner, LocalDate.of(2026, 10, 1), 38, AS_OF);
+        LocalDateTime later = KstTimes.now().plusHours(2);
+        relationshipRepository.save(Relationship.create(me.getId(), later.toLocalDate(), "v1", partner.getId(), 40, "model",
+                later, AS_OF));
+        saveBonus(me, partner, 2, Instant.parse("2026-10-01T10:00:00Z"));
+
+        // when: 마지막 기록의 다음 날을 시뮬레이션하려고 시작값 조회
+        Map<Long, Integer> intimacies = intimacyReader.readForSimulation(me.getId(), later.toLocalDate().plusDays(1), Instant.now());
+
+        // then: 화면 기준 38 + 2 = 40 이 아니라, AI 가 마지막으로 낸 40 에 퀴즈 점수를 더한 42 에서 출발한다
+        assertThat(intimacies).containsExactlyEntriesOf(Map.of(partner.getId(), 42));
+    }
+
+    @Test
     @DisplayName("시작값에는 기준 시각과 같은 순간의 게임 점수까지 넣고, 그 뒤의 점수는 넣지 않는다")
     void readForSimulation_includes_bonuses_up_to_as_of() {
         // given: 09시 기준 30, 기준 시각 10시 정각에 +2, 10시 1초에 +4
