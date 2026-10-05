@@ -19,6 +19,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -30,7 +31,7 @@ import static org.mockito.Mockito.never;
 @ExtendWith(MockitoExtension.class)
 class BalanceGameSummaryServiceUnitTest {
 
-    private static final Instant NOW = Instant.parse("2026-10-03T02:00:10Z");
+    private static final Instant NOW = Instant.parse("2026-10-03T03:00:10Z");
     private static final Long ROUND_ID = 100L;
 
     @Mock
@@ -46,16 +47,16 @@ class BalanceGameSummaryServiceUnitTest {
     BalanceGameSummaryService balanceGameSummaryService;
 
     @Test
-    @DisplayName("지난 한 시간 안에 끝난 회차를 한 번만 요약해, 같은 답을 고른 상대가 있는 유저별 인원을 이벤트로 낸다")
+    @DisplayName("KST 12시 10초에 방금 끝난 어제 18시 회차를 한 번만 요약해, 같은 답을 고른 상대가 있는 유저별 인원을 이벤트로 낸다")
     void sends_summary_of_round_ended_within_last_hour() {
-        // given: 1시간 전에 끝난 회차, 10번은 3명·20번은 1명과 일치
+        // given: 방금 끝난 회차, 10번은 3명·20번은 1명과 일치
         givenEndedRound();
         given(balanceGameRoundRepository.markSummarySent(ROUND_ID, NOW)).willReturn(1);
         given(balanceGameAnswerRepository.countMatchesByUserInRound(eq(ROUND_ID), any(LocalDateTime.class)))
                 .willReturn(List.of(count(10L, 3L), count(20L, 1L)));
 
         // when
-        balanceGameSummaryService.sendEndedWithinLastHour(NOW);
+        balanceGameSummaryService.sendEndedRound(NOW);
 
         // then
         then(eventPublisher).should().publishEvent(new BalanceGameSummaryEvent(ROUND_ID, Map.of(10L, 3L, 20L, 1L), NOW));
@@ -69,7 +70,7 @@ class BalanceGameSummaryServiceUnitTest {
         given(balanceGameRoundRepository.markSummarySent(ROUND_ID, NOW)).willReturn(0);
 
         // when
-        balanceGameSummaryService.sendEndedWithinLastHour(NOW);
+        balanceGameSummaryService.sendEndedRound(NOW);
 
         // then
         then(balanceGameAnswerRepository).should(never()).countMatchesByUserInRound(anyLong(), any());
@@ -85,7 +86,7 @@ class BalanceGameSummaryServiceUnitTest {
         given(balanceGameAnswerRepository.countMatchesByUserInRound(eq(ROUND_ID), any(LocalDateTime.class))).willReturn(List.of());
 
         // when
-        balanceGameSummaryService.sendEndedWithinLastHour(NOW);
+        balanceGameSummaryService.sendEndedRound(NOW);
 
         // then
         then(eventPublisher).should(never()).publishEvent(any());
@@ -94,10 +95,9 @@ class BalanceGameSummaryServiceUnitTest {
     private void givenEndedRound() {
         BalanceGameRound round = BeanUtils.instantiateClass(BalanceGameRound.class);
         ReflectionTestUtils.setField(round, "id", ROUND_ID);
-        ReflectionTestUtils.setField(round, "startsAt", Instant.parse("2026-10-03T01:00:00Z"));
-        given(balanceGameRoundRepository.findAllBySummarySentAtIsNullAndStartsAtBetween(
-                Instant.parse("2026-10-03T00:00:10Z"), Instant.parse("2026-10-03T01:00:10Z")))
-                .willReturn(List.of(round));
+        ReflectionTestUtils.setField(round, "startsAt", Instant.parse("2026-10-02T09:00:00Z"));
+        given(balanceGameRoundRepository.findByStartsAt(Instant.parse("2026-10-02T09:00:00Z")))
+                .willReturn(Optional.of(round));
     }
 
     private MatchedCountProjection count(Long userId, Long matchedCount) {

@@ -4,9 +4,9 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import com.nidus.twinly.balancegame.domain.BalanceGameSchedule;
 import org.hibernate.annotations.DynamicUpdate;
 
-import java.time.Duration;
 import java.time.Instant;
 
 @Entity
@@ -15,8 +15,6 @@ import java.time.Instant;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class BalanceGameRound {
-
-    private static final Duration DURATION = Duration.ofHours(1);
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -31,7 +29,7 @@ public class BalanceGameRound {
     private Instant createdAt;
 
     public Instant endsAt() {
-        return startsAt.plus(DURATION);
+        return BalanceGameSchedule.nextRoundStartOf(startsAt);
     }
 
     public boolean isEnded(Instant now) {

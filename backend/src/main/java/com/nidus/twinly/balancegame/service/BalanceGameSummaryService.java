@@ -1,5 +1,6 @@
 package com.nidus.twinly.balancegame.service;
 
+import com.nidus.twinly.balancegame.domain.BalanceGameSchedule;
 import com.nidus.twinly.balancegame.entity.BalanceGameRound;
 import com.nidus.twinly.balancegame.event.BalanceGameSummaryEvent;
 import com.nidus.twinly.balancegame.repository.BalanceGameAnswerRepository;
@@ -11,8 +12,8 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -20,17 +21,15 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class BalanceGameSummaryService {
 
-    private static final Duration ROUND_DURATION = Duration.ofHours(1);
-
     private final BalanceGameRoundRepository balanceGameRoundRepository;
     private final BalanceGameAnswerRepository balanceGameAnswerRepository;
     private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
-    public void sendEndedWithinLastHour(Instant now) {
+    public void sendEndedRound(Instant now) {
         balanceGameRoundRepository
-                .findAllBySummarySentAtIsNullAndStartsAtBetween(now.minus(ROUND_DURATION.multipliedBy(2)), now.minus(ROUND_DURATION))
-                .forEach(round -> send(round, now));
+                .findByStartsAt(BalanceGameSchedule.previousRoundStartOf(LocalDateTime.ofInstant(now, KstTimes.ZONE)))
+                .ifPresent(round -> send(round, now));
     }
 
     private void send(BalanceGameRound round, Instant now) {

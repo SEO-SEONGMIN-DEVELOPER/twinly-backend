@@ -1,6 +1,7 @@
 package com.nidus.twinly.balancegame.integration;
 
 import com.jayway.jsonpath.JsonPath;
+import com.nidus.twinly.balancegame.domain.BalanceGameSchedule;
 import com.nidus.twinly.balancegame.entity.BalanceGameAnswer;
 import com.nidus.twinly.balancegame.entity.BalanceGameRound;
 import com.nidus.twinly.balancegame.event.BalanceGameSummaryEvent;
@@ -25,10 +26,8 @@ import org.springframework.test.context.event.ApplicationEvents;
 import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.test.web.servlet.ResultActions;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 
@@ -77,7 +76,7 @@ class BalanceGameIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("이번 시간에는 누구의 프로필에서 조회하든 모두 같은 회차·같은 질문을 받는다")
+    @DisplayName("이번 회차에는 누구의 프로필에서 조회하든 모두 같은 회차·같은 질문을 받는다")
     void everyone_gets_the_same_round_and_question() throws Exception {
         // when: 서로 다른 사람·다른 상대 프로필에서 조회
         String mine = body(current(me, partner).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("waitingMe")));
@@ -89,7 +88,7 @@ class BalanceGameIntegrationTest extends AbstractIntegrationTest {
                 .containsOnly(JsonPath.<String>read(mine, "$.roundId"));
         assertThat(List.<String>of(JsonPath.read(partners, "$.question.id"), JsonPath.read(others, "$.question.id")))
                 .containsOnly(JsonPath.<String>read(mine, "$.question.id"));
-        assertThat(balanceGameRoundRepository.findByStartsAt(thisHour())).isPresent();
+        assertThat(balanceGameRoundRepository.findByStartsAt(thisRound())).isPresent();
     }
 
     @Test
@@ -191,20 +190,20 @@ class BalanceGameIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("지난 시간 회차가 끝나면 같은 답을 고른 상대가 있는 유저별 인원을 한 번만 요약한다")
+    @DisplayName("지난 회차가 끝나면 같은 답을 고른 상대가 있는 유저별 인원을 한 번만 요약한다")
     void summarizes_ended_round_once() {
-        // given: 지난 시간 회차에 나·상대·다른 상대가 모두 1번
-        Instant lastHour = thisHour().minus(Duration.ofHours(1));
-        balanceGameRoundRepository.upsert(lastHour, 1L);
-        BalanceGameRound round = balanceGameRoundRepository.findByStartsAt(lastHour).orElseThrow();
+        // given: 지난 회차에 나·상대·다른 상대가 모두 1번
+        Instant lastRound = BalanceGameSchedule.previousRoundStartOf(KstTimes.now());
+        balanceGameRoundRepository.upsert(lastRound, 1L);
+        BalanceGameRound round = balanceGameRoundRepository.findByStartsAt(lastRound).orElseThrow();
         balanceGameAnswerRepository.saveAll(List.of(
                 BalanceGameAnswer.create(round.getId(), me.getId(), 1L),
                 BalanceGameAnswer.create(round.getId(), partner.getId(), 1L),
                 BalanceGameAnswer.create(round.getId(), other.getId(), 1L)));
 
-        // when: 이번 정각 10초에 도는 시간 끝 요약을 (서버 재시도처럼) 두 번 실행
-        balanceGameSummaryService.sendEndedWithinLastHour(thisHour().plusSeconds(10));
-        balanceGameSummaryService.sendEndedWithinLastHour(thisHour().plusSeconds(10));
+        // when: 이번 회차 시작 10초에 도는 요약을 (서버 재시도처럼) 두 번 실행
+        balanceGameSummaryService.sendEndedRound(thisRound().plusSeconds(10));
+        balanceGameSummaryService.sendEndedRound(thisRound().plusSeconds(10));
 
         // then: 나는 2명, 서로 모르는 상대·다른 상대는 각자 나 1명과만 일치했고, 요약은 한 번만 나간다
         assertThat(applicationEvents.stream(BalanceGameSummaryEvent.class).toList())
@@ -231,8 +230,8 @@ class BalanceGameIntegrationTest extends AbstractIntegrationTest {
                 .toList();
     }
 
-    private Instant thisHour() {
-        return KstTimes.toInstant(KstTimes.now().truncatedTo(ChronoUnit.HOURS));
+    private Instant thisRound() {
+        return BalanceGameSchedule.roundStartOf(KstTimes.now());
     }
 
     private String body(ResultActions result) throws Exception {

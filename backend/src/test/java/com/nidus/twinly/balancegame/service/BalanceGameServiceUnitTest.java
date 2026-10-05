@@ -1,5 +1,6 @@
 package com.nidus.twinly.balancegame.service;
 
+import com.nidus.twinly.balancegame.domain.BalanceGameSchedule;
 import com.nidus.twinly.balancegame.domain.BalanceGameStatus;
 import com.nidus.twinly.balancegame.dto.command.BalanceGameAnswerCommand;
 import com.nidus.twinly.balancegame.dto.result.BalanceGameResult;
@@ -33,10 +34,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.BeanUtils;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 
@@ -93,7 +92,7 @@ class BalanceGameServiceUnitTest {
     // ---------------------------------------------------------------- 이번 시간 조회
 
     @Test
-    @DisplayName("이번 시간 회차를 KST 정각 기준으로 모두가 공유하도록 만들고, 아직 아무도 안 답했으면 내 답을 기다린다")
+    @DisplayName("이번 회차(KST 12시·18시 출제)를 모두가 공유하도록 만들고, 아직 아무도 안 답했으면 내 답을 기다린다")
     void current_creates_shared_round_of_this_hour() {
         // given: 사람 목록에 있는 상대
         Instant startsAt = givenVisiblePartnerAndRound();
@@ -101,12 +100,12 @@ class BalanceGameServiceUnitTest {
         // when
         BalanceGameResult result = balanceGameService.current(ME, PARTNER);
 
-        // then: 정각 회차를 (이미 있으면 그대로) 만들고 공통 질문을 담는다
+        // then: 이번 회차를 (이미 있으면 그대로) 만들고 공통 질문을 담는다
         then(balanceGameRoundRepository).should().upsert(startsAt, 7L);
         assertThat(result.roundId()).isEqualTo(ROUND_ID);
         assertThat(result.partnerId()).isEqualTo(PARTNER);
         assertThat(result.question().text()).isEqualTo("평생 하나만 먹어야 한다면?");
-        assertThat(result.endsAt()).isEqualTo(startsAt.plus(Duration.ofHours(1)));
+        assertThat(result.endsAt()).isEqualTo(BalanceGameSchedule.nextRoundStartOf(startsAt));
         assertThat(result.status()).isEqualTo(BalanceGameStatus.WAITING_ME);
         assertThat(result.myOptionId()).isNull();
         assertThat(result.partnerAnswered()).isFalse();
@@ -309,7 +308,7 @@ class BalanceGameServiceUnitTest {
     @DisplayName("질문에 없는 선택지는 INVALID_REQUEST 이고 답을 남기지 않는다")
     void answer_with_unknown_option_throws() {
         // given
-        given(balanceGameRoundRepository.findByIdForUpdate(ROUND_ID)).willReturn(Optional.of(round(thisHour())));
+        given(balanceGameRoundRepository.findByIdForUpdate(ROUND_ID)).willReturn(Optional.of(round(thisRound())));
         given(balanceGameQuestionLoader.findQuestion(7L)).willReturn(Optional.of(QUESTION));
 
         // when & then
@@ -321,10 +320,10 @@ class BalanceGameServiceUnitTest {
     }
 
     @Test
-    @DisplayName("한 시간이 지난 회차에는 답할 수 없다 (INTIMACY_QUIZ_EXPIRED)")
+    @DisplayName("끝난 회차에는 답할 수 없다 (INTIMACY_QUIZ_EXPIRED)")
     void answer_after_end_throws() {
-        // given: 두 시간 전 회차
-        given(balanceGameRoundRepository.findByIdForUpdate(ROUND_ID)).willReturn(Optional.of(round(thisHour().minus(Duration.ofHours(2)))));
+        // given: 2026-01-01 12시 회차
+        given(balanceGameRoundRepository.findByIdForUpdate(ROUND_ID)).willReturn(Optional.of(round(Instant.parse("2026-01-01T03:00:00Z"))));
         given(balanceGameQuestionLoader.findQuestion(7L)).willReturn(Optional.of(QUESTION));
 
         // when & then
@@ -355,8 +354,8 @@ class BalanceGameServiceUnitTest {
         given(userRepository.findById(PARTNER)).willReturn(Optional.of(user(PARTNER)));
         given(relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(eq(ME), eq(PARTNER), any(LocalDateTime.class)))
                 .willReturn(Optional.of(BeanUtils.instantiateClass(Relationship.class)));
-        Instant startsAt = thisHour();
-        given(balanceGameQuestionLoader.questionFor(startsAt)).willReturn(QUESTION);
+        Instant startsAt = thisRound();
+        given(balanceGameQuestionLoader.questionFor(BalanceGameSchedule.sequenceOf(startsAt))).willReturn(QUESTION);
         given(balanceGameQuestionLoader.findQuestion(7L)).willReturn(Optional.of(QUESTION));
         given(balanceGameRoundRepository.findByStartsAt(startsAt)).willReturn(Optional.of(round(startsAt)));
         return startsAt;
@@ -368,12 +367,12 @@ class BalanceGameServiceUnitTest {
     }
 
     private void givenOpenRoundWithoutAnswer() {
-        given(balanceGameRoundRepository.findByIdForUpdate(ROUND_ID)).willReturn(Optional.of(round(thisHour())));
+        given(balanceGameRoundRepository.findByIdForUpdate(ROUND_ID)).willReturn(Optional.of(round(thisRound())));
         given(balanceGameQuestionLoader.findQuestion(7L)).willReturn(Optional.of(QUESTION));
     }
 
-    private Instant thisHour() {
-        return KstTimes.toInstant(KstTimes.now().truncatedTo(ChronoUnit.HOURS));
+    private Instant thisRound() {
+        return BalanceGameSchedule.roundStartOf(KstTimes.now());
     }
 
     private BalanceGameRound round(Instant startsAt) {

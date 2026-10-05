@@ -6,15 +6,11 @@ import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class BalanceGameQuestionLoaderUnitTest {
-
-    private static final Instant STARTS_AT = Instant.parse("2026-10-03T01:00:00Z");
 
     private BalanceGameQuestionLoader loader;
 
@@ -36,22 +32,22 @@ class BalanceGameQuestionLoaderUnitTest {
     }
 
     @Test
-    @DisplayName("같은 시간이면 서버·요청과 관계없이 모두에게 같은 질문이 나온다")
+    @DisplayName("같은 회차 순번이면 서버·요청과 관계없이 모두에게 같은 질문이 나온다")
     void questionFor_is_deterministic() {
         // when & then
-        assertThat(loader.questionFor(STARTS_AT)).isEqualTo(loader.questionFor(STARTS_AT));
+        assertThat(loader.questionFor(81_000L)).isEqualTo(loader.questionFor(81_000L));
     }
 
     @Test
-    @DisplayName("하루 24시간 동안 같은 질문이 두 번 나오지 않는다")
-    void questionFor_does_not_repeat_within_a_day() {
-        // when: 24시간치 질문
-        long distinct = IntStream.range(0, 24)
-                .mapToObj(hour -> loader.questionFor(STARTS_AT.plus(Duration.ofHours(hour))).id())
+    @DisplayName("하루 두 문항씩, 2주(28회차) 동안 같은 질문이 두 번 나오지 않는다")
+    void questionFor_does_not_repeat_within_a_week() {
+        // when: 이어지는 28회차의 질문
+        long distinct = IntStream.range(0, 28)
+                .mapToObj(round -> loader.questionFor(81_000L + round).id())
                 .distinct()
                 .count();
 
         // then
-        assertThat(distinct).isEqualTo(24);
+        assertThat(distinct).isEqualTo(28);
     }
 }
