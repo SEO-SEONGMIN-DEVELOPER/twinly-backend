@@ -12,7 +12,8 @@ build.py → apply_texts.py → validate.py 다음에 돌린다. validate.py 는
      길이는 구역 사이 이동 시간과 빈틈 중 짧은 쪽이다.
      앞뒤 장면을 함께한 사람은, 그 사람 쪽에도 같은 이동이 생길 때만 동행으로 넣는다.
   4) rewrites.json 으로 옛 지명·여름 표현이 든 문장을 바꾼다.
-  5) scene_fixes.json 으로 문맥 검토에서 고친 문장을 장면 단위로 덮어쓴다.
+  5) place_fixes.json 으로 동선이 어색한 장면의 장소를 장면 단위로 바꾼다(키는 아래 scene_fixes 와 같다).
+  6) scene_fixes.json 으로 문맥 검토에서 고친 문장을 장면 단위로 덮어쓴다.
      키는 행동 A|유저|날짜|시각, 대화 D|날짜|시각|참가자, 이동 M|유저|날짜|시각 이고,
      필드는 narration·mind·lines.<n>.text·lines.<n>.action 이다. 맞는 장면이 없는 키가 있으면 멈춘다.
 
@@ -31,6 +32,8 @@ PLACES = {row["code"]: row for row in csv.DictReader(open(os.path.join(HERE, "pl
 PLACE_MAP = json.load(open(os.path.join(HERE, "place_map.json"), encoding="utf-8"))
 REWRITES = json.load(open(os.path.join(HERE, "rewrites.json"), encoding="utf-8"))
 SCENE_FIXES = json.load(open(os.path.join(HERE, "scene_fixes.json"), encoding="utf-8"))
+PLACE_FIXES = json.load(open(os.path.join(HERE, "place_fixes.json"), encoding="utf-8"))
+USED_PLACE_FIXES = set()
 
 HOME = "P0258"
 RIDES = {"지하철 2호선 안", "환승역 계단", "버스 창가 자리"}
@@ -123,8 +126,16 @@ def rewrite(text):
     return REWRITES.get(text, text) if text else text
 
 
-def relocated(scene):
-    code = PLACE_MAP[scene["place"]]
+def code_of(user_id, date, scene):
+    key = scene_key(user_id, date, scene)
+    if key in PLACE_FIXES:
+        USED_PLACE_FIXES.add(key)
+        return PLACE_FIXES[key]
+    return PLACE_MAP[scene["place"]]
+
+
+def relocated(user_id, date, scene):
+    code = code_of(user_id, date, scene)
     out = {}
     for key, value in scene.items():
         out[key] = value
@@ -162,13 +173,13 @@ def plan_day(day):
         scene = scenes[i]
         if is_ride(scene) and stays and i + 1 < len(scenes):
             src = stays[-1]["placeCode"]
-            dst = PLACE_MAP[scenes[i + 1]["place"]]
+            dst = code_of(day["userId"], day["date"], scenes[i + 1])
             if src != dst:
                 plans.append(dict(start=scene["start"], end=scene["end"], src=src, dst=dst, mode=travel(src, dst)[1],
                                   candidates=[], text=rewrite(scene["narration"]), mind=rewrite(scene["mind"])))
                 i += 1
                 continue
-        stays.append(relocated(scene))
+        stays.append(relocated(day["userId"], day["date"], scene))
         i += 1
 
     for a, b in zip(stays, stays[1:]):
@@ -235,6 +246,9 @@ def relocate(doc):
             moves.append(move(plan["start"], plan["end"], plan["src"], plan["dst"], plan["mode"],
                               together, text, plan["mind"]))
         day["scenes"] = sorted(stays + moves, key=lambda s: s["start"])
+    unused = set(PLACE_FIXES) - USED_PLACE_FIXES
+    if unused:
+        raise SystemExit(f"맞는 장면이 없는 장소 수정: {sorted(unused)[:5]}")
     apply_fixes(doc)
     return doc
 
