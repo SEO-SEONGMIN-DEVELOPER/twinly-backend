@@ -41,6 +41,7 @@ ai-server:
 
 slack:
   report-webhook-url: http://localhost:0/slack-test
+  feedback-webhook-url: http://localhost:0/slack-test
 
 aws:
   s3:

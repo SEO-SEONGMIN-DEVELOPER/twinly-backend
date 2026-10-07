@@ -17,6 +17,7 @@ public class SlackClient {
 
     private final RestClient restClient;
     private final URI reportWebhookUri;
+    private final URI feedbackWebhookUri;
 
     public SlackClient(JsonMapper jsonMapper, SlackProperties slackProperties) {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
@@ -27,12 +28,21 @@ public class SlackClient {
                 .configureMessageConverters(c -> c.withJsonConverter(new JacksonJsonHttpMessageConverter(jsonMapper)))
                 .build();
         this.reportWebhookUri = URI.create(slackProperties.reportWebhookUrl());
+        this.feedbackWebhookUri = URI.create(slackProperties.feedbackWebhookUrl());
     }
 
     public void sendReportAlert(String text) {
+        send(reportWebhookUri, text);
+    }
+
+    public void sendFeedbackAlert(String text) {
+        send(feedbackWebhookUri, text);
+    }
+
+    private void send(URI webhookUri, String text) {
         try {
             restClient.post()
-                    .uri(reportWebhookUri)
+                    .uri(webhookUri)
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(new SlackMessageRequest(text))
                     .retrieve()

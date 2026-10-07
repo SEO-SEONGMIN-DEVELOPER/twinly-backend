@@ -88,6 +88,7 @@ import com.nidus.twinly.me.dto.result.MeTendencyQuestionsItemResult;
 import com.nidus.twinly.me.dto.result.MeTendencyQuestionsOptionResult;
 import com.nidus.twinly.me.dto.result.MeTendencyQuestionsResult;
 import com.nidus.twinly.me.dto.result.MeWithdrawResult;
+import com.nidus.twinly.me.event.FeedbackSentEvent;
 import com.nidus.twinly.notification.domain.AppNotificationFeedType;
 import com.nidus.twinly.notification.domain.NotificationChannel;
 import com.nidus.twinly.notification.domain.NotificationType;
@@ -120,6 +121,7 @@ import com.nidus.twinly.user.repository.UserRepository;
 import com.nidus.twinly.user.repository.UserSurveyAnswerRepository;
 import com.nidus.twinly.user.repository.UserTendencyAnswerRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -189,6 +191,7 @@ public class MeService {
     private final TendencyLoader tendencyLoader;
     private final FeedbackOptionLoader feedbackOptionLoader;
     private final IntimacyReader intimacyReader;
+    private final ApplicationEventPublisher eventPublisher;
 
     public MeProfilePhotoPresignResult profilePhotoPresign(Long userId, MeProfilePhotoPresignCommand command) {
         PhotoPresignResult presign = presignService.presignPhoto(userId, command.contentType(), PhotoType.PROFILE);
@@ -750,12 +753,11 @@ public class MeService {
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "피드백 내용이 비어 있습니다: " + command.type());
         }
 
-        Set<Long> availableOptionIds = feedbackOptionLoader.getOptions(command.type()).stream()
-                .map(FeedbackOption::id)
-                .collect(Collectors.toSet());
+        Map<Long, String> labelByOptionId = feedbackOptionLoader.getOptions(command.type()).stream()
+                .collect(Collectors.toMap(FeedbackOption::id, FeedbackOption::label));
 
         List<Long> optionIds = command.optionIds().stream()
-                .filter(availableOptionIds::contains)
+                .filter(labelByOptionId::containsKey)
                 .distinct()
                 .toList();
 
@@ -769,6 +771,15 @@ public class MeService {
         userFeedbackOptionRepository.saveAll(optionIds.stream()
                 .map(optionId -> UserFeedbackOption.create(feedback.getId(), optionId))
                 .toList());
+
+        eventPublisher.publishEvent(new FeedbackSentEvent(
+                feedback.getId(),
+                userId,
+                feedback.getType(),
+                optionIds.stream().map(labelByOptionId::get).toList(),
+                feedback.getDetail(),
+                feedback.getAppPlatform(),
+                feedback.getAppVersion()));
     }
 
     @Transactional

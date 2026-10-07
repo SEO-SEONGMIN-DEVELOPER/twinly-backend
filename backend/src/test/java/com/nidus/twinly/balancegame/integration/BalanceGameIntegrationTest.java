@@ -92,7 +92,7 @@ class BalanceGameIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("같은 질문이라도 트윈마다 따로 답하고, 서로에게 같은 답을 한 쌍에만 2점이 쌓인다")
+    @DisplayName("같은 질문이라도 트윈마다 따로 답하고, 서로에게 같은 답을 한 쌍에만 10점이 쌓인다")
     void answers_are_separate_per_partner() throws Exception {
         // given: 이번 회차
         String round = body(current(me, partner));
@@ -105,17 +105,17 @@ class BalanceGameIntegrationTest extends AbstractIntegrationTest {
         answer(me, roundId, other, second).andExpect(status().isOk());
         answer(partner, roundId, me, first).andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("matched"))
-                .andExpect(jsonPath("$.intimacyBonus").value(2));
+                .andExpect(jsonPath("$.intimacyBonus").value(10));
         answer(other, roundId, me, first).andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("mismatched"))
                 .andExpect(jsonPath("$.partnerOptionId").value(second));
 
-        // then: 트윈과는 일치해 2점, 다른 트윈과는 불일치라 점수 없음
-        assertThat(bonusesBetween(me, partner)).containsExactly(2);
+        // then: 트윈과는 일치해 10점, 다른 트윈과는 불일치라 점수 없음
+        assertThat(bonusesBetween(me, partner)).containsExactly(10);
         assertThat(bonusesBetween(me, other)).isEmpty();
         current(me, partner).andExpect(jsonPath("$.status").value("matched"));
         current(me, other).andExpect(jsonPath("$.status").value("mismatched"));
-        profile(me, partner).andExpect(jsonPath("$.intimacy").value(42)).andExpect(jsonPath("$.gameIntimacy").value(2));
+        profile(me, partner).andExpect(jsonPath("$.intimacy").value(50)).andExpect(jsonPath("$.gameIntimacy").value(10));
         profile(me, other).andExpect(jsonPath("$.intimacy").value(40)).andExpect(jsonPath("$.gameIntimacy").value(0));
     }
 

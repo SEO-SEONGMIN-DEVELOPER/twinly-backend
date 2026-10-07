@@ -43,7 +43,7 @@ import static com.nidus.twinly.common.logging.LogField.field;
 @Transactional
 public class BalanceGameService {
 
-    private static final int MATCH_BONUS = 2;
+    private static final int MATCH_BONUS = 10;
 
     private final BalanceGameRoundRepository balanceGameRoundRepository;
     private final BalanceGameAnswerRepository balanceGameAnswerRepository;

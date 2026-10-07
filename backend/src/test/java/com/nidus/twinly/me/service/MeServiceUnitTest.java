@@ -87,6 +87,7 @@ import com.nidus.twinly.me.dto.result.MeTendencyQuestionsItemResult;
 import com.nidus.twinly.me.dto.result.MeTendencyQuestionsOptionResult;
 import com.nidus.twinly.me.dto.result.MeTendencyQuestionsResult;
 import com.nidus.twinly.me.dto.result.MeWithdrawResult;
+import com.nidus.twinly.me.event.FeedbackSentEvent;
 import com.nidus.twinly.notification.domain.AppNotificationFeedTargetType;
 import com.nidus.twinly.notification.domain.AppNotificationFeedType;
 import com.nidus.twinly.notification.domain.NotificationChannel;
@@ -128,6 +129,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.BeanUtils;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -252,6 +254,9 @@ class MeServiceUnitTest {
 
     @Mock
     FeedbackOptionLoader feedbackOptionLoader;
+
+    @Mock
+    ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     MeService meService;
@@ -1856,6 +1861,25 @@ class MeServiceUnitTest {
 
         then(userFeedbackRepository).should(never()).save(any());
         then(userFeedbackOptionRepository).should(never()).saveAll(any());
+        then(eventPublisher).should(never()).publishEvent(any());
+    }
+
+    @Test
+    @DisplayName("피드백을 저장하면 고른 선택지 문구와 저장된 내용으로 알림 이벤트를 발행한다")
+    void sendFeedback_publishes_event_with_option_labels() {
+        // given: 탈퇴 사유 선택지는 1, 2, 3 + 저장하면 피드백 id 10이 매겨짐
+        given(feedbackOptionLoader.getOptions(FeedbackType.WITHDRAWAL)).willReturn(feedbackOptions(1L, 2L, 3L));
+        givenSavedFeedbackId(10L);
+
+        // when: 없는 id 99와 중복된 3을 섞어 앞뒤 공백이 있는 내용으로 탈퇴 사유 전송
+        meService.sendFeedback(ME, new MeSendFeedbackCommand(FeedbackType.WITHDRAWAL, List.of(3L, 99L, 1L, 3L), "  매칭이 별로예요 "),
+                AppPlatform.ANDROID, new AppVersion(1, 2, 3));
+
+        // then: 저장된 선택지 순서대로 문구가 담기고, 내용은 공백을 지운 값으로 발행
+        ArgumentCaptor<FeedbackSentEvent> captor = ArgumentCaptor.forClass(FeedbackSentEvent.class);
+        then(eventPublisher).should().publishEvent(captor.capture());
+        assertThat(captor.getValue()).isEqualTo(new FeedbackSentEvent(
+                10L, ME, FeedbackType.WITHDRAWAL, List.of("선택지 3", "선택지 1"), "매칭이 별로예요", AppPlatform.ANDROID, "1.2.3"));
     }
 
     private List<FeedbackOption> feedbackOptions(Long... optionIds) {
