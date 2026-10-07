@@ -124,6 +124,7 @@ ai-server:
 
 slack:
   report-webhook-url: ${SLACK_REPORT_WEBHOOK_URL}
+  feedback-webhook-url: ${SLACK_FEEDBACK_WEBHOOK_URL}
   connect-timeout: 2s
   read-timeout: 3s
 

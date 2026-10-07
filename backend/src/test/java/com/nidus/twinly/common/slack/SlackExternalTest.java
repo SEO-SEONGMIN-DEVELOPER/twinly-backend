@@ -43,10 +43,21 @@ class SlackExternalTest {
     }
 
     @Test
+    @DisplayName("실제 Slack 웹훅으로 피드백 알림을 보내면 예외 없이 채널에 게시된다")
+    void send_feedback_alert() {
+        // given: 운영자가 실제 피드백으로 오인하지 않도록 테스트임을 드러낸 문구 (수신 채널은 .env 의 웹훅 URL 로만 정해진다)
+        String text = "[external-test] SlackClient 연동 검증 메시지입니다. 실제 피드백이 아니므로 무시하세요.";
+
+        // when & then: 웹훅 URL·요청 형식이 유효하면 Slack 이 200 으로 받아 예외가 나지 않는다
+        assertThatCode(() -> slackClient.sendFeedbackAlert(text))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
     @DisplayName("존재하지 않는 웹훅으로 보내면 Slack 의 거부 응답을 SLACK_SEND_FAILED 로 감싼다")
     void invalid_webhook_is_wrapped() {
         // given: 형식만 맞고 존재하지 않는 웹훅 URL 로 만든 클라이언트
-        SlackProperties invalid = new SlackProperties(INVALID_WEBHOOK_URL, slackProperties.connectTimeout(), slackProperties.readTimeout());
+        SlackProperties invalid = new SlackProperties(INVALID_WEBHOOK_URL, INVALID_WEBHOOK_URL, slackProperties.connectTimeout(), slackProperties.readTimeout());
         SlackClient invalidClient = new SlackClient(jsonMapper, invalid);
 
         // when & then: 4xx 응답이 우리 도메인 예외로 변환되어 올라온다
