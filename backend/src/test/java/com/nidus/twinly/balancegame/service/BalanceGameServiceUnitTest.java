@@ -154,7 +154,7 @@ class BalanceGameServiceUnitTest {
         // then
         assertThat(result.status()).isEqualTo(BalanceGameStatus.MATCHED);
         assertThat(result.partnerOptionId()).isEqualTo(2L);
-        assertThat(result.intimacyBonus()).isEqualTo(2);
+        assertThat(result.intimacyBonus()).isEqualTo(10);
     }
 
     @Test
@@ -245,7 +245,7 @@ class BalanceGameServiceUnitTest {
     }
 
     @Test
-    @DisplayName("트윈이 나에게 한 답과 같은 답을 하면 쌍에 2점을 쌓는다")
+    @DisplayName("트윈이 나에게 한 답과 같은 답을 하면 쌍에 10점을 쌓는다")
     void answer_matching_partner_answer_grants_bonus() {
         // given: 트윈이 나에게 이미 2번, 점수를 더해도 70 미만
         givenOpenRoundAndVisiblePartner();
@@ -255,12 +255,12 @@ class BalanceGameServiceUnitTest {
         // when: 나도 트윈에게 2번
         balanceGameService.answer(ME, ROUND_ID, new BalanceGameAnswerCommand(PARTNER, 2L));
 
-        // then: 쌍 단위 2점 한 건, 70 미만이라 채팅방은 열지 않는다
+        // then: 쌍 단위 10점 한 건, 70 미만이라 채팅방은 열지 않는다
         ArgumentCaptor<IntimacyBonus> bonus = ArgumentCaptor.forClass(IntimacyBonus.class);
         then(intimacyBonusRepository).should().save(bonus.capture());
         assertThat(bonus.getValue().getUserAId()).isEqualTo(ME);
         assertThat(bonus.getValue().getUserBId()).isEqualTo(PARTNER);
-        assertThat(bonus.getValue().getAmount()).isEqualTo(2);
+        assertThat(bonus.getValue().getAmount()).isEqualTo(10);
         then(chatRoomOpener).should(never()).open(any(), any());
     }
 
