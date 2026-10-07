@@ -19,7 +19,7 @@ public record PeopleEventDialogueSceneResponse(
         @JsonFormat(shape = JsonFormat.Shape.STRING)
         List<Long> with,
         List<PeopleEventLineResponse> lines
-) implements PeopleEventSceneResponse {
+) implements PeopleEventSceneResponse, PeopleEventV2SceneResponse {
 
     public static PeopleEventDialogueSceneResponse from(PeopleEventDialogueSceneResult result) {
         return new PeopleEventDialogueSceneResponse(

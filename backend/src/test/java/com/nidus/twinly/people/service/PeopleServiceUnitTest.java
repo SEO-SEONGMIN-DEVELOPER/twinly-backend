@@ -24,6 +24,7 @@ import com.nidus.twinly.common.scene.SceneNameRenderer;
 import com.nidus.twinly.common.scene.StoredSceneNarrationLine;
 import com.nidus.twinly.people.domain.TwinViewKind;
 import com.nidus.twinly.people.dto.result.PeopleEventActionSceneResult;
+import com.nidus.twinly.people.dto.result.PeopleEventMoveSceneResult;
 import com.nidus.twinly.people.dto.result.PeopleEventResult;
 import com.nidus.twinly.people.dto.result.PeopleEventUserInfoResult;
 import com.nidus.twinly.people.dto.result.PeopleEventsResult;
@@ -728,6 +729,28 @@ class PeopleServiceUnitTest {
     }
 
     @Test
+    @DisplayName("이벤트 목록의 첫 씬이 함께한 이동이면 미리보기는 이동 문장이다")
+    void events_preview_of_move_scene_is_narration() {
+        // given: 그날 상대와 함께한 첫 씬이 같이 카페로 걸어간 이동이다
+        LocalDate day = LocalDate.of(2026, 7, 20);
+
+        given(userRepository.findById(20L)).willReturn(Optional.of(user(20L, "철수")));
+        given(intimacyReader.read(eq(ME), eq(20L), any(LocalDateTime.class))).willReturn(Intimacy.ZERO);
+        given(sceneRepository.findDistinctDatesFromCursorByUserIdAndWithPartnerUserId(eq(ME), eq(20L), isNull(), eq(21), any(LocalDateTime.class)))
+                .willReturn(List.of(day));
+        given(sceneRepository.findAllByUserIdAndWithPartnerUserIdAndDateIn(eq(ME), eq(20L), eq(List.of(day)), any(LocalDateTime.class)))
+                .willReturn(List.of(move(201L, day.atTime(9, 0), day.atTime(9, 10), "집", "카페")));
+        given(relationshipRepository.findForDeltaRange(eq(ME), eq(20L), eq(day), eq(day), any(LocalDateTime.class))).willReturn(List.of());
+
+        // when: 이벤트 목록 조회
+        PeopleEventsResult result = peopleService.events(ME, 20L, null, null);
+
+        // then: 대사 파싱으로 빠지지 않고 이동 문장과 도착지가 그대로 내려간다
+        assertThat(result.events().getFirst().place()).isEqualTo("카페");
+        assertThat(result.events().getFirst().preview()).isEqualTo("카페로 향했다");
+    }
+
+    @Test
     @DisplayName("이벤트 상세의 씬 본문도 이름 자리를 실제 유저 닉네임으로 치환한다")
     void event_replaces_name_placeholders() {
         given(userRepository.existsById(20L)).willReturn(true);
@@ -833,6 +856,162 @@ class PeopleServiceUnitTest {
         assertThat(result.userInfos()).containsExactly(new PeopleEventUserInfoResult(ME, "자신", null));
     }
 
+    @Test
+    @DisplayName("v1 이벤트 상세는 상대와 함께한 씬만 내리고 혼자 한 이동은 찾지 않는다")
+    void event_does_not_look_up_preceding_moves() {
+        given(userRepository.existsById(20L)).willReturn(true);
+        // given: 상대(20)와 함께한 행동 씬 1개
+        LocalDate date = LocalDate.of(2026, 7, 20);
+        given(sceneRepository.findAllByUserIdAndWithPartnerUserIdAndDateIn(eq(ME), eq(20L), eq(List.of(date)), any(LocalDateTime.class)))
+                .willReturn(List.of(scene(300L, ME, date, "v1", "도서관", SceneType.ACTION, "함께 공부했다", null, null)));
+        given(scenePartnerRepository.findAllBySceneIdIn(List.of(300L))).willReturn(List.of(scenePartner(300L, 20L)));
+        given(userRepository.findAllById(List.of(ME, 20L))).willReturn(List.of(user(ME, "자신"), user(20L, "철수")));
+
+        // when: v1 이벤트 상세 조회
+        PeopleEventResult result = peopleService.event(ME, 20L, date);
+
+        // then: 함께한 씬만 남고 이동 조회는 일어나지 않는다
+        assertThat(result.scenes()).extracting(scene -> ((PeopleEventActionSceneResult) scene).sceneId()).containsExactly(300L);
+        then(sceneRepository).should(never()).findAllByUserIdAndDateAndType(any(), any(), any());
+    }
+
+    // ------------------------------------------------------------------- eventV2()
+
+    @Test
+    @DisplayName("v2 이벤트 상세는 함께한 씬이 시작하기 전에 끝난 내 이동 중 가장 늦은 것을 함께 내린다")
+    void eventV2_adds_latest_preceding_move() {
+        given(userRepository.existsById(20L)).willReturn(true);
+        // given: 14시에 상대와 도서관에서 공부했고, 그날 내 이동은 9시(집→카페), 13시 40분(카페→도서관, 14시 도착), 16시(도서관→집) 세 번이다
+        LocalDate date = LocalDate.of(2026, 7, 20);
+        Scene shared = between(scene(300L, ME, date, "v1", "도서관", SceneType.ACTION, "함께 공부했다", null, null),
+                date.atTime(14, 0), date.atTime(15, 0));
+        given(sceneRepository.findAllByUserIdAndWithPartnerUserIdAndDateIn(eq(ME), eq(20L), eq(List.of(date)), any(LocalDateTime.class)))
+                .willReturn(List.of(shared));
+        given(sceneRepository.findAllByUserIdAndDateAndType(ME, date, SceneType.MOVE)).willReturn(List.of(
+                move(201L, date.atTime(9, 0), date.atTime(9, 10), "집", "카페"),
+                move(202L, date.atTime(13, 40), date.atTime(14, 0), "카페", "도서관"),
+                move(203L, date.atTime(16, 0), date.atTime(16, 20), "도서관", "집")));
+        given(scenePartnerRepository.findAllBySceneIdIn(List.of(202L, 300L))).willReturn(List.of(scenePartner(300L, 20L)));
+        given(userRepository.findAllById(List.of(ME, 20L))).willReturn(List.of(user(ME, "자신"), user(20L, "철수")));
+
+        // when: v2 이벤트 상세 조회
+        PeopleEventResult result = peopleService.eventV2(ME, 20L, date);
+
+        // then: 도착 시각이 함께한 씬 시작과 같은 이동까지 포함해 가장 늦은 이동 하나만 시간순 앞에 붙는다
+        assertThat(result.scenes()).hasSize(2);
+        assertThat(result.scenes().get(0)).isInstanceOfSatisfying(PeopleEventMoveSceneResult.class, move -> {
+            assertThat(move.sceneId()).isEqualTo(202L);
+            assertThat(move.type()).isEqualTo("move");
+            assertThat(move.fromPlace()).isEqualTo("카페");
+            assertThat(move.place()).isEqualTo("도서관");
+            assertThat(move.with()).isEmpty();
+            assertThat(move.travelMode()).isEqualTo("walk");
+            assertThat(move.narration()).isEqualTo("도서관로 향했다");
+        });
+        assertThat(result.scenes().get(1)).isInstanceOfSatisfying(PeopleEventActionSceneResult.class,
+                action -> assertThat(action.sceneId()).isEqualTo(300L));
+        assertThat(result.userInfos()).extracting(PeopleEventUserInfoResult::userId).containsExactly(ME, 20L);
+    }
+
+    @Test
+    @DisplayName("v2 이벤트 상세에서 직전 이동을 함께한 다른 사람도 그 이동의 with와 userInfos에 담긴다")
+    void eventV2_includes_companion_of_preceding_move() {
+        given(userRepository.existsById(20L)).willReturn(true);
+        // given: 친구(30)와 함께 카페로 걸어간 뒤, 카페에서 상대(20)를 만났다
+        LocalDate date = LocalDate.of(2026, 7, 20);
+        Scene shared = between(scene(300L, ME, date, "v1", "카페", SceneType.ACTION, "커피를 마셨다", null, null),
+                date.atTime(10, 0), date.atTime(11, 0));
+        given(sceneRepository.findAllByUserIdAndWithPartnerUserIdAndDateIn(eq(ME), eq(20L), eq(List.of(date)), any(LocalDateTime.class)))
+                .willReturn(List.of(shared));
+        given(sceneRepository.findAllByUserIdAndDateAndType(ME, date, SceneType.MOVE)).willReturn(List.of(
+                move(201L, date.atTime(9, 30), date.atTime(9, 50), "집", "카페")));
+        given(scenePartnerRepository.findAllBySceneIdIn(List.of(201L, 300L)))
+                .willReturn(List.of(scenePartner(201L, 30L), scenePartner(300L, 20L)));
+        given(userRepository.findAllById(List.of(ME, 30L, 20L)))
+                .willReturn(List.of(user(ME, "자신"), user(30L, "영희"), user(20L, "철수")));
+
+        // when: v2 이벤트 상세 조회
+        PeopleEventResult result = peopleService.eventV2(ME, 20L, date);
+
+        // then: 이동의 동행자 30 이 with 에 들어가고, 화면이 이름을 그릴 수 있게 userInfos 에도 담긴다
+        PeopleEventMoveSceneResult move = (PeopleEventMoveSceneResult) result.scenes().get(0);
+        assertThat(move.with()).containsExactly(30L);
+        assertThat(result.userInfos()).extracting(PeopleEventUserInfoResult::userId).containsExactly(ME, 30L, 20L);
+    }
+
+    @Test
+    @DisplayName("v2 이벤트 상세에서 여러 씬이 같은 이동을 가리키면 그 이동은 한 번만 내린다")
+    void eventV2_dedupes_shared_preceding_move() {
+        given(userRepository.existsById(20L)).willReturn(true);
+        // given: 카페에 도착한 뒤 상대와 10시, 11시에 두 번 함께 있었다
+        LocalDate date = LocalDate.of(2026, 7, 20);
+        Scene first = between(scene(300L, ME, date, "v1", "카페", SceneType.ACTION, "커피를 마셨다", null, null),
+                date.atTime(10, 0), date.atTime(11, 0));
+        Scene second = between(scene(301L, ME, date, "v1", "카페", SceneType.ACTION, "케이크를 나눠 먹었다", null, null),
+                date.atTime(11, 0), date.atTime(12, 0));
+        given(sceneRepository.findAllByUserIdAndWithPartnerUserIdAndDateIn(eq(ME), eq(20L), eq(List.of(date)), any(LocalDateTime.class)))
+                .willReturn(List.of(first, second));
+        given(sceneRepository.findAllByUserIdAndDateAndType(ME, date, SceneType.MOVE)).willReturn(List.of(
+                move(201L, date.atTime(9, 0), date.atTime(9, 30), "집", "카페")));
+        given(scenePartnerRepository.findAllBySceneIdIn(List.of(201L, 300L, 301L)))
+                .willReturn(List.of(scenePartner(300L, 20L), scenePartner(301L, 20L)));
+        given(userRepository.findAllById(List.of(ME, 20L))).willReturn(List.of(user(ME, "자신"), user(20L, "철수")));
+
+        // when: v2 이벤트 상세 조회
+        PeopleEventResult result = peopleService.eventV2(ME, 20L, date);
+
+        // then: 이동 하나 + 함께한 씬 둘이 시간순으로 내려간다
+        assertThat(result.scenes()).hasSize(3);
+        assertThat(result.scenes().get(0)).isInstanceOf(PeopleEventMoveSceneResult.class);
+        assertThat(result.scenes().subList(1, 3)).extracting(scene -> ((PeopleEventActionSceneResult) scene).sceneId())
+                .containsExactly(300L, 301L);
+    }
+
+    @Test
+    @DisplayName("v2 이벤트 상세는 그날 함께한 씬보다 앞선 이동이 없으면 함께한 씬만 내린다")
+    void eventV2_without_preceding_move_returns_shared_scenes_only() {
+        given(userRepository.existsById(20L)).willReturn(true);
+        // given: 9시에 상대와 함께 있었고, 내 이동은 그 뒤인 12시에만 있다
+        LocalDate date = LocalDate.of(2026, 7, 20);
+        given(sceneRepository.findAllByUserIdAndWithPartnerUserIdAndDateIn(eq(ME), eq(20L), eq(List.of(date)), any(LocalDateTime.class)))
+                .willReturn(List.of(scene(300L, ME, date, "v1", "집", SceneType.ACTION, "함께 아침을 먹었다", null, null)));
+        given(sceneRepository.findAllByUserIdAndDateAndType(ME, date, SceneType.MOVE)).willReturn(List.of(
+                move(201L, date.atTime(12, 0), date.atTime(12, 10), "집", "카페")));
+        given(scenePartnerRepository.findAllBySceneIdIn(List.of(300L))).willReturn(List.of(scenePartner(300L, 20L)));
+        given(userRepository.findAllById(List.of(ME, 20L))).willReturn(List.of(user(ME, "자신"), user(20L, "철수")));
+
+        // when: v2 이벤트 상세 조회
+        PeopleEventResult result = peopleService.eventV2(ME, 20L, date);
+
+        // then: 함께한 씬보다 늦은 이동은 붙지 않아 함께한 씬 하나만 남는다
+        assertThat(result.scenes()).singleElement().isInstanceOf(PeopleEventActionSceneResult.class);
+    }
+
+    @Test
+    @DisplayName("v2 이벤트 상세는 함께한 씬이 없으면 이동을 찾지 않고 빈 목록을 반환한다")
+    void eventV2_without_shared_scenes_skips_move_lookup() {
+        given(userRepository.existsById(20L)).willReturn(true);
+        given(userRepository.findAllById(List.of(ME))).willReturn(List.of(user(ME, "자신")));
+
+        // when: 함께한 씬이 없는 날짜로 v2 이벤트 상세 조회
+        PeopleEventResult result = peopleService.eventV2(ME, 20L, LocalDate.of(2026, 7, 20));
+
+        // then: 빈 목록 + null version 이고, 혼자 한 이동만 있는 날이 상세에 나타나지 않도록 이동 조회도 하지 않는다
+        assertThat(result.scenes()).isEmpty();
+        assertThat(result.version()).isNull();
+        then(sceneRepository).should(never()).findAllByUserIdAndDateAndType(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 상대의 v2 이벤트 상세를 조회하면 USER_NOT_FOUND 예외가 발생한다")
+    void eventV2_user_not_found() {
+        // when & then: v1 과 같이 상대 유저가 없으면 USER_NOT_FOUND 예외 발생
+        assertThatThrownBy(() -> peopleService.eventV2(ME, 20L, LocalDate.of(2026, 7, 20)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.USER_NOT_FOUND);
+    }
+
     // ------------------------------------------------------------ learnedFacts()
 
     @Test
@@ -900,6 +1079,20 @@ class PeopleServiceUnitTest {
         ReflectionTestUtils.setField(scene, "narration", narration);
         ReflectionTestUtils.setField(scene, "mind", mind);
         ReflectionTestUtils.setField(scene, "lines", lines);
+        return scene;
+    }
+
+    private Scene move(Long id, LocalDateTime startsAt, LocalDateTime endsAt, String fromPlace, String place) {
+        Scene scene = between(scene(id, ME, startsAt.toLocalDate(), "v1", place, SceneType.MOVE, place + "로 향했다", null, null),
+                startsAt, endsAt);
+        ReflectionTestUtils.setField(scene, "fromPlace", fromPlace);
+        ReflectionTestUtils.setField(scene, "travelMode", "walk");
+        return scene;
+    }
+
+    private Scene between(Scene scene, LocalDateTime startsAt, LocalDateTime endsAt) {
+        ReflectionTestUtils.setField(scene, "startsAt", startsAt);
+        ReflectionTestUtils.setField(scene, "endsAt", endsAt);
         return scene;
     }
 

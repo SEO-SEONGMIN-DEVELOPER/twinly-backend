@@ -3,9 +3,12 @@ package com.nidus.twinly.showcase.controller;
 import com.nidus.twinly.anon.service.AnonService;
 import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.security.SecurityConfig;
+import com.nidus.twinly.common.web.BusinessException;
+import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.showcase.dto.result.ShowcaseActionSceneResult;
 import com.nidus.twinly.showcase.dto.result.ShowcaseBubbleLineResult;
 import com.nidus.twinly.showcase.dto.result.ShowcaseDialogueSceneResult;
+import com.nidus.twinly.showcase.dto.result.ShowcaseMoveSceneResult;
 import com.nidus.twinly.showcase.dto.result.ShowcaseTodayResult;
 import com.nidus.twinly.showcase.dto.result.ShowcaseUserCountsResult;
 import com.nidus.twinly.showcase.dto.result.ShowcaseUserInfoResult;
@@ -26,6 +29,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 
+import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -101,6 +105,99 @@ class ShowcaseControllerUnitTest {
         // then: 401 반환 + 서비스는 호출되지 않음
         result.andExpect(status().isUnauthorized());
         then(showcaseService).should(never()).today(anyLong());
+    }
+
+    @Test
+    @DisplayName("v1 관람 조회는 move 장면을 도착지 기준 action 장면으로 바꿔 내려 구버전 앱 디코더를 통과시킨다")
+    void today_v1_converts_move_scene_to_action() throws Exception {
+        // given: 서비스가 관람 대상이 다른 인물(ref 2)과 함께 이동한 move 장면을 돌려준다
+        given(showcaseService.today(12L)).willReturn(moveResult());
+
+        // when: 출시된 앱이 쓰는 v1 관람 API 호출
+        var result = mockMvc.perform(get("/api/v1/showcases/today")
+                .header("Authorization", "Bearer access-token"));
+
+        // then: 200 + action/dialogue 외 타입이 없고, with 는 userRef 그대로이며 move 전용 필드는 없다
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.scenes", hasSize(1)))
+                .andExpect(jsonPath("$.scenes[0].type").value("action"))
+                .andExpect(jsonPath("$.scenes[0].place").value("학생 거리 탐앤탐스"))
+                .andExpect(jsonPath("$.scenes[0].placeCode").value("P0158"))
+                .andExpect(jsonPath("$.scenes[0].with[0]").value("2"))
+                .andExpect(jsonPath("$.scenes[0].narration").value("김OO과 카페로 향했다"))
+                .andExpect(jsonPath("$.scenes[0].fromPlace").doesNotExist())
+                .andExpect(jsonPath("$.scenes[0].travelMode").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("v2 관람 조회는 move 장면을 출발지·도착지·이동 수단과 함께 내리고 with 는 userRef 목록이다")
+    void today_v2_returns_move_scene() throws Exception {
+        // given: 서비스가 관람 대상이 다른 인물(ref 2)과 함께 이동한 move 장면을 돌려준다
+        given(showcaseService.today(12L)).willReturn(moveResult());
+
+        // when: 새 앱이 쓰는 v2 관람 API 호출
+        var result = mockMvc.perform(get("/api/v2/showcases/today")
+                .header("Authorization", "Bearer access-token"));
+
+        // then: 200 + move 모양으로 내려가고 나머지 필드는 v1 과 같다
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.showcaseId").value("3312"))
+                .andExpect(jsonPath("$.userRef").value("1"))
+                .andExpect(jsonPath("$.scenes[0].sceneId").value("88103"))
+                .andExpect(jsonPath("$.scenes[0].type").value("move"))
+                .andExpect(jsonPath("$.scenes[0].fromPlace").value("집"))
+                .andExpect(jsonPath("$.scenes[0].fromPlaceCode").value("P0258"))
+                .andExpect(jsonPath("$.scenes[0].place").value("학생 거리 탐앤탐스"))
+                .andExpect(jsonPath("$.scenes[0].placeCode").value("P0158"))
+                .andExpect(jsonPath("$.scenes[0].with[0]").value("2"))
+                .andExpect(jsonPath("$.scenes[0].travelMode").value("transit"))
+                .andExpect(jsonPath("$.scenes[0].mapVersion").value("sha256:89af"))
+                .andExpect(jsonPath("$.userInfos[0].userName").value("김OO"))
+                .andExpect(jsonPath("$.userCounts.total").value(12840));
+        then(showcaseService).should().today(12L);
+    }
+
+    @Test
+    @DisplayName("v2 관람 조회에 인증 헤더가 없으면 401을 반환하고 서비스를 호출하지 않는다")
+    void today_v2_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 v2 관람 API 호출
+        var result = mockMvc.perform(get("/api/v2/showcases/today"));
+
+        // then: 401 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isUnauthorized());
+        then(showcaseService).should(never()).today(anyLong());
+    }
+
+    @Test
+    @DisplayName("v2 관람 조회에서 서비스가 SHOWCASE_TARGET_NOT_FOUND를 던지면 404를 반환한다")
+    void today_v2_target_not_found_returns_404() throws Exception {
+        // given: 오늘 장면이 있는 관람 대상 후보가 없음
+        given(showcaseService.today(12L)).willThrow(new BusinessException(ErrorCode.SHOWCASE_TARGET_NOT_FOUND));
+
+        // when: v2 관람 API 호출
+        var result = mockMvc.perform(get("/api/v2/showcases/today")
+                .header("Authorization", "Bearer access-token"));
+
+        // then: 404 SHOWCASE_TARGET_NOT_FOUND 반환
+        result.andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("SHOWCASE_TARGET_NOT_FOUND"));
+    }
+
+    private ShowcaseTodayResult moveResult() {
+        OffsetDateTime startsAt = OffsetDateTime.parse("2026-08-18T11:00:00+09:00");
+        OffsetDateTime endsAt = OffsetDateTime.parse("2026-08-18T11:20:00+09:00");
+
+        return new ShowcaseTodayResult(
+                3312L,
+                1L,
+                LocalDate.parse("2026-08-18"),
+                Instant.parse("2026-08-18T04:20:11Z"),
+                List.of(new ShowcaseMoveSceneResult(88103L, "move", startsAt, endsAt, "집", "P0258", "학생 거리 탐앤탐스", "P0158",
+                        List.of(2L), "transit", "sha256:89af", "김OO과 카페로 향했다", null)),
+                List.of(new ShowcaseUserInfoResult(1L, "김OO", Gender.MALE, "한국대"),
+                        new ShowcaseUserInfoResult(2L, "박OO", Gender.FEMALE, "한국대")),
+                new ShowcaseUserCountsResult(12840, 320, "성신여대")
+        );
     }
 
     private ShowcaseTodayResult todayResult() {

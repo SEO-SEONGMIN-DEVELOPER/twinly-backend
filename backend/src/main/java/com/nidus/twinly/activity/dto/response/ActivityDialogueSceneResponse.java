@@ -19,7 +19,7 @@ public record ActivityDialogueSceneResponse(
         @JsonFormat(shape = JsonFormat.Shape.STRING)
         List<Long> with,
         List<ActivityLineResponse> lines
-) implements ActivitySceneResponse {
+) implements ActivitySceneResponse, ActivityV2SceneResponse {
 
     public static ActivityDialogueSceneResponse from(ActivityDialogueSceneResult result) {
         return new ActivityDialogueSceneResponse(

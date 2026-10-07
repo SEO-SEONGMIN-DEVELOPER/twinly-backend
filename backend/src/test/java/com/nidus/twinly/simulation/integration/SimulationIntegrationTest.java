@@ -1,5 +1,6 @@
 package com.nidus.twinly.simulation.integration;
 
+import com.nidus.twinly.activity.domain.SceneType;
 import com.nidus.twinly.activity.entity.Question;
 import com.nidus.twinly.activity.entity.Scene;
 import com.nidus.twinly.activity.repository.QuestionPartnerRepository;
@@ -100,6 +101,36 @@ class SimulationIntegrationTest extends AbstractIntegrationTest {
         assertThat(sceneRepository.findAllByUserIdAndDate(me.getId(), DATE))
                 .extracting(Scene::getPlace, Scene::getPlaceCode)
                 .containsExactly(tuple("카페", "CAFE"));
+    }
+
+    @Test
+    @DisplayName("이동 장면을 받으면 MOVE 타입으로 출발지·도착지·이동 수단·지도 버전을 저장하고 함께 이동한 상대를 붙인다")
+    void simulations_saves_move_scene() throws Exception {
+        // given: 상대와 함께 집에서 카페로 걸어간 이동 장면 하나가 담긴 결과
+        User me = saveUser();
+        User partner = saveUser();
+
+        // when: 시뮬레이션 결과 저장
+        mockMvc.perform(post("/internal/v1/users/{userId}/simulations", me.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(movePayload(me, partner.getId())))
+                .andExpect(status().isOk());
+
+        // then: 실제 ENUM 컬럼이 MOVE 를 받고 새 칼럼에 이동 정보가 저장된다 (71자 지도 버전도 잘리지 않는다)
+        List<Scene> scenes = sceneRepository.findAllByUserIdAndDate(me.getId(), DATE);
+        assertThat(scenes).singleElement().satisfies(scene -> {
+            assertThat(scene.getType()).isEqualTo(SceneType.MOVE);
+            assertThat(scene.getFromPlace()).isEqualTo("성북구 주택가 집");
+            assertThat(scene.getFromPlaceCode()).isEqualTo("P0258");
+            assertThat(scene.getPlace()).isEqualTo("학생 거리 탐앤탐스");
+            assertThat(scene.getPlaceCode()).isEqualTo("P0158");
+            assertThat(scene.getTravelMode()).isEqualTo("walk");
+            assertThat(scene.getMapVersion()).hasSize(71);
+            assertThat(scene.getNarration()).isEqualTo("카페로 향했다");
+        });
+        assertThat(scenePartnerRepository.findAllBySceneIdIn(ids(scenes, Scene::getId)))
+                .extracting(scenePartner -> scenePartner.getUserId())
+                .containsExactly(partner.getId());
     }
 
     @Test
@@ -278,6 +309,51 @@ class SimulationIntegrationTest extends AbstractIntegrationTest {
         assertThat(sceneRepository.findAllByUserIdAndDate(me.getId(), DATE)).hasSize(1);
         assertThat(schedulesOf(me, AppNotificationScheduleType.FIRST_MEETING)).hasSize(1);
         assertThat(schedulesOf(me, AppNotificationScheduleType.FRIEND)).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("함께 이동한 상대 id가 실제 유저가 아니면 FK 위반 500이 아니라 400 INVALID_REQUEST를 반환하고 아무것도 저장하지 않는다")
+    void simulations_move_with_unknown_partner_returns_400() throws Exception {
+        // given: 실제 유저 하나와, 존재하지 않는 동행자 id
+        User me = saveUser();
+
+        // when: 존재하지 않는 동행자와 함께 이동한 결과로 저장 API 호출
+        ResultActions result = mockMvc.perform(post("/internal/v1/users/{userId}/simulations", me.getId())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(movePayload(me, 99999999L)));
+
+        // then: 400 INVALID_REQUEST + 장면은 하나도 저장되지 않는다
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        assertThat(sceneRepository.findAllByUserIdAndDate(me.getId(), DATE)).isEmpty();
+    }
+
+    private String movePayload(User me, Long companionId) {
+        return """
+                {
+                  "userId": "%d",
+                  "date": "2026-08-18",
+                  "scenes": [
+                    {
+                      "type": "move",
+                      "start": "2026-08-18T11:00:00",
+                      "end": "2026-08-18T11:10:00",
+                      "from": "성북구:주택가:집",
+                      "fromPlaceCode": "P0258",
+                      "place": "학생 거리 탐앤탐스",
+                      "placeCode": "P0158",
+                      "with": ["%d"],
+                      "travelMode": "walk",
+                      "mapVersion": "sha256:89af4a676e168d1e6d1f2213a9d039c7b9f79a3b53b6e85b3e27c1cbf1b6e7a6",
+                      "narration": "카페로 향했다",
+                      "mind": null
+                    }
+                  ],
+                  "questions": [],
+                  "relationships": [],
+                  "intimacyAsOf": "%s"
+                }
+                """.formatted(me.getId(), companionId, INTIMACY_AS_OF);
     }
 
     private List<AppNotificationSchedule> schedulesOf(User user, AppNotificationScheduleType type) {

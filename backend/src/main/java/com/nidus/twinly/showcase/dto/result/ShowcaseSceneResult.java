@@ -1,4 +1,4 @@
 package com.nidus.twinly.showcase.dto.result;
 
-public sealed interface ShowcaseSceneResult permits ShowcaseActionSceneResult, ShowcaseDialogueSceneResult {
+public sealed interface ShowcaseSceneResult permits ShowcaseActionSceneResult, ShowcaseDialogueSceneResult, ShowcaseMoveSceneResult {
 }

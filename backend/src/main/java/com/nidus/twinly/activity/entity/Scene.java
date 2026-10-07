@@ -53,6 +53,15 @@ public class Scene {
     @Column(name = "`lines`")
     private String lines;
 
+    @Column(columnDefinition = "TEXT")
+    private String fromPlace;
+
+    private String fromPlaceCode;
+
+    private String travelMode;
+
+    private String mapVersion;
+
     private Instant createdAt;
 
     public static Scene createAction(Long userId, LocalDate date, String version, String place, String placeCode,
@@ -70,6 +79,21 @@ public class Scene {
         Scene scene = newScene(userId, date, version, place, placeCode, startsAt, endsAt, SceneType.DIALOGUE);
 
         scene.lines = lines;
+
+        return scene;
+    }
+
+    public static Scene createMove(Long userId, LocalDate date, String version, String fromPlace, String fromPlaceCode,
+                                   String place, String placeCode, LocalDateTime startsAt, LocalDateTime endsAt,
+                                   String travelMode, String mapVersion, String narration, String mind) {
+        Scene scene = newScene(userId, date, version, place, placeCode, startsAt, endsAt, SceneType.MOVE);
+
+        scene.fromPlace = fromPlace;
+        scene.fromPlaceCode = fromPlaceCode;
+        scene.travelMode = travelMode;
+        scene.mapVersion = mapVersion;
+        scene.narration = narration;
+        scene.mind = mind;
 
         return scene;
     }

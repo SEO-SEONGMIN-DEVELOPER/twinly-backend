@@ -6,7 +6,8 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.EXISTING_PROPERTY, property = "type")
 @JsonSubTypes({
         @JsonSubTypes.Type(value = PeopleEventActionSceneResult.class, name = "action"),
-        @JsonSubTypes.Type(value = PeopleEventDialogueSceneResult.class, name = "dialogue")
+        @JsonSubTypes.Type(value = PeopleEventDialogueSceneResult.class, name = "dialogue"),
+        @JsonSubTypes.Type(value = PeopleEventMoveSceneResult.class, name = "move")
 })
-public sealed interface PeopleEventSceneResult permits PeopleEventActionSceneResult, PeopleEventDialogueSceneResult {
+public sealed interface PeopleEventSceneResult permits PeopleEventActionSceneResult, PeopleEventDialogueSceneResult, PeopleEventMoveSceneResult {
 }

@@ -2,6 +2,7 @@ package com.nidus.twinly.people.controller;
 
 import com.nidus.twinly.common.web.RequestId;
 import com.nidus.twinly.people.dto.response.PeopleEventResponse;
+import com.nidus.twinly.people.dto.response.PeopleEventV2Response;
 import com.nidus.twinly.people.dto.response.PeopleEventsResponse;
 import com.nidus.twinly.people.dto.response.PeopleIntimacyQuizMatchRateResponse;
 import com.nidus.twinly.people.dto.response.PeopleIntimacySeriesResponse;
@@ -115,5 +116,14 @@ public class PeopleController {
     public PeopleIntimacyQuizMatchRateResponse intimacyQuizMatchRate(@AuthenticationPrincipal UserInfo userInfo,
                                                                      @PathVariable("userId") String partnerUserId) {
         return PeopleIntimacyQuizMatchRateResponse.from(peopleService.intimacyQuizMatchRate(userInfo.id(), RequestId.toLong(partnerUserId, "userId")));
+    }
+
+    @Operation(summary = "날짜별 트윈 이벤트 조회 v2")
+    @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND")
+    @GetMapping("/api/v2/people/{userId}/events/{date}")
+    public PeopleEventV2Response eventV2(@AuthenticationPrincipal UserInfo userInfo,
+                                         @PathVariable("userId") String partnerUserId,
+                                         @PathVariable LocalDate date) {
+        return PeopleEventV2Response.from(peopleService.eventV2(userInfo.id(), RequestId.toLong(partnerUserId, "userId"), date));
     }
 }

@@ -142,6 +142,50 @@ class ActivityIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("이동 씬은 v2 에서 출발지·도착지·이동 정보를 담은 move 로, v1 에서는 도착지 기준 action 으로 내려온다")
+    void activity_move_scene_v2_and_v1_end_to_end() throws Exception {
+        // given: 활성 시즌과 혼자 집에서 카페로 걸어간 이동 씬 1개를 DB에 저장
+        saveCurrentSeason();
+        User me = saveUser();
+        Scene move = sceneRepository.save(Scene.createMove(me.getId(), DATE, "v1", "집", "P0258", "학생 거리 탐앤탐스", "P0158",
+                DATE.atTime(11, 0), DATE.atTime(11, 10), "walk", "sha256:89af", "카페로 향했다", null));
+        flushAndClear();
+
+        // when: 새 앱이 쓰는 v2 활동 조회 API 호출
+        var v2 = mockMvc.perform(get("/api/v2/activities/{date}", "2026-07-26")
+                .header("Authorization", bearer(me.getId())));
+
+        // then: 200 + 새 칼럼까지 DB 에서 읽혀 move 모양으로 내려오고, 동행자가 없으면 with 는 빈 배열이다
+        v2.andExpect(status().isOk())
+                .andExpect(jsonPath("$.scenes", hasSize(1)))
+                .andExpect(jsonPath("$.scenes[0].sceneId").value(move.getId().toString()))
+                .andExpect(jsonPath("$.scenes[0].type").value("move"))
+                .andExpect(jsonPath("$.scenes[0].startsAt", startsWith("2026-07-26T11:00")))
+                .andExpect(jsonPath("$.scenes[0].endsAt", startsWith("2026-07-26T11:10")))
+                .andExpect(jsonPath("$.scenes[0].fromPlace").value("집"))
+                .andExpect(jsonPath("$.scenes[0].fromPlaceCode").value("P0258"))
+                .andExpect(jsonPath("$.scenes[0].place").value("학생 거리 탐앤탐스"))
+                .andExpect(jsonPath("$.scenes[0].placeCode").value("P0158"))
+                .andExpect(jsonPath("$.scenes[0].with", hasSize(0)))
+                .andExpect(jsonPath("$.scenes[0].travelMode").value("walk"))
+                .andExpect(jsonPath("$.scenes[0].mapVersion").value("sha256:89af"))
+                .andExpect(jsonPath("$.scenes[0].narration").value("카페로 향했다"));
+
+        // when: 출시된 앱이 쓰는 v1 활동 조회 API 호출
+        var v1 = mockMvc.perform(get("/api/v1/activities/{date}", "2026-07-26")
+                .header("Authorization", bearer(me.getId())));
+
+        // then: 200 + 같은 씬이 예전처럼 action 으로 내려오고 move 전용 필드는 없다
+        v1.andExpect(status().isOk())
+                .andExpect(jsonPath("$.scenes", hasSize(1)))
+                .andExpect(jsonPath("$.scenes[0].type").value("action"))
+                .andExpect(jsonPath("$.scenes[0].place").value("학생 거리 탐앤탐스"))
+                .andExpect(jsonPath("$.scenes[0].narration").value("카페로 향했다"))
+                .andExpect(jsonPath("$.scenes[0].with").doesNotExist())
+                .andExpect(jsonPath("$.scenes[0].fromPlace").doesNotExist());
+    }
+
+    @Test
     @DisplayName("해당 날짜에 데이터가 없으면 200과 함께 빈 목록과 null version을 반환한다")
     void activity_without_data_returns_empty_lists() throws Exception {
         // given: 활성 시즌만 있고 씬도 질문도 저장하지 않은 실제 유저
@@ -161,6 +205,16 @@ class ActivityIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.questions").isEmpty())
                 .andExpect(jsonPath("$.userInfos", hasSize(1)))
                 .andExpect(jsonPath("$.userInfos[0].userId").value(me.getId().toString()));
+    }
+
+    @Test
+    @DisplayName("v2 활동 조회에 인증 헤더가 없으면 실제 보안 필터에서 401을 반환한다")
+    void activity_v2_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 v2 활동 조회 API 호출
+        var result = mockMvc.perform(get("/api/v2/activities/{date}", "2026-07-26"));
+
+        // then: 401 반환
+        result.andExpect(status().isUnauthorized());
     }
 
     /** seasons는 엔티티에 생성 팩토리가 없어 네이티브 INSERT로 넣고, 현재 시즌이 되도록 is_active를 켠다. */

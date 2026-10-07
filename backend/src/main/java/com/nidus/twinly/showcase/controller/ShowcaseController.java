@@ -1,6 +1,7 @@
 package com.nidus.twinly.showcase.controller;
 
 import com.nidus.twinly.showcase.dto.response.ShowcaseTodayResponse;
+import com.nidus.twinly.showcase.dto.response.ShowcaseTodayV2Response;
 import com.nidus.twinly.showcase.service.ShowcaseService;
 import com.nidus.twinly.user.dto.header.UserInfo;
 import io.swagger.v3.oas.annotations.Operation;
@@ -23,5 +24,12 @@ public class ShowcaseController {
     @GetMapping("/api/v1/showcases/today")
     public ShowcaseTodayResponse today(@AuthenticationPrincipal UserInfo userInfo) {
         return ShowcaseTodayResponse.from(showcaseService.today(userInfo.id()));
+    }
+
+    @Operation(summary = "오늘의 쇼케이스 조회 v2")
+    @ApiResponse(responseCode = "404", description = "SHOWCASE_TARGET_NOT_FOUND, USER_NOT_FOUND")
+    @GetMapping("/api/v2/showcases/today")
+    public ShowcaseTodayV2Response todayV2(@AuthenticationPrincipal UserInfo userInfo) {
+        return ShowcaseTodayV2Response.from(showcaseService.today(userInfo.id()));
     }
 }

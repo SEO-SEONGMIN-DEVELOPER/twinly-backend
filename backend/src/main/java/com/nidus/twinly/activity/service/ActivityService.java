@@ -133,6 +133,21 @@ public class ActivityService {
                     with,
                     toSceneLines(scene, nameByUserId)
             );
+            case MOVE -> new ActivityMoveSceneResult(
+                    scene.getId(),
+                    "move",
+                    startsAt,
+                    endsAt,
+                    scene.getFromPlace(),
+                    scene.getFromPlaceCode(),
+                    scene.getPlace(),
+                    scene.getPlaceCode(),
+                    with == null ? List.of() : with,
+                    scene.getTravelMode(),
+                    scene.getMapVersion(),
+                    sceneNameRenderer.render(scene.getNarration(), nameByUserId),
+                    sceneNameRenderer.render(scene.getMind(), nameByUserId)
+            );
         };
     }
 

@@ -92,6 +92,55 @@ class ShowcaseIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("관람 조회 v2: 대상의 이동 장면이 move 로 출발지·도착지·이동 정보와 userRef 동행자를 담아 내려가고, v1 은 action 으로 내려간다")
+    void today_v2_move_scene_end_to_end() throws Exception {
+        // given: 오늘 동행자와 함께 집에서 카페로 이동한 시드 참가자와 관람자
+        User viewer = saveUser();
+        User target = saveSeedParticipant();
+        User partner = saveUser();
+        LocalDate today = KstTimes.today();
+        Scene move = sceneRepository.save(Scene.createMove(
+                target.getId(), today, "v1", "집", "P0258", "학생 거리 탐앤탐스", "P0158",
+                LocalDateTime.of(today, java.time.LocalTime.of(11, 0)),
+                LocalDateTime.of(today, java.time.LocalTime.of(11, 20)),
+                "transit", "sha256:89af", "{user_" + partner.getId() + "}과 카페로 향했다", null));
+        scenePartnerRepository.save(ScenePartner.create(move.getId(), partner.getId()));
+
+        // when: 새 앱이 쓰는 v2 관람 API 호출
+        mockMvc.perform(get("/api/v2/showcases/today")
+                        .header("Authorization", bearer(viewer.getId())))
+                // then: move 모양 + 동행자는 userRef 2 + 문장 속 이름은 가명
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.userRef").value("1"))
+                .andExpect(jsonPath("$.scenes[0].sceneId").value(move.getId().toString()))
+                .andExpect(jsonPath("$.scenes[0].type").value("move"))
+                .andExpect(jsonPath("$.scenes[0].fromPlace").value("집"))
+                .andExpect(jsonPath("$.scenes[0].fromPlaceCode").value("P0258"))
+                .andExpect(jsonPath("$.scenes[0].place").value("학생 거리 탐앤탐스"))
+                .andExpect(jsonPath("$.scenes[0].placeCode").value("P0158"))
+                .andExpect(jsonPath("$.scenes[0].with[0]").value("2"))
+                .andExpect(jsonPath("$.scenes[0].travelMode").value("transit"))
+                .andExpect(jsonPath("$.scenes[0].mapVersion").value("sha256:89af"))
+                .andExpect(jsonPath("$.scenes[0].narration").value(matchesPattern("[가-힣]OO과 카페로 향했다")));
+
+        // then: v2 호출도 v1 과 같이 오늘자 배정 행을 만든다
+        assertThat(showcaseRepository.findByViewerUserIdAndDate(viewer.getId(), KstTimes.today()))
+                .get()
+                .satisfies(showcase -> assertThat(showcase.getTargetUserId()).isEqualTo(target.getId()));
+
+        // when: 출시된 앱이 쓰는 v1 관람 API 호출 (같은 날이라 같은 대상이 배정돼 있다)
+        mockMvc.perform(get("/api/v1/showcases/today")
+                        .header("Authorization", bearer(viewer.getId())))
+                // then: 구버전 디코더가 아는 action 으로 내려가고 move 전용 필드는 없다
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.scenes[0].type").value("action"))
+                .andExpect(jsonPath("$.scenes[0].place").value("학생 거리 탐앤탐스"))
+                .andExpect(jsonPath("$.scenes[0].with[0]").value("2"))
+                .andExpect(jsonPath("$.scenes[0].fromPlace").doesNotExist())
+                .andExpect(jsonPath("$.scenes[0].travelMode").doesNotExist());
+    }
+
+    @Test
     @DisplayName("관람 조회 재요청: 같은 날 다시 호출해도 배정이 늘지 않고 같은 대상이 나온다")
     void today_is_fixed_per_day() throws Exception {
         // given: 후보가 두 명이라 무작위 선택이 흔들릴 수 있는 상황
@@ -200,6 +249,18 @@ class ShowcaseIntegrationTest extends AbstractIntegrationTest {
     void without_auth_returns_401() throws Exception {
         // when & then: 인증 없이 호출하면 401
         mockMvc.perform(get("/api/v1/showcases/today"))
+                .andExpect(status().isUnauthorized());
+
+        // then: DB에 아무것도 저장되지 않는다
+        assertThat(showcaseRepository.count()).isZero();
+    }
+
+    @Test
+    @DisplayName("관람 조회 v2: 인증 헤더가 없으면 401이고 배정 행도 생기지 않는다")
+    void today_v2_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 v2 관람 API 호출
+        mockMvc.perform(get("/api/v2/showcases/today"))
+                // then: 401 반환
                 .andExpect(status().isUnauthorized());
 
         // then: DB에 아무것도 저장되지 않는다

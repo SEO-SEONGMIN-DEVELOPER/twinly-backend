@@ -345,6 +345,72 @@ class ActivityServiceUnitTest {
         assertThat(result.userInfos()).containsExactly(new ActivityUserInfoResult(USER_ID, "자신", null));
     }
 
+    @Test
+    @DisplayName("move 씬은 출발지·도착지·이동 수단·지도 버전까지 매핑하고, 함께 이동한 사람이 없으면 with를 빈 배열로 내린다")
+    void activity_maps_move_scene() {
+        // given: 혼자 집에서 카페로 걸어간 move 씬 1개
+        Scene scene = moveScene(10L, "집", "학생 거리 탐앤탐스",
+                DATE.atTime(11, 0), DATE.atTime(11, 10), "카페로 향했다");
+        given(sceneRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of(scene));
+        given(userRepository.findAllById(List.of(USER_ID))).willReturn(List.of(user(USER_ID, "자신")));
+        given(questionRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of());
+
+        // when: 활동 조회
+        ActivityResult result = activityService.activity(USER_ID, DATE);
+
+        // then: move 결과로 매핑되고, action 과 달리 동행자 없음은 null 이 아니라 빈 배열이다
+        assertThat(result.scenes()).singleElement().isInstanceOfSatisfying(ActivityMoveSceneResult.class, move -> {
+            assertThat(move.sceneId()).isEqualTo(10L);
+            assertThat(move.type()).isEqualTo("move");
+            assertThat(move.startsAt()).isEqualTo(OffsetDateTime.of(2026, 7, 26, 11, 0, 0, 0, KST));
+            assertThat(move.endsAt()).isEqualTo(OffsetDateTime.of(2026, 7, 26, 11, 10, 0, 0, KST));
+            assertThat(move.fromPlace()).isEqualTo("집");
+            assertThat(move.fromPlaceCode()).isEqualTo("P0258");
+            assertThat(move.place()).isEqualTo("학생 거리 탐앤탐스");
+            assertThat(move.placeCode()).isEqualTo("P0158");
+            assertThat(move.with()).isEmpty();
+            assertThat(move.travelMode()).isEqualTo("walk");
+            assertThat(move.mapVersion()).isEqualTo("sha256:89af");
+            assertThat(move.narration()).isEqualTo("카페로 향했다");
+            assertThat(move.mind()).isNull();
+        });
+    }
+
+    @Test
+    @DisplayName("함께 이동한 사람은 move 씬의 with와 userInfos에 담기고, 이동 문장의 이름 자리는 닉네임으로 바뀐다")
+    void activity_maps_move_scene_with_partner() {
+        // given: 파트너(100)와 함께 이동한 move 씬, 나레이션에 파트너 이름 자리가 있다
+        Scene scene = moveScene(10L, "집", "학생 거리 탐앤탐스",
+                DATE.atTime(11, 0), DATE.atTime(11, 10), "{user_100}와 카페로 향했다");
+        given(sceneRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of(scene));
+        given(scenePartnerRepository.findAllBySceneIdIn(List.of(10L))).willReturn(List.of(scenePartner(10L, 100L)));
+        given(userRepository.findAllById(List.of(USER_ID, 100L)))
+                .willReturn(List.of(user(USER_ID, "자신"), user(100L, "길동")));
+        given(userRepository.findAllById(Set.of(100L))).willReturn(List.of(user(100L, "길동")));
+        given(questionRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of());
+
+        // when: 활동 조회
+        ActivityResult result = activityService.activity(USER_ID, DATE);
+
+        // then: 동행자 id 와 닉네임이 들어간 문장이 내려가고, userInfos 에 동행자가 담긴다
+        ActivityMoveSceneResult move = (ActivityMoveSceneResult) result.scenes().get(0);
+        assertThat(move.with()).containsExactly(100L);
+        assertThat(move.narration()).isEqualTo("길동와 카페로 향했다");
+        assertThat(result.userInfos()).extracting(ActivityUserInfoResult::userId).containsExactly(USER_ID, 100L);
+    }
+
+    private Scene moveScene(Long id, String fromPlace, String place,
+                            LocalDateTime startsAt, LocalDateTime endsAt, String narration) {
+        Scene scene = newScene(id, "v1", place, startsAt, endsAt, SceneType.MOVE);
+        ReflectionTestUtils.setField(scene, "fromPlace", fromPlace);
+        ReflectionTestUtils.setField(scene, "fromPlaceCode", "P0258");
+        ReflectionTestUtils.setField(scene, "placeCode", "P0158");
+        ReflectionTestUtils.setField(scene, "travelMode", "walk");
+        ReflectionTestUtils.setField(scene, "mapVersion", "sha256:89af");
+        ReflectionTestUtils.setField(scene, "narration", narration);
+        return scene;
+    }
+
     private Scene actionScene(Long id, String version, String place,
                               LocalDateTime startsAt, LocalDateTime endsAt,
                               String narration, String mind) {
