@@ -1,5 +1,6 @@
 package com.nidus.twinly.activity.repository;
 
+import com.nidus.twinly.activity.domain.SceneType;
 import com.nidus.twinly.activity.entity.Scene;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -18,6 +19,8 @@ public interface SceneRepository extends JpaRepository<Scene, Long> {
     List<Scene> findAllByUserIdAndDate(Long userId, LocalDate date);
 
     List<Scene> findAllByUserIdAndDateOrderByStartsAtAsc(Long userId, LocalDate date);
+
+    List<Scene> findAllByUserIdAndDateAndType(Long userId, LocalDate date, SceneType type);
 
     @Query(value = """
             SELECT DISTINCT s.date

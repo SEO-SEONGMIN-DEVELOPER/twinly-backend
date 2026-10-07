@@ -439,6 +439,70 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("이벤트 상세 조회 v2: 함께한 씬 앞에 그날 내가 혼자 간 마지막 이동을 move 로 붙이고, v1 은 함께한 씬만 내려준다")
+    void event_v2_adds_preceding_move_end_to_end() throws Exception {
+        // given: 7/20 9시에 상대와 함께한 씬, 그 전 7시·8시 반의 이동과 그 뒤 10시 반의 이동을 실제 DB에 저장
+        User me = saveUser();
+        User partner = saveUser();
+        saveMove(me.getId(), DAY_2.atTime(7, 0), DAY_2.atTime(7, 20), "집", "카페");
+        Scene latestMove = saveMove(me.getId(), DAY_2.atTime(8, 30), DAY_2.atTime(9, 0), "카페", "학교 복도");
+        saveMove(me.getId(), DAY_2.atTime(10, 30), DAY_2.atTime(10, 50), "학교 복도", "집");
+        Scene withPartner = saveScene(me.getId(), DAY_2, "v1", "학교 복도", "복도를 함께 걸었다", "설렜다");
+        saveScenePartner(withPartner.getId(), partner.getId());
+
+        // when: 새 앱이 쓰는 v2 이벤트 상세 조회 API 호출
+        var v2 = mockMvc.perform(get("/api/v2/people/{userId}/events/{date}", partner.getId().toString(), "2026-07-20")
+                .header("Authorization", bearer(me.getId())));
+
+        // then: 200 + 9시에 도착한 마지막 이동 하나가 move 로 앞에 붙고, 혼자 간 길이라 with 는 빈 배열이다
+        v2.andExpect(status().isOk())
+                .andExpect(jsonPath("$.scenes.length()").value(2))
+                .andExpect(jsonPath("$.scenes[0].sceneId").value(latestMove.getId().toString()))
+                .andExpect(jsonPath("$.scenes[0].type").value("move"))
+                .andExpect(jsonPath("$.scenes[0].fromPlace").value("카페"))
+                .andExpect(jsonPath("$.scenes[0].place").value("학교 복도"))
+                .andExpect(jsonPath("$.scenes[0].with.length()").value(0))
+                .andExpect(jsonPath("$.scenes[0].travelMode").value("walk"))
+                .andExpect(jsonPath("$.scenes[1].sceneId").value(withPartner.getId().toString()))
+                .andExpect(jsonPath("$.scenes[1].type").value("action"))
+                .andExpect(jsonPath("$.scenes[1].with[0]").value(partner.getId().toString()));
+
+        // when: 출시된 앱이 쓰는 v1 이벤트 상세 조회 API 호출
+        var v1 = mockMvc.perform(get("/api/v1/people/{userId}/events/{date}", partner.getId().toString(), "2026-07-20")
+                .header("Authorization", bearer(me.getId())));
+
+        // then: 200 + 지금처럼 함께한 씬만 내려간다
+        v1.andExpect(status().isOk())
+                .andExpect(jsonPath("$.scenes.length()").value(1))
+                .andExpect(jsonPath("$.scenes[0].sceneId").value(withPartner.getId().toString()));
+    }
+
+    @Test
+    @DisplayName("이벤트 상세 조회 v2: 존재하지 않는 상대면 v1 과 같이 404 USER_NOT_FOUND를 반환한다")
+    void event_v2_unknown_partner_returns_404() throws Exception {
+        // given: 조회하는 나만 실제 유저로 저장
+        User me = saveUser();
+
+        // when: 없는 상대 id 로 v2 이벤트 상세 조회 API 호출
+        var result = mockMvc.perform(get("/api/v2/people/{userId}/events/{date}", "99999999", "2026-07-20")
+                .header("Authorization", bearer(me.getId())));
+
+        // then: 404 USER_NOT_FOUND 반환
+        result.andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("USER_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("이벤트 상세 조회 v2: 인증 헤더가 없으면 실제 보안 필터에서 401을 반환한다")
+    void event_v2_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 v2 이벤트 상세 조회 API 호출
+        var result = mockMvc.perform(get("/api/v2/people/{userId}/events/{date}", "1", "2026-07-20"));
+
+        // then: 401 반환
+        result.andExpect(status().isUnauthorized());
+    }
+
+    @Test
     @DisplayName("알게 된 사실 조회: 최신 관계 기록의 partner_model 값이 그대로 내려온다")
     void learnedFacts_success_end_to_end() throws Exception {
         // given: 날짜가 다른 관계 기록 2건을 저장 (최신 기록의 partnerModel이 응답되어야 함)
@@ -649,6 +713,11 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
         ReflectionTestUtils.setField(scene, "startsAt", startsAt);
         ReflectionTestUtils.setField(scene, "endsAt", endsAt);
         return sceneRepository.saveAndFlush(scene);
+    }
+
+    private Scene saveMove(Long userId, LocalDateTime startsAt, LocalDateTime endsAt, String fromPlace, String place) {
+        return sceneRepository.saveAndFlush(Scene.createMove(userId, startsAt.toLocalDate(), "v1", fromPlace, null, place, null,
+                startsAt, endsAt, "walk", null, place + "로 향했다", null));
     }
 
     private Scene saveScene(Long userId, LocalDate date, String version, String place, String narration, String mind) {

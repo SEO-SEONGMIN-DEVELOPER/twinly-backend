@@ -60,10 +60,12 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -365,10 +367,13 @@ public class PeopleService {
     }
 
     private String preview(Scene scene, Map<Long, String> nameByUserId) {
-        if (scene.getType() == SceneType.ACTION) {
-            return sceneNameRenderer.render(scene.getNarration(), nameByUserId);
-        }
+        return switch (scene.getType()) {
+            case ACTION, MOVE -> sceneNameRenderer.render(scene.getNarration(), nameByUserId);
+            case DIALOGUE -> dialoguePreview(scene, nameByUserId);
+        };
+    }
 
+    private String dialoguePreview(Scene scene, Map<Long, String> nameByUserId) {
         List<StoredSceneLine> lines = parseLines(scene);
         if (lines.isEmpty()) {
             return null;
@@ -424,6 +429,42 @@ public class PeopleService {
 
         List<Scene> scenes = sceneRepository.findAllByUserIdAndWithPartnerUserIdAndDateIn(userId, partnerUserId, List.of(date), KstTimes.now());
 
+        return toEventResult(userId, partnerUserId, date, scenes);
+    }
+
+    public PeopleEventResult eventV2(Long userId, Long partnerUserId, LocalDate date) {
+        if (!userRepository.existsById(partnerUserId)) {
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+        }
+
+        List<Scene> sharedScenes = sceneRepository.findAllByUserIdAndWithPartnerUserIdAndDateIn(userId, partnerUserId, List.of(date), KstTimes.now());
+
+        return toEventResult(userId, partnerUserId, date, withPrecedingMoves(userId, date, sharedScenes));
+    }
+
+    private List<Scene> withPrecedingMoves(Long userId, LocalDate date, List<Scene> sharedScenes) {
+        if (sharedScenes.isEmpty()) {
+            return sharedScenes;
+        }
+
+        List<Scene> moves = sceneRepository.findAllByUserIdAndDateAndType(userId, date, SceneType.MOVE);
+        Map<Long, Scene> sceneById = new LinkedHashMap<>();
+        sharedScenes.forEach(scene -> sceneById.put(scene.getId(), scene));
+        sharedScenes.forEach(scene -> precedingMove(scene, moves)
+                .ifPresent(move -> sceneById.putIfAbsent(move.getId(), move)));
+
+        return sceneById.values().stream()
+                .sorted(Comparator.comparing(Scene::getStartsAt).thenComparing(Scene::getId))
+                .toList();
+    }
+
+    private Optional<Scene> precedingMove(Scene scene, List<Scene> moves) {
+        return moves.stream()
+                .filter(move -> !move.getEndsAt().isAfter(scene.getStartsAt()))
+                .max(Comparator.comparing(Scene::getEndsAt).thenComparing(Scene::getId));
+    }
+
+    private PeopleEventResult toEventResult(Long userId, Long partnerUserId, LocalDate date, List<Scene> scenes) {
         List<Long> sceneIds = scenes.stream().map(Scene::getId).toList();
         List<ScenePartner> scenePartners = scenePartnerRepository.findAllBySceneIdIn(sceneIds);
         Map<Long, List<Long>> partnerUserIdsBySceneId = scenePartners.stream()
@@ -487,6 +528,21 @@ public class PeopleService {
                     scene.getPlaceCode(),
                     with,
                     toSceneLines(scene, nameByUserId)
+            );
+            case MOVE -> new PeopleEventMoveSceneResult(
+                    scene.getId(),
+                    "move",
+                    startsAt,
+                    endsAt,
+                    scene.getFromPlace(),
+                    scene.getFromPlaceCode(),
+                    scene.getPlace(),
+                    scene.getPlaceCode(),
+                    with == null ? List.of() : with,
+                    scene.getTravelMode(),
+                    scene.getMapVersion(),
+                    sceneNameRenderer.render(scene.getNarration(), nameByUserId),
+                    sceneNameRenderer.render(scene.getMind(), nameByUserId)
             );
         };
     }

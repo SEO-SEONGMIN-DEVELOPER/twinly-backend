@@ -206,6 +206,21 @@ public class SimulationService {
                     dialogue.end(),
                     writeLines(dialogue.lines())
             );
+            case SimulationsMoveSceneCommand move -> Scene.createMove(
+                    userId,
+                    date,
+                    version,
+                    normalizePlace(move.fromPlace()),
+                    move.fromPlaceCode(),
+                    normalizePlace(move.place()),
+                    move.placeCode(),
+                    move.start(),
+                    move.end(),
+                    move.travelMode(),
+                    move.mapVersion(),
+                    move.narration(),
+                    move.mind()
+            );
         };
     }
 
@@ -244,6 +259,7 @@ public class SimulationService {
         List<Long> with = switch (command) {
             case SimulationsActionSceneCommand action -> action.with();
             case SimulationsDialogueSceneCommand dialogue -> dialogue.with();
+            case SimulationsMoveSceneCommand move -> move.with();
         };
 
         return distinct(with);

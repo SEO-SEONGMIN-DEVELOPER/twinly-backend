@@ -4,6 +4,7 @@ import com.nidus.twinly.activity.dto.result.ActivityActionSceneResult;
 import com.nidus.twinly.common.scene.SceneBubbleLine;
 import com.nidus.twinly.common.scene.SceneNarrationLine;
 import com.nidus.twinly.activity.dto.result.ActivityDialogueSceneResult;
+import com.nidus.twinly.activity.dto.result.ActivityMoveSceneResult;
 import com.nidus.twinly.activity.dto.result.ActivityQuestionResult;
 import com.nidus.twinly.activity.dto.result.ActivityResult;
 import com.nidus.twinly.activity.dto.result.ActivityUserInfoResult;
@@ -147,6 +148,129 @@ class ActivityControllerUnitTest {
         // then: 400 반환 + 서비스는 호출되지 않음
         result.andExpect(status().isBadRequest());
         then(activityService).should(never()).activity(anyLong(), any(LocalDate.class));
+    }
+
+    @Test
+    @DisplayName("v1 활동 조회는 move 씬을 도착지 기준 action 씬으로 바꿔 내리고 출발지·이동 정보는 싣지 않는다")
+    void activity_v1_converts_move_scene_to_action() throws Exception {
+        // given: 서비스가 혼자 이동한 move 씬 1개를 반환
+        given(activityService.activity(1L, DATE)).willReturn(moveResult());
+
+        // when: 출시된 앱이 쓰는 v1 활동 조회 API 호출
+        var result = mockMvc.perform(get("/api/v1/activities/{date}", "2026-07-26")
+                .header("Authorization", "Bearer access-token"));
+
+        // then: 200 + 기존 action 모양 그대로(장소는 도착지, 동행자 없으면 with 없음), move 전용 필드는 없다
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.scenes", hasSize(1)))
+                .andExpect(jsonPath("$.scenes[0].sceneId").value("12"))
+                .andExpect(jsonPath("$.scenes[0].type").value("action"))
+                .andExpect(jsonPath("$.scenes[0].startsAt", startsWith("2026-07-26T11:00")))
+                .andExpect(jsonPath("$.scenes[0].endsAt", startsWith("2026-07-26T11:10")))
+                .andExpect(jsonPath("$.scenes[0].place").value("학생 거리 탐앤탐스"))
+                .andExpect(jsonPath("$.scenes[0].placeCode").value("P0158"))
+                .andExpect(jsonPath("$.scenes[0].narration").value("카페로 향했다"))
+                .andExpect(jsonPath("$.scenes[0].with").doesNotExist())
+                .andExpect(jsonPath("$.scenes[0].fromPlace").doesNotExist())
+                .andExpect(jsonPath("$.scenes[0].travelMode").doesNotExist())
+                .andExpect(jsonPath("$.scenes[0].mapVersion").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("v2 활동 조회는 move 씬을 출발지·도착지·이동 수단·지도 버전과 함께 내리고 v1과 같은 서비스에 위임한다")
+    void activity_v2_returns_move_scene() throws Exception {
+        // given: 서비스가 혼자 이동한 move 씬 1개를 반환
+        given(activityService.activity(1L, DATE)).willReturn(moveResult());
+
+        // when: 새 앱이 쓰는 v2 활동 조회 API 호출
+        var result = mockMvc.perform(get("/api/v2/activities/{date}", "2026-07-26")
+                .header("Authorization", "Bearer access-token"));
+
+        // then: 200 + move 모양으로 내려가고, 동행자가 없으면 with 는 빈 배열이다
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.userId").value("1"))
+                .andExpect(jsonPath("$.version").value("v1"))
+                .andExpect(jsonPath("$.scenes", hasSize(1)))
+                .andExpect(jsonPath("$.scenes[0].sceneId").value("12"))
+                .andExpect(jsonPath("$.scenes[0].type").value("move"))
+                .andExpect(jsonPath("$.scenes[0].startsAt", startsWith("2026-07-26T11:00")))
+                .andExpect(jsonPath("$.scenes[0].endsAt", startsWith("2026-07-26T11:10")))
+                .andExpect(jsonPath("$.scenes[0].fromPlace").value("집"))
+                .andExpect(jsonPath("$.scenes[0].fromPlaceCode").value("P0258"))
+                .andExpect(jsonPath("$.scenes[0].place").value("학생 거리 탐앤탐스"))
+                .andExpect(jsonPath("$.scenes[0].placeCode").value("P0158"))
+                .andExpect(jsonPath("$.scenes[0].with", hasSize(0)))
+                .andExpect(jsonPath("$.scenes[0].travelMode").value("walk"))
+                .andExpect(jsonPath("$.scenes[0].mapVersion").value("sha256:89af"))
+                .andExpect(jsonPath("$.scenes[0].narration").value("카페로 향했다"))
+                .andExpect(jsonPath("$.userInfos", hasSize(1)));
+        then(activityService).should().activity(1L, DATE);
+    }
+
+    @Test
+    @DisplayName("v2 활동 조회는 action·dialogue 씬을 v1과 같은 모양으로 내린다")
+    void activity_v2_keeps_action_and_dialogue_shape() throws Exception {
+        // given: 서비스가 action 씬 1개, dialogue 씬 1개를 반환
+        given(activityService.activity(1L, DATE)).willReturn(sampleResult());
+
+        // when: v2 활동 조회 API 호출
+        var result = mockMvc.perform(get("/api/v2/activities/{date}", "2026-07-26")
+                .header("Authorization", "Bearer access-token"));
+
+        // then: 200 + 두 씬 모두 v1 과 같은 필드로 내려간다
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.scenes", hasSize(2)))
+                .andExpect(jsonPath("$.scenes[0].type").value("action"))
+                .andExpect(jsonPath("$.scenes[0].place").value("학교 복도"))
+                .andExpect(jsonPath("$.scenes[0].with[0]", is("100")))
+                .andExpect(jsonPath("$.scenes[1].type").value("dialogue"))
+                .andExpect(jsonPath("$.scenes[1].lines", hasSize(2)))
+                .andExpect(jsonPath("$.questions", hasSize(1)));
+    }
+
+    @Test
+    @DisplayName("v2 활동 조회에 인증 헤더가 없으면 401을 반환하고 서비스를 호출하지 않는다")
+    void activity_v2_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 v2 활동 조회 API 호출
+        var result = mockMvc.perform(get("/api/v2/activities/{date}", "2026-07-26"));
+
+        // then: 401 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isUnauthorized());
+        then(activityService).should(never()).activity(anyLong(), any(LocalDate.class));
+    }
+
+    @Test
+    @DisplayName("v2 활동 조회에서 경로 변수 date가 날짜 형식이 아니면 400을 반환하고 서비스를 호출하지 않는다")
+    void activity_v2_with_invalid_date_returns_400() throws Exception {
+        // when: 날짜로 변환할 수 없는 date 로 v2 활동 조회 API 호출
+        var result = mockMvc.perform(get("/api/v2/activities/{date}", "invalid-date")
+                .header("Authorization", "Bearer access-token"));
+
+        // then: 400 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest());
+        then(activityService).should(never()).activity(anyLong(), any(LocalDate.class));
+    }
+
+    private ActivityResult moveResult() {
+        ActivityMoveSceneResult move = new ActivityMoveSceneResult(
+                12L,
+                "move",
+                OffsetDateTime.of(2026, 7, 26, 11, 0, 0, 0, KST),
+                OffsetDateTime.of(2026, 7, 26, 11, 10, 0, 0, KST),
+                "집",
+                "P0258",
+                "학생 거리 탐앤탐스",
+                "P0158",
+                List.of(),
+                "walk",
+                "sha256:89af",
+                "카페로 향했다",
+                null
+        );
+
+        ActivityUserInfoResult me = new ActivityUserInfoResult(1L, "자신", null);
+
+        return new ActivityResult(1L, 7L, DATE, "v1", Instant.now(), List.of(move), List.of(), List.of(me));
     }
 
     private ActivityResult sampleResult() {

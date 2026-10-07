@@ -3,6 +3,7 @@ package com.nidus.twinly.user.seed;
 import com.nidus.twinly.simulation.dto.command.SimulationsCommand;
 import com.nidus.twinly.simulation.dto.request.SimulationsActionSceneRequest;
 import com.nidus.twinly.simulation.dto.request.SimulationsDialogueSceneRequest;
+import com.nidus.twinly.simulation.dto.request.SimulationsMoveSceneRequest;
 import com.nidus.twinly.simulation.dto.request.SimulationsRequest;
 import com.nidus.twinly.simulation.dto.request.SimulationsSceneRequest;
 import org.junit.jupiter.api.BeforeAll;
@@ -75,6 +76,14 @@ class ShowcaseScenarioResourceUnitTest {
 
         assertThat(dates.getFirst()).isBeforeOrEqualTo(anchor);
         assertThat(dates.getLast()).isAfter(anchor);
+    }
+
+    @Test
+    @DisplayName("기준일까지 옮기는 일수가 7의 배수라 화면의 요일이 시나리오를 쓴 요일과 같다")
+    void shift_keeps_the_weekday() {
+        LocalDate anchor = LocalDate.parse(root.get("anchorDate").asString());
+
+        assertThat(UserSeeder.SCENARIO_BASE_DATE.getDayOfWeek()).isEqualTo(anchor.getDayOfWeek());
     }
 
     private static final Pattern DATE_LIKE = Pattern.compile("\\d{4}-\\d{2}-\\d{2}.*");
@@ -168,6 +177,7 @@ class ShowcaseScenarioResourceUnitTest {
         return switch (scene) {
             case SimulationsActionSceneRequest action -> action.start();
             case SimulationsDialogueSceneRequest dialogue -> dialogue.start();
+            case SimulationsMoveSceneRequest move -> move.start();
         };
     }
 
@@ -175,6 +185,7 @@ class ShowcaseScenarioResourceUnitTest {
         return switch (scene) {
             case SimulationsActionSceneRequest action -> action.end();
             case SimulationsDialogueSceneRequest dialogue -> dialogue.end();
+            case SimulationsMoveSceneRequest move -> move.end();
         };
     }
 
@@ -182,6 +193,7 @@ class ShowcaseScenarioResourceUnitTest {
         return switch (scene) {
             case SimulationsActionSceneRequest action -> action.place();
             case SimulationsDialogueSceneRequest dialogue -> dialogue.place();
+            case SimulationsMoveSceneRequest move -> move.place();
         };
     }
 
@@ -190,6 +202,8 @@ class ShowcaseScenarioResourceUnitTest {
             case SimulationsActionSceneRequest action ->
                     action.with() == null ? List.of() : action.with();
             case SimulationsDialogueSceneRequest dialogue -> dialogue.with();
+            case SimulationsMoveSceneRequest move ->
+                    move.with() == null ? List.of() : move.with();
         };
     }
 
@@ -338,7 +352,7 @@ class ShowcaseScenarioResourceUnitTest {
     }
 
     @Test
-    @DisplayName("나레이션·속마음·대사는 다른 장면에서 다시 쓰이지 않는다 (대화는 양쪽 미러를 한 장면으로 본다)")
+    @DisplayName("나레이션·속마음·대사는 다른 장면에서 다시 쓰이지 않는다 (대화는 양쪽 미러를 한 장면으로 보고, 정형 문장인 이동은 뺀다)")
     void scene_texts_are_never_reused() {
         Map<String, Set<String>> ownersByText = new LinkedHashMap<>();
 
@@ -349,6 +363,9 @@ class ShowcaseScenarioResourceUnitTest {
                 String start = scene.get("start").asString();
                 List<String> texts = new ArrayList<>();
                 String owner;
+                if ("move".equals(scene.get("type").asString())) {
+                    continue;
+                }
                 if ("action".equals(scene.get("type").asString())) {
                     owner = userId + "|" + start;
                     texts.add("narration:" + scene.get("narration").asString());
@@ -433,127 +450,83 @@ class ShowcaseScenarioResourceUnitTest {
     }
 
 
-    /** 판정 순서가 결과를 바꾸므로 리스트로 고정한다. 앞에 있는 것이 먼저 이긴다. */
-    private static final List<Map.Entry<String, List<String>>> REGION_RULES = List.of(
-            Map.entry("SKKU", List.of("금잔디광장", "퇴계인문관", "수선관", "다산경제관", "경영관",
-                    "중앙학술정보관", "성대 후문", "명륜동", "혜화역", "대학로", "성균관 돌담길")),
-            Map.entry("KOREA", List.of("중앙광장", "하나스퀘어", "참살이길", "개운사", "안암역", "안암동",
-                    "정경관", "정경대", "문과대 서관", "우당교양관", "백주년기념관", "애기능생활관",
-                    "고대 앞", "고대 정문", "고대 체육관")),
-            Map.entry("SUNGSHIN", List.of("돈암수정캠퍼스", "미아리고개", "성신여대입구역", "성신여대 앞",
-                    "돈암동", "난향관", "수정관", "학생누리관")),
-            Map.entry("SCHOOL", List.of("중앙도서관", "학술정보관", "미디어관", "인문관", "정문 앞",
-                    "학생회관", "교내", "학교 앞", "등굣길", "기숙사")),
-            Map.entry("HONGDAE", List.of("홍대", "합정", "연남동", "경의선숲길")),
-            Map.entry("SEONGSU", List.of("성수동", "성수역", "서울숲", "건대입구")),
-            Map.entry("JONGNO", List.of("동대문역사문화공원", "을지로", "청계천", "익선동", "북촌",
-                    "광화문", "교보문고", "DDP", "전시관", "남산")),
-            Map.entry("JAMSIL", List.of("잠실", "석촌호수", "올림픽공원", "종합운동장", "롯데월드",
-                    "자이로드롭", "워터존", "실내 회전목마", "외야 잔디석", "관중석 통로", "푸드존",
-                    "푸드트럭", "메인 스테이지", "서브 스테이지", "굿즈 부스", "야구장", "매표소",
-                    "스탠딩존", "퍼레이드 관람", "페스티벌 입장 게이트", "송리단길", "방이동",
-                    "몽촌토성역", "잔디밭 돗자리 자리", "물놀이장")),
-            Map.entry("HANGANG", List.of("한강", "뚝섬", "강변 계단")),
-            Map.entry("GANGNEUNG", List.of("강릉", "경포", "안목해변", "방파제", "해변 파라솔",
-                    "중앙시장 닭강정")));
-
-    private static final List<String> TRANSIT = List.of("지하철", "버스 창가", "환승역 계단",
-            "환승통로", "고속버스터미널", "KTX 승강장", "청량리역 승강장", "셔틀버스", "가는 버스",
-            "마을버스 정류장", "서울역 3번 출구");
-
     private static final List<String> LECTURE = List.of("강의실", "세미나실", "실습실");
 
-    private static final Map<String, Integer> TRAVEL = travelTable();
+    private static final Pattern PLACE_CODE = Pattern.compile("P\\d{4}");
 
-    private static Map<String, Integer> travelTable() {
-        Map<String, Integer> table = new LinkedHashMap<>();
-        String[][] rows = {
-                {"SKKU", "KOREA", "25"}, {"SKKU", "SUNGSHIN", "25"}, {"SKKU", "HONGDAE", "40"},
-                {"SKKU", "SEONGSU", "35"}, {"SKKU", "JONGNO", "15"}, {"SKKU", "JAMSIL", "50"},
-                {"SKKU", "HANGANG", "35"}, {"SKKU", "GANGNEUNG", "200"},
-                {"KOREA", "SUNGSHIN", "20"}, {"KOREA", "HONGDAE", "45"}, {"KOREA", "SEONGSU", "30"},
-                {"KOREA", "JONGNO", "25"}, {"KOREA", "JAMSIL", "50"}, {"KOREA", "HANGANG", "35"},
-                {"KOREA", "GANGNEUNG", "200"},
-                {"SUNGSHIN", "HONGDAE", "50"}, {"SUNGSHIN", "SEONGSU", "40"},
-                {"SUNGSHIN", "JONGNO", "25"}, {"SUNGSHIN", "JAMSIL", "55"},
-                {"SUNGSHIN", "HANGANG", "45"}, {"SUNGSHIN", "GANGNEUNG", "210"},
-                {"HONGDAE", "SEONGSU", "35"}, {"HONGDAE", "JONGNO", "25"}, {"HONGDAE", "JAMSIL", "45"},
-                {"HONGDAE", "HANGANG", "20"}, {"HONGDAE", "GANGNEUNG", "220"},
-                {"SEONGSU", "JONGNO", "25"}, {"SEONGSU", "JAMSIL", "25"}, {"SEONGSU", "HANGANG", "15"},
-                {"SEONGSU", "GANGNEUNG", "195"},
-                {"JONGNO", "JAMSIL", "40"}, {"JONGNO", "HANGANG", "30"}, {"JONGNO", "GANGNEUNG", "205"},
-                {"JAMSIL", "HANGANG", "25"}, {"JAMSIL", "GANGNEUNG", "190"},
-                {"HANGANG", "GANGNEUNG", "200"},
+    private static final String HOME_CODE = "P0258";
+
+    private static String placeCode(SimulationsSceneRequest scene) {
+        return switch (scene) {
+            case SimulationsActionSceneRequest action -> action.placeCode();
+            case SimulationsDialogueSceneRequest dialogue -> dialogue.placeCode();
+            case SimulationsMoveSceneRequest move -> move.placeCode();
         };
-        for (String[] row : rows) {
-            table.put(row[0] + ">" + row[1], Integer.parseInt(row[2]));
-            table.put(row[1] + ">" + row[0], Integer.parseInt(row[2]));
-        }
-        return table;
-    }
-
-    private static String schoolOf(long userId) {
-        if (userId <= 7) {
-            return "SKKU";
-        }
-        return userId <= 14 ? "KOREA" : "SUNGSHIN";
-    }
-
-    private static boolean contains(List<String> keys, String place) {
-        return keys.stream().anyMatch(place::contains);
-    }
-
-    /** 이동 수단 안은 null 을 돌려 이동 시간 검사에서 빼고, 나머지는 소속 캠퍼스를 기본값으로 쓴다. */
-    private static String regionOf(String place, long userId) {
-        if (contains(TRANSIT, place)) {
-            return null;
-        }
-        for (var rule : REGION_RULES) {
-            if (contains(rule.getValue(), place)) {
-                return "SCHOOL".equals(rule.getKey()) ? schoolOf(userId) : rule.getKey();
-            }
-        }
-        return schoolOf(userId);
     }
 
     @Test
-    @DisplayName("지역을 옮길 때는 이동 시간만큼 비어 있다")
-    void moving_between_regions_takes_time() {
+    @DisplayName("모든 장면에 장소 코드가 있고, 내 집은 '집'으로 표시된다")
+    void every_scene_has_a_place_code() {
         List<String> broken = new ArrayList<>();
         for (SimulationsRequest request : requests) {
-            String lastRegion = null;
-            LocalDateTime lastEnd = null;
-            for (SimulationsSceneRequest scene : ordered(request)) {
-                String region = regionOf(place(scene), request.userId());
-                if (region == null) {
-                    continue;
+            for (SimulationsSceneRequest scene : request.scenes()) {
+                String code = placeCode(scene);
+                if (code == null || !PLACE_CODE.matcher(code).matches()
+                        || HOME_CODE.equals(code) != "집".equals(place(scene))) {
+                    broken.add("%d %s %s %s".formatted(request.userId(), request.date(), place(scene), code));
                 }
-                if (lastRegion != null && !lastRegion.equals(region)) {
-                    int need = TRAVEL.getOrDefault(lastRegion + ">" + region, 0);
-                    long got = java.time.Duration.between(lastEnd, start(scene)).toMinutes();
-                    if (got < need) {
-                        broken.add("%d %s %s->%s %d분(필요 %d분)".formatted(
-                                request.userId(), request.date(), lastRegion, region, got, need));
-                    }
+                if (scene instanceof SimulationsMoveSceneRequest move
+                        && (move.fromPlaceCode() == null || !PLACE_CODE.matcher(move.fromPlaceCode()).matches())) {
+                    broken.add("%d %s 출발지 %s".formatted(request.userId(), request.date(), move.fromPlace()));
                 }
-                lastRegion = region;
-                lastEnd = end(scene);
             }
         }
         assertThat(broken).isEmpty();
     }
 
     @Test
-    @DisplayName("수업은 본인 학교 캠퍼스에서, 평일에만 듣는다")
-    void lectures_happen_only_on_the_own_campus_on_weekdays() {
+    @DisplayName("장소가 바뀌는 사이에는 그 두 곳을 잇는 이동 장면이 하나 있다")
+    void place_changes_go_through_a_move() {
+        List<String> broken = new ArrayList<>();
+        for (SimulationsRequest request : requests) {
+            String lastCode = null;
+            SimulationsMoveSceneRequest pending = null;
+            for (SimulationsSceneRequest scene : ordered(request)) {
+                if (scene instanceof SimulationsMoveSceneRequest move) {
+                    if (pending != null || lastCode == null || !lastCode.equals(move.fromPlaceCode())
+                            || !List.of("walk", "transit").contains(move.travelMode())) {
+                        broken.add("%d %s %s 이동이 앞 장소에서 출발하지 않음".formatted(
+                                request.userId(), request.date(), start(move).toLocalTime()));
+                    }
+                    pending = move;
+                    continue;
+                }
+                String code = placeCode(scene);
+                boolean moved = lastCode != null && !lastCode.equals(code);
+                if (moved != (pending != null) || (pending != null && !pending.placeCode().equals(code))) {
+                    broken.add("%d %s %s %s -> %s".formatted(
+                            request.userId(), request.date(), start(scene).toLocalTime(), lastCode, code));
+                }
+                lastCode = code;
+                pending = null;
+            }
+            if (pending != null) {
+                broken.add("%d %s 마지막 이동 뒤 장면 없음".formatted(request.userId(), request.date()));
+            }
+        }
+        assertThat(broken).isEmpty();
+    }
+
+    @Test
+    @DisplayName("수업은 트윈리 캠퍼스에서, 평일에만 듣는다")
+    void lectures_happen_only_on_campus_on_weekdays() {
         List<String> broken = new ArrayList<>();
         for (SimulationsRequest request : requests) {
             for (SimulationsSceneRequest scene : request.scenes()) {
-                if (!contains(LECTURE, place(scene))) {
+                if (scene instanceof SimulationsMoveSceneRequest || LECTURE.stream().noneMatch(place(scene)::contains)) {
                     continue;
                 }
-                if (!schoolOf(request.userId()).equals(regionOf(place(scene), request.userId()))
-                        || request.date().getDayOfWeek().getValue() >= 6) {
+                if (!place(scene).startsWith("트윈리 ") || request.date().getDayOfWeek().getValue() >= 6) {
                     broken.add("%d %s %s".formatted(request.userId(), request.date(), place(scene)));
                 }
             }

@@ -15,6 +15,7 @@ import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.showcase.dto.result.ShowcaseActionSceneResult;
 import com.nidus.twinly.showcase.dto.result.ShowcaseBubbleLineResult;
 import com.nidus.twinly.showcase.dto.result.ShowcaseDialogueSceneResult;
+import com.nidus.twinly.showcase.dto.result.ShowcaseMoveSceneResult;
 import com.nidus.twinly.showcase.dto.result.ShowcaseTodayResult;
 import com.nidus.twinly.showcase.dto.result.ShowcaseUserInfoResult;
 import com.nidus.twinly.showcase.entity.Showcase;
@@ -433,6 +434,36 @@ class ShowcaseServiceUnitTest {
         assertThat(result.userInfos().get(0).organization()).isEqualTo("고려대");
     }
 
+    @Test
+    @DisplayName("move 장면은 출발지·도착지·이동 정보를 담고, 함께 이동한 인물은 userRef로, 문장 속 이름은 가명으로 내려간다")
+    void today_maps_move_scene() {
+        // given: 대상이 동행자와 함께 집에서 카페로 이동한 장면, 나레이션에 동행자 이름 자리가 있다
+        given(showcaseRepository.findByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(showcase()));
+        given(sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(anyLong(), any()))
+                .willReturn(List.of(moveScene(88103L, "{user_311}과 카페로 향했다")));
+        given(scenePartnerRepository.findAllBySceneIdIn(anyList()))
+                .willReturn(List.of(ScenePartner.create(88103L, PARTNER_ID)));
+        given(userRepository.findAllById(any()))
+                .willReturn(List.of(user(TARGET_ID, "김", "민수"), user(PARTNER_ID, "박", "지훈")));
+        givenViewerCounts();
+
+        // when: 오늘 관람 조회
+        ShowcaseTodayResult result = showcaseService.today(VIEWER_ID);
+
+        // then: move 결과로 매핑되고 실제 id·이름은 나가지 않는다
+        ShowcaseMoveSceneResult move = (ShowcaseMoveSceneResult) result.scenes().get(0);
+        assertThat(move.sceneId()).isEqualTo(88103L);
+        assertThat(move.type()).isEqualTo("move");
+        assertThat(move.fromPlace()).isEqualTo("집");
+        assertThat(move.fromPlaceCode()).isEqualTo("P0258");
+        assertThat(move.place()).isEqualTo("학생 거리 탐앤탐스");
+        assertThat(move.placeCode()).isEqualTo("P0158");
+        assertThat(move.with()).containsExactly(2L);
+        assertThat(move.travelMode()).isEqualTo("walk");
+        assertThat(move.mapVersion()).isNull();
+        assertThat(move.narration()).isEqualTo(result.userInfos().get(1).userName() + "과 카페로 향했다");
+    }
+
     private void givenEmptyDay() {
         given(sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(anyLong(), any())).willReturn(List.of());
         given(scenePartnerRepository.findAllBySceneIdIn(anyList())).willReturn(List.of());
@@ -463,6 +494,14 @@ class ShowcaseServiceUnitTest {
     private Scene actionScene(Long id, String narration, String mind) {
         Scene scene = Scene.createAction(TARGET_ID, LocalDate.parse("2026-08-18"), "v1", "학교 정문", null,
                 LocalDateTime.parse("2026-08-18T09:00:00"), LocalDateTime.parse("2026-08-18T09:40:00"), narration, mind);
+        ReflectionTestUtils.setField(scene, "id", id);
+
+        return scene;
+    }
+
+    private Scene moveScene(Long id, String narration) {
+        Scene scene = Scene.createMove(TARGET_ID, LocalDate.parse("2026-08-18"), "v1", "집", "P0258", "학생 거리 탐앤탐스", "P0158",
+                LocalDateTime.parse("2026-08-18T11:00:00"), LocalDateTime.parse("2026-08-18T11:20:00"), "walk", null, narration, null);
         ReflectionTestUtils.setField(scene, "id", id);
 
         return scene;

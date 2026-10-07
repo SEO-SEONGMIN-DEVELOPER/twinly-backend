@@ -222,6 +222,21 @@ public class ShowcaseService {
                     with,
                     toLineResults(sceneLines, userRefByUserId, nameByUserId)
             );
+            case MOVE -> new ShowcaseMoveSceneResult(
+                    scene.getId(),
+                    "move",
+                    startsAt,
+                    endsAt,
+                    scene.getFromPlace(),
+                    scene.getFromPlaceCode(),
+                    scene.getPlace(),
+                    scene.getPlaceCode(),
+                    with,
+                    scene.getTravelMode(),
+                    scene.getMapVersion(),
+                    sceneNameRenderer.render(scene.getNarration(), nameByUserId),
+                    sceneNameRenderer.render(scene.getMind(), nameByUserId)
+            );
         };
     }
 

@@ -1,6 +1,7 @@
 package com.nidus.twinly.activity.controller;
 
 import com.nidus.twinly.activity.dto.response.ActivityResponse;
+import com.nidus.twinly.activity.dto.response.ActivityV2Response;
 import com.nidus.twinly.activity.service.ActivityService;
 import com.nidus.twinly.user.dto.header.UserInfo;
 import io.swagger.v3.oas.annotations.Operation;
@@ -25,5 +26,12 @@ public class ActivityController {
     public ActivityResponse activity(@AuthenticationPrincipal UserInfo userInfo,
                                      @PathVariable LocalDate date) {
         return ActivityResponse.from(activityService.activity(userInfo.id(), date));
+    }
+
+    @Operation(summary = "날짜별 활동 내역 조회 v2")
+    @GetMapping("/api/v2/activities/{date}")
+    public ActivityV2Response activityV2(@AuthenticationPrincipal UserInfo userInfo,
+                                         @PathVariable LocalDate date) {
+        return ActivityV2Response.from(activityService.activity(userInfo.id(), date));
     }
 }

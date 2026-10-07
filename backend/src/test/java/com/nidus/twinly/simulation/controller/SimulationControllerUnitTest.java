@@ -8,6 +8,7 @@ import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.simulation.dto.command.SimulationsCommand;
 import com.nidus.twinly.simulation.dto.command.SimulationsDialogueSceneCommand;
+import com.nidus.twinly.simulation.dto.command.SimulationsMoveSceneCommand;
 import com.nidus.twinly.simulation.dto.result.SimulationPersonaIntimacyResult;
 import com.nidus.twinly.simulation.dto.result.SimulationPersonaResult;
 import com.nidus.twinly.simulation.service.SimulationService;
@@ -324,6 +325,112 @@ class SimulationControllerUnitTest {
 
         // then: 404 반환
         result.andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("이동 장면은 from 을 출발지로 읽고 출발지 코드·이동 수단·지도 버전까지 서비스에 위임한다")
+    void simulations_with_move_scene() throws Exception {
+        // when: 집에서 카페로 걸어간 이동 장면 하나가 담긴 결과로 저장 API 호출
+        var result = mockMvc.perform(post("/internal/v1/users/{userId}/simulations", "12")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(movePayload("""
+                        "from": "집",
+                        "fromPlaceCode": "P0258",
+                        "travelMode": "walk",
+                        "mapVersion": "sha256:89af",
+                        """)));
+
+        // then: 200 반환 + 이동 장면이 출발지·도착지·이동 수단을 그대로 담은 커맨드로 전달됨
+        result.andExpect(status().isOk());
+        ArgumentCaptor<SimulationsCommand> captor = ArgumentCaptor.forClass(SimulationsCommand.class);
+        then(simulationService).should().simulations(eq(USER_ID), captor.capture());
+        assertThat(captor.getValue().scenes()).singleElement()
+                .isInstanceOfSatisfying(SimulationsMoveSceneCommand.class, move -> {
+                    assertThat(move.type()).isEqualTo("move");
+                    assertThat(move.start()).isEqualTo(LocalDateTime.of(2026, 10, 1, 11, 0));
+                    assertThat(move.end()).isEqualTo(LocalDateTime.of(2026, 10, 1, 11, 10));
+                    assertThat(move.fromPlace()).isEqualTo("집");
+                    assertThat(move.fromPlaceCode()).isEqualTo("P0258");
+                    assertThat(move.place()).isEqualTo("학생 거리 탐앤탐스");
+                    assertThat(move.placeCode()).isEqualTo("P0158");
+                    assertThat(move.with()).isEmpty();
+                    assertThat(move.travelMode()).isEqualTo("walk");
+                    assertThat(move.mapVersion()).isEqualTo("sha256:89af");
+                    assertThat(move.narration()).isEqualTo("카페로 향했다");
+                    assertThat(move.mind()).isNull();
+                });
+    }
+
+    @Test
+    @DisplayName("이동 장면에 출발지 from 이 없으면 400을 반환하고 서비스를 호출하지 않는다")
+    void simulations_move_without_from_returns_400() throws Exception {
+        // when: 출발지를 뺀 이동 장면으로 저장 API 호출
+        var result = mockMvc.perform(post("/internal/v1/users/{userId}/simulations", "12")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(movePayload("""
+                        "travelMode": "walk",
+                        """)));
+
+        // then: 400 반환 + 앱이 출발지 없이 길을 그릴 수 없으므로 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest());
+        then(simulationService).should(never()).simulations(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("이동 장면에 이동 수단 travelMode 가 없으면 400을 반환하고 서비스를 호출하지 않는다")
+    void simulations_move_without_travel_mode_returns_400() throws Exception {
+        // when: 이동 수단을 뺀 이동 장면으로 저장 API 호출
+        var result = mockMvc.perform(post("/internal/v1/users/{userId}/simulations", "12")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(movePayload("""
+                        "from": "집",
+                        """)));
+
+        // then: 400 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest());
+        then(simulationService).should(never()).simulations(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("모르는 장면 종류가 오면 400을 반환하고 서비스를 호출하지 않는다")
+    void simulations_with_unknown_scene_type_returns_400() throws Exception {
+        // when: action·dialogue·move 가 아닌 장면 종류로 저장 API 호출
+        var result = mockMvc.perform(post("/internal/v1/users/{userId}/simulations", "12")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(movePayload("""
+                        "from": "집",
+                        "travelMode": "walk",
+                        """).replace("\"type\": \"move\"", "\"type\": \"teleport\"")));
+
+        // then: 400 INVALID_REQUEST 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code", is("INVALID_REQUEST")));
+        then(simulationService).should(never()).simulations(anyLong(), any());
+    }
+
+    private String movePayload(String moveFields) {
+        return """
+                {
+                  "userId": "12",
+                  "date": "2026-10-01",
+                  "intimacyAsOf": "2026-10-01T10:30:00",
+                  "scenes": [
+                    {
+                      "type": "move",
+                      "start": "2026-10-01T11:00:00",
+                      "end": "2026-10-01T11:10:00",
+                      %s
+                      "place": "학생 거리 탐앤탐스",
+                      "placeCode": "P0158",
+                      "with": [],
+                      "narration": "카페로 향했다",
+                      "mind": null
+                    }
+                  ],
+                  "questions": [],
+                  "relationships": []
+                }
+                """.formatted(moveFields);
     }
 
     private String simulationsPayload(String updateTimeField, String with) {

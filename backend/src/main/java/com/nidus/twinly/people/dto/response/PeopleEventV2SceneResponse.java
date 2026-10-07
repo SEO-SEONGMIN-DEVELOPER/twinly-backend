@@ -10,15 +10,16 @@ import com.nidus.twinly.people.dto.result.PeopleEventSceneResult;
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.EXISTING_PROPERTY, property = "type")
 @JsonSubTypes({
         @JsonSubTypes.Type(value = PeopleEventActionSceneResponse.class, name = "action"),
-        @JsonSubTypes.Type(value = PeopleEventDialogueSceneResponse.class, name = "dialogue")
+        @JsonSubTypes.Type(value = PeopleEventDialogueSceneResponse.class, name = "dialogue"),
+        @JsonSubTypes.Type(value = PeopleEventMoveSceneResponse.class, name = "move")
 })
-public sealed interface PeopleEventSceneResponse permits PeopleEventActionSceneResponse, PeopleEventDialogueSceneResponse {
+public sealed interface PeopleEventV2SceneResponse permits PeopleEventActionSceneResponse, PeopleEventDialogueSceneResponse, PeopleEventMoveSceneResponse {
 
-    static PeopleEventSceneResponse from(PeopleEventSceneResult result) {
+    static PeopleEventV2SceneResponse from(PeopleEventSceneResult result) {
         return switch (result) {
             case PeopleEventActionSceneResult r -> PeopleEventActionSceneResponse.from(r);
             case PeopleEventDialogueSceneResult r -> PeopleEventDialogueSceneResponse.from(r);
-            case PeopleEventMoveSceneResult r -> PeopleEventActionSceneResponse.from(r);
+            case PeopleEventMoveSceneResult r -> PeopleEventMoveSceneResponse.from(r);
         };
     }
 }

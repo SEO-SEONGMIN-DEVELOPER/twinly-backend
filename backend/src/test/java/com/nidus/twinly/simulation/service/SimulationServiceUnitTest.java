@@ -1,7 +1,9 @@
 package com.nidus.twinly.simulation.service;
 
 import com.nidus.twinly.activity.domain.QuestionType;
+import com.nidus.twinly.activity.domain.SceneType;
 import com.nidus.twinly.activity.entity.Scene;
+import com.nidus.twinly.activity.entity.ScenePartner;
 import com.nidus.twinly.activity.repository.QuestionPartnerRepository;
 import com.nidus.twinly.activity.repository.QuestionRepository;
 import com.nidus.twinly.activity.repository.ScenePartnerRepository;
@@ -24,6 +26,7 @@ import com.nidus.twinly.relationship.repository.RelationshipRepository;
 import com.nidus.twinly.simulation.dto.command.SimulationsActionSceneCommand;
 import com.nidus.twinly.simulation.dto.command.SimulationsCommand;
 import com.nidus.twinly.simulation.dto.command.SimulationsDialogueSceneCommand;
+import com.nidus.twinly.simulation.dto.command.SimulationsMoveSceneCommand;
 import com.nidus.twinly.simulation.dto.command.SimulationsQuestionCommand;
 import com.nidus.twinly.simulation.dto.command.SimulationsRelationshipCommand;
 import com.nidus.twinly.simulation.dto.command.SimulationsSceneCommand;
@@ -578,6 +581,92 @@ class SimulationServiceUnitTest {
         then(sceneRepository).should().saveAll(captor.capture());
         assertThat(captor.getValue()).extracting(Scene::getPlaceCode)
                 .containsExactly("SCHOOL_GATE", null);
+    }
+
+    @Test
+    @DisplayName("이동 장면은 출발지·도착지·이동 수단·지도 버전을 담은 MOVE 장면으로 저장하고, 두 장소의 ':' 구분자를 공백으로 바꾼다")
+    void simulations_saves_move_scene() {
+        // given: 집에서 카페로 걸어간 이동 장면, 두 장소에 ':' 구분자가 들어 있음
+        givenEmptyPreviousSimulation();
+        SimulationsCommand command = new SimulationsCommand(USER_ID, DATE, List.of(
+                moveScene("성북구:주택가:집", "성북구:학생 거리:탐앤탐스", List.of())
+        ), List.of(), List.of(), null);
+
+        // when: 시뮬레이션 결과 저장
+        simulationService.simulations(USER_ID, command);
+
+        // then: MOVE 장면 하나가 출발지·도착지·이동 정보를 담고, 장소 코드와 지도 버전은 가공 없이 저장됨
+        ArgumentCaptor<List<Scene>> captor = ArgumentCaptor.captor();
+        then(sceneRepository).should().saveAll(captor.capture());
+        assertThat(captor.getValue()).singleElement().satisfies(scene -> {
+            assertThat(scene.getType()).isEqualTo(SceneType.MOVE);
+            assertThat(scene.getStartsAt()).isEqualTo(DATE.atTime(11, 0));
+            assertThat(scene.getEndsAt()).isEqualTo(DATE.atTime(11, 10));
+            assertThat(scene.getFromPlace()).isEqualTo("성북구 주택가 집");
+            assertThat(scene.getFromPlaceCode()).isEqualTo("P0258");
+            assertThat(scene.getPlace()).isEqualTo("성북구 학생 거리 탐앤탐스");
+            assertThat(scene.getPlaceCode()).isEqualTo("P0158");
+            assertThat(scene.getTravelMode()).isEqualTo("walk");
+            assertThat(scene.getMapVersion()).isEqualTo("sha256:89af");
+            assertThat(scene.getNarration()).isEqualTo("카페로 향했다");
+            assertThat(scene.getMind()).isNull();
+            assertThat(scene.getLines()).isNull();
+        });
+    }
+
+    @Test
+    @DisplayName("함께 이동한 상대는 이동 장면의 상대로 저장하지만 대화가 아니므로 첫 만남 알림 대상은 아니다")
+    void simulations_saves_move_partner_without_first_meeting() {
+        // given: 상대와 함께 카페로 이동한 장면, 저장된 장면에는 id 가 붙는다
+        given(userRepository.existsById(USER_ID)).willReturn(true);
+        given(userRepository.countByIdIn(Set.of(PARTNER_ID))).willReturn(1L);
+        given(sceneRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of());
+        given(questionRepository.findAllByUserIdAndDate(USER_ID, DATE)).willReturn(List.of());
+        given(sceneRepository.saveAll(any())).willAnswer(invocation -> {
+            List<Scene> scenes = invocation.getArgument(0);
+            scenes.forEach(scene -> ReflectionTestUtils.setField(scene, "id", 70L));
+            return scenes;
+        });
+        given(questionRepository.saveAll(any())).willReturn(List.of());
+        SimulationsCommand command = new SimulationsCommand(USER_ID, DATE, List.of(
+                moveScene("집", "학생 거리 탐앤탐스", List.of(PARTNER_ID))
+        ), List.of(), List.of(), null);
+
+        // when: 시뮬레이션 결과 저장
+        simulationService.simulations(USER_ID, command);
+
+        // then: 상대가 이동 장면에 붙어 저장됨 + 첫 만남 알림은 예약하지 않음
+        ArgumentCaptor<List<ScenePartner>> captor = ArgumentCaptor.captor();
+        then(scenePartnerRepository).should().saveAll(captor.capture());
+        assertThat(captor.getValue()).extracting(ScenePartner::getSceneId, ScenePartner::getUserId)
+                .containsExactly(tuple(70L, PARTNER_ID));
+        then(appNotificationScheduleRepository).should(never()).insertIfAbsent(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("함께 이동한 상대가 존재하지 않는 유저면 INVALID_REQUEST 예외가 발생하고 이전 결과를 지우지 않는다")
+    void simulations_with_unknown_move_partner_throws_before_deleting() {
+        // given: 이동 장면의 동행자가 실제 유저가 아님
+        given(userRepository.existsById(USER_ID)).willReturn(true);
+        given(userRepository.countByIdIn(Set.of(999L))).willReturn(0L);
+        SimulationsCommand command = new SimulationsCommand(USER_ID, DATE, List.of(
+                moveScene("집", "학생 거리 탐앤탐스", List.of(999L))
+        ), List.of(), List.of(), null);
+
+        // when & then: 대화 상대와 같은 규칙으로 요청 오류로 끊고, 기존 결과는 그대로 둔다
+        assertThatThrownBy(() -> simulationService.simulations(USER_ID, command))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_REQUEST);
+
+        then(sceneRepository).should(never()).findAllByUserIdAndDate(any(), any());
+        then(sceneRepository).should(never()).saveAll(any());
+    }
+
+    private SimulationsSceneCommand moveScene(String fromPlace, String place, List<Long> with) {
+        return new SimulationsMoveSceneCommand(
+                DATE.atTime(11, 0), DATE.atTime(11, 10), "move", fromPlace, "P0258", place, "P0158", with,
+                "walk", "sha256:89af", "카페로 향했다", null);
     }
 
     private SimulationsSceneCommand actionScene(String place) {

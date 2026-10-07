@@ -4,7 +4,10 @@ import com.nidus.twinly.anon.service.AnonService;
 import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.photo.PhotoPosInfo;
 import com.nidus.twinly.common.photo.ProfilePhotoInfo;
+import com.nidus.twinly.common.web.BusinessException;
+import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.people.dto.result.PeopleEventActionSceneResult;
+import com.nidus.twinly.people.dto.result.PeopleEventMoveSceneResult;
 import com.nidus.twinly.people.dto.result.PeopleEventResult;
 import com.nidus.twinly.people.dto.result.PeopleEventUserInfoResult;
 import com.nidus.twinly.people.dto.result.PeopleEventsItemResult;
@@ -42,6 +45,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 
+import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -447,6 +451,139 @@ class PeopleControllerUnitTest {
         result.andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
         then(peopleService).should(never()).event(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("v1 이벤트 상세 조회는 상대와 함께한 이동을 도착지 기준 action 씬으로 바꿔 내린다")
+    void event_v1_converts_move_scene_to_action() throws Exception {
+        // given: 서비스가 상대(42)와 함께 이동한 move 씬 1건을 반환
+        given(peopleService.event(1L, 42L, LocalDate.of(2026, 7, 20)))
+                .willReturn(moveEventResult(List.of(42L)));
+
+        // when: 출시된 앱이 쓰는 v1 이벤트 상세 조회 API 호출
+        var result = mockMvc.perform(get("/api/v1/people/{userId}/events/{date}", "42", "2026-07-20")
+                .header("Authorization", "Bearer access-token"));
+
+        // then: 200 + 기존 action 모양(장소는 도착지)으로 내려가고 move 전용 필드는 없다
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.scenes", hasSize(1)))
+                .andExpect(jsonPath("$.scenes[0].type").value("action"))
+                .andExpect(jsonPath("$.scenes[0].place").value("학생 거리 탐앤탐스"))
+                .andExpect(jsonPath("$.scenes[0].placeCode").value("P0158"))
+                .andExpect(jsonPath("$.scenes[0].with[0]", is("42")))
+                .andExpect(jsonPath("$.scenes[0].narration").value("카페로 향했다"))
+                .andExpect(jsonPath("$.scenes[0].fromPlace").doesNotExist())
+                .andExpect(jsonPath("$.scenes[0].travelMode").doesNotExist());
+    }
+
+    // -------------------------------------------- GET /api/v2/people/{userId}/events/{date}
+
+    @Test
+    @DisplayName("v2 이벤트 상세 조회는 move 씬을 출발지·도착지·이동 수단과 함께 내리고 eventV2 에 위임한다")
+    void eventV2_success() throws Exception {
+        // given: 서비스가 혼자 이동한 move 씬 1건을 반환
+        given(peopleService.eventV2(1L, 42L, LocalDate.of(2026, 7, 20)))
+                .willReturn(moveEventResult(List.of()));
+
+        // when: 새 앱이 쓰는 v2 이벤트 상세 조회 API 호출
+        var result = mockMvc.perform(get("/api/v2/people/{userId}/events/{date}", "42", "2026-07-20")
+                .header("Authorization", "Bearer access-token"));
+
+        // then: 200 + move 모양으로 내려가고 혼자 간 길의 with 는 빈 배열이다
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.date").value("2026-07-20"))
+                .andExpect(jsonPath("$.userId").value("42"))
+                .andExpect(jsonPath("$.version").value("v1"))
+                .andExpect(jsonPath("$.scenes[0].sceneId").value("200"))
+                .andExpect(jsonPath("$.scenes[0].type").value("move"))
+                .andExpect(jsonPath("$.scenes[0].startsAt").value("2026-07-20T11:00:00+09:00"))
+                .andExpect(jsonPath("$.scenes[0].endsAt").value("2026-07-20T11:10:00+09:00"))
+                .andExpect(jsonPath("$.scenes[0].fromPlace").value("집"))
+                .andExpect(jsonPath("$.scenes[0].fromPlaceCode").value("P0258"))
+                .andExpect(jsonPath("$.scenes[0].place").value("학생 거리 탐앤탐스"))
+                .andExpect(jsonPath("$.scenes[0].placeCode").value("P0158"))
+                .andExpect(jsonPath("$.scenes[0].with", hasSize(0)))
+                .andExpect(jsonPath("$.scenes[0].travelMode").value("walk"))
+                .andExpect(jsonPath("$.scenes[0].mapVersion").doesNotExist())
+                .andExpect(jsonPath("$.scenes[0].narration").value("카페로 향했다"))
+                .andExpect(jsonPath("$.userInfos[0].userId").value("1"));
+        then(peopleService).should().eventV2(1L, 42L, LocalDate.of(2026, 7, 20));
+        then(peopleService).should(never()).event(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("v2 이벤트 상세 조회 시 경로 변수 userId가 숫자가 아니면 400을 반환하고 서비스를 호출하지 않는다")
+    void eventV2_with_non_numeric_userId_returns_400() throws Exception {
+        // when: userId 를 숫자가 아닌 값으로 v2 이벤트 상세 조회 API 호출
+        var result = mockMvc.perform(get("/api/v2/people/{userId}/events/{date}", "abc", "2026-07-20")
+                .header("Authorization", "Bearer access-token"));
+
+        // then: 400 INVALID_REQUEST 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        then(peopleService).should(never()).eventV2(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("v2 이벤트 상세 조회 시 인증 헤더가 없으면 401을 반환하고 서비스를 호출하지 않는다")
+    void eventV2_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 v2 이벤트 상세 조회 API 호출
+        var result = mockMvc.perform(get("/api/v2/people/{userId}/events/{date}", "42", "2026-07-20"));
+
+        // then: 401 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isUnauthorized());
+        then(peopleService).should(never()).eventV2(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("v2 이벤트 상세 조회 시 date 경로 변수가 날짜 형식이 아니면 400을 반환하고 서비스를 호출하지 않는다")
+    void eventV2_with_invalid_date_returns_400() throws Exception {
+        // when: date 를 날짜가 아닌 값으로 v2 이벤트 상세 조회 API 호출
+        var result = mockMvc.perform(get("/api/v2/people/{userId}/events/{date}", "42", "not-a-date")
+                .header("Authorization", "Bearer access-token"));
+
+        // then: 400 INVALID_REQUEST 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        then(peopleService).should(never()).eventV2(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("v2 이벤트 상세 조회 시 서비스가 USER_NOT_FOUND를 던지면 404를 반환한다")
+    void eventV2_user_not_found_returns_404() throws Exception {
+        // given: 상대 유저가 없음
+        given(peopleService.eventV2(1L, 42L, LocalDate.of(2026, 7, 20)))
+                .willThrow(new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        // when: v2 이벤트 상세 조회 API 호출
+        var result = mockMvc.perform(get("/api/v2/people/{userId}/events/{date}", "42", "2026-07-20")
+                .header("Authorization", "Bearer access-token"));
+
+        // then: 404 USER_NOT_FOUND 반환
+        result.andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("USER_NOT_FOUND"));
+    }
+
+    private PeopleEventResult moveEventResult(List<Long> with) {
+        return new PeopleEventResult(
+                LocalDate.of(2026, 7, 20),
+                42L,
+                "v1",
+                List.of(new PeopleEventMoveSceneResult(
+                        200L,
+                        "move",
+                        OffsetDateTime.of(2026, 7, 20, 11, 0, 0, 0, ZoneOffset.ofHours(9)),
+                        OffsetDateTime.of(2026, 7, 20, 11, 10, 0, 0, ZoneOffset.ofHours(9)),
+                        "집",
+                        "P0258",
+                        "학생 거리 탐앤탐스",
+                        "P0158",
+                        with,
+                        "walk",
+                        null,
+                        "카페로 향했다",
+                        null)),
+                List.of(new PeopleEventUserInfoResult(1L, "자신", null)));
     }
 
     // ------------------------------------------ GET /api/v1/people/{userId}/learned-facts
