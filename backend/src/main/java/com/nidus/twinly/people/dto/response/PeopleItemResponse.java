@@ -21,7 +21,9 @@ public record PeopleItemResponse(
         @JsonFormat(shape = JsonFormat.Shape.STRING)
         @Schema(nullable = true)
         Long chatRoomId,
-        Boolean isFavorited
+        Boolean isFavorited,
+        @Schema(nullable = true)
+        PeopleIntimacyQuizStatusResponse intimacyQuizStatus
 ) {
 
     public static PeopleItemResponse from(PeopleItemResult result) {
@@ -35,7 +37,8 @@ public record PeopleItemResponse(
                 result.relationshipSpecificType(),
                 result.sceneElementCount(),
                 result.chatRoomId(),
-                result.isFavorited()
+                result.isFavorited(),
+                result.intimacyQuizStatus() != null ? PeopleIntimacyQuizStatusResponse.from(result.intimacyQuizStatus()) : null
         );
     }
 }

@@ -16,6 +16,7 @@ import com.nidus.twinly.people.dto.result.PeopleEventsPartnerResult;
 import com.nidus.twinly.people.dto.result.PeopleEventsResult;
 import com.nidus.twinly.people.dto.result.PeopleIntimacySeriesItemResult;
 import com.nidus.twinly.people.dto.result.PeopleIntimacySeriesResult;
+import com.nidus.twinly.people.dto.result.PeopleIntimacyQuizStatusResult;
 import com.nidus.twinly.people.dto.result.PeopleItemResult;
 import com.nidus.twinly.people.dto.result.PeopleLearnedFactsResult;
 import com.nidus.twinly.people.dto.result.PeoplePageResult;
@@ -100,7 +101,8 @@ class PeopleControllerUnitTest {
                                 RelationshipSpecificType.GO_TO,
                                 3,
                                 7L,
-                                true)),
+                                true,
+                                new PeopleIntimacyQuizStatusResult(true, false))),
                         PeopleThresholdResult.of(),
                         new PeoplePageResult(42L, true)));
 
@@ -125,6 +127,8 @@ class PeopleControllerUnitTest {
                 .andExpect(jsonPath("$.people[0].sceneElementCount").value(3))
                 .andExpect(jsonPath("$.people[0].chatRoomId").value("7"))
                 .andExpect(jsonPath("$.people[0].isFavorited").value(true))
+                .andExpect(jsonPath("$.people[0].intimacyQuizStatus.myAnswered").value(true))
+                .andExpect(jsonPath("$.people[0].intimacyQuizStatus.partnerAnswered").value(false))
                 .andExpect(jsonPath("$.people[0].isHighlighted").doesNotExist())
                 .andExpect(jsonPath("$.threshold.acquaintance").value(0))
                 .andExpect(jsonPath("$.threshold.friend").value(35))

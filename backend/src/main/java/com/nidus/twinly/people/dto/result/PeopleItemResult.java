@@ -14,6 +14,7 @@ public record PeopleItemResult(
         RelationshipSpecificType relationshipSpecificType,
         Integer sceneElementCount,
         Long chatRoomId,
-        Boolean isFavorited
+        Boolean isFavorited,
+        PeopleIntimacyQuizStatusResult intimacyQuizStatus
 ) {
 }

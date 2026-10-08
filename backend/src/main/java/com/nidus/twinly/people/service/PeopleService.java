@@ -5,6 +5,11 @@ import com.nidus.twinly.activity.entity.Scene;
 import com.nidus.twinly.activity.entity.ScenePartner;
 import com.nidus.twinly.activity.repository.ScenePartnerRepository;
 import com.nidus.twinly.activity.repository.SceneRepository;
+import com.nidus.twinly.balancegame.domain.BalanceGameSchedule;
+import com.nidus.twinly.balancegame.entity.BalanceGameAnswer;
+import com.nidus.twinly.balancegame.entity.BalanceGameRound;
+import com.nidus.twinly.balancegame.repository.BalanceGameRoundRepository;
+import com.nidus.twinly.block.entity.Block;
 import com.nidus.twinly.block.repository.BlockRepository;
 import com.nidus.twinly.chat.entity.ChatRoom;
 import com.nidus.twinly.chat.repository.ChatRoomRepository;
@@ -101,6 +106,7 @@ public class PeopleService {
     private final TwinViewWriter twinViewWriter;
     private final IntimacyReader intimacyReader;
     private final BalanceGameAnswerRepository balanceGameAnswerRepository;
+    private final BalanceGameRoundRepository balanceGameRoundRepository;
 
     public PeopleResult people(Long userId, Long cursor, Integer limit) {
         int effectiveLimit = (limit != null && limit > 0) ? limit : DEFAULT_PEOPLE_LIMIT;
@@ -144,6 +150,8 @@ public class PeopleService {
                         encounters.stream().map(Encounter::getId).toList(), userId).stream()
                 .collect(Collectors.toMap(EncounterPreference::getEncounterId, EncounterPreference::getIsFavorited));
 
+        Map<Long, PeopleIntimacyQuizStatusResult> intimacyQuizStatusByPartnerUserId = intimacyQuizStatusByPartnerUserId(userId, visiblePartnerUserIds, now);
+
         List<PeopleItemResult> people = partnerUserIds.stream()
                 .map(partnerUserId -> {
                     User user = userByPartnerUserId.get(partnerUserId);
@@ -165,7 +173,8 @@ public class PeopleService {
                             RelationshipSpecificType.fromIntimacy(intimacy.value()),
                             sceneCountByPartnerUserId.getOrDefault(partnerUserId, 0),
                             chatRoomId,
-                            isFavorited
+                            isFavorited,
+                            intimacyQuizStatusByPartnerUserId.get(partnerUserId)
                     );
                 })
                 .toList();
@@ -173,6 +182,34 @@ public class PeopleService {
         Long nextCursor = hasMore ? partnerUserIds.get(partnerUserIds.size() - 1) : null;
 
         return new PeopleResult(people, PeopleThresholdResult.of(), new PeoplePageResult(nextCursor, hasMore));
+    }
+
+    private Map<Long, PeopleIntimacyQuizStatusResult> intimacyQuizStatusByPartnerUserId(Long userId, List<Long> partnerUserIds, LocalDateTime now) {
+        Set<Long> blockingUserIds = blockRepository.findAllByUserIdInAndBlockedUserId(partnerUserIds, userId).stream()
+                .map(Block::getUserId)
+                .collect(Collectors.toSet());
+        List<Long> quizPartnerUserIds = partnerUserIds.stream()
+                .filter(partnerUserId -> !blockingUserIds.contains(partnerUserId))
+                .toList();
+
+        Optional<Long> roundId = balanceGameRoundRepository.findByStartsAt(BalanceGameSchedule.roundStartOf(now))
+                .map(BalanceGameRound::getId);
+
+        Set<Long> answeredByMePartnerUserIds = roundId
+                .map(id -> balanceGameAnswerRepository.findAllByRoundIdAndUserIdAndPartnerUserIdIn(id, userId, quizPartnerUserIds).stream()
+                        .map(BalanceGameAnswer::getPartnerUserId)
+                        .collect(Collectors.toSet()))
+                .orElse(Set.of());
+        Set<Long> answeredPartnerUserIds = roundId
+                .map(id -> balanceGameAnswerRepository.findAllByRoundIdAndUserIdInAndPartnerUserId(id, quizPartnerUserIds, userId).stream()
+                        .map(BalanceGameAnswer::getUserId)
+                        .collect(Collectors.toSet()))
+                .orElse(Set.of());
+
+        return quizPartnerUserIds.stream()
+                .collect(Collectors.toMap(Function.identity(), partnerUserId -> new PeopleIntimacyQuizStatusResult(
+                        answeredByMePartnerUserIds.contains(partnerUserId),
+                        answeredPartnerUserIds.contains(partnerUserId))));
     }
 
     private Long partnerUserIdOf(Long userAId, Long userBId, Long userId) {

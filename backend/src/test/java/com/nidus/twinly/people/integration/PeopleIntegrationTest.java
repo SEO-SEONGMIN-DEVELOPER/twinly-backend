@@ -5,6 +5,10 @@ import com.nidus.twinly.activity.entity.Scene;
 import com.nidus.twinly.activity.entity.ScenePartner;
 import com.nidus.twinly.activity.repository.ScenePartnerRepository;
 import com.nidus.twinly.activity.repository.SceneRepository;
+import com.nidus.twinly.balancegame.domain.BalanceGameSchedule;
+import com.nidus.twinly.balancegame.entity.BalanceGameAnswer;
+import com.nidus.twinly.balancegame.repository.BalanceGameAnswerRepository;
+import com.nidus.twinly.balancegame.repository.BalanceGameRoundRepository;
 import com.nidus.twinly.block.entity.Block;
 import com.nidus.twinly.block.repository.BlockRepository;
 import com.nidus.twinly.common.time.KstTimes;
@@ -73,6 +77,12 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     TwinViewRepository twinViewRepository;
 
+    @Autowired
+    BalanceGameRoundRepository balanceGameRoundRepository;
+
+    @Autowired
+    BalanceGameAnswerRepository balanceGameAnswerRepository;
+
     @Test
     @DisplayName("사람 목록 조회: 실제 관계 데이터를 파트너 id 오름차순으로 관통 조회해 친밀도·관계 타입을 내려준다")
     void people_success_end_to_end() throws Exception {
@@ -126,6 +136,46 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.people.length()").value(1))
                 .andExpect(jsonPath("$.people[0].userId").value(partner1.getId().toString()))
                 .andExpect(jsonPath("$.page.hasMore").value(false));
+    }
+
+    @Test
+    @DisplayName("사람 목록 조회: 현재 회차 친밀도 퀴즈의 나·상대 답변 여부를 내려주고, 나를 차단한 상대는 null 이다")
+    void people_includes_intimacy_quiz_status_end_to_end() throws Exception {
+        // given: 현재 회차에서 partner1 은 서로 같은 답, partner2 는 상대만 답(지난 회차엔 나도 답함), partner3 은 나를 차단
+        User me = saveUser();
+        User partner1 = saveUser();
+        User partner2 = saveUser();
+        User partner3 = saveUser();
+        saveRelationship(me.getId(), partner1.getId(), DAY_2, 40, "{}");
+        saveRelationship(me.getId(), partner2.getId(), DAY_2, 40, "{}");
+        saveRelationship(me.getId(), partner3.getId(), DAY_2, 40, "{}");
+        blockRepository.save(Block.create(partner3.getId(), me.getId()));
+
+        Instant currentStartsAt = BalanceGameSchedule.roundStartOf(KstTimes.now());
+        Instant previousStartsAt = BalanceGameSchedule.previousRoundStartOf(KstTimes.now());
+        balanceGameRoundRepository.upsert(currentStartsAt, 1L);
+        balanceGameRoundRepository.upsert(previousStartsAt, 1L);
+        Long currentRoundId = balanceGameRoundRepository.findByStartsAt(currentStartsAt).orElseThrow().getId();
+        Long previousRoundId = balanceGameRoundRepository.findByStartsAt(previousStartsAt).orElseThrow().getId();
+        balanceGameAnswerRepository.saveAll(List.of(
+                BalanceGameAnswer.create(currentRoundId, me.getId(), partner1.getId(), 1L),
+                BalanceGameAnswer.create(currentRoundId, partner1.getId(), me.getId(), 1L),
+                BalanceGameAnswer.create(currentRoundId, partner2.getId(), me.getId(), 2L),
+                BalanceGameAnswer.create(previousRoundId, me.getId(), partner2.getId(), 2L),
+                BalanceGameAnswer.create(currentRoundId, me.getId(), partner3.getId(), 1L)));
+
+        // when: 사람 목록 조회
+        var result = mockMvc.perform(get("/api/v1/people")
+                .header("Authorization", bearer(me.getId())));
+
+        // then: 현재 회차 답변만 반영되며, 나를 차단한 상대는 퀴즈를 할 수 없어 null
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.people.length()").value(3))
+                .andExpect(jsonPath("$.people[0].intimacyQuizStatus.myAnswered").value(true))
+                .andExpect(jsonPath("$.people[0].intimacyQuizStatus.partnerAnswered").value(true))
+                .andExpect(jsonPath("$.people[1].intimacyQuizStatus.myAnswered").value(false))
+                .andExpect(jsonPath("$.people[1].intimacyQuizStatus.partnerAnswered").value(true))
+                .andExpect(jsonPath("$.people[2].intimacyQuizStatus").isEmpty());
     }
 
     @Test
