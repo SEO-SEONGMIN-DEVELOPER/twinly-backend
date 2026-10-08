@@ -14,7 +14,12 @@ import com.nidus.twinly.common.photo.PhotoPosInfo;
 import com.nidus.twinly.common.photo.PhotoType;
 import com.nidus.twinly.common.photo.ProfilePhotoInfo;
 import com.nidus.twinly.common.time.KstTimes;
+import com.nidus.twinly.balancegame.domain.BalanceGameSchedule;
+import com.nidus.twinly.balancegame.entity.BalanceGameAnswer;
+import com.nidus.twinly.balancegame.entity.BalanceGameRound;
 import com.nidus.twinly.balancegame.repository.BalanceGameAnswerRepository;
+import com.nidus.twinly.balancegame.repository.BalanceGameRoundRepository;
+import com.nidus.twinly.block.entity.Block;
 import com.nidus.twinly.balancegame.repository.BalanceGameAnswerRepository.MatchRateProjection;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
@@ -30,6 +35,7 @@ import com.nidus.twinly.people.dto.result.PeopleEventUserInfoResult;
 import com.nidus.twinly.people.dto.result.PeopleEventsResult;
 import com.nidus.twinly.people.dto.result.PeopleIntimacySeriesItemResult;
 import com.nidus.twinly.people.dto.result.PeopleIntimacySeriesResult;
+import com.nidus.twinly.people.dto.result.PeopleIntimacyQuizStatusResult;
 import com.nidus.twinly.people.dto.result.PeopleItemResult;
 import com.nidus.twinly.people.dto.result.PeopleLearnedFactsResult;
 import com.nidus.twinly.people.dto.result.PeopleProfileResult;
@@ -144,6 +150,9 @@ class PeopleServiceUnitTest {
     @Mock
     BalanceGameAnswerRepository balanceGameAnswerRepository;
 
+    @Mock
+    BalanceGameRoundRepository balanceGameRoundRepository;
+
     @Spy
     SceneNameRenderer sceneNameRenderer = new SceneNameRenderer();
 
@@ -243,6 +252,86 @@ class PeopleServiceUnitTest {
                 .containsExactly("길동", "철수");
         assertThat(result.people().get(0).profilePhoto()).isNotNull();
         assertThat(result.people().get(1).profilePhoto()).isNull();
+    }
+
+    @Test
+    @DisplayName("사람 목록은 현재 회차 친밀도 퀴즈에서 나와 상대가 답한 상태를 파트너별로 담는다")
+    void people_includes_intimacy_quiz_status() {
+        // given: 현재 회차(id 3)에서 10은 둘 다 같은 답, 20은 나만 답, 30은 상대만 답, 40은 아무도 안 답한 상태
+        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), any(LocalDateTime.class)))
+                .willReturn(List.of(10L, 20L, 30L, 40L));
+        given(userRepository.findAllById(List.of(10L, 20L, 30L, 40L)))
+                .willReturn(List.of(user(10L, "길동"), user(20L, "철수"), user(30L, "영희"), user(40L, "민수")));
+        given(balanceGameRoundRepository.findByStartsAt(any(Instant.class))).willReturn(Optional.of(round(3L)));
+        given(balanceGameAnswerRepository.findAllByRoundIdAndUserIdAndPartnerUserIdIn(3L, ME, List.of(10L, 20L, 30L, 40L)))
+                .willReturn(List.of(answer(3L, ME, 10L, 100L), answer(3L, ME, 20L, 100L)));
+        given(balanceGameAnswerRepository.findAllByRoundIdAndUserIdInAndPartnerUserId(3L, List.of(10L, 20L, 30L, 40L), ME))
+                .willReturn(List.of(answer(3L, 10L, ME, 100L), answer(3L, 30L, ME, 200L)));
+
+        // when: 사람 목록 조회
+        PeopleResult result = peopleService.people(ME, null, null);
+
+        // then: 나와 상대의 답변 여부가 각각 담긴다
+        assertThat(result.people()).extracting(PeopleItemResult::intimacyQuizStatus)
+                .containsExactly(new PeopleIntimacyQuizStatusResult(true, true), new PeopleIntimacyQuizStatusResult(true, false),
+                        new PeopleIntimacyQuizStatusResult(false, true), new PeopleIntimacyQuizStatusResult(false, false));
+    }
+
+    @Test
+    @DisplayName("현재 회차가 아직 만들어지지 않았으면 둘 다 안 답한 것으로 내리고 답변은 조회하지 않는다")
+    void people_intimacy_quiz_status_without_round() {
+        // given: 파트너 1명, 현재 회차 행이 아직 없는 상태
+        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), any(LocalDateTime.class)))
+                .willReturn(List.of(10L));
+        given(userRepository.findAllById(List.of(10L))).willReturn(List.of(user(10L, "길동")));
+        given(balanceGameRoundRepository.findByStartsAt(any(Instant.class))).willReturn(Optional.empty());
+
+        // when: 사람 목록 조회
+        PeopleResult result = peopleService.people(ME, null, null);
+
+        // then: 회차를 만들지 않고 둘 다 false 로 응답한다
+        assertThat(result.people().getFirst().intimacyQuizStatus()).isEqualTo(new PeopleIntimacyQuizStatusResult(false, false));
+        then(balanceGameAnswerRepository).should(never()).findAllByRoundIdAndUserIdAndPartnerUserIdIn(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("현재 회차는 조회 시각의 KST 기준 회차 시작 시각으로 찾는다")
+    void people_intimacy_quiz_round_is_current_kst_round() {
+        // given: 파트너 1명
+        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), any(LocalDateTime.class)))
+                .willReturn(List.of(10L));
+        given(userRepository.findAllById(List.of(10L))).willReturn(List.of(user(10L, "길동")));
+        Instant before = BalanceGameSchedule.roundStartOf(KstTimes.now());
+
+        // when: 사람 목록 조회
+        peopleService.people(ME, null, null);
+        Instant after = BalanceGameSchedule.roundStartOf(KstTimes.now());
+
+        // then: 회차 시작 시각은 호출 전후 시각의 회차 시작 사이다
+        ArgumentCaptor<Instant> captor = ArgumentCaptor.forClass(Instant.class);
+        then(balanceGameRoundRepository).should().findByStartsAt(captor.capture());
+        assertThat(captor.getValue()).isBetween(before, after);
+    }
+
+    @Test
+    @DisplayName("탈퇴했거나 나를 차단한 파트너는 퀴즈를 할 수 없어 상태가 null 이다")
+    void people_intimacy_quiz_status_null_for_unavailable_partner() {
+        // given: 20은 탈퇴, 30은 나를 차단한 상태
+        User withdrawn = user(20L, "철수");
+        ReflectionTestUtils.setField(withdrawn, "deletedAt", Instant.now());
+        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), any(LocalDateTime.class)))
+                .willReturn(List.of(10L, 20L, 30L));
+        given(userRepository.findAllById(List.of(10L, 20L, 30L)))
+                .willReturn(List.of(user(10L, "길동"), withdrawn, user(30L, "영희")));
+        given(blockRepository.findAllByUserIdInAndBlockedUserId(List.of(10L, 30L), ME))
+                .willReturn(List.of(Block.create(30L, ME)));
+
+        // when: 사람 목록 조회
+        PeopleResult result = peopleService.people(ME, null, null);
+
+        // then: 10만 상태가 있고, 20·30은 null
+        assertThat(result.people()).extracting(PeopleItemResult::intimacyQuizStatus)
+                .containsExactly(new PeopleIntimacyQuizStatusResult(false, false), null, null);
     }
 
     @Test
@@ -1114,6 +1203,16 @@ class PeopleServiceUnitTest {
         ReflectionTestUtils.setField(match, "userAId", Math.min(userAId, userBId));
         ReflectionTestUtils.setField(match, "userBId", Math.max(userAId, userBId));
         return match;
+    }
+
+    private BalanceGameRound round(Long id) {
+        BalanceGameRound round = newInstance(BalanceGameRound.class);
+        ReflectionTestUtils.setField(round, "id", id);
+        return round;
+    }
+
+    private BalanceGameAnswer answer(Long roundId, Long userId, Long partnerUserId, Long optionId) {
+        return BalanceGameAnswer.create(roundId, userId, partnerUserId, optionId);
     }
 
     private ChatRoom chatRoom(Long id, Long matchId) {

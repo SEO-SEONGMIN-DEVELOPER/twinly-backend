@@ -12,6 +12,10 @@ public interface BalanceGameAnswerRepository extends JpaRepository<BalanceGameAn
 
     Optional<BalanceGameAnswer> findByRoundIdAndUserIdAndPartnerUserId(Long roundId, Long userId, Long partnerUserId);
 
+    List<BalanceGameAnswer> findAllByRoundIdAndUserIdAndPartnerUserIdIn(Long roundId, Long userId, List<Long> partnerUserIds);
+
+    List<BalanceGameAnswer> findAllByRoundIdAndUserIdInAndPartnerUserId(Long roundId, List<Long> userIds, Long partnerUserId);
+
     @Query(value = """
             SELECT mine.user_id AS userId, COUNT(*) AS matchedCount
             FROM balance_game_partner_answers mine
