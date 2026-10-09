@@ -269,6 +269,28 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("학과 목록: 학과가 등록되지 않은 학교면 시드된 공통 학과 목록이 이름순으로 내려온다")
+    void affiliations_when_organization_has_none_returns_common_affiliations() throws Exception {
+        // given: 학과가 하나도 없는 학교와 그 학교 이메일로 인증을 마친 익명 세션, 시드로 들어간 공통 학과 전체
+        saveOrganization("소마대학교", "nidus.ac.kr");
+        List<String> commonAffiliations = jdbcTemplate.queryForList(
+                "SELECT name FROM common_affiliations ORDER BY name", String.class);
+
+        AnonSession session = saveAnonSession();
+        saveVerifiedEmailSession(session.getId(), "student@nidus.ac.kr");
+        flushAndClear();
+
+        // when: 학과 목록 조회
+        var result = mockMvc.perform(get("/api/v1/onboarding/affiliations")
+                .header("Authorization", anonBearer(session)));
+
+        // then: 빈 목록이 아니라 공통 학과 전체가 DB 정렬 순서 그대로 내려온다
+        String body = result.andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(commonAffiliations).contains("경영학과", "컴퓨터공학과");
+        assertThat(JsonPath.<List<String>>read(body, "$.affiliations")).containsExactlyElementsOf(commonAffiliations);
+    }
+
+    @Test
     @DisplayName("학과 목록: 이메일 인증을 마치지 않았으면 422 EMAIL_VERIFICATION_NOT_COMPLETED를 반환한다")
     void affiliations_without_verified_email_returns_422() throws Exception {
         // given: 인증 세션이 전혀 없는 익명 세션

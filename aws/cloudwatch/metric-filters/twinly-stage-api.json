@@ -40,6 +40,14 @@
         "defaultValue": 0.0
     },
     {
+        "name": "twinly-stage-api-ai-interview-failure",
+        "pattern": "{ $.errorCode = \"AI_RESPONSE_FAILED\" && $.httpPath = \"*/ai-chat/*\" }",
+        "metric": "AiInterviewFailureCount",
+        "namespace": "twinly/stage/api",
+        "value": "1",
+        "defaultValue": 0.0
+    },
+    {
         "name": "twinly-stage-api-stack-overflow",
         "pattern": "StackOverflowError",
         "metric": "StackOverflowCount",

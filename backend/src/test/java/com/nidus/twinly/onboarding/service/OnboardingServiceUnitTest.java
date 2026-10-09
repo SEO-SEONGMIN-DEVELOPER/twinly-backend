@@ -54,9 +54,11 @@ import com.nidus.twinly.onboarding.dto.result.OnboardingProfilePhotoCommitResult
 import com.nidus.twinly.onboarding.dto.result.OnboardingProfilePhotoPresignResult;
 import com.nidus.twinly.onboarding.entity.SurveyAnswer;
 import com.nidus.twinly.onboarding.repository.SurveyAnswerRepository;
+import com.nidus.twinly.organization.entity.CommonAffiliation;
 import com.nidus.twinly.organization.entity.Organization;
 import com.nidus.twinly.organization.entity.OrganizationAffiliation;
 import com.nidus.twinly.organization.entity.OrganizationDomain;
+import com.nidus.twinly.organization.repository.CommonAffiliationRepository;
 import com.nidus.twinly.organization.repository.OrganizationAffiliationRepository;
 import com.nidus.twinly.organization.repository.OrganizationDomainRepository;
 import com.nidus.twinly.organization.repository.OrganizationRepository;
@@ -158,6 +160,9 @@ class OnboardingServiceUnitTest {
 
     @Mock
     OrganizationAffiliationRepository organizationAffiliationRepository;
+
+    @Mock
+    CommonAffiliationRepository commonAffiliationRepository;
 
     @Mock
     AnonSessionVerificationSessionRepository anonSessionVerificationSessionRepository;
@@ -359,8 +364,27 @@ class OnboardingServiceUnitTest {
         // when: 학과 목록 조회
         OnboardingAffiliationsResult result = onboardingService.affiliations(ANON_SESSION);
 
-        // then: 요청 파라미터 없이 서버가 판별한 학교의 학과가 이름만 담겨 나감
+        // then: 요청 파라미터 없이 서버가 판별한 학교의 학과가 이름만 담겨 나가고 공통 목록은 조회하지 않음
         assertThat(result.affiliations()).containsExactly("경영학과", "컴퓨터공학과");
+        then(commonAffiliationRepository).should(never()).findAllByOrderByNameAsc();
+    }
+
+    @Test
+    @DisplayName("학교에 등록된 학과가 없으면 공통 학과 목록을 반환한다")
+    void affiliations_when_organization_has_none_returns_common_affiliations() {
+        // given: 이메일 인증이 끝난 세션과, 학과가 하나도 등록되지 않은 학교, 그리고 공통 학과 2개
+        given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.EMAIL))
+                .willReturn(Optional.of(verifiedEmailSession("student@nidus.ac.kr")));
+        given(organizationCatalog.findByEmail("student@nidus.ac.kr")).willReturn(organization(1L, "트윈리대학교"));
+        given(organizationAffiliationRepository.findAllByOrganizationIdOrderByNameAsc(1L)).willReturn(List.of());
+        given(commonAffiliationRepository.findAllByOrderByNameAsc())
+                .willReturn(List.of(commonAffiliation("경영학과"), commonAffiliation("심리학과")));
+
+        // when: 학과 목록 조회
+        OnboardingAffiliationsResult result = onboardingService.affiliations(ANON_SESSION);
+
+        // then: 빈 목록 대신 공통 학과가 이름만 담겨 나감
+        assertThat(result.affiliations()).containsExactly("경영학과", "심리학과");
     }
 
     @Test
@@ -422,6 +446,12 @@ class OnboardingServiceUnitTest {
 
     private OrganizationAffiliation organizationAffiliation(String name) {
         OrganizationAffiliation affiliation = BeanUtils.instantiateClass(OrganizationAffiliation.class);
+        ReflectionTestUtils.setField(affiliation, "name", name);
+        return affiliation;
+    }
+
+    private CommonAffiliation commonAffiliation(String name) {
+        CommonAffiliation affiliation = BeanUtils.instantiateClass(CommonAffiliation.class);
         ReflectionTestUtils.setField(affiliation, "name", name);
         return affiliation;
     }

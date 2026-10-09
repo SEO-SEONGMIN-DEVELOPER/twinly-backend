@@ -273,6 +273,21 @@
         ]
     },
     {
+        "name": "twinly-stage-api-ai-interview-failure",
+        "description": "AI 인터뷰 질문 생성이 실패. 온보딩(/api/v1/onboarding/ai-chat/*)과 재인터뷰(/api/v1/me/ai-chat/*)에서 Bedrock 호출이 502(AI_RESPONSE_FAILED)로 끝나면 한 건만으로 울린다. 실패한 사용자는 인터뷰 화면에서 바로 막히므로 일시 오류도 거르지 않는다. 같은 코드를 쓰는 채팅방 공통점 생성은 경로로 제외했다.\n\n조치:\n1. 원인 구분 (cause 의 예외 종류와 메시지)\n   fields @timestamp, @logStream, httpPath, actor, @message | filter errorCode = \"AI_RESPONSE_FAILED\" | sort @timestamp desc\n2. AccessDeniedException 이면 IAM 정책 또는 조직 SCP 가 모델·추론 프로필을 막은 것이다. 2026-10-01 에 global 추론이 SCP 로 막힌 적이 있다. BEDROCK 모델 ID 와 TwinlyStageBedrockInvoke 정책을 확인\n3. ThrottlingException 이면 호출량이 할당량을 넘은 것. 한두 건이면 재시도로 풀리고, 계속되면 Service Quotas 에서 증설 요청\n4. 응답에 텍스트가 없어서 실패한 경우(cause 없음)는 모델 응답 형식 문제다. 모델 교체 직후인지 확인\n\n유저 영향: 해당 사용자의 인터뷰 다음 질문이 나오지 않는다. 같은 턴을 다시 보내면 새로 생성을 시도하므로 복구되면 이어서 진행된다.",
+        "namespace": "twinly/stage/api",
+        "metric": "AiInterviewFailureCount",
+        "statistic": "Sum",
+        "period": 300,
+        "evaluationPeriods": 1,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 1.0,
+        "treatMissingData": "notBreaching",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-stage-alerts"
+        ]
+    },
+    {
         "name": "twinly-stage-api-stack-overflow",
         "description": "StackOverflowError 발생. 무한 재귀 가능성. JVM Error 계열이라 해당 요청 스레드는 복구 불가.\n\n조치:\n1. 어느 인스턴스인지, 어느 코드 경로인지 확인\n   fields @timestamp, @logStream, log | filter log like /StackOverflowError/ | sort @timestamp desc\n2. 스택트레이스에서 반복되는 메서드 호출 구간을 찾아 재귀 종료 조건 점검\n3. 최근 배포와 연관 있는지 확인",
         "namespace": "twinly/stage/api",
