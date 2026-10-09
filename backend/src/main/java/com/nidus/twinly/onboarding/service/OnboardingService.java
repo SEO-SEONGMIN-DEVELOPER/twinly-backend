@@ -36,9 +36,11 @@ import com.nidus.twinly.onboarding.dto.result.OnboardingProfileNicknameCheckResu
 import com.nidus.twinly.onboarding.dto.result.OnboardingProfilePhotoCommitResult;
 import com.nidus.twinly.onboarding.dto.result.OnboardingProfilePhotoPresignResult;
 import com.nidus.twinly.onboarding.repository.SurveyAnswerRepository;
+import com.nidus.twinly.organization.entity.CommonAffiliation;
 import com.nidus.twinly.organization.entity.Organization;
 import com.nidus.twinly.organization.entity.OrganizationAffiliation;
 import com.nidus.twinly.organization.entity.OrganizationDomain;
+import com.nidus.twinly.organization.repository.CommonAffiliationRepository;
 import com.nidus.twinly.organization.repository.OrganizationAffiliationRepository;
 import com.nidus.twinly.organization.repository.OrganizationDomainRepository;
 import com.nidus.twinly.organization.repository.OrganizationRepository;
@@ -75,6 +77,7 @@ public class OnboardingService {
     private final OrganizationRepository organizationRepository;
     private final OrganizationDomainRepository organizationDomainRepository;
     private final OrganizationAffiliationRepository organizationAffiliationRepository;
+    private final CommonAffiliationRepository commonAffiliationRepository;
     private final AnonSessionPhotoRepository anonSessionPhotoRepository;
     private final AnonSessionPersonaElementRepository anonSessionPersonaElementRepository;
     private final AnonSessionAgreementRepository anonSessionAgreementRepository;
@@ -325,6 +328,12 @@ public class OnboardingService {
         List<String> affiliations = organizationAffiliationRepository.findAllByOrganizationIdOrderByNameAsc(organization.getId()).stream()
                 .map(OrganizationAffiliation::getName)
                 .toList();
+
+        if (affiliations.isEmpty()) {
+            affiliations = commonAffiliationRepository.findAllByOrderByNameAsc().stream()
+                    .map(CommonAffiliation::getName)
+                    .toList();
+        }
 
         return new OnboardingAffiliationsResult(affiliations);
     }
