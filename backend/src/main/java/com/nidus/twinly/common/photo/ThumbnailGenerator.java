@@ -22,6 +22,10 @@ public class ThumbnailGenerator {
     private static final String OUTPUT_FORMAT = "jpg";
 
     public byte[] generate(Path source, PhotoPosInfo position) throws IOException {
+        return generate(source, position, TARGET_SIZE);
+    }
+
+    public byte[] generate(Path source, PhotoPosInfo position, int targetSize) throws IOException {
         try (ImageInputStream input = ImageIO.createImageInputStream(source.toFile())) {
             Iterator<ImageReader> readers = ImageIO.getImageReaders(input);
             if (!readers.hasNext()) {
@@ -34,12 +38,12 @@ public class ThumbnailGenerator {
                 validateWithinBounds(position, reader.getWidth(0), reader.getHeight(0));
 
                 ImageReadParam param = reader.getDefaultReadParam();
-                param.setSourceSubsampling(subsampling(position.width()), subsampling(position.height()), 0, 0);
+                param.setSourceSubsampling(subsampling(position.width(), targetSize), subsampling(position.height(), targetSize), 0, 0);
                 param.setSourceRegion(new Rectangle(
                         position.startPos().x(), position.startPos().y(),
                         position.width(), position.height()));
 
-                return encode(scale(reader.read(0, param)));
+                return encode(scale(reader.read(0, param), targetSize));
             } finally {
                 reader.dispose();
             }
@@ -59,18 +63,18 @@ public class ThumbnailGenerator {
         }
     }
 
-    private int subsampling(int cropWidth) {
+    private int subsampling(int cropWidth, int targetSize) {
         int factor = 1;
-        while (cropWidth / (factor * 2) >= TARGET_SIZE) {
+        while (cropWidth / (factor * 2) >= targetSize) {
             factor *= 2;
         }
         return factor;
     }
 
-    private BufferedImage scale(BufferedImage source) {
-        Image scaled = source.getScaledInstance(TARGET_SIZE, TARGET_SIZE, Image.SCALE_SMOOTH);
+    private BufferedImage scale(BufferedImage source, int targetSize) {
+        Image scaled = source.getScaledInstance(targetSize, targetSize, Image.SCALE_SMOOTH);
 
-        BufferedImage result = new BufferedImage(TARGET_SIZE, TARGET_SIZE, BufferedImage.TYPE_INT_RGB);
+        BufferedImage result = new BufferedImage(targetSize, targetSize, BufferedImage.TYPE_INT_RGB);
         Graphics2D graphics = result.createGraphics();
         try {
             graphics.drawImage(scaled, 0, 0, null);

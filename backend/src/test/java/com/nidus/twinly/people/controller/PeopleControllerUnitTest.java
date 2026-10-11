@@ -20,12 +20,15 @@ import com.nidus.twinly.people.dto.result.PeopleIntimacyQuizStatusResult;
 import com.nidus.twinly.people.dto.result.PeopleItemResult;
 import com.nidus.twinly.people.dto.result.PeopleLearnedFactsResult;
 import com.nidus.twinly.people.dto.result.PeoplePageResult;
+import com.nidus.twinly.people.dto.result.PeoplePreviewResult;
+import com.nidus.twinly.people.dto.result.PeoplePreviewsResult;
 import com.nidus.twinly.people.dto.result.PeopleProfileDisclosedFieldsResult;
 import com.nidus.twinly.people.dto.result.PeopleProfileResult;
 import com.nidus.twinly.people.dto.result.PeopleProfileV2Result;
 import com.nidus.twinly.people.dto.result.PeopleIntimacyQuizMatchRateResult;
 import com.nidus.twinly.people.dto.result.PeopleResult;
 import com.nidus.twinly.people.dto.result.PeopleThresholdResult;
+import com.nidus.twinly.people.service.PeoplePreviewService;
 import com.nidus.twinly.people.service.PeopleService;
 import com.nidus.twinly.relationship.domain.RelationshipSpecificType;
 import com.nidus.twinly.relationship.domain.RelationshipType;
@@ -68,6 +71,9 @@ class PeopleControllerUnitTest {
 
     @MockitoBean
     PeopleService peopleService;
+
+    @MockitoBean
+    PeoplePreviewService peoplePreviewService;
 
     // SecurityConfig가 JWT·익명 세션 필터를 함께 만들고 각 필터가 이 서비스에 의존하므로 슬라이스 기동에 둘 다 필수.
     @MockitoBean
@@ -657,5 +663,64 @@ class PeopleControllerUnitTest {
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.comparedCount").value(0))
                 .andExpect(jsonPath("$.matchRate").isEmpty());
+    }
+
+    // ---------------------------------------------------------------- GET /api/v1/people/previews
+
+    @Test
+    @DisplayName("트윈 미리보기 조회 시 200과 함께 ref·성별·학교·출생 연도·작은 사진 URL만 내려주고 사용자 식별 값은 내려주지 않는다")
+    void previews_success() throws Exception {
+        // given: 서비스가 사진 있는 사람 1명, 사진·성별·학교 없는 사람 1명을 반환
+        given(peoplePreviewService.previews(1L))
+                .willReturn(new PeoplePreviewsResult(List.of(
+                        new PeoplePreviewResult("b71e09a1c2d3", Gender.FEMALE, "성신여대", "02", "https://cdn.example.com/preview/x?sig"),
+                        new PeoplePreviewResult("4c2a8f000000", null, null, "01", null))));
+
+        // when: 인증 상태로 미리보기 조회 API 호출
+        var result = mockMvc.perform(get("/api/v1/people/previews")
+                .header("Authorization", "Bearer access-token"));
+
+        // then: 200 + 값이 없는 필드도 null 로 키가 내려가고, userId·userName 은 없다
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.previews.length()").value(2))
+                .andExpect(jsonPath("$.previews[0].ref").value("b71e09a1c2d3"))
+                .andExpect(jsonPath("$.previews[0].gender").value("female"))
+                .andExpect(jsonPath("$.previews[0].organization").value("성신여대"))
+                .andExpect(jsonPath("$.previews[0].birthYear").value("02"))
+                .andExpect(jsonPath("$.previews[0].profilePhoto").value("https://cdn.example.com/preview/x?sig"))
+                .andExpect(jsonPath("$.previews[0].userId").doesNotExist())
+                .andExpect(jsonPath("$.previews[0].userName").doesNotExist())
+                .andExpect(jsonPath("$.previews[1].gender").isEmpty())
+                .andExpect(jsonPath("$.previews[1].organization").isEmpty())
+                .andExpect(jsonPath("$.previews[1].profilePhoto").isEmpty())
+                .andExpect(jsonPath("$.previews[1].profilePhoto").hasJsonPath());
+        then(peoplePreviewService).should().previews(1L);
+    }
+
+    @Test
+    @DisplayName("보여 줄 사람이 없으면 200과 빈 previews 배열을 내려준다")
+    void previews_empty() throws Exception {
+        // given: 서비스가 빈 결과를 반환
+        given(peoplePreviewService.previews(1L)).willReturn(new PeoplePreviewsResult(List.of()));
+
+        // when: 미리보기 조회
+        var result = mockMvc.perform(get("/api/v1/people/previews")
+                .header("Authorization", "Bearer access-token"));
+
+        // then: 200 + 빈 배열
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.previews").isArray())
+                .andExpect(jsonPath("$.previews.length()").value(0));
+    }
+
+    @Test
+    @DisplayName("인증 없이 미리보기를 조회하면 401을 반환하고 서비스를 호출하지 않는다")
+    void previews_without_auth_returns_401() throws Exception {
+        // when: Authorization 헤더 없이 호출
+        var result = mockMvc.perform(get("/api/v1/people/previews"));
+
+        // then: 401, 서비스 미호출
+        result.andExpect(status().isUnauthorized());
+        then(peoplePreviewService).shouldHaveNoInteractions();
     }
 }
