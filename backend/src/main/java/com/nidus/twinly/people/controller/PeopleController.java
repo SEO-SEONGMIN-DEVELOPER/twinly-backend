@@ -7,9 +7,11 @@ import com.nidus.twinly.people.dto.response.PeopleEventsResponse;
 import com.nidus.twinly.people.dto.response.PeopleIntimacyQuizMatchRateResponse;
 import com.nidus.twinly.people.dto.response.PeopleIntimacySeriesResponse;
 import com.nidus.twinly.people.dto.response.PeopleLearnedFactsResponse;
+import com.nidus.twinly.people.dto.response.PeoplePreviewsResponse;
 import com.nidus.twinly.people.dto.response.PeopleProfileResponse;
 import com.nidus.twinly.people.dto.response.PeopleProfileV2Response;
 import com.nidus.twinly.people.dto.response.PeopleResponse;
+import com.nidus.twinly.people.service.PeoplePreviewService;
 import com.nidus.twinly.people.service.PeopleService;
 import com.nidus.twinly.user.dto.header.UserInfo;
 import io.swagger.v3.oas.annotations.Operation;
@@ -34,6 +36,7 @@ import java.time.LocalDate;
 public class PeopleController {
 
     private final PeopleService peopleService;
+    private final PeoplePreviewService peoplePreviewService;
 
     @Operation(summary = "트윈 목록 조회")
     @GetMapping("/api/v1/people")
@@ -41,6 +44,12 @@ public class PeopleController {
                                     @RequestParam(required = false) String cursor,
                                     @RequestParam(required = false) @Min(1) @Max(100) Integer limit) {
         return PeopleResponse.from(peopleService.people(userInfo.id(), RequestId.toLongOrNull(cursor, "cursor"), limit));
+    }
+
+    @Operation(summary = "트윈 미리보기 조회")
+    @GetMapping("/api/v1/people/previews")
+    public PeoplePreviewsResponse previews(@AuthenticationPrincipal UserInfo userInfo) {
+        return PeoplePreviewsResponse.from(peoplePreviewService.previews(userInfo.id()));
     }
 
     @Operation(summary = "트윈 프로필 조회")
