@@ -16,6 +16,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
@@ -167,6 +168,79 @@ class ProfileThumbnailServiceUnitTest {
         then(s3Service).should().download(eq(SOURCE_KEY), downloadCaptor.capture());
         then(thumbnailGenerator).should().generate(generateCaptor.capture(), any());
         assertThat(generateCaptor.getValue()).isEqualTo(downloadCaptor.getValue());
+    }
+
+    @Test
+    @DisplayName("미리보기 사진은 원본과 연결되지 않는 preview/ key 에 8px 로 만들어 올리고 그 key 를 돌려준다")
+    void generatePreview_uploads_to_unlinkable_key() throws IOException {
+        // given: 정상 크기의 원본과 정상 변환
+        given(s3Service.contentLength(SOURCE_KEY)).willReturn(Optional.of(SOURCE_BYTES));
+        given(thumbnailGenerator.generate(any(), any(), anyInt())).willReturn(new byte[]{1, 2});
+
+        // when: 미리보기 사진 생성
+        String previewKey = profileThumbnailService.generatePreview(SOURCE_KEY, position());
+
+        // then: 원본 key·사용자 ID 가 드러나지 않는 key 로, 크롭 영역 그대로 8px 변환해 올린다
+        assertThat(previewKey).matches("preview/[0-9a-f-]{36}");
+        assertThat(previewKey).doesNotContain("profile").doesNotContain("abc");
+        then(thumbnailGenerator).should().generate(any(), eq(position()), eq(8));
+        then(s3Service).should().upload(previewKey, new byte[]{1, 2}, "image/jpeg");
+    }
+
+    @Test
+    @DisplayName("미리보기 원본이 없으면 내려받지 않고 null 을 돌려준다")
+    void generatePreview_missing_source() {
+        // given: 원본 없음
+        given(s3Service.contentLength(SOURCE_KEY)).willReturn(Optional.empty());
+
+        // when
+        String previewKey = profileThumbnailService.generatePreview(SOURCE_KEY, position());
+
+        // then
+        assertThat(previewKey).isNull();
+        then(s3Service).should(never()).download(any(), any());
+    }
+
+    @Test
+    @DisplayName("미리보기 원본이 허용 크기를 넘으면 내려받지 않고 null 을 돌려준다")
+    void generatePreview_skips_oversized_source() {
+        // given: 10MB 초과 원본
+        given(s3Service.contentLength(SOURCE_KEY)).willReturn(Optional.of(11L * 1024 * 1024));
+
+        // when
+        String previewKey = profileThumbnailService.generatePreview(SOURCE_KEY, position());
+
+        // then
+        assertThat(previewKey).isNull();
+        then(s3Service).should(never()).download(any(), any());
+    }
+
+    @Test
+    @DisplayName("미리보기 변환이 실패하면 예외를 밖으로 던지지 않고 null 을 돌려준다")
+    void generatePreview_swallows_generation_failure() throws IOException {
+        // given: 크롭 영역이 원본을 벗어남
+        given(s3Service.contentLength(SOURCE_KEY)).willReturn(Optional.of(SOURCE_BYTES));
+        given(thumbnailGenerator.generate(any(), any(), anyInt())).willThrow(new IOException("크롭 영역이 원본을 벗어났습니다"));
+
+        // when
+        String previewKey = profileThumbnailService.generatePreview(SOURCE_KEY, position());
+
+        // then
+        assertThat(previewKey).isNull();
+        then(s3Service).should(never()).upload(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("미리보기 원본 크기 조회가 실패하면 예외를 밖으로 던지지 않고 null 을 돌려준다")
+    void generatePreview_swallows_head_failure() {
+        // given: S3 HEAD 실패
+        given(s3Service.contentLength(SOURCE_KEY)).willThrow(S3Exception.builder().message("boom").build());
+
+        // when
+        String previewKey = profileThumbnailService.generatePreview(SOURCE_KEY, position());
+
+        // then
+        assertThat(previewKey).isNull();
     }
 
     private PhotoPosInfo position() {
