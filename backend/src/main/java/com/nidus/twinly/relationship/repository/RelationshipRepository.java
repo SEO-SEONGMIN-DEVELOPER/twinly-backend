@@ -104,4 +104,17 @@ public interface RelationshipRepository extends JpaRepository<Relationship, Long
                                          @Param("from") LocalDate from,
                                          @Param("to") LocalDate to,
                                          @Param("now") LocalDateTime now);
+
+    @Query("""
+            SELECT r.partnerUserId AS partnerUserId, MIN(r.updateTime) AS firstUpdateTime
+            FROM Relationship r
+            WHERE r.userId = :userId
+            GROUP BY r.partnerUserId
+            """)
+    List<PartnerFirstUpdateProjection> findAllPartnerFirstUpdatesByUserId(@Param("userId") Long userId);
+
+    interface PartnerFirstUpdateProjection {
+        Long getPartnerUserId();
+        LocalDateTime getFirstUpdateTime();
+    }
 }
