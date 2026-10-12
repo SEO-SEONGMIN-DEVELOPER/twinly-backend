@@ -47,6 +47,22 @@ class ThumbnailGeneratorUnitTest {
     }
 
     @Test
+    @DisplayName("크기를 지정하면 크롭 영역을 그 크기의 정사각형으로 줄인다")
+    void generate_with_target_size() throws IOException {
+        // given: 오른쪽 절반이 파랑인 원본
+        Path source = halfAndHalf("jpg", 400, 200, Color.RED, Color.BLUE);
+
+        // when: 오른쪽 절반을 8px 로 생성
+        byte[] preview = thumbnailGenerator.generate(source, position(200, 0, 200, 200), 8);
+
+        // then
+        BufferedImage result = decode(preview);
+        assertThat(result.getWidth()).isEqualTo(8);
+        assertThat(result.getHeight()).isEqualTo(8);
+        assertThatColorIsNear(result.getRGB(4, 4), Color.BLUE);
+    }
+
+    @Test
     @DisplayName("크롭 좌표가 다르면 잘라낸 영역의 색도 다르게 나온다")
     void generate_respects_crop_origin() throws IOException {
         // given: 동일한 원본

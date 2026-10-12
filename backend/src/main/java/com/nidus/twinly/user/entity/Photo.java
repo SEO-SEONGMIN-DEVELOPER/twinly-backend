@@ -32,6 +32,9 @@ public class Photo {
     @Column(columnDefinition = "TEXT")
     private String thumbnailKey;
 
+    @Column(columnDefinition = "TEXT")
+    private String previewKey;
+
     private Integer xPos;
 
     private Integer yPos;
@@ -67,6 +70,7 @@ public class Photo {
     public void changePhoto(String key, Integer xPos, Integer yPos, Integer width, Integer height) {
         this.key = key;
         this.thumbnailKey = null;
+        this.previewKey = null;
         this.xPos = xPos;
         this.yPos = yPos;
         this.width = width;
