@@ -194,6 +194,12 @@ public class UserSeeder implements ApplicationRunner {
             new SeedUser("전", "지아", Gender.FEMALE, SeedOrganization.SUNGSHIN, "프랑스어문·문화학과")
     );
 
+    private static final List<SeedUser> NO_SCENARIO_SHOWCASE_USERS = List.of(
+            new SeedUser("문", "가온", Gender.MALE, SeedOrganization.SKKU, "소프트웨어학과")
+    );
+
+    private static final int SHOWCASE_USER_COUNT = SHOWCASE_USERS.size() + NO_SCENARIO_SHOWCASE_USERS.size();
+
     @Override
     public void run(ApplicationArguments args) throws IOException {
         requireEnoughElements();
@@ -213,7 +219,11 @@ public class UserSeeder implements ApplicationRunner {
 
         agreeRequiredPolicies(users.stream().map(User::getId).toList(), PolicyKind.ONBOARDING, now);
 
-        int accessEnd = Math.min(SHOWCASE_USERS.size() + seedProperties.simulationAccessUserCount(), users.size());
+        int aiTestUserEnd = users.size() - NO_SCENARIO_SHOWCASE_USERS.size();
+        List<User> showcaseUsers = new ArrayList<>(users.subList(0, SHOWCASE_USERS.size()));
+        showcaseUsers.addAll(users.subList(aiTestUserEnd, users.size()));
+
+        int accessEnd = Math.min(SHOWCASE_USERS.size() + seedProperties.simulationAccessUserCount(), aiTestUserEnd);
 
         revokeSimulationAccess(users.subList(0, SHOWCASE_USERS.size()));
         grantSimulationAccess(users.subList(SHOWCASE_USERS.size(), accessEnd), now);
@@ -245,9 +255,9 @@ public class UserSeeder implements ApplicationRunner {
             }
         }
 
-        userRepository.markShowcaseSeed(users.subList(0, SHOWCASE_USERS.size()).stream().map(User::getId).toList());
+        userRepository.markShowcaseSeed(showcaseUsers.stream().map(User::getId).toList());
         showcasePhotoSeeder.seed(users.subList(0, SHOWCASE_USERS.size()));
-        seedScenarios(users.subList(0, SHOWCASE_USERS.size()));
+        seedScenarios(showcaseUsers);
 
         InfoLog.log(log, "시드 유저를 채웠습니다.", field("userCount", users.size()), field("elementCount", elements.size()));
     }
@@ -477,8 +487,19 @@ public class UserSeeder implements ApplicationRunner {
             seedUsers.add(SHOWCASE_USERS.get(index).withPersona(details(index), PersonaSeedElements.SUMMARY.get(index)));
         }
 
+        seedUsers.addAll(loadAiTestUsers());
+
+        for (int offset = 0; offset < NO_SCENARIO_SHOWCASE_USERS.size(); offset++) {
+            int index = SHOWCASE_USERS.size() + offset;
+            seedUsers.add(NO_SCENARIO_SHOWCASE_USERS.get(offset).withPersona(details(index), PersonaSeedElements.SUMMARY.get(index)));
+        }
+
+        return List.copyOf(seedUsers);
+    }
+
+    private List<SeedUser> loadAiTestUsers() throws IOException {
         if (!seedProperties.aiTestUsers()) {
-            return List.copyOf(seedUsers);
+            return List.of();
         }
 
         List<AiTestPersona> personas;
@@ -486,6 +507,7 @@ public class UserSeeder implements ApplicationRunner {
             personas = objectMapper.readValue(in, objectMapper.getTypeFactory().constructCollectionType(List.class, AiTestPersona.class));
         }
 
+        List<SeedUser> aiTestUsers = new ArrayList<>();
         for (AiTestPersona persona : personas) {
             if (persona.details() == null || persona.details().size() != PERSONA_DETAILS_PER_USER) {
                 throw new IllegalStateException("AI 테스트 페르소나의 detail 수가 맞지 않습니다. name=%s%s, required=%d"
@@ -495,23 +517,23 @@ public class UserSeeder implements ApplicationRunner {
                 throw new IllegalStateException("AI 테스트 페르소나의 summary 가 비어 있습니다. name=%s%s"
                         .formatted(persona.familyName(), persona.givenName()));
             }
-            seedUsers.add(persona.toSeedUser());
+            aiTestUsers.add(persona.toSeedUser());
         }
 
-        return List.copyOf(seedUsers);
+        return List.copyOf(aiTestUsers);
     }
 
     private void requireEnoughElements() {
-        int required = SHOWCASE_USERS.size() * DETAIL_ELEMENTS_PER_USER;
+        int required = SHOWCASE_USER_COUNT * DETAIL_ELEMENTS_PER_USER;
 
         if (PersonaSeedElements.DETAIL.size() < required) {
             throw new IllegalStateException("페르소나 시드 문장이 부족합니다. dimension=%s, required=%d, actual=%d"
                     .formatted(PersonaDimension.DETAIL, required, PersonaSeedElements.DETAIL.size()));
         }
 
-        if (PersonaSeedElements.SUMMARY.size() < SHOWCASE_USERS.size()) {
+        if (PersonaSeedElements.SUMMARY.size() < SHOWCASE_USER_COUNT) {
             throw new IllegalStateException("페르소나 시드 문장이 부족합니다. dimension=%s, required=%d, actual=%d"
-                    .formatted(PersonaDimension.SUMMARY, SHOWCASE_USERS.size(), PersonaSeedElements.SUMMARY.size()));
+                    .formatted(PersonaDimension.SUMMARY, SHOWCASE_USER_COUNT, PersonaSeedElements.SUMMARY.size()));
         }
 
         if (INTEREST_POOL.size() < INTERESTS_PER_USER) {
