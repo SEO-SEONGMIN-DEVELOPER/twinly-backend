@@ -32,6 +32,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -80,7 +81,7 @@ class PeoplePreviewIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("미리보기 조회: 어제까지 참여한 사람만 고르고 본인·인연·양방향 차단·탈퇴·오늘 참여·비참여자는 뺀다")
+    @DisplayName("미리보기 조회: 어제까지 참여한 사람만 고르고 본인·인연·양방향 차단·탈퇴·시드·오늘 참여·비참여자는 뺀다")
     void previews_excludes_ineligible_people() throws Exception {
         // given: 나와 조건을 통과할 후보 1명, 그리고 각 제외 조건에 하나씩 걸리는 사람들
         User me = participant(Gender.MALE, POOL, YESTERDAY);
@@ -92,6 +93,9 @@ class PeoplePreviewIntegrationTest extends AbstractIntegrationTest {
         User withdrawn = participant(Gender.FEMALE, POOL, YESTERDAY);
         withdrawn.requestWithdrawal(Duration.ofDays(14));
         userRepository.saveAndFlush(withdrawn);
+
+        User seed = participant(Gender.FEMALE, POOL, YESTERDAY);
+        userRepository.markSeed(List.of(seed.getId()));
 
         User blockedByMe = participant(Gender.FEMALE, POOL, YESTERDAY);
         blockRepository.save(Block.create(me.getId(), blockedByMe.getId()));
