@@ -80,8 +80,9 @@ import static org.mockito.Mockito.times;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class UserSeederUnitTest {
 
-    private static final int SEED_USER_COUNT = 520;
+    private static final int SEED_USER_COUNT = 521;
     private static final int SHOWCASE_USER_COUNT = 20;
+    private static final long NO_SCENARIO_SHOWCASE_USER_ID = SEED_USER_COUNT;
     private static final int INTERESTS_PER_USER = 5;
     private static final int DETAIL_ELEMENTS_PER_USER = 5;
     private static final int PERSONA_DETAILS_PER_USER = 8;
@@ -188,7 +189,7 @@ class UserSeederUnitTest {
     }
 
     @Test
-    @DisplayName("시드된 적이 없으면 유저 520명과 설문 문항 수만큼의 성향을 저장한다")
+    @DisplayName("시드된 적이 없으면 유저 521명과 설문 문항 수만큼의 성향을 저장한다")
     void run_seeds_users_and_elements() throws IOException {
         // given: 아직 시드 유저가 없는 상태
         given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
@@ -196,7 +197,7 @@ class UserSeederUnitTest {
         // when: 시더 실행
         userSeeder.run(null);
 
-        // then: 유저 520명 저장 + 유저별로 설문 23문항 + 관심사 5개 + 대화(기존 40명 5개, 나머지 8개) + 요약 1개
+        // then: 유저 521명 저장 + 유저별로 설문 23문항 + 관심사 5개 + 대화(기존 40명 5개, 나머지 8개) + 요약 1개
         then(userRepository).should(org.mockito.Mockito.times(SEED_USER_COUNT)).save(any(User.class));
 
         List<PersonaElement> elements = savedElements();
@@ -312,9 +313,9 @@ class UserSeederUnitTest {
         List<User> users = savedUsers();
 
         assertThat(users.getFirst().getPhoneNumber()).isEqualTo("01000009001");
-        assertThat(users.getLast().getPhoneNumber()).isEqualTo("01000009520");
+        assertThat(users.getLast().getPhoneNumber()).isEqualTo("01000009521");
         assertThat(users.getFirst().getEmail()).isEqualTo("test-seed01@skku.edu");
-        assertThat(users.getLast().getEmail()).isEqualTo("test-seed520@sungshin.ac.kr");
+        assertThat(users.getLast().getEmail()).isEqualTo("test-seed521@skku.edu");
 
         assertThat(users).extracting(User::getPhoneNumber).doesNotHaveDuplicates();
         assertThat(users).extracting(User::getEmail).doesNotHaveDuplicates();
@@ -322,7 +323,7 @@ class UserSeederUnitTest {
     }
 
     @Test
-    @DisplayName("성별은 남녀 260명씩이고 학교는 세 곳이 섞여 있다")
+    @DisplayName("성별은 남 261명·여 260명이고 학교는 세 곳이 섞여 있다")
     void run_keeps_gender_and_organization_mix() throws IOException {
         // given: 아직 시드 유저가 없는 상태
         given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
@@ -336,7 +337,7 @@ class UserSeederUnitTest {
         Map<Gender, Long> countByGender = users.stream()
                 .collect(Collectors.groupingBy(User::getGender, Collectors.counting()));
         assertThat(countByGender).containsOnly(
-                Map.entry(Gender.MALE, 260L),
+                Map.entry(Gender.MALE, 261L),
                 Map.entry(Gender.FEMALE, 260L));
 
         assertThat(users).extracting(User::getOrganization)
@@ -390,7 +391,8 @@ class UserSeederUnitTest {
         assertThat(elements.get(SHOWCASE_USER_COUNT - 1).getExplanation())
                 .isEqualTo(PersonaSeedElements.SUMMARY.get(SHOWCASE_USER_COUNT - 1));
         assertThat(elements.get(SHOWCASE_USER_COUNT).getExplanation()).isEqualTo(personaSummaries().getFirst());
-        assertThat(elements.getLast().getExplanation()).isEqualTo(personaSummaries().getLast());
+        assertThat(elements.get(SEED_USER_COUNT - 2).getExplanation()).isEqualTo(personaSummaries().getLast());
+        assertThat(elements.getLast().getExplanation()).isEqualTo(PersonaSeedElements.SUMMARY.get(SHOWCASE_USER_COUNT));
     }
 
     @Test
@@ -543,12 +545,12 @@ class UserSeederUnitTest {
         int common = surveyLoader.getAllQuestions().size() + INTERESTS_PER_USER + SUMMARY_ELEMENTS_PER_USER;
 
         return SEED_USER_COUNT * common
-                + SHOWCASE_USER_COUNT * DETAIL_ELEMENTS_PER_USER
-                + (SEED_USER_COUNT - SHOWCASE_USER_COUNT) * PERSONA_DETAILS_PER_USER;
+                + (SHOWCASE_USER_COUNT + 1) * DETAIL_ELEMENTS_PER_USER
+                + (SEED_USER_COUNT - SHOWCASE_USER_COUNT - 1) * PERSONA_DETAILS_PER_USER;
     }
 
     private long detailsFor(Long userId) {
-        return userId <= SHOWCASE_USER_COUNT ? DETAIL_ELEMENTS_PER_USER : PERSONA_DETAILS_PER_USER;
+        return userId <= SHOWCASE_USER_COUNT || userId == NO_SCENARIO_SHOWCASE_USER_ID ? DETAIL_ELEMENTS_PER_USER : PERSONA_DETAILS_PER_USER;
     }
 
     private List<String> personaSummaries() throws IOException {
@@ -794,7 +796,7 @@ class UserSeederUnitTest {
     }
 
     @Test
-    @DisplayName("AI 테스트 유저 시드가 꺼져 있으면 쇼케이스 유저 20명만 만들고 시뮬레이션 권한은 건드리지 않는다")
+    @DisplayName("AI 테스트 유저 시드가 꺼져 있으면 쇼케이스 유저 21명만 만들고 시뮬레이션 권한은 건드리지 않는다")
     void run_seeds_only_showcase_users_when_ai_test_users_disabled() throws IOException {
         // given: 아직 시드 유저가 없고 AI 테스트 유저 시드가 꺼진 상태
         given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
@@ -804,7 +806,7 @@ class UserSeederUnitTest {
         userSeeder.run(null);
 
         // then: 쇼케이스 유저만 저장되고, 권한 부여·풀 배정은 일어나지 않으며, 시나리오는 그대로 적재된다
-        then(userRepository).should(times(SHOWCASE_USER_COUNT)).save(any(User.class));
+        then(userRepository).should(times(SHOWCASE_USER_COUNT + 1)).save(any(User.class));
         then(userEntitlementRepository).should(never()).saveAll(any());
         then(purchaseWriter).should(never()).assignPool(any());
         then(simulationService).should(times(SCENARIO_DAY_COUNT)).simulations(any(), any());
@@ -847,7 +849,7 @@ class UserSeederUnitTest {
     }
 
     @Test
-    @DisplayName("쇼케이스 유저 20명에게만 프로필 사진을 채운다")
+    @DisplayName("시나리오가 있는 쇼케이스 유저 20명에게만 프로필 사진을 채운다")
     void run_seeds_profile_photos_for_showcase_users() throws IOException {
         // given: 아직 시드 유저가 없는 상태
         given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
@@ -863,7 +865,7 @@ class UserSeederUnitTest {
     }
 
     @Test
-    @DisplayName("쇼케이스 유저 20명에게만 쇼케이스 시드 표시를 한다")
+    @DisplayName("시나리오 없는 21번까지 쇼케이스 유저 21명에게만 쇼케이스 시드 표시를 한다")
     void run_marks_showcase_users_as_showcase_seed() throws IOException {
         // given: 아직 시드 유저가 없는 상태
         given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
@@ -871,8 +873,8 @@ class UserSeederUnitTest {
         // when: 시더 실행
         userSeeder.run(null);
 
-        // then: 앞쪽 쇼케이스 유저 20명의 id 만 표시 대상으로 넘어간다
-        then(userRepository).should().markShowcaseSeed(LongStream.rangeClosed(1, SHOWCASE_USER_COUNT).boxed().toList());
+        // then: 앞쪽 쇼케이스 유저 20명과 맨 뒤 21번의 id 만 표시 대상으로 넘어간다
+        then(userRepository).should().markShowcaseSeed(showcaseUserIds());
     }
 
     @Test
@@ -884,12 +886,12 @@ class UserSeederUnitTest {
         // when: 시더 실행
         userSeeder.run(null);
 
-        // then: 쇼케이스 20명과 AI 테스트 500명의 id 가 모두 표시 대상으로 넘어간다
+        // then: 쇼케이스 21명과 AI 테스트 500명의 id 가 모두 표시 대상으로 넘어간다
         then(userRepository).should().markSeed(LongStream.rangeClosed(1, SEED_USER_COUNT).boxed().toList());
     }
 
     @Test
-    @DisplayName("AI 테스트 유저 시드가 꺼져 있으면 쇼케이스 유저 20명에게만 시드 표시를 한다")
+    @DisplayName("AI 테스트 유저 시드가 꺼져 있으면 쇼케이스 유저 21명에게만 시드 표시를 한다")
     void run_marks_only_showcase_users_as_seed_when_ai_test_users_disabled() throws IOException {
         // given: 아직 시드 유저가 없고 AI 테스트 유저 시드가 꺼진 상태
         given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
@@ -898,8 +900,8 @@ class UserSeederUnitTest {
         // when: 시더 실행
         userSeeder.run(null);
 
-        // then: 쇼케이스 유저 20명의 id 만 표시 대상으로 넘어간다
-        then(userRepository).should().markSeed(LongStream.rangeClosed(1, SHOWCASE_USER_COUNT).boxed().toList());
+        // then: 쇼케이스 유저 21명의 id 만 표시 대상으로 넘어간다
+        then(userRepository).should().markSeed(LongStream.rangeClosed(1, SHOWCASE_USER_COUNT + 1).boxed().toList());
     }
 
     @Test
@@ -945,8 +947,8 @@ class UserSeederUnitTest {
         // when: 시더 실행
         userSeeder.run(null);
 
-        // then: 쇼케이스 유저 20명의 시나리오를 지운 뒤 하루도 빠짐없이 다시 넣는다
-        then(scenarioCleaner).should().clear(LongStream.rangeClosed(1, SHOWCASE_USER_COUNT).boxed().toList());
+        // then: 쇼케이스 유저 21명의 시나리오를 지운 뒤 하루도 빠짐없이 다시 넣는다
+        then(scenarioCleaner).should().clear(showcaseUserIds());
         then(simulationService).should(times(SCENARIO_DAY_COUNT)).simulations(any(), any());
     }
 
@@ -979,7 +981,7 @@ class UserSeederUnitTest {
 
         // then: 쇼케이스 유저 시나리오를 지우고 하루도 빠짐없이 다시 넣은 뒤, 저장된 해시를 현재 파일 기준으로 바꾼다
         InOrder inOrder = inOrder(scenarioCleaner, simulationService, seedResourceHashRepository);
-        inOrder.verify(scenarioCleaner).clear(LongStream.rangeClosed(1, SHOWCASE_USER_COUNT).boxed().toList());
+        inOrder.verify(scenarioCleaner).clear(showcaseUserIds());
         inOrder.verify(simulationService, times(SCENARIO_DAY_COUNT)).simulations(any(), any());
         inOrder.verify(seedResourceHashRepository).save(stored);
         assertThat(stored.getHash()).isEqualTo(currentScenarioHash());
@@ -1014,6 +1016,68 @@ class UserSeederUnitTest {
         // when & then: 같은 내용은 같은 해시, 다른 내용은 다른 해시
         assertThat(UserSeeder.scenarioHash(original)).isEqualTo(UserSeeder.scenarioHash(original.clone()));
         assertThat(UserSeeder.scenarioHash(original)).isNotEqualTo(UserSeeder.scenarioHash(edited));
+    }
+
+    @Test
+    @DisplayName("시나리오 없는 쇼케이스 유저는 AI 테스트 유저 뒤 521번 신원으로 만들어 기존 시드 유저의 번호를 밀지 않는다")
+    void run_appends_no_scenario_showcase_user_after_ai_test_users() throws IOException {
+        // given: 아직 시드 유저가 없는 상태
+        given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
+
+        // when: 시더 실행
+        userSeeder.run(null);
+
+        // then: AI 테스트 첫 유저는 그대로 21번 신원이고, 시나리오 없는 쇼케이스 유저는 맨 뒤 521번 신원이다
+        List<User> users = savedUsers();
+        User firstAiTestUser = users.get(SHOWCASE_USER_COUNT);
+        assertThat(firstAiTestUser.getPhoneNumber()).isEqualTo("01000009021");
+        assertThat(firstAiTestUser.getEmail()).isEqualTo("test-seed21@skku.edu");
+
+        User noScenarioShowcaseUser = users.getLast();
+        assertThat(noScenarioShowcaseUser.getId()).isEqualTo(NO_SCENARIO_SHOWCASE_USER_ID);
+        assertThat(noScenarioShowcaseUser.getNickname()).isEqualTo("가온521");
+        assertThat(noScenarioShowcaseUser.getPhoneNumber()).isEqualTo("01000009521");
+        assertThat(noScenarioShowcaseUser.getEmail()).isEqualTo("test-seed521@skku.edu");
+    }
+
+    @Test
+    @DisplayName("시나리오 없는 쇼케이스 유저에게는 시뮬레이션을 넣지 않는다")
+    void run_never_seeds_scenarios_for_no_scenario_showcase_user() throws IOException {
+        // given: 아직 시드 유저가 없는 상태
+        given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
+
+        // when: 시더 실행
+        userSeeder.run(null);
+
+        // then: 시나리오 하루치는 모두 적재되지만 21번 앞으로는 하나도 없다
+        then(simulationService).should(times(SCENARIO_DAY_COUNT)).simulations(any(), any());
+        then(simulationService).should(never()).simulations(eq(NO_SCENARIO_SHOWCASE_USER_ID), any());
+    }
+
+    @Test
+    @DisplayName("시나리오 없는 쇼케이스 유저에게 시뮬레이션이 생겨 있으면 쇼케이스 시나리오를 지우고 다시 적재한다")
+    void run_clears_scenarios_when_no_scenario_showcase_user_has_scenes() throws IOException {
+        // given: 시드 파일도 날짜도 그대로인데 21번에게만 장면이 생겨 있는 상태
+        given(userRepository.findByEmailHash(any())).willReturn(Optional.empty());
+        givenStoredHash(currentScenarioHash());
+        List<SceneDayProjection> existing = new ArrayList<>(expectedDays());
+        existing.add(day(NO_SCENARIO_SHOWCASE_USER_ID, UserSeeder.SCENARIO_BASE_DATE));
+        given(sceneRepository.findAllDaysByUserIdIn(any())).willReturn(existing);
+
+        // when: 시더 실행
+        userSeeder.run(null);
+
+        // then: 21번을 포함해 쇼케이스 유저 시나리오를 지우고, 시나리오는 다시 넣되 21번에게는 넣지 않는다
+        then(scenarioCleaner).should().clear(showcaseUserIds());
+        then(simulationService).should(times(SCENARIO_DAY_COUNT)).simulations(any(), any());
+        then(simulationService).should(never()).simulations(eq(NO_SCENARIO_SHOWCASE_USER_ID), any());
+    }
+
+    private List<Long> showcaseUserIds() {
+        List<Long> userIds = new ArrayList<>(LongStream.rangeClosed(1, SHOWCASE_USER_COUNT).boxed().toList());
+        userIds.add(NO_SCENARIO_SHOWCASE_USER_ID);
+
+        return userIds;
     }
 
     private SeedResourceHash givenStoredHash(String hash) {
