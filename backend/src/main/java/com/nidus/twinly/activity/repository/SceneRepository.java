@@ -54,6 +54,20 @@ public interface SceneRepository extends JpaRepository<Scene, Long> {
                                                              @Param("dates") List<LocalDate> dates,
                                                              @Param("now") LocalDateTime now);
 
+    @Query("""
+            SELECT s.id AS id, s.userId AS userId, s.type AS type, s.startsAt AS startsAt, s.endsAt AS endsAt,
+                   s.placeCode AS placeCode, s.fromPlaceCode AS fromPlaceCode, s.travelMode AS travelMode
+            FROM Scene s
+            WHERE s.userId IN :userIds
+              AND s.date BETWEEN :fromDate AND :toDate
+              AND s.endsAt > :endsAfter
+            ORDER BY s.startsAt ASC, s.id ASC
+            """)
+    List<SceneRouteProjection> findAllRoutesByUserIdInAndEndsAfter(@Param("userIds") List<Long> userIds,
+                                                                    @Param("fromDate") LocalDate fromDate,
+                                                                    @Param("toDate") LocalDate toDate,
+                                                                    @Param("endsAfter") LocalDateTime endsAfter);
+
     @Modifying
     @Query("DELETE FROM Scene s WHERE s.userId IN :userIds")
     void deleteAllByUserIdIn(@Param("userIds") List<Long> userIds);
@@ -61,5 +75,16 @@ public interface SceneRepository extends JpaRepository<Scene, Long> {
     interface SceneDayProjection {
         Long getUserId();
         LocalDate getDate();
+    }
+
+    interface SceneRouteProjection {
+        Long getId();
+        Long getUserId();
+        SceneType getType();
+        LocalDateTime getStartsAt();
+        LocalDateTime getEndsAt();
+        String getPlaceCode();
+        String getFromPlaceCode();
+        String getTravelMode();
     }
 }
