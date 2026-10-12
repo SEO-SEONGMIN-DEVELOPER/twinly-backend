@@ -63,6 +63,7 @@ public interface SeasonParticipationRepository extends JpaRepository<SeasonParti
             WHERE p.seasonId = :seasonId
               AND p.userId <> :userId
               AND p.participatedInAt < :participatedBefore
+              AND u.isSeed = FALSE
               AND u.withdrawalRequestedAt IS NULL
               AND u.deletedAt IS NULL
               AND NOT EXISTS (
