@@ -49,8 +49,4 @@ public class ChatRoom {
         this.closedAt = null;
         this.closeReason = null;
     }
-
-    public void assignCommonPoint(String commonPoint) {
-        this.commonPoint = commonPoint;
-    }
 }
