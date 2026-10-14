@@ -1029,14 +1029,41 @@ class ChatServiceUnitTest {
         given(personaElementRepository.findAllByUserIdOrderByIdAsc(PARTNER)).willReturn(partnerPersona);
         given(commonPointGenerator.generate(myPersona, partnerPersona))
                 .willReturn("두 사람은 산을 즐기고, 주말이면 산에서 시간을 보내요.");
+        given(chatRoomRepository.assignCommonPointIfAbsent(ROOM_ID, "두 사람은 산을 즐기고, 주말이면 산에서 시간을 보내요."))
+                .willReturn(1);
 
         // when: 공통점 조회
         ChatCommonPointResult result = chatService.commonPoint(ME, ROOM_ID);
 
-        // then: 생성기 결과가 그대로 반환되고 방에도 저장됨 (내 페르소나가 A, 상대 페르소나가 B 순서로 전달)
+        // then: 생성기 결과가 그대로 반환되고 비어 있을 때만 저장하는 쿼리로 방에 저장됨 (내 페르소나가 A, 상대 페르소나가 B 순서로 전달)
         assertThat(result.message()).isEqualTo("두 사람은 산을 즐기고, 주말이면 산에서 시간을 보내요.");
-        assertThat(room.getCommonPoint()).isEqualTo("두 사람은 산을 즐기고, 주말이면 산에서 시간을 보내요.");
+        then(chatRoomRepository).should().assignCommonPointIfAbsent(ROOM_ID, "두 사람은 산을 즐기고, 주말이면 산에서 시간을 보내요.");
         then(commonPointGenerator).should().generate(myPersona, partnerPersona);
+        then(chatRoomRepository).should(never()).findCommonPointById(anyLong());
+    }
+
+    @Test
+    @DisplayName("공통점 생성 중 다른 요청이 먼저 저장했으면 내 결과를 버리고 먼저 저장된 공통점을 반환한다")
+    void commonPoint_returns_first_saved_one_when_concurrently_generated() {
+        // given: 두 사람이 동시에 공통점을 열어 둘 다 생성기를 호출했고, 상대 요청이 먼저 저장을 마친 상황
+        given(chatRoomRepository.findById(ROOM_ID)).willReturn(Optional.of(room(ROOM_ID, MATCH_ID)));
+        given(matchRepository.findById(MATCH_ID)).willReturn(Optional.of(match(MATCH_ID, ME, PARTNER, CURRENT_SEASON_ID)));
+        given(userRepository.findById(PARTNER)).willReturn(Optional.of(user(PARTNER, "partnerNick")));
+        given(chatRoomParticipationRepository.findAllByRoomId(ROOM_ID))
+                .willReturn(List.of(participation(ROOM_ID, ME), participation(ROOM_ID, PARTNER)));
+        List<PersonaElement> myPersona = List.of(personaElement(ME, PersonaDimension.INTEREST, "등산"));
+        List<PersonaElement> partnerPersona = List.of(personaElement(PARTNER, PersonaDimension.INTEREST, "등산"));
+        given(personaElementRepository.findAllByUserIdOrderByIdAsc(ME)).willReturn(myPersona);
+        given(personaElementRepository.findAllByUserIdOrderByIdAsc(PARTNER)).willReturn(partnerPersona);
+        given(commonPointGenerator.generate(myPersona, partnerPersona)).willReturn("내 요청이 만든 공통점");
+        given(chatRoomRepository.assignCommonPointIfAbsent(ROOM_ID, "내 요청이 만든 공통점")).willReturn(0);
+        given(chatRoomRepository.findCommonPointById(ROOM_ID)).willReturn(Optional.of("먼저 저장된 공통점"));
+
+        // when: 공통점 조회
+        ChatCommonPointResult result = chatService.commonPoint(ME, ROOM_ID);
+
+        // then: 두 사람이 서로 다른 문구를 보지 않도록 먼저 저장된 공통점을 반환한다
+        assertThat(result.message()).isEqualTo("먼저 저장된 공통점");
     }
 
     @Test
@@ -1044,7 +1071,7 @@ class ChatServiceUnitTest {
     void commonPoint_returns_stored_one_without_ai_call() {
         // given: 이미 공통점이 저장된 양쪽 입장 완료 방
         ChatRoom room = room(ROOM_ID, MATCH_ID);
-        room.assignCommonPoint("두 사람은 산을 즐기고, 주말이면 산에서 시간을 보내요.");
+        ReflectionTestUtils.setField(room, "commonPoint", "두 사람은 산을 즐기고, 주말이면 산에서 시간을 보내요.");
         given(chatRoomRepository.findById(ROOM_ID)).willReturn(Optional.of(room));
         given(matchRepository.findById(MATCH_ID)).willReturn(Optional.of(match(MATCH_ID, ME, PARTNER, CURRENT_SEASON_ID)));
         given(userRepository.findById(PARTNER)).willReturn(Optional.of(user(PARTNER, "partnerNick")));

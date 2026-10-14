@@ -43,6 +43,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
@@ -495,7 +496,7 @@ public class ChatService {
         mine.leave();
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public ChatCommonPointResult commonPoint(Long userId, Long roomId) {
         ChatRoom room = chatRoomRepository.findById(roomId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ROOM_NOT_FOUND));
@@ -523,7 +524,11 @@ public class ChatService {
         }
 
         String commonPoint = commonPointGenerator.generate(myPersona, partnerPersona);
-        room.assignCommonPoint(commonPoint);
+        if (chatRoomRepository.assignCommonPointIfAbsent(roomId, commonPoint) == 0) {
+            String stored = chatRoomRepository.findCommonPointById(roomId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.ROOM_NOT_FOUND));
+            return new ChatCommonPointResult(stored);
+        }
 
         return new ChatCommonPointResult(commonPoint);
     }

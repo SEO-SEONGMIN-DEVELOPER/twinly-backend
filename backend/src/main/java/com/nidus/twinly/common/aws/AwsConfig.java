@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
 import software.amazon.awssdk.services.cloudfront.CloudFrontUtilities;
@@ -19,10 +20,14 @@ import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
 import java.security.PrivateKey;
 import java.security.spec.PKCS8EncodedKeySpec;
+import java.time.Duration;
 import java.util.Base64;
 
 @Configuration
 public class AwsConfig {
+
+    private static final Duration BEDROCK_ATTEMPT_TIMEOUT = Duration.ofSeconds(20);
+    private static final Duration BEDROCK_CALL_TIMEOUT = Duration.ofSeconds(25);
 
     @Bean
     public S3Presigner s3Presigner(S3Properties s3Properties) {
@@ -60,6 +65,10 @@ public class AwsConfig {
         return BedrockRuntimeClient.builder()
                 .region(Region.of(bedrockProperties.region()))
                 .credentialsProvider(StaticCredentialsProvider.create(credentials))
+                .overrideConfiguration(ClientOverrideConfiguration.builder()
+                        .apiCallAttemptTimeout(BEDROCK_ATTEMPT_TIMEOUT)
+                        .apiCallTimeout(BEDROCK_CALL_TIMEOUT)
+                        .build())
                 .build();
     }
 

@@ -4,6 +4,7 @@ import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import software.amazon.awssdk.core.document.Document;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
 import software.amazon.awssdk.services.bedrockruntime.model.*;
@@ -14,6 +15,12 @@ import java.util.Objects;
 @Service
 @RequiredArgsConstructor
 public class BedrockService {
+
+    private static final Document THINKING_DISABLED = Document.mapBuilder()
+            .putDocument("thinking", Document.mapBuilder()
+                    .putString("type", "disabled")
+                    .build())
+            .build();
 
     private final BedrockRuntimeClient bedrockRuntimeClient;
     private final BedrockProperties bedrockProperties;
@@ -27,6 +34,7 @@ public class BedrockService {
         ConverseRequest request = ConverseRequest.builder()
                 .modelId(bedrockProperties.modelId())
                 .messages(List.of(message))
+                .additionalModelRequestFields(THINKING_DISABLED)
                 .build();
 
         ConverseResponse response;
