@@ -88,7 +88,7 @@ groups:
           severity: critical
         annotations:
           summary: "[{{ $labels.env }}] {{ $labels.node }} 의 5xx 비율이 5%를 넘었습니다"
-          description: "4xx 는 클라이언트 잘못이라 제외한 수치입니다. 어떤 요청이 실패하는지는 CloudWatch Logs 에서 같은 시간대를 확인하십시오."
+          description: "4xx 는 클라이언트 잘못이라 제외한 수치입니다. 5분간 5xx 가 3건 이상일 때만 울립니다(한산한 시간대 1건만으로 100% 가 되는 오탐 방지). 어떤 요청이 실패하는지는 CloudWatch Logs 에서 같은 시간대를 확인하십시오."
         data:
           - refId: A
             relativeTimeRange:
@@ -98,7 +98,7 @@ groups:
             model:
               refId: A
               instant: true
-              expr: sum by (env, node) (rate(http_server_requests_seconds_count{outcome="SERVER_ERROR"}[5m])) / sum by (env, node) (rate(http_server_requests_seconds_count[5m]))
+              expr: (sum by (env, node) (rate(http_server_requests_seconds_count{outcome="SERVER_ERROR"}[5m])) / sum by (env, node) (rate(http_server_requests_seconds_count[5m]))) and sum by (env, node) (increase(http_server_requests_seconds_count{outcome="SERVER_ERROR"}[5m])) >= 3
           - refId: B
             relativeTimeRange:
               from: 0
