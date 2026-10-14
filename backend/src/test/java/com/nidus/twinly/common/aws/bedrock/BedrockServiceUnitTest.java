@@ -5,8 +5,10 @@ import com.nidus.twinly.common.web.ErrorCode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import software.amazon.awssdk.core.document.Document;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
 import software.amazon.awssdk.services.bedrockruntime.model.ContentBlock;
 import software.amazon.awssdk.services.bedrockruntime.model.ConversationRole;
@@ -21,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class BedrockServiceUnitTest {
@@ -58,6 +61,25 @@ class BedrockServiceUnitTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.AI_RESPONSE_FAILED);
+    }
+
+    @Test
+    @DisplayName("모든 요청에 사고(thinking) 비활성화를 실어 보낸다")
+    void sends_thinking_disabled() {
+        // given: 정상 텍스트 응답
+        given(bedrockRuntimeClient.converse(any(ConverseRequest.class)))
+                .willReturn(responseOf(ContentBlock.fromText("답변")));
+        bedrockService = new BedrockService(bedrockRuntimeClient, properties());
+
+        // when: 호출한다
+        bedrockService.converse("prompt");
+
+        // then: Sonnet 5 는 thinking 을 생략하면 adaptive 로 켜져 출력 상한을 사고로 다 쓰므로,
+        //       요청에 {"thinking":{"type":"disabled"}} 가 실려야 한다
+        ArgumentCaptor<ConverseRequest> captor = ArgumentCaptor.forClass(ConverseRequest.class);
+        verify(bedrockRuntimeClient).converse(captor.capture());
+        Document fields = captor.getValue().additionalModelRequestFields();
+        assertThat(fields.asMap().get("thinking").asMap().get("type").asString()).isEqualTo("disabled");
     }
 
     private BedrockProperties properties() {
