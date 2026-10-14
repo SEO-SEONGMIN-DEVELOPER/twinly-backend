@@ -23,6 +23,7 @@ import static com.nidus.twinly.common.logging.LogField.field;
 public class CommonPointGenerator {
 
     private static final int MAX_SHARED_POINTS = 3;
+    private static final int MAX_EXTRACTED_SHARED = 5;
 
     private final BedrockService bedrockService;
     private final ObjectMapper objectMapper;
@@ -171,7 +172,7 @@ public class CommonPointGenerator {
         appendPersona(sb, "A", myPersona);
         appendPersona(sb, "B", partnerPersona);
 
-        sb.append("\n두 사람 모두에게 실제로 있는 공통점을 모두 찾아 JSON으로만 답하세요.\n");
+        sb.append("\n두 사람 모두에게 실제로 있는 공통점을 최대 ").append(MAX_EXTRACTED_SHARED).append("개까지 찾아 JSON으로만 답하세요.\n");
         sb.append("형식: {\"shared\":[{\"content\":\"...\",\"keyword\":\"...\",\"evidenceA\":\"...\",\"evidenceB\":\"...\"}],\"contrast\":{\"traitA\":\"...\",\"traitB\":\"...\"}}\n");
         sb.append("- content: 두 사람이 공유하는 내용을 15자 안팎의 짧은 한 구절로 쓰세요. 세부 내용은 양쪽에 모두 있는 수준까지만 쓰고, 한쪽에만 있는 세부는 넣지 마세요. (예: 공포 영화를 좋아함, 김애란 소설을 읽음, 혼자 있는 시간에 에너지를 회복함)\n");
         sb.append("- content는 evidenceA만 봐도 참이고 evidenceB만 봐도 참이어야 합니다. 한쪽 근거로는 참이 아닌 표현이면 양쪽 모두에 맞는 넓은 표현으로 바꾸세요.\n");
