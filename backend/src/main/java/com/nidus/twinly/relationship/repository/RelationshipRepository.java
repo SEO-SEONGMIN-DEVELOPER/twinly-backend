@@ -64,6 +64,7 @@ public interface RelationshipRepository extends JpaRepository<Relationship, Long
     @Query(value = """
             SELECT DISTINCT r.partner_user_id
             FROM relationships r
+            JOIN users u ON u.id = r.partner_user_id AND u.withdrawal_requested_at IS NULL AND u.deleted_at IS NULL
             WHERE r.user_id = :userId
               AND r.update_time <= :now
               AND (:cursor IS NULL OR r.partner_user_id > :cursor)

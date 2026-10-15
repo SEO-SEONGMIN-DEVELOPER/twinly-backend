@@ -232,29 +232,6 @@ class PeopleServiceUnitTest {
     }
 
     @Test
-    @DisplayName("목록에서 탈퇴한 파트너는 사진 조회 대상에서 빠져 photo가 null이 된다")
-    void people_excludes_withdrawn_partner_from_photo_lookup() {
-        // given: 파트너 2명 중 20이 탈퇴한 상태
-        User withdrawn = user(20L, "철수");
-        ReflectionTestUtils.setField(withdrawn, "deletedAt", Instant.now());
-        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), any(LocalDateTime.class))).willReturn(List.of(10L, 20L));
-        given(userRepository.findAllById(List.of(10L, 20L)))
-                .willReturn(List.of(user(10L, "길동"), withdrawn));
-        given(photoRepository.findAllByUserIdInAndType(List.of(10L), PhotoType.PROFILE))
-                .willReturn(List.of(Photo.create(10L, PhotoType.PROFILE, "key10", 10, 20, 100, 200, Instant.now())));
-        given(cloudFrontService.getSignedUrl("key10")).willReturn("https://cdn.example.com/signed10");
-
-        // when: 사람 목록 조회
-        PeopleResult result = peopleService.people(ME, null, null);
-
-        // then: 탈퇴한 파트너는 목록에 남아 닉네임은 그대로, 사진만 가려진다
-        assertThat(result.people()).extracting(PeopleItemResult::userName)
-                .containsExactly("길동", "철수");
-        assertThat(result.people().get(0).profilePhoto()).isNotNull();
-        assertThat(result.people().get(1).profilePhoto()).isNull();
-    }
-
-    @Test
     @DisplayName("사람 목록은 현재 회차 친밀도 퀴즈에서 나와 상대가 답한 상태를 파트너별로 담는다")
     void people_includes_intimacy_quiz_status() {
         // given: 현재 회차(id 3)에서 10은 둘 다 같은 답, 20은 나만 답, 30은 상대만 답, 40은 아무도 안 답한 상태
@@ -314,24 +291,22 @@ class PeopleServiceUnitTest {
     }
 
     @Test
-    @DisplayName("탈퇴했거나 나를 차단한 파트너는 퀴즈를 할 수 없어 상태가 null 이다")
-    void people_intimacy_quiz_status_null_for_unavailable_partner() {
-        // given: 20은 탈퇴, 30은 나를 차단한 상태
-        User withdrawn = user(20L, "철수");
-        ReflectionTestUtils.setField(withdrawn, "deletedAt", Instant.now());
+    @DisplayName("나를 차단한 파트너는 퀴즈를 할 수 없어 상태가 null 이다")
+    void people_intimacy_quiz_status_null_for_blocking_partner() {
+        // given: 30은 나를 차단한 상태
         given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), any(LocalDateTime.class)))
-                .willReturn(List.of(10L, 20L, 30L));
-        given(userRepository.findAllById(List.of(10L, 20L, 30L)))
-                .willReturn(List.of(user(10L, "길동"), withdrawn, user(30L, "영희")));
+                .willReturn(List.of(10L, 30L));
+        given(userRepository.findAllById(List.of(10L, 30L)))
+                .willReturn(List.of(user(10L, "길동"), user(30L, "영희")));
         given(blockRepository.findAllByUserIdInAndBlockedUserId(List.of(10L, 30L), ME))
                 .willReturn(List.of(Block.create(30L, ME)));
 
         // when: 사람 목록 조회
         PeopleResult result = peopleService.people(ME, null, null);
 
-        // then: 10만 상태가 있고, 20·30은 null
+        // then: 10만 상태가 있고, 30은 null
         assertThat(result.people()).extracting(PeopleItemResult::intimacyQuizStatus)
-                .containsExactly(new PeopleIntimacyQuizStatusResult(false, false), null, null);
+                .containsExactly(new PeopleIntimacyQuizStatusResult(false, false), null);
     }
 
     @Test

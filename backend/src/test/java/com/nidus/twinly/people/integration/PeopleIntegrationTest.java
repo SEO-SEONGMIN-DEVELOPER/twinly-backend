@@ -179,33 +179,30 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("사람 목록 조회: 탈퇴한 파트너는 목록에 남아 닉네임은 그대로 내려가고 사진은 내려가지 않는다")
-    void people_masks_withdrawn_partner() throws Exception {
-        // given: 파트너 둘 다 프로필 사진을 가진 상태에서 한 명만 탈퇴시킨다.
-        //        사진 행이 있어야 "사진이 빠졌다"가 필터의 결과임이 증명된다 (없으면 어차피 null이라 무의미)
+    @DisplayName("사람 목록 조회: 유예 중이거나 파기된 탈퇴 파트너는 쿼리 단계에서 제외되어 목록에 나오지 않는다")
+    void people_excludes_withdrawn_partner() throws Exception {
+        // given: 관계가 있는 파트너 3명 중 한 명은 탈퇴 유예 중, 한 명은 파기 완료
         User me = saveUser();
         User active = saveUser();
-        User withdrawn = saveUser();
-        savePhoto(active.getId());
-        savePhoto(withdrawn.getId());
-        withdrawn.delete();
-        userRepository.save(withdrawn);
+        User pending = saveUser();
+        User deleted = saveUser();
+        pending.requestWithdrawal(Duration.ofDays(14));
+        deleted.delete();
+        userRepository.saveAll(List.of(pending, deleted));
         saveRelationship(me.getId(), active.getId(), DAY_2, 40, "{}");
-        saveRelationship(me.getId(), withdrawn.getId(), DAY_2, 80, "{}");
+        saveRelationship(me.getId(), pending.getId(), DAY_2, 60, "{}");
+        saveRelationship(me.getId(), deleted.getId(), DAY_2, 80, "{}");
 
-        // when: 사람 목록 조회
+        // when: limit 1 로 사람 목록 조회
         var result = mockMvc.perform(get("/api/v1/people")
+                .param("limit", "1")
                 .header("Authorization", bearer(me.getId())));
 
-        // then: 탈퇴자도 목록에는 남는다 (관계 이력이 사라지면 안 되므로) 닉네임은 그대로, 사진은 가려진다
+        // then: 탈퇴자 둘은 빠지고, 페이지 정보도 남은 건수 기준으로 계산된다
         result.andExpect(status().isOk())
-                .andExpect(jsonPath("$.people.length()").value(2))
+                .andExpect(jsonPath("$.people.length()").value(1))
                 .andExpect(jsonPath("$.people[0].userId").value(active.getId().toString()))
-                .andExpect(jsonPath("$.people[0].userName").value(active.getNickname()))
-                .andExpect(jsonPath("$.people[0].profilePhoto").exists())
-                .andExpect(jsonPath("$.people[1].userId").value(withdrawn.getId().toString()))
-                .andExpect(jsonPath("$.people[1].userName").value(withdrawn.getNickname()))
-                .andExpect(jsonPath("$.people[1].profilePhoto").isEmpty());
+                .andExpect(jsonPath("$.page.hasMore").value(false));
     }
 
     @Test
