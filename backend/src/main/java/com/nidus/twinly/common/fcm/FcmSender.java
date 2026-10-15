@@ -32,6 +32,7 @@ public class FcmSender {
             ErrorCode.PERMISSION_DENIED);
 
     private static final String MIXED = "MIXED";
+    private static final String ERROR_CODE_PREFIX = "FCM_";
 
     private static final String PUSH_TYPE = "pushType";
     private static final String MESSAGING_ERROR_CODE = "messagingErrorCode";
@@ -53,7 +54,7 @@ public class FcmSender {
         try {
             response = firebaseMessaging.sendEach(pushMessages.stream().map(PushMessage::message).toList());
         } catch (FirebaseMessagingException e) {
-            ErrorLog.error(log, e.getErrorCode().name(), null, e)
+            ErrorLog.error(log, errorCode(e), null, e)
                     .addKeyValue(REQUESTED, pushMessages.size())
                     .log("푸시 발송이 중단되었습니다");
             return PushSendResult.cancelled();
@@ -74,6 +75,10 @@ public class FcmSender {
                 .log("푸시 발송 결과");
 
         return new PushSendResult(response.getSuccessCount(), response.getFailureCount(), authFailed);
+    }
+
+    private String errorCode(FirebaseMessagingException exception) {
+        return ERROR_CODE_PREFIX + exception.getErrorCode().name();
     }
 
     private String pushType(List<PushMessage> pushMessages) {
@@ -106,7 +111,7 @@ public class FcmSender {
             if (REVOKABLE.contains(messagingErrorCode)) {
                 revokable.add(pushMessage.token());
             } else {
-                ErrorLog.warn(log, exception.getErrorCode().name(), Actor.user(pushMessage.userId()), exception)
+                ErrorLog.warn(log, errorCode(exception), Actor.user(pushMessage.userId()), exception)
                         .addKeyValue(PUSH_TYPE, pushMessage.type())
                         .addKeyValue(MESSAGING_ERROR_CODE, messagingErrorCode)
                         .log("푸시 발송에 실패했습니다");

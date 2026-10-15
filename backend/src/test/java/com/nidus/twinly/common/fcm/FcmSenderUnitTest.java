@@ -1,5 +1,8 @@
 package com.nidus.twinly.common.fcm;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.google.firebase.ErrorCode;
 import com.google.firebase.messaging.BatchResponse;
 import com.google.firebase.messaging.FirebaseMessaging;
@@ -14,6 +17,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
@@ -130,6 +134,36 @@ class FcmSenderUnitTest {
     }
 
     @Test
+    @DisplayName("FCM 실패 코드는 FCM_ 접두어를 붙여 남긴다")
+    void send_logs_prefixed_error_code() throws Exception {
+        // given: FCM 서버 내부 오류
+        BatchResponse response = batchResponse(
+                failure(ErrorCode.INTERNAL, MessagingErrorCode.INTERNAL));
+        given(firebaseMessaging.sendEach(anyList())).willReturn(response);
+
+        // when: 발송
+        List<String> errorCodes = loggedErrorCodes(() -> fcmSender.send(List.of(pushMessage("token-A"))));
+
+        // then: 웹소켓 INTERNAL 경보와 구분되도록 접두어가 붙는다
+        assertThat(errorCodes).containsExactly("FCM_INTERNAL");
+    }
+
+    @Test
+    @DisplayName("요청 자체가 실패해도 FCM_ 접두어를 붙여 남긴다")
+    void send_logs_prefixed_error_code_on_request_failure() throws Exception {
+        // given: 요청 전체가 FCM 내부 오류로 실패
+        FirebaseMessagingException exception = mock(FirebaseMessagingException.class);
+        given(exception.getErrorCode()).willReturn(ErrorCode.INTERNAL);
+        willThrow(exception).given(firebaseMessaging).sendEach(anyList());
+
+        // when: 발송
+        List<String> errorCodes = loggedErrorCodes(() -> fcmSender.send(List.of(pushMessage("token-A"))));
+
+        // then: 웹소켓 INTERNAL 경보와 구분되도록 접두어가 붙는다
+        assertThat(errorCodes).containsExactly("FCM_INTERNAL");
+    }
+
+    @Test
     @DisplayName("개별 사유가 붙은 실패는 자격 증명 장애로 보지 않는다")
     void send_does_not_flag_auth_failure_on_per_message_error() throws Exception {
         // given: 403·401 이지만 FCM 이 메시지 단위 사유를 알려준 실패
@@ -171,6 +205,26 @@ class FcmSenderUnitTest {
         fcmSender.send(List.of(pushMessage("token-A")));
 
         then(deviceTokenRevoker).should(never()).revoke(anyList());
+    }
+
+    private List<String> loggedErrorCodes(Runnable action) {
+        Logger logger = (Logger) LoggerFactory.getLogger(FcmSender.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+
+        try {
+            action.run();
+        } finally {
+            logger.detachAppender(appender);
+        }
+
+        return appender.list.stream()
+                .filter(event -> event.getKeyValuePairs() != null)
+                .flatMap(event -> event.getKeyValuePairs().stream())
+                .filter(pair -> pair.key.equals("errorCode"))
+                .map(pair -> String.valueOf(pair.value))
+                .toList();
     }
 
     private PushMessage pushMessage(String token) {
