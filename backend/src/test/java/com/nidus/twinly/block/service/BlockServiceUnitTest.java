@@ -17,6 +17,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
@@ -94,25 +95,28 @@ class BlockServiceUnitTest {
     }
 
     @Test
-    @DisplayName("차단 목록은 탈퇴 여부와 무관하게 닉네임만 반환한다")
-    void blockList_maps_names_and_withdrawn_user() {
-        // given: 차단 대상 2명 (정상 유저 10, 탈퇴 유저 20)
+    @DisplayName("차단 목록은 유예 중이거나 파기된 탈퇴 유저를 빼고 반환한다")
+    void blockList_excludes_withdrawn_users() {
+        // given: 차단 대상 3명 (정상 유저 10, 탈퇴 유예 유저 20, 파기 유저 30)
         given(blockRepository.findAllByUserId(1L))
-                .willReturn(List.of(Block.create(1L, 10L), Block.create(1L, 20L)));
+                .willReturn(List.of(Block.create(1L, 10L), Block.create(1L, 20L), Block.create(1L, 30L)));
 
         User active = user("길동", null);
         ReflectionTestUtils.setField(active, "id", 10L);
-        User withdrawn = user("철수", Instant.now());
-        ReflectionTestUtils.setField(withdrawn, "id", 20L);
-        given(userRepository.findAllById(anyList())).willReturn(List.of(active, withdrawn));
+        User pending = user("영희", null);
+        ReflectionTestUtils.setField(pending, "id", 20L);
+        pending.requestWithdrawal(Duration.ofDays(14));
+        User deleted = user("철수", Instant.now());
+        ReflectionTestUtils.setField(deleted, "id", 30L);
+        given(userRepository.findAllById(anyList())).willReturn(List.of(active, pending, deleted));
 
         // when: 차단 목록 조회
         BlockListResult result = blockService.blockList(1L);
 
-        // then: 정상 유저와 탈퇴 유저 모두 닉네임만
+        // then: 정상 유저만 남는다
         assertThat(result.blocks())
                 .extracting(item -> item.blockedUserId() + ":" + item.blockedUserName())
-                .containsExactly("10:길동", "20:철수");
+                .containsExactly("10:길동");
     }
 
     private User user(String nickname, Instant deletedAt) {

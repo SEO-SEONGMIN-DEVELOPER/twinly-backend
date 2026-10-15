@@ -62,6 +62,7 @@ public class BlockService {
                 .collect(Collectors.toMap(User::getId, Function.identity()));
 
         List<BlockListItemResult> items = blocks.stream()
+                .filter(block -> !usersById.get(block.getBlockedUserId()).isWithdrawn())
                 .map(block -> {
                     User user = usersById.get(block.getBlockedUserId());
 

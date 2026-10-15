@@ -9,9 +9,9 @@ import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.util.ReflectionTestUtils;
 
-import java.time.Instant;
+import java.time.Duration;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -129,23 +129,30 @@ class BlockIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("차단 목록 조회: 탈퇴한 유저도 닉네임으로 응답된다")
-    void blockList_with_withdrawn_user_end_to_end() throws Exception {
-        // given: 차단 대상이 탈퇴(deletedAt 세팅) 처리된 상태 — 세터가 없어 리플렉션으로 세팅
+    @DisplayName("차단 목록 조회: 유예 중이거나 파기된 탈퇴 유저는 목록에서 빠진다")
+    void blockList_excludes_withdrawn_users_end_to_end() throws Exception {
+        // given: 차단 대상 3명 중 한 명은 탈퇴 유예 중, 한 명은 파기 완료
         User me = saveUser();
-        User target = saveUser();
-        ReflectionTestUtils.setField(target, "deletedAt", Instant.now());
-        userRepository.save(target);
-        blockRepository.save(Block.create(me.getId(), target.getId()));
+        User active = saveUser();
+        User pending = saveUser();
+        User deleted = saveUser();
+        pending.requestWithdrawal(Duration.ofDays(14));
+        deleted.delete();
+        userRepository.saveAll(List.of(pending, deleted));
+        blockRepository.saveAll(List.of(
+                Block.create(me.getId(), active.getId()),
+                Block.create(me.getId(), pending.getId()),
+                Block.create(me.getId(), deleted.getId())));
         flushAndClear();
 
         // when: 차단 목록 조회 API 호출
         var result = mockMvc.perform(get("/api/v1/blocks")
                 .header("Authorization", bearer(me.getId())));
 
-        // then: 탈퇴 전과 같은 닉네임으로 응답됨
+        // then: 정상 유저만 응답된다
         result.andExpect(status().isOk())
-                .andExpect(jsonPath("$.blocks[0].blockedUserName").value(target.getNickname()));
+                .andExpect(jsonPath("$.blocks.length()").value(1))
+                .andExpect(jsonPath("$.blocks[0].blockedUserId").value(active.getId().toString()));
     }
 
     @Test

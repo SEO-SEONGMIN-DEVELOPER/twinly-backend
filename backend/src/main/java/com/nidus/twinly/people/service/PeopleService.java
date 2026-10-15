@@ -124,11 +124,7 @@ public class PeopleService {
         Map<Long, User> userByPartnerUserId = userRepository.findAllById(partnerUserIds).stream()
                 .collect(Collectors.toMap(User::getId, Function.identity()));
 
-        List<Long> visiblePartnerUserIds = partnerUserIds.stream()
-                .filter(partnerUserId -> !userByPartnerUserId.get(partnerUserId).isWithdrawn())
-                .toList();
-
-        Map<Long, ProfilePhotoInfo> profilePhotoByPartnerUserId = photoRepository.findAllByUserIdInAndType(visiblePartnerUserIds, PhotoType.PROFILE).stream()
+        Map<Long, ProfilePhotoInfo> profilePhotoByPartnerUserId = photoRepository.findAllByUserIdInAndType(partnerUserIds, PhotoType.PROFILE).stream()
                 .collect(Collectors.toMap(Photo::getUserId, photo -> new ProfilePhotoInfo(photo.getKey(), cloudFrontService.getSignedUrl(photo.getKey()), photo.position())));
 
         Map<Long, Intimacy> intimacyByPartnerUserId = intimacyReader.readAll(userId, partnerUserIds, now);
@@ -150,7 +146,7 @@ public class PeopleService {
                         encounters.stream().map(Encounter::getId).toList(), userId).stream()
                 .collect(Collectors.toMap(EncounterPreference::getEncounterId, EncounterPreference::getIsFavorited));
 
-        Map<Long, PeopleIntimacyQuizStatusResult> intimacyQuizStatusByPartnerUserId = intimacyQuizStatusByPartnerUserId(userId, visiblePartnerUserIds, now);
+        Map<Long, PeopleIntimacyQuizStatusResult> intimacyQuizStatusByPartnerUserId = intimacyQuizStatusByPartnerUserId(userId, partnerUserIds, now);
 
         List<PeopleItemResult> people = partnerUserIds.stream()
                 .map(partnerUserId -> {
