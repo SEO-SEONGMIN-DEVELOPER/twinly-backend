@@ -41,6 +41,13 @@ class ApiDocsSchemaIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.components.schemas.ChatMessageItemResponse.properties.clientMsgId.type", hasItem("null")))
                 .andExpect(jsonPath("$.components.schemas.ChatMessageItemResponse.properties.text.type", is("string")));
 
+        // then: 다형 타입(oneOf)이면서 null 이 올 수 있는 필드는 null 을 oneOf 의 한 갈래로 더하고 type 을 따로 두지 않는다
+        String feedTarget = "$.components.schemas.MeAppNotificationsFeedsItemResponse.properties.target";
+        result.andExpect(jsonPath("$.components.schemas.MeAppNotificationsFeedsItemResponse.required", hasItem("target")))
+                .andExpect(jsonPath(feedTarget + ".type").doesNotExist())
+                .andExpect(jsonPath(feedTarget + ".oneOf.length()", is(3)))
+                .andExpect(jsonPath(feedTarget + ".oneOf[*].type", hasItem("null")));
+
         // then: 탈퇴 시 마스킹 문자열로 대체되는 userName 은 null 타입을 허용하지 않고, 사진은 없을 수 있다
         result.andExpect(jsonPath("$.components.schemas.PeopleItemResponse.properties.userName.type", is("string")))
                 .andExpect(jsonPath("$.components.schemas.PeopleItemResponse.required", hasItem("userName")));
