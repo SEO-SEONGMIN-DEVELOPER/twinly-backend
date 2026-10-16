@@ -90,6 +90,7 @@ import com.nidus.twinly.common.tendency.TendencyQuestion;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
+import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.Matchers.startsWith;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -429,6 +430,57 @@ class MeIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.appNotificationFeeds[0].type").value("oneTime"))
                 .andExpect(jsonPath("$.appNotificationFeeds[0].target.kind").value("profile"))
                 .andExpect(jsonPath("$.appNotificationFeeds[0].target.userId").value(target.getId().toString()));
+    }
+
+    @Test
+    @DisplayName("앱 알림: 공지 피드가 실제 DB 에서 notice 타입·target null 로 최신순에 섞여 조회되고, 필터·미읽음 수·모두 읽음에 포함된다")
+    void appNotificationsFeeds_notice_type() throws Exception {
+        // given: 실제 유저 + 1시간 전 친구 피드 1건, 방금 발행된 공지 1건 (target_kind 가 NOT NULL 이거나 CHECK 가 막으면 저장에서 실패한다)
+        User me = saveUser();
+        User target = saveUser();
+        appNotificationFeedRepository.save(
+                feed(me.getId(), target.getId(), "새 친구", "친구 요청이 도착했어요", Instant.now().minus(Duration.ofHours(1))));
+        appNotificationFeedRepository.insertNoticeForActiveUsersIn(
+                "공지 제목", "첫 줄\n\n전문: https://trytwinly.com/legal/privacyPolicy/", List.of(me.getId()));
+        flushAndClear();
+        String noticeId = appNotificationFeedRepository.findAllByUserIdAndFilter(me.getId(), false, "NOTICE", 20)
+                .getFirst().getId().toString();
+
+        // when: 필터 없이 피드 조회
+        var result = mockMvc.perform(get("/api/v1/me/app-notifications/feeds")
+                .header("Authorization", bearer(me.getId())));
+
+        // then: 공지가 맨 앞에 notice 타입·target null 로 내려오고, 친구 피드가 뒤따르며 미읽음 2건
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.unreadCount").value(2))
+                .andExpect(jsonPath("$.appNotificationFeeds.length()").value(2))
+                .andExpect(jsonPath("$.appNotificationFeeds[0].id").value(noticeId))
+                .andExpect(jsonPath("$.appNotificationFeeds[0].type").value("notice"))
+                .andExpect(jsonPath("$.appNotificationFeeds[0].title").value("공지 제목"))
+                .andExpect(jsonPath("$.appNotificationFeeds[0].body").value("첫 줄\n\n전문: https://trytwinly.com/legal/privacyPolicy/"))
+                .andExpect(jsonPath("$.appNotificationFeeds[0].target").value(nullValue()))
+                .andExpect(jsonPath("$.appNotificationFeeds[0].isRead").value(false))
+                .andExpect(jsonPath("$.appNotificationFeeds[1].type").value("friend"));
+
+        // when & then: type=notice 로 필터링하면 공지만 내려온다
+        mockMvc.perform(get("/api/v1/me/app-notifications/feeds")
+                        .param("type", "notice")
+                        .header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.appNotificationFeeds.length()").value(1))
+                .andExpect(jsonPath("$.appNotificationFeeds[0].id").value(noticeId));
+
+        // when: 앱처럼 필터 없는 목록의 첫 item(공지) id 기준으로 모두 읽음
+        mockMvc.perform(post("/api/v1/me/app-notifications/read-all")
+                        .header("Authorization", bearer(me.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"lastAppNotificationId": "%s"}
+                                """.formatted(noticeId)))
+                .andExpect(status().isOk());
+
+        // then: DB 기준 미읽음이 0 이 되어 공지와 친구 피드가 모두 읽힘
+        assertThat(appNotificationFeedRepository.countByUserIdAndReadAtIsNull(me.getId())).isZero();
     }
 
     @Test
