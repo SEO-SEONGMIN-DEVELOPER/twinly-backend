@@ -506,6 +506,10 @@ public class MeService {
     }
 
     private MeAppNotificationsFeedsTargetResult toTargetResult(AppNotificationFeed feed) {
+        if (feed.getTargetKind() == null) {
+            return null;
+        }
+
         return switch (feed.getTargetKind()) {
             case PROFILE -> new MeAppNotificationsFeedsProfileTargetResult("profile", feed.getTargetUserId());
             case CHAT -> new MeAppNotificationsFeedsChatTargetResult("chat", feed.getTargetChatRoomId());

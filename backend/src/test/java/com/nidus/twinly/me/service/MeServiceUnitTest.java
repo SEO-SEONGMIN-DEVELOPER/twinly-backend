@@ -65,6 +65,7 @@ import com.nidus.twinly.me.dto.command.MeSubmitTendencyAnswerCommand;
 import com.nidus.twinly.me.dto.command.MeSurveyAnswerCommand;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsChatTargetResult;
 import com.nidus.twinly.me.dto.result.MeCheckProfileNicknameResult;
+import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsItemResult;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsProfileTargetResult;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsResult;
 import com.nidus.twinly.me.dto.result.MeConsentsResult;
@@ -831,6 +832,30 @@ class MeServiceUnitTest {
         assertThat(result.appNotificationFeeds().get(1).isRead()).isTrue();
         assertThat(result.appNotificationFeeds().get(1).target())
                 .isEqualTo(new MeAppNotificationsFeedsChatTargetResult("chat", 77L));
+    }
+
+    @Test
+    @DisplayName("targetKind 가 없는 공지 알림은 target 을 null 로 변환하고, 다른 알림과 같은 순서로 함께 내려준다")
+    void appNotificationsFeeds_maps_notice_without_target() {
+        // given: 공지 1건(target 없음) 뒤에 프로필 알림 1건
+        AppNotificationFeed noticeFeed = feed(20L, AppNotificationFeedType.NOTICE, "공지", "공지 본문",
+                null, null, null, null);
+        AppNotificationFeed profileFeed = feed(10L, AppNotificationFeedType.FRIEND, "친구", "본문",
+                AppNotificationFeedTargetType.PROFILE, 5L, null, null);
+        given(appNotificationFeedRepository.findAllByUserIdAndFilter(ME, false, null, 20))
+                .willReturn(List.of(noticeFeed, profileFeed));
+        given(appNotificationFeedRepository.countByUserIdAndReadAtIsNull(ME)).willReturn(2);
+
+        // when: 필터 없이 조회
+        MeAppNotificationsFeedsResult result = meService.appNotificationsFeeds(ME, null, null, null);
+
+        // then: 공지는 target null·NOTICE 타입으로, 프로필 알림은 기존대로 변환되고 미읽음 수에 둘 다 포함
+        assertThat(result.unreadCount()).isEqualTo(2);
+        assertThat(result.appNotificationFeeds()).extracting(MeAppNotificationsFeedsItemResult::id).containsExactly(20L, 10L);
+        assertThat(result.appNotificationFeeds().get(0).type()).isEqualTo(AppNotificationFeedType.NOTICE);
+        assertThat(result.appNotificationFeeds().get(0).target()).isNull();
+        assertThat(result.appNotificationFeeds().get(1).target())
+                .isEqualTo(new MeAppNotificationsFeedsProfileTargetResult("profile", 5L));
     }
 
     @Test

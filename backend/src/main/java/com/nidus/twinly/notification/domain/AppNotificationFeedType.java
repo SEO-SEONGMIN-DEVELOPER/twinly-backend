@@ -6,5 +6,6 @@ public enum AppNotificationFeedType {
     @JsonProperty("friend")   FRIEND,
     @JsonProperty("match")    MATCH,
     @JsonProperty("twinView") TWIN_VIEW,
-    @JsonProperty("oneTime")  ONE_TIME
+    @JsonProperty("oneTime")  ONE_TIME,
+    @JsonProperty("notice")   NOTICE
 }
