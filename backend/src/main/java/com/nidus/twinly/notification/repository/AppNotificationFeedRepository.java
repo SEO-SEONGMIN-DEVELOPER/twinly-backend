@@ -35,6 +35,42 @@ public interface AppNotificationFeedRepository extends JpaRepository<AppNotifica
                                                        @Param("limit") Integer limit);
 
     @Modifying
+    @Query(value = """
+            INSERT INTO app_notification_feeds (user_id, title, body, type)
+            SELECT u.id, :title, :body, 'NOTICE'
+            FROM users u
+            WHERE u.deleted_at IS NULL
+              AND u.withdrawal_requested_at IS NULL
+              AND u.is_seed = FALSE
+              AND NOT EXISTS (SELECT 1
+                              FROM app_notification_feeds f
+                              WHERE f.user_id = u.id
+                                AND f.type = 'NOTICE'
+                                AND f.title = :title
+                                AND f.body = :body)
+            """, nativeQuery = true)
+    int insertNoticeForActiveUsers(@Param("title") String title, @Param("body") String body);
+
+    @Modifying
+    @Query(value = """
+            INSERT INTO app_notification_feeds (user_id, title, body, type)
+            SELECT u.id, :title, :body, 'NOTICE'
+            FROM users u
+            WHERE u.id IN (:userIds)
+              AND u.deleted_at IS NULL
+              AND u.withdrawal_requested_at IS NULL
+              AND u.is_seed = FALSE
+              AND NOT EXISTS (SELECT 1
+                              FROM app_notification_feeds f
+                              WHERE f.user_id = u.id
+                                AND f.type = 'NOTICE'
+                                AND f.title = :title
+                                AND f.body = :body)
+            """, nativeQuery = true)
+    int insertNoticeForActiveUsersIn(@Param("title") String title, @Param("body") String body,
+                                     @Param("userIds") List<Long> userIds);
+
+    @Modifying
     @Query("DELETE FROM AppNotificationFeed f WHERE f.userId IN :userIds AND f.type = :type")
     void deleteAllByUserIdInAndType(@Param("userIds") List<Long> userIds, @Param("type") AppNotificationFeedType type);
 

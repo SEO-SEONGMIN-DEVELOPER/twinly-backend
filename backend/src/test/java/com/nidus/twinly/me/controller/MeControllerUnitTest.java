@@ -91,6 +91,7 @@ import com.nidus.twinly.common.survey.SurveyOption;
 import com.nidus.twinly.common.survey.SurveyQuestion;
 import java.util.Map;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -105,6 +106,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -556,6 +558,29 @@ class MeControllerUnitTest {
                 .andExpect(jsonPath("$.appNotificationFeeds[0].isRead").value(false))
                 .andExpect(jsonPath("$.appNotificationFeeds[0].createdAt").value("2026-07-20T09:00:00Z"));
         then(meService).should().appNotificationsFeeds(ME, true, AppNotificationFeedType.FRIEND, 5);
+    }
+
+    @Test
+    @DisplayName("공지 알림은 target 키를 null 로 직렬화하고, type=notice 필터를 NOTICE 로 위임한다")
+    void appNotificationsFeeds_notice_serializes_null_target() throws Exception {
+        // given: 서비스가 target 없는 공지 1건을 반환
+        given(meService.appNotificationsFeeds(eq(ME), any(), any(), any()))
+                .willReturn(new MeAppNotificationsFeedsResult(1, List.of(new MeAppNotificationsFeedsItemResult(
+                        20L, AppNotificationFeedType.NOTICE, "공지 제목", "첫 줄\n\n전문: https://trytwinly.com",
+                        null, false, Instant.parse("2026-10-20T01:00:00Z")))));
+
+        // when: type=notice 로 앱 알림 피드 조회 API 호출
+        var result = mockMvc.perform(get("/api/v1/me/app-notifications/feeds")
+                .header("Authorization", BEARER)
+                .param("type", "notice"));
+
+        // then: 200 반환 + type 은 notice, target 키는 생략되지 않고 null 로 내려감 + NOTICE 로 위임
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.appNotificationFeeds[0].id").value("20"))
+                .andExpect(jsonPath("$.appNotificationFeeds[0].type").value("notice"))
+                .andExpect(jsonPath("$.appNotificationFeeds[0].body").value("첫 줄\n\n전문: https://trytwinly.com"))
+                .andExpect(content().string(containsString("\"target\":null")));
+        then(meService).should().appNotificationsFeeds(ME, null, AppNotificationFeedType.NOTICE, null);
     }
 
     @Test

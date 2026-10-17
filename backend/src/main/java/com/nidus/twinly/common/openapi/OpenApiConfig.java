@@ -234,14 +234,24 @@ public class OpenApiConfig {
     }
 
     private Schema toOneOfIfNullableRef(Schema property) {
-        if (property.get$ref() == null || !isNullType(property)) {
+        if (!isNullType(property)) {
+            return property;
+        }
+
+        List<Schema> variants = new ArrayList<>();
+        if (property.get$ref() != null) {
+            variants.add(new Schema<>().$ref(property.get$ref()));
+        } else if (property.getOneOf() != null) {
+            variants.addAll(property.getOneOf());
+        } else {
             return property;
         }
 
         Schema nullSchema = new Schema<>();
         nullSchema.addType("null");
+        variants.add(nullSchema);
 
-        Schema oneOf = new Schema<>().oneOf(List.of(new Schema<>().$ref(property.get$ref()), nullSchema));
+        Schema oneOf = new Schema<>().oneOf(variants);
         if (property.getDescription() != null) {
             oneOf.setDescription(property.getDescription());
         }

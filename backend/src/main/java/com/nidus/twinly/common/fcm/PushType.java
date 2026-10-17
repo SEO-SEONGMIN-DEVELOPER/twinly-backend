@@ -18,6 +18,7 @@ public enum PushType {
             case MATCH -> MATCH;
             case TWIN_VIEW -> TWIN_VIEW;
             case ONE_TIME -> ONE_TIME;
+            case NOTICE -> throw new IllegalArgumentException("공지는 푸시하지 않는다");
         };
     }
 }

@@ -1,0 +1,11 @@
+services:
+  jansori:
+    build: ./monitoring/jansori
+    image: twinly-jansori:9d2db8b
+    container_name: jansori-container-twinly
+    environment:
+      DATABASE_URL: ${JANSORI_DATABASE_URL:?JANSORI_DATABASE_URL is not set}
+    ports:
+      - "127.0.0.1:18080:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
