@@ -30,7 +30,7 @@ class TendencyLoaderUnitTest {
     @DisplayName("문항은 id 크기순이 아니라 파일에 실린 순서대로 내려간다")
     void getAllQuestions_follows_file_order() throws IOException {
         // given: 파일에 적힌 순서 그대로의 문항 id
-        JsonNode root = objectMapper.readTree(new ClassPathResource("tendency/tendency_v1.json").getInputStream());
+        JsonNode root = objectMapper.readTree(new ClassPathResource("tendency/tendency_v2.json").getInputStream());
         List<Long> idsInFile = new ArrayList<>();
         root.get("questions").forEach(questionNode -> idsInFile.add(questionNode.get("id").asLong()));
 
