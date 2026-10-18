@@ -19,7 +19,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class TendencyLoader {
 
-    private static final String RESOURCE_PATH = "tendency/tendency_v1.json";
+    private static final String RESOURCE_PATH = "tendency/tendency_v2.json";
     private static final int MIN_OPTION_COUNT = 2;
 
     private final ObjectMapper objectMapper;
