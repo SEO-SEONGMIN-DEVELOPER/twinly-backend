@@ -2,6 +2,7 @@ package com.nidus.twinly.common.websocket.config;
 
 import com.nidus.twinly.common.websocket.interceptor.WebSocketErrorInterceptor;
 import com.nidus.twinly.common.websocket.interceptor.WebSocketFrameValidationInterceptor;
+import com.nidus.twinly.common.websocket.interceptor.WebSocketSubscribeReceiptInterceptor;
 import com.nidus.twinly.common.websocket.interceptor.WebSocketTraceIdInterceptor;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,13 +23,15 @@ class WebSocketConfigUnitTest {
     private final WebSocketTraceIdInterceptor traceIdInterceptor = new WebSocketTraceIdInterceptor();
     private final WebSocketErrorInterceptor errorInterceptor = new WebSocketErrorInterceptor();
     private final WebSocketFrameValidationInterceptor frameValidationInterceptor = new WebSocketFrameValidationInterceptor();
+    private final WebSocketSubscribeReceiptInterceptor subscribeReceiptInterceptor = new WebSocketSubscribeReceiptInterceptor(null);
 
     @Test
     @DisplayName("아웃바운드 채널도 traceId 인터셉터를 가장 먼저 태운다")
     void outbound_channel_carries_trace_id() {
         // given: 실제 설정
         WebSocketConfig config = new WebSocketConfig(
-                null, frameValidationInterceptor, errorInterceptor, traceIdInterceptor, null, null);
+                null, frameValidationInterceptor, errorInterceptor, traceIdInterceptor, subscribeReceiptInterceptor,
+                null, null);
 
         ChannelRegistration registration = mock(ChannelRegistration.class);
 
@@ -49,7 +52,8 @@ class WebSocketConfigUnitTest {
     void trace_id_interceptor_comes_first() {
         // given: 실제 설정
         WebSocketConfig config = new WebSocketConfig(
-                null, frameValidationInterceptor, errorInterceptor, traceIdInterceptor, null, null);
+                null, frameValidationInterceptor, errorInterceptor, traceIdInterceptor, subscribeReceiptInterceptor,
+                null, null);
 
         ChannelRegistration registration = mock(ChannelRegistration.class);
         TaskExecutorRegistration taskExecutorRegistration = mock(TaskExecutorRegistration.class);
@@ -67,5 +71,30 @@ class WebSocketConfigUnitTest {
         List<ChannelInterceptor> interceptors = List.of(captor.getValue());
         assertThat(interceptors.indexOf(traceIdInterceptor))
                 .isLessThan(interceptors.indexOf(errorInterceptor));
+    }
+
+    @Test
+    @DisplayName("인바운드 채널은 구독 RECEIPT 인터셉터를 traceId 인터셉터 뒤에 태운다")
+    void subscribe_receipt_interceptor_runs_inside_trace_id() {
+        // given: 실제 설정
+        WebSocketConfig config = new WebSocketConfig(
+                null, frameValidationInterceptor, errorInterceptor, traceIdInterceptor, subscribeReceiptInterceptor,
+                null, null);
+
+        ChannelRegistration registration = mock(ChannelRegistration.class);
+        TaskExecutorRegistration taskExecutorRegistration = mock(TaskExecutorRegistration.class);
+        given(registration.taskExecutor()).willReturn(taskExecutorRegistration);
+        given(taskExecutorRegistration.corePoolSize(1)).willReturn(taskExecutorRegistration);
+
+        // when: 인바운드 채널을 구성한다
+        config.configureClientInboundChannel(registration);
+
+        // then: afterMessageHandled 는 역순이라, 뒤에 있어야 MDC 가 지워지기 전에 RECEIPT 에 traceId 를 싣는다
+        ArgumentCaptor<ChannelInterceptor[]> captor = ArgumentCaptor.forClass(ChannelInterceptor[].class);
+        then(registration).should().interceptors(captor.capture());
+
+        List<ChannelInterceptor> interceptors = List.of(captor.getValue());
+        assertThat(interceptors.indexOf(subscribeReceiptInterceptor))
+                .isGreaterThan(interceptors.indexOf(traceIdInterceptor));
     }
 }

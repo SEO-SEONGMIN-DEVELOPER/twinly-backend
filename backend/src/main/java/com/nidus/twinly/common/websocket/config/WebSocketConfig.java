@@ -4,6 +4,7 @@ import com.nidus.twinly.common.websocket.handshake.ConnectionTicketHandshakeHand
 import com.nidus.twinly.common.websocket.interceptor.ConnectionTicketHandshakeInterceptor;
 import com.nidus.twinly.common.websocket.interceptor.WebSocketFrameValidationInterceptor;
 import com.nidus.twinly.common.websocket.interceptor.WebSocketErrorInterceptor;
+import com.nidus.twinly.common.websocket.interceptor.WebSocketSubscribeReceiptInterceptor;
 import com.nidus.twinly.common.websocket.interceptor.WebSocketTraceIdInterceptor;
 import com.nidus.twinly.connection.domain.ConnectionType;
 import com.nidus.twinly.connection.service.ConnectionService;
@@ -38,12 +39,13 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     private final WebSocketFrameValidationInterceptor frameValidationInterceptor;
     private final WebSocketErrorInterceptor errorInterceptor;
     private final WebSocketTraceIdInterceptor traceIdInterceptor;
+    private final WebSocketSubscribeReceiptInterceptor subscribeReceiptInterceptor;
     private final JsonMapper jsonMapper;
     private final WebSocketProperties webSocketProperties;
 
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
-        registration.interceptors(traceIdInterceptor, errorInterceptor, frameValidationInterceptor);
+        registration.interceptors(traceIdInterceptor, errorInterceptor, frameValidationInterceptor, subscribeReceiptInterceptor);
         registration.taskExecutor().corePoolSize(1).maxPoolSize(1);
     }
 
