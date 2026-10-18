@@ -32,6 +32,7 @@ import tools.jackson.databind.json.JsonMapper;
 import java.lang.reflect.Type;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -69,7 +70,7 @@ public abstract class AbstractWebSocketIntegrationTest {
     }
 
     private static final long CONNECT_TIMEOUT_SECONDS = 5L;
-    private static final long SUBSCRIBE_SETTLE_MS = 300L;
+    private static final long SUBSCRIBE_RECEIPT_TIMEOUT_SECONDS = 5L;
 
     @LocalServerPort
     protected int port;
@@ -147,15 +148,15 @@ public abstract class AbstractWebSocketIntegrationTest {
     /**
      * destination을 구독하고, 서버가 보내는 프레임을 담을 큐를 돌려준다.
      *
-     * <p>SimpleBroker는 SUBSCRIBE에 RECEIPT를 돌려주지 않아 구독 확정을 확인할 방법이 없다.
-     * 게다가 clientInboundChannel은 멀티스레드라 SUBSCRIBE와 뒤이은 SEND의 처리 순서가 보장되지 않는다.
-     * 그래서 짧은 settle 지연으로 구독이 먼저 등록되도록 한 뒤 반환한다(전송된 응답 프레임 유실 방지).
+     * <p>서버는 구독 등록을 마친 뒤 RECEIPT를 보낸다. RECEIPT까지 기다린 뒤 반환하므로,
+     * 이후 발행되는 응답 프레임을 놓치지 않는다.
      */
     protected <T extends WebSocketResponseBody> BlockingQueue<T> subscribe(
-            StompSession session, String destination, Class<T> bodyType) throws InterruptedException {
+            StompSession session, String destination, Class<T> bodyType) throws Exception {
         BlockingQueue<T> received = new LinkedBlockingQueue<>();
+        CompletableFuture<Void> confirmed = new CompletableFuture<>();
 
-        session.subscribe(destination, new StompFrameHandler() {
+        StompSession.Subscription subscription = session.subscribe(destination, new StompFrameHandler() {
             @Override
             public Type getPayloadType(StompHeaders headers) {
                 return bodyType;
@@ -166,8 +167,9 @@ public abstract class AbstractWebSocketIntegrationTest {
                 received.add(bodyType.cast(payload));
             }
         });
+        subscription.addReceiptTask(() -> confirmed.complete(null));
 
-        Thread.sleep(SUBSCRIBE_SETTLE_MS);
+        confirmed.get(SUBSCRIBE_RECEIPT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         return received;
     }
 }
