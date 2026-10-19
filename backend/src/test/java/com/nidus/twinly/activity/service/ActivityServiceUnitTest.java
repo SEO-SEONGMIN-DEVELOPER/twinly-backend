@@ -395,7 +395,7 @@ class ActivityServiceUnitTest {
         // then: 동행자 id 와 닉네임이 들어간 문장이 내려가고, userInfos 에 동행자가 담긴다
         ActivityMoveSceneResult move = (ActivityMoveSceneResult) result.scenes().get(0);
         assertThat(move.with()).containsExactly(100L);
-        assertThat(move.narration()).isEqualTo("길동와 카페로 향했다");
+        assertThat(move.narration()).isEqualTo("길동과 카페로 향했다");
         assertThat(result.userInfos()).extracting(ActivityUserInfoResult::userId).containsExactly(USER_ID, 100L);
     }
 
