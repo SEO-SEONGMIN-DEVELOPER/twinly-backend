@@ -190,11 +190,11 @@ class PurchaseIntegrationTest extends AbstractIntegrationTest {
                     .andExpect(status().isOk());
         }
 
-        // then: 둘 다 풀 1, 두 번째 웹훅으로 번호가 바뀌거나 중복 배정되지 않는다 (캐시가 아닌 실제 DB 값으로 확인)
+        // then: 둘 다 풀 13, 두 번째 웹훅으로 번호가 바뀌거나 중복 배정되지 않는다 (캐시가 아닌 실제 DB 값으로 확인)
         entityManager.flush();
         entityManager.clear();
-        assertThat(userRepository.findById(first.getId()).orElseThrow().getPoolNumber()).isEqualTo(1);
-        assertThat(userRepository.findById(second.getId()).orElseThrow().getPoolNumber()).isEqualTo(1);
+        assertThat(userRepository.findById(first.getId()).orElseThrow().getPoolNumber()).isEqualTo(13);
+        assertThat(userRepository.findById(second.getId()).orElseThrow().getPoolNumber()).isEqualTo(13);
         assertThat(poolCounterRepository.findById(PoolCounter.SINGLETON_ID).orElseThrow().getAssignedCount()).isEqualTo(2);
     }
 
