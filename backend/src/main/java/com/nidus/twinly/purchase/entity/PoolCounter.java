@@ -15,7 +15,8 @@ import lombok.NoArgsConstructor;
 public class PoolCounter {
 
     public static final int SINGLETON_ID = 1;
-    public static final int POOL_SIZE = 50;
+    public static final int FIRST_POOL_NUMBER = 13;
+    public static final int POOL_SIZE = 100;
 
     @Id
     @Column(columnDefinition = "TINYINT")
@@ -24,7 +25,7 @@ public class PoolCounter {
     private int assignedCount;
 
     public int nextPoolNumber() {
-        return assignedCount / POOL_SIZE + 1;
+        return FIRST_POOL_NUMBER + assignedCount / POOL_SIZE;
     }
 
     public void increase() {

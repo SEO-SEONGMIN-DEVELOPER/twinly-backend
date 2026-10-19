@@ -1,6 +1,5 @@
 package com.nidus.twinly.purchase.writer;
 
-import com.nidus.twinly.purchase.PoolProperties;
 import com.nidus.twinly.purchase.client.RevenueCatEntitlement;
 import com.nidus.twinly.purchase.entity.PoolCounter;
 import com.nidus.twinly.purchase.entity.RevenueCatEvent;
@@ -27,6 +26,8 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
@@ -54,7 +55,7 @@ class PurchaseWriterUnitTest {
 
     @BeforeEach
     void setUp() {
-        purchaseWriter = writerWith(new PoolProperties(null));
+        purchaseWriter = new PurchaseWriter(userEntitlementRepository, revenueCatEventRepository, userRepository, poolCounterRepository);
     }
 
     @Test
@@ -217,19 +218,36 @@ class PurchaseWriterUnitTest {
     }
 
     @Test
-    @DisplayName("풀이 없던 유저에게 카운터 기준 풀 번호를 배정하고 카운터를 1 올린다")
-    void assignPool_assigns_next_pool_and_increases_counter() {
-        // given: 지금까지 50명이 배정되어 다음 유저는 풀 2
-        PoolCounter counter = counter(50);
+    @DisplayName("새로 배정되는 첫 유저는 풀 13 을 받고 카운터를 1 올린다")
+    void assignPool_assigns_first_pool_13() {
+        // given: 풀 12 이후로 아직 아무도 배정되지 않음
+        PoolCounter counter = counter(0);
         given(poolCounterRepository.findWithLockById(PoolCounter.SINGLETON_ID)).willReturn(Optional.of(counter));
-        given(userRepository.assignPoolNumber(USER_ID, 2)).willReturn(1);
+        given(userRepository.assignPoolNumber(USER_ID, 13)).willReturn(1);
 
         // when: 배정
         purchaseWriter.assignPool(USER_ID);
 
-        // then: 풀 2 로 갱신 쿼리가 나가고 카운터는 51
-        then(userRepository).should().assignPoolNumber(USER_ID, 2);
-        assertThat(counter.getAssignedCount()).isEqualTo(51);
+        // then: 풀 13 으로 갱신 쿼리가 나가고 카운터는 1
+        then(userRepository).should().assignPoolNumber(USER_ID, 13);
+        assertThat(counter.getAssignedCount()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("한 풀에 100명이 차면 다음 유저부터 다음 풀을 배정한다")
+    void assignPool_moves_to_next_pool_every_100_users() {
+        // given: 99명까지는 풀 13, 100명이 배정된 뒤의 유저는 풀 14
+        given(poolCounterRepository.findWithLockById(PoolCounter.SINGLETON_ID))
+                .willReturn(Optional.of(counter(99)), Optional.of(counter(100)));
+        given(userRepository.assignPoolNumber(anyLong(), anyInt())).willReturn(1);
+
+        // when: 100번째, 101번째 유저 배정
+        purchaseWriter.assignPool(100L);
+        purchaseWriter.assignPool(101L);
+
+        // then: 경계에서 풀이 바뀐다
+        then(userRepository).should().assignPoolNumber(100L, 13);
+        then(userRepository).should().assignPoolNumber(101L, 14);
     }
 
     @Test
@@ -238,30 +256,13 @@ class PurchaseWriterUnitTest {
         // given: 조건부 갱신이 0건
         PoolCounter counter = counter(50);
         given(poolCounterRepository.findWithLockById(PoolCounter.SINGLETON_ID)).willReturn(Optional.of(counter));
-        given(userRepository.assignPoolNumber(USER_ID, 2)).willReturn(0);
+        given(userRepository.assignPoolNumber(USER_ID, 13)).willReturn(0);
 
         // when: 배정
         purchaseWriter.assignPool(USER_ID);
 
         // then: 카운터는 50 유지
         assertThat(counter.getAssignedCount()).isEqualTo(50);
-    }
-
-    @Test
-    @DisplayName("고정 풀 번호가 설정되면 카운터와 관계없이 그 풀을 배정하고 카운터를 1 올린다")
-    void assignPool_assigns_fixed_pool_when_configured() {
-        // given: 카운터 기준이면 풀 13 이지만 고정 풀 12 가 설정됨
-        purchaseWriter = writerWith(new PoolProperties(12));
-        PoolCounter counter = counter(600);
-        given(poolCounterRepository.findWithLockById(PoolCounter.SINGLETON_ID)).willReturn(Optional.of(counter));
-        given(userRepository.assignPoolNumber(USER_ID, 12)).willReturn(1);
-
-        // when: 배정
-        purchaseWriter.assignPool(USER_ID);
-
-        // then: 풀 12 로 갱신 쿼리가 나가고 카운터는 601
-        then(userRepository).should().assignPoolNumber(USER_ID, 12);
-        assertThat(counter.getAssignedCount()).isEqualTo(601);
     }
 
     @Test
@@ -273,10 +274,6 @@ class PurchaseWriterUnitTest {
         // when & then
         assertThatThrownBy(() -> purchaseWriter.assignPool(USER_ID))
                 .isInstanceOf(IllegalStateException.class);
-    }
-
-    private PurchaseWriter writerWith(PoolProperties poolProperties) {
-        return new PurchaseWriter(userEntitlementRepository, revenueCatEventRepository, userRepository, poolCounterRepository, poolProperties);
     }
 
     private PoolCounter counter(int assignedCount) {
