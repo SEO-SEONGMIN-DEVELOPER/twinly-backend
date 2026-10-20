@@ -409,6 +409,32 @@ class AdminConsoleIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("탈퇴 사유: 시즌 참가 전이면 가입일부터, 참가 후면 첫 참가일부터 탈퇴까지 날짜 수를 준다")
+    void withdrawalReasons_withdrawalTiming() throws Exception {
+        // given: 오늘 가입하고 바로 탈퇴한 회원, 10일 전 가입·3일 전 첫 참가 뒤 탈퇴한 회원
+        User quick = saveMember("바로탈퇴", Gender.MALE, "시기대학교", "q@sigi.ac.kr");
+        User subscribed = saveMember("참가탈퇴", Gender.FEMALE, "시기대학교", "s@sigi.ac.kr");
+        jdbcTemplate.update("UPDATE users SET created_at = UTC_TIMESTAMP(6) - INTERVAL 10 DAY WHERE id = ?", subscribed.getId());
+        jdbcTemplate.update("""
+                INSERT INTO season_participations (user_id, season_id, participated_in_at, created_at)
+                VALUES (?, ?, UTC_TIMESTAMP(6) - INTERVAL 3 DAY, UTC_TIMESTAMP(6))
+                """, subscribed.getId(), activeSeasonId);
+        UserFeedback quickReason = feedback(quick, FeedbackType.WITHDRAWAL, null, 1L);
+        UserFeedback subscribedReason = feedback(subscribed, FeedbackType.WITHDRAWAL, null, 1L);
+        flushAndClear();
+
+        // when & then
+        mockMvc.perform(admin(get("/admin/cases/withdrawal-reasons")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.items[?(@.id == '%d')].withdrawalTiming.stage".formatted(quickReason.getId())).value("BEFORE_SUBSCRIPTION"))
+                .andExpect(jsonPath("$.page.items[?(@.id == '%d')].withdrawalTiming.days".formatted(quickReason.getId())).value(0))
+                .andExpect(jsonPath("$.page.items[?(@.id == '%d')].withdrawalTiming.stage".formatted(subscribedReason.getId())).value("AFTER_SUBSCRIPTION"))
+                .andExpect(jsonPath("$.page.items[?(@.id == '%d')].withdrawalTiming.days".formatted(subscribedReason.getId())).value(3));
+        mockMvc.perform(admin(get("/admin/cases/suggestions")))
+                .andExpect(jsonPath("$.items[0].withdrawalTiming").doesNotExist());
+    }
+
+    @Test
     @DisplayName("기능 이용 현황: 시드가 낀 방은 빼고 회원별 열린 건수 대비 입장 건수와 상대 성별을 센다")
     void usage_countsEntriesAndPartnerGenders() throws Exception {
         // given: 현재까지의 집계를 기억해 두고 남-여 방(둘 다 입장), 남-남 방(한 명만 입장) 추가

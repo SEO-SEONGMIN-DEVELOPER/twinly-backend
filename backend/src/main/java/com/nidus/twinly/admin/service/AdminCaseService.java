@@ -13,6 +13,7 @@ import com.nidus.twinly.admin.dto.result.AdminMemberSummaryResult;
 import com.nidus.twinly.admin.dto.result.AdminPageResult;
 import com.nidus.twinly.admin.dto.result.AdminUserReportResult;
 import com.nidus.twinly.admin.dto.result.AdminWithdrawalReasonListResult;
+import com.nidus.twinly.admin.dto.result.AdminWithdrawalTimingResult;
 import com.nidus.twinly.admin.reader.AdminCaseReader;
 import com.nidus.twinly.admin.reader.AdminCaseReader.AiReportRow;
 import com.nidus.twinly.admin.reader.AdminCaseReader.FeedbackRow;
@@ -37,6 +38,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -151,7 +153,11 @@ public class AdminCaseService {
         Map<Long, String> labelByOptionId = feedbackOptionLoader.getOptions(type).stream()
                 .collect(Collectors.toMap(FeedbackOption::id, FeedbackOption::label));
         Map<Long, List<Long>> optionIdsByFeedbackId = adminCaseReader.optionIdsByFeedbackId(rows.items().stream().map(FeedbackRow::id).toList());
-        Map<Long, User> userById = adminMemberReader.usersById(rows.items().stream().map(FeedbackRow::authorId).collect(Collectors.toSet()));
+        Set<Long> authorIds = rows.items().stream().map(FeedbackRow::authorId).collect(Collectors.toSet());
+        Map<Long, User> userById = adminMemberReader.usersById(authorIds);
+        Map<Long, Instant> subscribedAtByUserId = type == FeedbackType.WITHDRAWAL
+                ? adminCaseReader.firstParticipatedAtByUserId(authorIds)
+                : Map.of();
 
         return rows.map(row -> new AdminFeedbackResult(
                 row.id(),
@@ -164,7 +170,16 @@ public class AdminCaseService {
                 row.appVersion(),
                 row.status(),
                 row.memo(),
-                row.createdAt()));
+                row.createdAt(),
+                type == FeedbackType.WITHDRAWAL ? withdrawalTiming(userById.get(row.authorId()), subscribedAtByUserId.get(row.authorId()), row.createdAt()) : null));
+    }
+
+    private AdminWithdrawalTimingResult withdrawalTiming(User user, Instant subscribedAt, Instant withdrawnAt) {
+        if (user == null) {
+            return null;
+        }
+
+        return AdminWithdrawalTimingResult.of(user.getCreatedAt(), subscribedAt, withdrawnAt);
     }
 
     private AdminMemberSummaryResult summary(Long userId, Map<Long, User> userById) {

@@ -644,9 +644,9 @@
         html = `<div class="card-head"><h2 style="font-size:15px">사유별 선택 수</h2><span class="hint num">탈퇴 신청 ${num(result.withdrawalCount)}건 · 여러 개 선택 가능</span></div>
           <div class="reason-bars bars num">${result.reasonCounts.map(r => `<div class="bar-row" style="grid-template-columns:minmax(0,180px) minmax(0,1fr) 72px"><span>${esc(r.label)}</span><div class="track"><div class="fill" style="width:${r.count / max * 100}%;background:var(--accent)"></div></div><span class="val"><b>${num(r.count)}</b>건</span></div>`).join('')}</div>
           <div class="section-label">최근 탈퇴 사유</div>
-          <div class="table-wrap"><table><thead><tr><th>선택한 사유</th><th>추가 의견</th><th>접수 시각</th></tr></thead><tbody>
+          <div class="table-wrap"><table><thead><tr><th>선택한 사유</th><th>추가 의견</th><th>접수 시각</th><th>탈퇴 시기</th></tr></thead><tbody>
           ${pageResult.items.map(w => `<tr style="cursor:default"><td><div class="chips">${w.optionLabels.map(label => pill(label, 'idle', true)).join('') || '<span class="dash">없음</span>'}</div></td>
-            <td class="wrap">${esc(w.detail) || '<span class="dash">없음</span>'}</td><td class="num">${fmtDateTime(w.createdAt)}</td></tr>`).join('') || stateRow(3, '탈퇴 사유가 없어요.')}</tbody></table></div>`;
+            <td class="wrap">${esc(w.detail) || '<span class="dash">없음</span>'}</td><td class="num">${fmtDateTime(w.createdAt)}</td><td>${withdrawalTiming(w.withdrawalTiming)}</td></tr>`).join('') || stateRow(4, '탈퇴 사유가 없어요.')}</tbody></table></div>`;
       }
       markRefreshed();
       body.innerHTML = filterChips + html + '<div class="pager" id="report-pager"></div>';
@@ -654,6 +654,14 @@
     } catch (error) {
       body.innerHTML = filterChips + `<div class="state-box error">${esc(error.message)}</div>`;
     }
+  }
+
+  function withdrawalTiming(timing) {
+    if (!timing) return '<span class="dash">알 수 없음</span>';
+    const subscribed = timing.stage === 'AFTER_SUBSCRIPTION';
+    const from = subscribed ? '구독' : '가입';
+    const elapsed = timing.days === 0 ? `${from} 당일 탈퇴` : `${from} 후 ${num(timing.days)}일 후 탈퇴`;
+    return `${pill(subscribed ? '구독 후' : '구독 전', subscribed ? 'ok' : 'idle', true)} <span class="hint num">${elapsed}</span>`;
   }
 
   function openCase(key) {

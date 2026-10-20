@@ -18,6 +18,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
@@ -62,6 +63,13 @@ public class AdminCaseReader {
             FROM user_feedback_options o
             WHERE o.feedback_id IN (:feedbackIds)
             ORDER BY o.feedback_id, o.option_id
+            """;
+
+    private static final String FIRST_PARTICIPATED_AT = """
+            SELECT sp.user_id, MIN(sp.participated_in_at) AS first_participated_at
+            FROM season_participations sp
+            WHERE sp.user_id IN (:userIds)
+            GROUP BY sp.user_id
             """;
 
     private static final RowMapper<UserReportRow> USER_REPORT_ROW = (rs, rowNum) -> new UserReportRow(
@@ -161,6 +169,19 @@ public class AdminCaseReader {
         Map<Long, List<Long>> result = new HashMap<>();
         jdbcTemplate.query(FEEDBACK_OPTIONS, Map.of("feedbackIds", feedbackIds), rs -> {
             result.computeIfAbsent(rs.getLong("feedback_id"), id -> new ArrayList<>()).add(rs.getLong("option_id"));
+        });
+
+        return result;
+    }
+
+    public Map<Long, Instant> firstParticipatedAtByUserId(Collection<Long> userIds) {
+        if (userIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, Instant> result = new HashMap<>();
+        jdbcTemplate.query(FIRST_PARTICIPATED_AT, Map.of("userIds", userIds), rs -> {
+            result.put(rs.getLong("user_id"), instant(rs.getTimestamp("first_participated_at")));
         });
 
         return result;
