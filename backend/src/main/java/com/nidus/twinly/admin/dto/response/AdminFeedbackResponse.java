@@ -22,7 +22,9 @@ public record AdminFeedbackResponse(
         FeedbackStatus status,
         @Schema(nullable = true)
         String memo,
-        Instant createdAt
+        Instant createdAt,
+        @Schema(nullable = true, description = "탈퇴 사유에만 있다. 건의사항은 null")
+        AdminWithdrawalTimingResponse withdrawalTiming
 ) {
 
     public static AdminFeedbackResponse from(AdminFeedbackResult result) {
@@ -35,6 +37,7 @@ public record AdminFeedbackResponse(
                 result.appVersion(),
                 result.status(),
                 result.memo(),
-                result.createdAt());
+                result.createdAt(),
+                AdminWithdrawalTimingResponse.from(result.withdrawalTiming()));
     }
 }

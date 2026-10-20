@@ -14,6 +14,7 @@ public record AdminFeedbackResult(
         String appVersion,
         FeedbackStatus status,
         String memo,
-        Instant createdAt
+        Instant createdAt,
+        AdminWithdrawalTimingResult withdrawalTiming
 ) {
 }
