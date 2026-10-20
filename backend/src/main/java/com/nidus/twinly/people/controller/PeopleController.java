@@ -119,7 +119,7 @@ public class PeopleController {
         return PeopleProfileV2Response.from(peopleService.profileV2(userInfo.id(), RequestId.toLong(partnerUserId, "userId")));
     }
 
-    @Operation(summary = "트윈과의 친밀도 퀴즈 역대 일치도 조회")
+    @Operation(summary = "트윈과의 친밀도 퀴즈 이번 시즌 일치도 조회")
     @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND")
     @GetMapping("/api/v1/people/{userId}/intimacy-quiz/match-rate")
     public PeopleIntimacyQuizMatchRateResponse intimacyQuizMatchRate(@AuthenticationPrincipal UserInfo userInfo,

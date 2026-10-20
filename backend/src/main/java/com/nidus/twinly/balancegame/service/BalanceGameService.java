@@ -3,11 +3,14 @@ package com.nidus.twinly.balancegame.service;
 import com.nidus.twinly.balancegame.domain.BalanceGameSchedule;
 import com.nidus.twinly.balancegame.domain.BalanceGameStatus;
 import com.nidus.twinly.balancegame.dto.command.BalanceGameAnswerCommand;
+import com.nidus.twinly.balancegame.dto.result.BalanceGameHistoryItemResult;
+import com.nidus.twinly.balancegame.dto.result.BalanceGameHistoryResult;
 import com.nidus.twinly.balancegame.dto.result.BalanceGameQuestionResult;
 import com.nidus.twinly.balancegame.dto.result.BalanceGameResult;
 import com.nidus.twinly.balancegame.entity.BalanceGameAnswer;
 import com.nidus.twinly.balancegame.entity.BalanceGameRound;
 import com.nidus.twinly.balancegame.repository.BalanceGameAnswerRepository;
+import com.nidus.twinly.balancegame.repository.BalanceGameAnswerRepository.HistoryProjection;
 import com.nidus.twinly.balancegame.repository.BalanceGameRoundRepository;
 import com.nidus.twinly.block.repository.BlockRepository;
 import com.nidus.twinly.chat.opener.ChatRoomOpener;
@@ -22,6 +25,7 @@ import com.nidus.twinly.relationship.entity.IntimacyBonus;
 import com.nidus.twinly.relationship.reader.IntimacyReader;
 import com.nidus.twinly.relationship.repository.IntimacyBonusRepository;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
+import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -44,6 +49,7 @@ import static com.nidus.twinly.common.logging.LogField.field;
 public class BalanceGameService {
 
     private static final int MATCH_BONUS = 10;
+    private static final int HISTORY_PAGE_SIZE = 20;
 
     private final BalanceGameRoundRepository balanceGameRoundRepository;
     private final BalanceGameAnswerRepository balanceGameAnswerRepository;
@@ -54,6 +60,7 @@ public class BalanceGameService {
     private final BalanceGameQuestionLoader balanceGameQuestionLoader;
     private final IntimacyReader intimacyReader;
     private final ChatRoomOpener chatRoomOpener;
+    private final CurrentSeasonReader currentSeasonReader;
 
     public BalanceGameResult current(Long userId, Long partnerUserId) {
         LocalDateTime now = KstTimes.now();
@@ -62,12 +69,34 @@ public class BalanceGameService {
         return toResult(currentRound(now), userId, partnerUserId);
     }
 
+    public BalanceGameHistoryResult history(Long userId, Long partnerUserId, Long cursorRoundId) {
+        validatePartner(userId, partnerUserId, KstTimes.now());
+
+        Instant cursorStartsAt = cursorRoundId == null ? null : balanceGameRoundRepository.findById(cursorRoundId)
+                .map(BalanceGameRound::getStartsAt)
+                .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_REQUEST));
+
+        List<HistoryProjection> rows = balanceGameAnswerRepository.findHistory(
+                userId, partnerUserId, currentSeasonReader.read().getId(), cursorStartsAt, HISTORY_PAGE_SIZE + 1);
+        List<BalanceGameHistoryItemResult> questions = rows.stream()
+                .limit(HISTORY_PAGE_SIZE)
+                .map(row -> new BalanceGameHistoryItemResult(
+                        row.getRoundId(),
+                        BalanceGameQuestionResult.from(questionOf(row.getQuestionId())),
+                        row.getMyOptionId(),
+                        row.getMyOptionId().equals(row.getPartnerOptionId())))
+                .toList();
+        Long nextCursor = rows.size() > HISTORY_PAGE_SIZE ? questions.getLast().roundId() : null;
+
+        return new BalanceGameHistoryResult(questions, nextCursor);
+    }
+
     public BalanceGameResult answer(Long userId, Long roundId, BalanceGameAnswerCommand command) {
         BalanceGameRound round = balanceGameRoundRepository.findByIdForUpdate(roundId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.INTIMACY_QUIZ_NOT_FOUND));
         Long partnerUserId = command.partnerId();
         validatePartner(userId, partnerUserId, KstTimes.now());
-        if (!questionOf(round).hasOption(command.optionId())) {
+        if (!questionOf(round.getQuestionId()).hasOption(command.optionId())) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST);
         }
         if (round.isEnded(Instant.now())) {
@@ -109,7 +138,7 @@ public class BalanceGameService {
         return new BalanceGameResult(
                 round.getId(),
                 partnerUserId,
-                BalanceGameQuestionResult.from(questionOf(round)),
+                BalanceGameQuestionResult.from(questionOf(round.getQuestionId())),
                 round.endsAt(),
                 status(myOptionId.isPresent(), completed, matched),
                 myOptionId.orElse(null),
@@ -123,7 +152,8 @@ public class BalanceGameService {
         Instant startsAt = BalanceGameSchedule.roundStartOf(now);
 
         balanceGameRoundRepository.upsert(startsAt,
-                balanceGameQuestionLoader.questionFor(BalanceGameSchedule.sequenceOf(startsAt)).id());
+                balanceGameQuestionLoader.questionFor(BalanceGameSchedule.sequenceOf(startsAt)).id(),
+                currentSeasonReader.read().getId());
 
         return balanceGameRoundRepository.findByStartsAt(startsAt)
                 .orElseThrow(() -> new IllegalStateException("방금 만든 밸런스 게임 회차를 찾을 수 없습니다."));
@@ -165,8 +195,8 @@ public class BalanceGameService {
                 || blockRepository.existsByUserIdAndBlockedUserId(partnerUserId, userId);
     }
 
-    private BalanceGameQuestion questionOf(BalanceGameRound round) {
-        return balanceGameQuestionLoader.findQuestion(round.getQuestionId())
+    private BalanceGameQuestion questionOf(Long questionId) {
+        return balanceGameQuestionLoader.findQuestion(questionId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.INTIMACY_QUIZ_NOT_FOUND));
     }
 }

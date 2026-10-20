@@ -24,6 +24,8 @@ public class BalanceGameRound {
 
     private Long questionId;
 
+    private Long seasonId;
+
     private Instant summarySentAt;
 
     private Instant createdAt;

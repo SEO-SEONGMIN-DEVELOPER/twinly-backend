@@ -2,6 +2,7 @@ package com.nidus.twinly.balancegame.controller;
 
 import com.nidus.twinly.balancegame.dto.command.BalanceGameAnswerCommand;
 import com.nidus.twinly.balancegame.dto.request.BalanceGameAnswerRequest;
+import com.nidus.twinly.balancegame.dto.response.BalanceGameHistoryResponse;
 import com.nidus.twinly.balancegame.dto.response.BalanceGameResponse;
 import com.nidus.twinly.balancegame.service.BalanceGameService;
 import com.nidus.twinly.common.web.RequestId;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "친밀도 퀴즈")
@@ -32,6 +34,19 @@ public class BalanceGameController {
     public BalanceGameResponse current(@AuthenticationPrincipal UserInfo userInfo,
                                        @PathVariable("userId") String partnerUserId) {
         return BalanceGameResponse.from(balanceGameService.current(userInfo.id(), RequestId.toLong(partnerUserId, "userId")));
+    }
+
+    @Operation(summary = "트윈과 이번 시즌에 서로 답한 친밀도 퀴즈 기록 조회", description = "최신 회차부터 20개씩, 다음 페이지는 앞 응답의 nextCursor 를 cursor 로 보낸다")
+    @ApiResponses({
+            @ApiResponse(responseCode = "400", description = "INVALID_REQUEST"),
+            @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND, RELATIONSHIP_NOT_FOUND")
+    })
+    @GetMapping("/api/v1/people/{userId}/intimacy-quiz/history")
+    public BalanceGameHistoryResponse history(@AuthenticationPrincipal UserInfo userInfo,
+                                              @PathVariable("userId") String partnerUserId,
+                                              @RequestParam(required = false) String cursor) {
+        return BalanceGameHistoryResponse.from(balanceGameService.history(
+                userInfo.id(), RequestId.toLong(partnerUserId, "userId"), RequestId.toLongOrNull(cursor, "cursor")));
     }
 
     @Operation(summary = "트윈에게 친밀도 퀴즈 답변", description = "같은 질문이라도 트윈마다 따로 답한다")
