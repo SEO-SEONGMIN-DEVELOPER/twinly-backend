@@ -87,29 +87,29 @@ class PeoplePreviewServiceUnitTest {
         Season season = Season.create(Instant.now().minusSeconds(86400), Instant.now().plusSeconds(86400));
         ReflectionTestUtils.setField(season, "id", SEASON_ID);
         given(currentSeasonReader.read()).willReturn(season);
-        given(seasonParticipationRepository.existsByUserIdAndSeasonId(ME, SEASON_ID)).willReturn(true);
         given(userRepository.findById(ME)).willReturn(Optional.of(user(ME, Gender.MALE)));
         given(photoRepository.findAllByUserIdInAndType(anyList(), eq(PhotoType.PROFILE))).willReturn(List.of());
     }
 
     @Test
-    @DisplayName("현재 시즌 참여자가 아니면 후보를 조회하지 않고 빈 목록을 돌려준다")
-    void previews_non_participant_returns_empty() {
-        // given: 현재 시즌에 참여하지 않은 호출자
+    @DisplayName("호출자의 현재 시즌 참여 여부는 보지 않고 미참여자에게도 후보를 골라 돌려준다")
+    void previews_ignores_caller_participation() {
+        // given: 현재 시즌에 참여하지 않은 호출자, 후보 1명
         given(seasonParticipationRepository.existsByUserIdAndSeasonId(ME, SEASON_ID)).willReturn(false);
+        givenCandidates(List.of(candidate(2L, Gender.FEMALE)));
 
         // when: 미리보기 조회
         PeoplePreviewsResult result = peoplePreviewService.previews(ME);
 
-        // then: 빈 목록, 후보 조회 없음
-        assertThat(result.previews()).isEmpty();
-        then(seasonParticipationRepository).should(never()).findAllPreviewCandidates(any(), any(), any());
+        // then: 참여 여부 조회 없이 후보가 그대로 내려간다
+        assertThat(result.previews()).hasSize(1);
+        then(seasonParticipationRepository).should(never()).existsByUserIdAndSeasonId(any(), any());
     }
 
     @Test
-    @DisplayName("참여자인데 사용자 행이 없으면 USER_NOT_FOUND 예외가 발생한다")
+    @DisplayName("사용자 행이 없으면 USER_NOT_FOUND 예외가 발생한다")
     void previews_user_not_found() {
-        // given: 참여 기록은 있지만 사용자 행이 없음
+        // given: 사용자 행이 없음
         given(userRepository.findById(ME)).willReturn(Optional.empty());
 
         // when & then: 미리보기 조회 시 USER_NOT_FOUND 예외

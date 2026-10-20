@@ -50,9 +50,6 @@ public class PeoplePreviewService {
 
     public PeoplePreviewsResult previews(Long userId) {
         Long seasonId = currentSeasonReader.read().getId();
-        if (!seasonParticipationRepository.existsByUserIdAndSeasonId(userId, seasonId)) {
-            return new PeoplePreviewsResult(List.of());
-        }
 
         User me = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));

@@ -140,19 +140,26 @@ class PeoplePreviewIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("미리보기 조회: 현재 시즌 참여자가 아니면 200 과 빈 배열을 내려준다")
-    void previews_non_participant_returns_empty() throws Exception {
-        // given: 나는 비참여, 같은 풀에 참여자 1명
+    @DisplayName("미리보기 조회: 현재 시즌 미참여자도 부를 수 있고, 참여자 중에서 양방향 차단을 빼고 고른다")
+    void previews_non_participant_gets_participants() throws Exception {
+        // given: 나는 비참여, 후보가 될 참여자 1명, 비참여자 1명, 나와 서로 차단한 참여자 2명
         User me = poolUser(Gender.MALE, POOL);
-        participant(Gender.FEMALE, POOL, YESTERDAY);
+        User eligible = participant(Gender.FEMALE, POOL, YESTERDAY);
+        poolUser(Gender.FEMALE, POOL);
+
+        User blockedByMe = participant(Gender.FEMALE, POOL, YESTERDAY);
+        blockRepository.save(Block.create(me.getId(), blockedByMe.getId()));
+        User blockingMe = participant(Gender.FEMALE, POOL, YESTERDAY);
+        blockRepository.save(Block.create(blockingMe.getId(), me.getId()));
 
         // when: 비참여자의 토큰으로 미리보기 조회
         var result = mockMvc.perform(get("/api/v1/people/previews")
                 .header("Authorization", bearer(me.getId())));
 
-        // then: 오류 없이 200 + 빈 배열
+        // then: 오류 없이 200, 조건을 통과한 참여자 1명만 내려간다
         result.andExpect(status().isOk())
-                .andExpect(jsonPath("$.previews.length()").value(0));
+                .andExpect(jsonPath("$.previews.length()").value(1))
+                .andExpect(jsonPath("$.previews[0].organization").value(eligible.shortOrganization()));
     }
 
     @Test
