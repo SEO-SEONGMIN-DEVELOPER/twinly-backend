@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <title>트윈리 어드민</title>
+  <link rel="icon" href="/app-icon.jpg">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+  <link rel="stylesheet" href="/console.css">
+</head>
+<body>
+<div id="shell">
+  <header class="site-header">
+    <div class="header-row">
+      <a class="brand" href="#dashboard"><img src="/app-icon.jpg" alt=""><span>트윈리</span><span class="brand-tag">어드민</span></a>
+      <div class="header-right">
+        <span class="mock-tag" id="refreshed-at"></span>
+        <span class="mock-tag" id="operator"></span>
+        <a class="header-cta" href="/cdn-cgi/access/logout">로그아웃</a>
+      </div>
+    </div>
+    <nav class="nav" aria-label="메뉴">
+      <button data-view="dashboard">대시보드</button>
+      <button data-view="members">회원 관리</button>
+      <button data-view="chats">채팅방 관리</button>
+      <button data-view="subs">구독 관리</button>
+      <button data-view="reports">신고·문의 <span class="count num" id="pending-count" hidden></span></button>
+      <button data-view="usage">기능 이용 현황</button>
+      <button data-view="settings">운영자 API</button>
+    </nav>
+  </header>
+
+  <main class="main">
+    <div class="top">
+      <h1 id="page-title"></h1>
+      <div class="top-desc" id="page-desc"></div>
+    </div>
+
+    <section class="view" id="v-dashboard" data-title="대시보드" data-desc="가입자·구독자·탈퇴자 현황과 구독 전환율을 한눈에 봅니다." hidden>
+      <div class="basis">
+        <span><b>집계 대상</b> 시드·탈퇴(유예 포함) 회원 제외</span>
+        <span><b>성비</b> 남성 : 여성 비율(%)</span>
+      </div>
+      <div id="dashboard-body"></div>
+    </section>
+
+    <section class="view" id="v-members" data-title="회원 관리" data-desc="회원을 찾아 인증·구독 상태와 AI 활동 기록을 확인합니다." hidden>
+      <div class="card">
+        <form class="toolbar" id="member-search">
+          <div class="search">
+            <select class="ctl" id="m-key" aria-label="검색 기준">
+              <option value="ID">회원 ID</option>
+              <option value="NICKNAME" selected>닉네임</option>
+              <option value="EMAIL">이메일</option>
+              <option value="SCHOOL">학교</option>
+            </select>
+            <input class="ctl" id="m-q" placeholder="닉네임 일부를 입력하세요" aria-label="검색어" autocomplete="off">
+            <datalist id="school-list"></datalist>
+          </div>
+          <select class="ctl" id="m-status" aria-label="회원 상태">
+            <option value="">상태 전체</option>
+            <option value="ACTIVE">활성</option>
+            <option value="WITHDRAWING">탈퇴 유예</option>
+            <option value="WITHDRAWN">탈퇴</option>
+          </select>
+          <button class="btn" type="submit">검색</button>
+        </form>
+        <p class="hint" id="m-hint">닉네임은 일부만 입력해도 찾을 수 있어요.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>ID</th><th>닉네임</th><th>이메일</th><th>학교</th><th>가입일</th><th>구독</th><th>상태</th></tr></thead>
+            <tbody id="member-rows"></tbody>
+          </table>
+        </div>
+        <div class="pager" id="member-pager"></div>
+      </div>
+    </section>
+
+    <section class="view" id="v-chats" data-title="채팅방 관리" data-desc="채팅방을 찾아 입장 상태와 대화 내용을 확인합니다." hidden>
+      <div class="card">
+        <form class="toolbar" id="chat-search">
+          <input class="ctl" id="c-q" placeholder="채팅방 번호, 닉네임 또는 회원 ID" aria-label="채팅방 검색" autocomplete="off" style="flex:1 1 280px">
+          <button class="btn" type="submit">검색</button>
+        </form>
+        <div style="height:14px"></div>
+        <div class="toolbar" style="justify-content:space-between">
+          <div class="chips" id="chat-chips">
+            <button class="chip" type="button" data-f="" aria-pressed="true">전체</button>
+            <button class="chip" type="button" data-f="BOTH" aria-pressed="false">둘 다 입장</button>
+            <button class="chip" type="button" data-f="ONE" aria-pressed="false">한 명만 입장</button>
+            <button class="chip" type="button" data-f="NONE" aria-pressed="false">미입장</button>
+          </div>
+          <span class="hint">시드 회원이 있는 방은 빼고 보여줘요</span>
+        </div>
+        <div style="height:6px"></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>번호</th><th>회원</th><th>상대 회원</th><th>열린 시각</th><th>입장</th><th>메시지</th><th>마지막 메시지</th></tr></thead>
+            <tbody id="chat-rows"></tbody>
+          </table>
+        </div>
+        <div class="pager" id="chat-pager"></div>
+      </div>
+    </section>
+
+    <section class="view" id="v-subs" data-title="구독 관리" data-desc="유료 구독, 무료 체험, 선착순 무료 혜택을 나눠 보고 이용권 동기화 상태를 확인합니다." hidden>
+      <div class="card">
+        <div class="toolbar" style="justify-content:space-between">
+          <div class="chips" id="sub-chips"></div>
+          <label class="toggle" style="font-size:13px;font-weight:550;color:var(--muted)"><input type="checkbox" id="sub-active" checked> 활성 이용권만</label>
+        </div>
+        <p class="hint">스토어는 다음 구매 동기화부터 채워져요. 비어 있으면 아직 동기화 전이에요.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>회원</th><th>구분</th><th>활성</th><th>만료일</th><th>스토어</th><th>마지막 동기화</th></tr></thead>
+            <tbody id="sub-rows"></tbody>
+          </table>
+        </div>
+        <div class="pager" id="sub-pager"></div>
+      </div>
+    </section>
+
+    <section class="view" id="v-reports" data-title="신고·문의" data-desc="신고는 접수 → 검토 중 → 처리 완료 순서로 처리합니다. 유저 신고는 접수 후 24시간 안에 검토해야 합니다." hidden>
+      <div class="card summary" id="case-summary"></div>
+      <div class="card">
+        <div class="tabs" role="tablist" id="report-tabs">
+          <button class="tab" role="tab" data-tab="user" aria-selected="true">유저 신고</button>
+          <button class="tab" role="tab" data-tab="ai" aria-selected="false">AI 발화 신고</button>
+          <button class="tab" role="tab" data-tab="suggest" aria-selected="false">건의사항</button>
+          <button class="tab" role="tab" data-tab="withdraw" aria-selected="false">탈퇴 사유</button>
+        </div>
+        <div style="height:16px"></div>
+        <div id="report-body"></div>
+      </div>
+    </section>
+
+    <section class="view" id="v-usage" data-title="기능 이용 현황" data-desc="회원들이 밸런스 게임과 채팅방을 얼마나 쓰는지 봅니다." hidden>
+      <div id="usage-body"></div>
+    </section>
+
+    <section class="view" id="v-settings" data-title="운영자 API" data-desc="앱 내 공지를 전체 회원 또는 지정 회원에게 발행합니다." hidden>
+      <div class="settings">
+        <article class="card">
+          <div class="card-head"><h2>공지 발행</h2><span class="card-sub">알림 피드에만 들어가고 푸시는 보내지 않아요</span></div>
+          <div class="form">
+            <div class="field"><label for="n-title">제목</label><input class="ctl" id="n-title" maxlength="100"></div>
+            <div class="field"><label for="n-body">본문</label><textarea class="ctl" id="n-body" maxlength="2000"></textarea></div>
+            <div class="field">
+              <span class="lbl">받는 사람</span>
+              <div class="target-options" role="radiogroup" aria-label="받는 사람">
+                <label class="target-option"><input type="radio" name="n-target" value="all" checked><span class="t">전체 회원</span><span class="d">활성 가입자 모두에게 보내요</span></label>
+                <label class="target-option"><input type="radio" name="n-target" value="some"><span class="t">지정 회원</span><span class="d">회원 ID를 골라 보내요</span></label>
+              </div>
+              <textarea class="ctl" id="n-ids" placeholder="회원 ID를 쉼표나 줄바꿈으로 구분해 입력하세요. 예: 1042, 1187" style="min-height:70px" hidden></textarea>
+            </div>
+            <div class="recip"><span class="hint">탈퇴·탈퇴 유예·시드 회원은 받지 않아요</span><span>수신 대상 <b class="num" id="n-count">-</b>명</span></div>
+            <div id="notice-step1"><button class="btn" type="button" id="n-review">발행 전 확인</button></div>
+            <div id="notice-step2" hidden class="form">
+              <div class="preview">
+                <span class="hint">회원 알림 피드에는 이렇게 보여요</span>
+                <div class="feed"><strong id="pv-title"></strong><p id="pv-body"></p></div>
+                <span class="num" id="pv-count"></span>
+              </div>
+              <div class="toolbar"><button class="btn" type="button" id="n-publish">발행하기</button><button class="btn ghost" type="button" id="n-back">수정하기</button></div>
+            </div>
+            <p class="saved" id="n-done" hidden></p>
+          </div>
+        </article>
+      </div>
+    </section>
+  </main>
+  <footer class="site-footer"><div class="footer-row"><strong>Twinly</strong><span>운영자 전용 페이지</span></div></footer>
+</div>
+
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" hidden aria-modal="true" role="dialog" aria-labelledby="drawer-title"></aside>
+
+<script src="/console.js"></script>
+</body>
+</html>

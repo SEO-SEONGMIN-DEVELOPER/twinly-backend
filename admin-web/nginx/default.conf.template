@@ -1,0 +1,55 @@
+server {
+    listen 80;
+    server_tokens off;
+    root /usr/share/nginx/html;
+
+    resolver ${ADMIN_WEB_RESOLVER} valid=30s ipv6=off;
+
+    add_header X-Frame-Options DENY always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy same-origin always;
+
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 'ok';
+    }
+
+    location / {
+        if ($http_cf_access_jwt_assertion = "") {
+            return 403;
+        }
+
+        try_files $uri /index.html;
+        add_header Cache-Control "no-cache" always;
+        add_header X-Frame-Options DENY always;
+        add_header X-Content-Type-Options nosniff always;
+        add_header Referrer-Policy same-origin always;
+    }
+
+    location = /me {
+        if ($http_cf_access_jwt_assertion = "") {
+            return 403;
+        }
+
+        default_type application/json;
+        return 200 '{"email":"$http_cf_access_authenticated_user_email"}';
+    }
+
+    location /admin/ {
+        if ($http_cf_access_jwt_assertion = "") {
+            return 403;
+        }
+
+        set $admin_api_upstream ${ADMIN_API_UPSTREAM};
+        proxy_pass $admin_api_upstream;
+        proxy_set_header Host $proxy_host;
+        proxy_set_header X-Admin-Token ${ADMIN_API_TOKEN};
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Cf-Access-Jwt-Assertion "";
+        proxy_set_header Cookie "";
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 30s;
+    }
+}
