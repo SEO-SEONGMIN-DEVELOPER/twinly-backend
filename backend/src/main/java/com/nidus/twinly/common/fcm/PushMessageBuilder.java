@@ -81,13 +81,19 @@ public class PushMessageBuilder {
     }
 
     private Map<String, String> feedData(FeedPushContent content) {
-        return Map.of(
-                "version", VERSION,
-                "type", EnumJsonNames.of(PushType.from(content.type())),
-                "appNotificationId", String.valueOf(content.appNotificationId()),
-                "targetKind", EnumJsonNames.of(content.targetKind()),
-                "targetId", String.valueOf(content.targetId()),
-                "createdAt", content.createdAt().toString());
+        Map<String, String> data = new HashMap<>();
+
+        data.put("version", VERSION);
+        data.put("type", EnumJsonNames.of(PushType.from(content.type())));
+        data.put("appNotificationId", String.valueOf(content.appNotificationId()));
+        data.put("createdAt", content.createdAt().toString());
+
+        if (content.targetKind() != null) {
+            data.put("targetKind", EnumJsonNames.of(content.targetKind()));
+            data.put("targetId", String.valueOf(content.targetId()));
+        }
+
+        return data;
     }
 
     private Map<String, String> oneTimePushOnlyData(OneTimePushContent content) {

@@ -197,6 +197,47 @@ class PushMessageBuilderUnitTest {
     }
 
     @Test
+    @DisplayName("알림 피드: 공지는 notice 타입으로 나가고 target 키 없이 appNotificationId 만 싣는다")
+    void feed_notice_has_no_target() throws IOException {
+        // given: target 이 없는 공지 피드
+        FeedPushContent content = new FeedPushContent(
+                1004L, AppNotificationFeedType.NOTICE, "공지 제목", "공지 본문",
+                null, null, CREATED_AT);
+
+        // when: 피드 푸시 생성
+        List<PushMessage> messages = pushMessageBuilder.feed(
+                List.of(device(DevicePlatform.IOS, "token-ios")), content);
+
+        // then: "null" 문자열이 아니라 키 자체가 없어야 앱이 이동할 화면을 잘못 고르지 않는다
+        String json = toJson(messages.get(0));
+        assertThat(json).contains("\"type\":\"notice\"");
+        assertThat(json).contains("\"appNotificationId\":\"1004\"");
+        assertThat(json).contains("\"title\":\"공지 제목\"");
+        assertThat(json).contains("\"notification\"");
+        assertThat(json).doesNotContain("targetKind");
+        assertThat(json).doesNotContain("targetId");
+        assertThat(messages).extracting(PushMessage::type).containsExactly(PushType.NOTICE);
+    }
+
+    @Test
+    @DisplayName("알림 피드: 공지는 플랫폼이 달라도 같은 모양으로 만들어진다")
+    void feed_notice_is_platform_agnostic() throws IOException {
+        // given: 아이폰과 안드로이드
+        List<Device> devices = List.of(device(DevicePlatform.IOS, "token-ios"), device(DevicePlatform.ANDROID, "token-android"));
+        FeedPushContent content = new FeedPushContent(
+                1004L, AppNotificationFeedType.NOTICE, "공지 제목", "공지 본문",
+                null, null, CREATED_AT);
+
+        // when: 피드 푸시 생성
+        List<PushMessage> messages = pushMessageBuilder.feed(devices, content);
+
+        // then: 양쪽 모두 OS 가 배너를 그리는 notification 블록을 갖는다
+        assertThat(messages).extracting(PushMessage::token).containsExactly("token-ios", "token-android");
+        assertThat(toJson(messages.get(0))).contains("\"notification\"");
+        assertThat(toJson(messages.get(1))).contains("\"notification\"");
+    }
+
+    @Test
     @DisplayName("일회성 푸시 전용: 피드가 없으므로 appNotificationId 와 target 없이 나간다")
     void oneTimePushOnly_has_no_feed_fields() throws IOException {
         // given: 피드에 남기지 않는 일회성 알림
