@@ -195,7 +195,7 @@ management:
       minimum-expected-value:
         http.server.requests: 10ms
       maximum-expected-value:
-        http.server.requests: 5s
+        http.server.requests: 30s
   endpoint:
     health:
       show-details: never
