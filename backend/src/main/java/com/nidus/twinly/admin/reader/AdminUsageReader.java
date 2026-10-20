@@ -38,6 +38,16 @@ public class AdminUsageReader {
             GROUP BY u.gender
             """.formatted(AdminSql.ACTIVE_USER);
 
+    private static final String HESITATION_ANSWER_USERS = """
+            SELECT u.gender, COUNT(DISTINCT q.user_id) AS cnt
+            FROM questions q
+            JOIN users u ON u.id = q.user_id
+            WHERE %s
+              AND q.type = 'PERSONA'
+              AND q.answered_at IS NOT NULL
+            GROUP BY u.gender
+            """.formatted(AdminSql.ACTIVE_USER);
+
     private static final String ROOM_COUNTS = """
             SELECT COUNT(*) AS opened, COALESCE(SUM(r.entered_count >= 2), 0) AS both_entered
             FROM (%s) r
@@ -92,6 +102,7 @@ public class AdminUsageReader {
         return new AdminUsageResult(
                 AdminGenderCountResult.from(countByGender(SUBSCRIBERS)),
                 AdminGenderCountResult.from(countByGender(BALANCE_GAME_USERS)),
+                AdminGenderCountResult.from(countByGender(HESITATION_ANSWER_USERS)),
                 roomCounts == null ? 0 : roomCounts[0],
                 roomCounts == null ? 0 : roomCounts[1],
                 AdminGenderCountResult.from(opened),
