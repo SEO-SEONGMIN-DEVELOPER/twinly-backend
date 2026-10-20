@@ -34,6 +34,14 @@ public class Report {
     @Enumerated(EnumType.STRING)
     private ReportStatus status;
 
+    @Column(columnDefinition = "TEXT")
+    private String reviewNote;
+
+    @Column(columnDefinition = "TEXT")
+    private String actionNote;
+
+    private Instant processedAt;
+
     private Instant createdAt;
 
     public static Report create(Long userId, Long reportedUserId, ReportReason reason, String detail) {
@@ -47,5 +55,12 @@ public class Report {
         report.createdAt = Instant.now();
 
         return report;
+    }
+
+    public void review(ReportStatus status, String reviewNote, String actionNote, Instant now) {
+        this.status = status;
+        this.reviewNote = reviewNote;
+        this.actionNote = actionNote;
+        this.processedAt = status.isProcessed() ? now : null;
     }
 }

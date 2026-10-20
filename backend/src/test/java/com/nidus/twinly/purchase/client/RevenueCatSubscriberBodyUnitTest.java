@@ -24,7 +24,7 @@ class RevenueCatSubscriberBodyUnitTest {
                   }
                 },
                 "subscriptions": {
-                  "twinly_simulation_monthly": { "is_sandbox": true, "store": "app_store" }
+                  "twinly_simulation_monthly": { "is_sandbox": true, "store": "app_store", "period_type": "trial" }
                 },
                 "non_subscriptions": {}
               }
@@ -41,7 +41,7 @@ class RevenueCatSubscriberBodyUnitTest {
                   }
                 },
                 "subscriptions": {
-                  "twinly_simulation_monthly": { "is_sandbox": false, "store": "app_store" }
+                  "twinly_simulation_monthly": { "is_sandbox": false, "store": "app_store", "period_type": "normal" }
                 },
                 "non_subscriptions": {}
               }
@@ -59,7 +59,7 @@ class RevenueCatSubscriberBodyUnitTest {
 
         // then: 버리면 심사관이 결제해도 유료 기능이 열리지 않아 리젝된다
         assertThat(entitlements).containsExactly(
-                new RevenueCatEntitlement("simulation_access", Instant.parse("2026-09-20T10:13:34Z")));
+                new RevenueCatEntitlement("simulation_access", Instant.parse("2026-09-20T10:13:34Z"), "app_store", "trial"));
     }
 
     @Test
@@ -73,7 +73,7 @@ class RevenueCatSubscriberBodyUnitTest {
 
         // then
         assertThat(entitlements).containsExactly(
-                new RevenueCatEntitlement("simulation_access", Instant.parse("2026-10-19T10:13:34Z")));
+                new RevenueCatEntitlement("simulation_access", Instant.parse("2026-10-19T10:13:34Z"), "app_store", "normal"));
     }
 
     @Test
@@ -102,7 +102,7 @@ class RevenueCatSubscriberBodyUnitTest {
                       }
                     },
                     "subscriptions": {
-                      "rc_promo_simulation_access_custom": { "is_sandbox": false, "store": "promotional" }
+                      "rc_promo_simulation_access_custom": { "is_sandbox": false, "store": "promotional", "period_type": "normal" }
                     },
                     "non_subscriptions": {}
                   }
@@ -111,9 +111,9 @@ class RevenueCatSubscriberBodyUnitTest {
 
         // when & then: 실결제로 보고 버리면 stage 에서 부여받은 유저가 시즌 참여에서 403 을 받는다
         assertThat(body.entitlementsIn(RevenueCatEnvironment.SANDBOX)).containsExactly(
-                new RevenueCatEntitlement("simulation_access", Instant.parse("2026-11-27T07:00:00Z")));
+                new RevenueCatEntitlement("simulation_access", Instant.parse("2026-11-27T07:00:00Z"), "promotional", "normal"));
         assertThat(body.entitlementsIn(RevenueCatEnvironment.PRODUCTION)).containsExactly(
-                new RevenueCatEntitlement("simulation_access", Instant.parse("2026-11-27T07:00:00Z")));
+                new RevenueCatEntitlement("simulation_access", Instant.parse("2026-11-27T07:00:00Z"), "promotional", "normal"));
     }
 
     @Test
@@ -136,7 +136,7 @@ class RevenueCatSubscriberBodyUnitTest {
 
         // when & then: 실결제 구매가 있으므로 prod 에서 인정한다
         assertThat(body.entitlementsIn(RevenueCatEnvironment.PRODUCTION))
-                .containsExactly(new RevenueCatEntitlement("simulation_access", null));
+                .containsExactly(new RevenueCatEntitlement("simulation_access", null, null, null));
     }
 
     @Test
@@ -190,5 +190,34 @@ class RevenueCatSubscriberBodyUnitTest {
 
     private RevenueCatSubscriberBody read(String json) {
         return JSON_MAPPER.readValue(json, RevenueCatSubscriberBody.class);
+    }
+
+    @Test
+    @DisplayName("권한의 상품 구매에서 스토어와 기간 유형을 함께 담아 무료 체험·선착순 부여를 구분할 수 있게 한다")
+    void entitlement_carries_store_and_period_type_of_its_purchase() {
+        // given: 무료 체험 중인 Play Store 구독
+        RevenueCatSubscriberBody body = read("""
+                {
+                  "subscriber": {
+                    "entitlements": {
+                      "simulation_access": {
+                        "expires_date": "2026-10-27T00:00:00Z",
+                        "product_identifier": "twinly_simulation_monthly"
+                      }
+                    },
+                    "subscriptions": {
+                      "twinly_simulation_monthly": { "is_sandbox": false, "store": "play_store", "period_type": "trial" }
+                    },
+                    "non_subscriptions": {}
+                  }
+                }
+                """);
+
+        // when
+        RevenueCatEntitlement entitlement = body.entitlementsIn(RevenueCatEnvironment.PRODUCTION).getFirst();
+
+        // then
+        assertThat(entitlement.store()).isEqualTo("play_store");
+        assertThat(entitlement.periodType()).isEqualTo("trial");
     }
 }

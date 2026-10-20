@@ -121,6 +121,10 @@ public enum ErrorCode {
     // 하루 관람
     SHOWCASE_TARGET_NOT_FOUND(HttpStatus.NOT_FOUND, "오늘 관람할 수 있는 대상이 없습니다."),
 
+    // 운영자
+    REPORT_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 신고입니다."),
+    FEEDBACK_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 건의사항입니다."),
+
     // 친밀도 퀴즈
     INTIMACY_QUIZ_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 친밀도 퀴즈입니다."),
     INTIMACY_QUIZ_EXPIRED(HttpStatus.GONE, "답변 시간이 지난 친밀도 퀴즈입니다."),

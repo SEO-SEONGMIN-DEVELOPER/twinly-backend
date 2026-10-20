@@ -103,6 +103,24 @@ class RevenueCatExternalTest {
     }
 
     @Test
+    @DisplayName("실제 응답의 구매 정보에서 store 와 period_type 이 함께 파싱된다")
+    void entitlements_carry_store_and_period_type() {
+        // given: 테스트 구독자에게 1시간짜리 promotional 권한을 부여한 상태 (스토어 결제 없이 구매 정보가 생기는 유일한 방법)
+        revenueCatClient.grantPromotional(APP_USER_ID, "simulation_access", Instant.now().plus(Duration.ofHours(1)));
+
+        // when: 실제 자격증명으로 구독자 조회
+        RevenueCatEntitlement entitlement = revenueCatClient.entitlements(APP_USER_ID).stream()
+                .filter(found -> found.entitlement().equals("simulation_access"))
+                .findFirst()
+                .orElseThrow();
+
+        // then: 응답의 subscriptions.<상품> 에서 두 필드를 실제로 받아 파싱한다 (값 자체는 단언하지 않고 채워졌는지만 본다)
+        log.info("RevenueCat 구매 정보 — store={}, periodType={}", entitlement.store(), entitlement.periodType());
+        assertThat(entitlement.store()).isNotBlank();
+        assertThat(entitlement.periodType()).isNotBlank();
+    }
+
+    @Test
     @DisplayName("부여 요청의 자격증명이 잘못되면 RestClient 예외를 REVENUE_CAT_GRANT_FAILED 로 감싼다")
     void grantPromotional_with_invalid_credential_is_wrapped() {
         // given: 형식만 그럴듯한 가짜 키로 만든 클라이언트
