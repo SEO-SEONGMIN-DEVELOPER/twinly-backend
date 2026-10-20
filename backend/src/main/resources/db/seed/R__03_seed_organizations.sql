@@ -565,6 +565,7 @@ VALUES ((SELECT id FROM organizations WHERE name = '성균관대학교'), 'skku.
        ((SELECT id FROM organizations WHERE name = '중원대학교'), 'office.jwu.ac.kr'),
        ((SELECT id FROM organizations WHERE name = '중원대학교'), 'jwu.ac.kr'),
        ((SELECT id FROM organizations WHERE name = '진주교육대학교'), 'stu.cue.ac.kr'),
+       ((SELECT id FROM organizations WHERE name = '청운대학교'), 'office.chungwoon.ac.kr'),
        ((SELECT id FROM organizations WHERE name = '청운대학교'), 'chungwoon.ac.kr'),
        ((SELECT id FROM organizations WHERE name = '청주대학교'), 'cju.kr'),
        ((SELECT id FROM organizations WHERE name = '청주대학교'), 'cju.ac.kr'),
