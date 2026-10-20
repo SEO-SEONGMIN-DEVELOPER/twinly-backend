@@ -271,10 +271,7 @@ public class PeopleService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.ENCOUNTER_NOT_FOUND));
 
         encounterPreferenceRepository.findByEncounterIdAndUserId(encounter.getId(), userId)
-                .ifPresent(preference -> {
-                    preference.changeIsFavorited(false);
-                    encounterPreferenceRepository.save(preference);
-                });
+                .ifPresent(preference -> preference.changeIsFavorited(false));
     }
 
     public PeopleIntimacySeriesResult intimacySeries(Long userId, Long partnerUserId) {

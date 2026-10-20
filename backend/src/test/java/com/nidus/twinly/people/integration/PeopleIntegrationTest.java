@@ -28,6 +28,8 @@ import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.PhotoRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.transaction.TestTransaction;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -52,6 +54,9 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
 
     private static final LocalDate DAY_1 = LocalDate.of(2026, 7, 19);
     private static final LocalDate DAY_2 = LocalDate.of(2026, 7, 20);
+
+    @PersistenceContext
+    EntityManager entityManager;
 
     @Autowired
     SceneRepository sceneRepository;
@@ -389,7 +394,9 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
                         .header("Authorization", bearer(me.getId())))
                 .andExpect(status().isOk());
 
-        // then: DB의 즐겨찾기 값이 false로 바뀐다
+        // then: 영속성 컨텍스트를 비우고 다시 읽어도 DB의 즐겨찾기 값이 false로 바뀌어 있다 (변경 감지로 UPDATE 반영)
+        entityManager.flush();
+        entityManager.clear();
         EncounterPreference updated = encounterPreferenceRepository
                 .findByEncounterIdAndUserId(encounter.getId(), me.getId())
                 .orElseThrow();
