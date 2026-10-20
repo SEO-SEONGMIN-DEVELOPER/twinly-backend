@@ -796,6 +796,7 @@ VALUES ((SELECT id FROM organizations WHERE name = '성균관대학교'), 'skku.
        ((SELECT id FROM organizations WHERE name = '안산대학교'), 'ansan.ac.kr'),
        ((SELECT id FROM organizations WHERE name = '에스라성경대학원대학교'), 'ezra.ac.kr'),
        ((SELECT id FROM organizations WHERE name = '연암공과대학교'), 'st.yc.ac.kr'),
+       ((SELECT id FROM organizations WHERE name = '연암공과대학교'), 'yc.ac.kr'),
        ((SELECT id FROM organizations WHERE name = '영남외국어대학'), 'yflc.ac.kr'),
        ((SELECT id FROM organizations WHERE name = '영남이공대학교'), 'ync.ac.kr'),
        ((SELECT id FROM organizations WHERE name = '영산선학대학교'), 'youngsan.ac.kr'),
