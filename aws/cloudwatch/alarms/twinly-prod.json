@@ -402,6 +402,60 @@
         ]
     },
     {
+        "name": "twinly-prod-monitoring-cpu-surplus-credits",
+        "description": "버스터블 CPU 크레딧이 바닥나 초과 크레딧 과금이 시작됨. 모니터링 인스턴스는 t4g.small 이고 unlimited 모드라 크레딧 소진 시 성능이 깎이는 대신 vCPU-시간당 추가 비용이 청구된다.\n\n이 인스턴스에는 prometheus·grafana·admin-web(관리자 콘솔)·cloudflared 가 올라간다. 서비스 트래픽과는 무관하지만, 여기서 프로세스가 죽으면 Grafana 알림과 관리자 콘솔이 함께 멎는다. EC2 자체는 살아 있으므로 status-check 알람으로는 잡히지 않아, CloudWatch 쪽에서 감시하는 수단은 이 알람뿐이다.\n\n이 알람이 울리면 기준 성능(vCPU 당 20%)을 넘는 부하가 장시간 지속되고 있다는 뜻이다. 평소에는 수집과 대시보드 조회뿐이라 여기까지 오지 않는다.\n\n조치:\n1. CPUUtilization 과 CPUCreditBalance 추이로 언제부터 소진됐는지 확인\n2. docker stats 로 어느 컨테이너인지 확인\n3. prometheus 면 scrape 대상이나 무거운 쿼리(대시보드·알림 규칙)가 늘었는지 확인\n4. grafana 면 짧은 새로고침 주기로 열어 둔 대시보드가 있는지 확인",
+        "namespace": "AWS/EC2",
+        "metric": "CPUSurplusCreditsCharged",
+        "statistic": "Sum",
+        "period": 300,
+        "evaluationPeriods": 1,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 1.0,
+        "treatMissingData": "notBreaching",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ],
+        "okActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ]
+    },
+    {
+        "name": "twinly-prod-monitoring-disk-used",
+        "description": "루트 볼륨 사용률 80% 초과. 디스크가 차면 prometheus 가 TSDB 를 쓰지 못해 수집이 멈춘다.\n\n이 인스턴스에는 prometheus·grafana·admin-web(관리자 콘솔)·cloudflared 가 올라간다. 서비스 트래픽과는 무관하지만, 여기서 프로세스가 죽으면 Grafana 알림과 관리자 콘솔이 함께 멎는다. EC2 자체는 살아 있으므로 status-check 알람으로는 잡히지 않아, CloudWatch 쪽에서 감시하는 수단은 이 알람뿐이다.\n\nprometheus 보관 기간이 15일(--storage.tsdb.retention.time=15d)이라 TSDB 는 일정 크기에서 더 늘지 않고, 컨테이너 로그도 json-file 10MB × 3 으로 제한돼 있다. 2026-10-20 기준 30GB 중 23% 이고 7일간 변화가 거의 없었다. 따라서 이 알람은 대개 쌓인 이미지나 예상 밖의 파일이 원인이다.\n\n조치:\n1. SSM으로 접속해 df -h 로 현황 확인\n2. docker system df 로 이미지·볼륨·컨테이너 중 어디가 큰지 확인\n3. 볼륨이면 promdata-twinly 크기를 보고, 보관 기간 설정이 실제 컨테이너에 적용됐는지 확인\n4. 이미지면 docker system prune -f 로 미사용 이미지/컨테이너 정리",
+        "namespace": "CWAgent",
+        "metric": "disk_used_percent",
+        "statistic": "Average",
+        "period": 300,
+        "evaluationPeriods": 2,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 80.0,
+        "treatMissingData": "missing",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ],
+        "okActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ]
+    },
+    {
+        "name": "twinly-prod-monitoring-mem-used",
+        "description": "호스트 메모리 사용률 85% 초과. 방치하면 커널 OOM Killer 가 프로세스를 SIGKILL 로 죽인다.\n\n이 인스턴스에는 prometheus·grafana·admin-web(관리자 콘솔)·cloudflared 가 올라간다. 서비스 트래픽과는 무관하지만, 여기서 프로세스가 죽으면 Grafana 알림과 관리자 콘솔이 함께 멎는다. EC2 자체는 살아 있으므로 status-check 알람으로는 잡히지 않아, CloudWatch 쪽에서 감시하는 수단은 이 알람뿐이다.\n\nt4g.small 은 가용 1836MiB 이고 OS·docker·CloudWatch 에이전트가 약 510MiB 를 고정으로 쓴다. 컨테이너 상한 합계는 864m(prometheus 400m·grafana 300m·cloudflared 100m·admin-web 64m)라 모두 상한까지 써도 약 75% 다. 2026-10-20 기준 7일 평균 31%, 최대 44% 였다. 즉 이 알람이 울린다면 컨테이너 바깥이 늘어난 것이다. 컨테이너 자체의 폭주는 호스트가 아니라 컨테이너 OOM 으로 먼저 끊긴다.\n\n조치:\n1. free -m 과 docker stats 로 확인\n2. 컨테이너 합계가 평소와 같으면 호스트 쪽이다 — journald 로그, docker 이미지 캐시, CloudWatch 에이전트부터 확인\n3. 특정 컨테이너가 재시작을 반복하면 docker inspect 로 OOMKilled 여부 확인",
+        "namespace": "CWAgent",
+        "metric": "mem_used_percent",
+        "statistic": "Average",
+        "period": 60,
+        "evaluationPeriods": 5,
+        "comparisonOperator": "GreaterThanOrEqualToThreshold",
+        "threshold": 85.0,
+        "treatMissingData": "missing",
+        "alarmActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ],
+        "okActions": [
+            "arn:aws:sns:ap-northeast-2:968177690717:twinly-prod-alerts"
+        ]
+    },
+    {
         "name": "twinly-prod-monitoring-status-check-failed",
         "description": "모니터링 인스턴스의 상태 검사 실패. EC2 또는 OS가 응답하지 않음.\n\n이 인스턴스에는 prometheus·grafana 가 올라간다. 죽어도 서비스 트래픽에는 영향이 없지만 Grafana 기반 알림이 전부 멎는다. CloudWatch 알람은 계속 동작하므로, 복구 전까지는 CloudWatch 쪽만 신뢰할 수 있다.\n\n조치:\n1. EC2 콘솔 → 상태 검사 탭에서 시스템/인스턴스 중 어느 쪽인지 확인\n2. 시스템 검사 실패면 AWS 인프라 문제. 인스턴스를 중지 후 시작 (재부팅이 아님)\n3. 인스턴스 검사 실패면 OS 문제. SSM 접속 시도 후 안 되면 재부팅\n4. 복구되면 docker ps 로 prometheus·grafana 기동 확인, Grafana 에서 수집 재개 확인\n5. 다운된 구간의 prometheus 메트릭은 유실된다. 사후 분석 시 공백 구간임을 감안",
         "namespace": "AWS/EC2",
