@@ -40,6 +40,8 @@ VALUES ((SELECT id FROM policy_names WHERE identifier = 'serviceTerms'),
        ((SELECT id FROM policy_names WHERE identifier = 'privacyPolicy'),
         '1.4', TRUE, '2026-10-14 15:00:00'),
        ((SELECT id FROM policy_names WHERE identifier = 'adMeasurementConsent'),
-        '1.0', FALSE, '2026-10-16 15:00:00') AS new
+        '1.0', FALSE, '2026-10-16 15:00:00'),
+       ((SELECT id FROM policy_names WHERE identifier = 'privacyPolicy'),
+        '1.5', TRUE, '2026-10-16 15:00:00') AS new
 ON DUPLICATE KEY UPDATE is_required  = new.is_required,
                         effective_at = new.effective_at;
