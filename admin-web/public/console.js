@@ -798,6 +798,7 @@
   const noticeIds = $('n-ids');
   const parseIds = () => [...new Set(noticeIds.value.split(/[\s,]+/).filter(value => /^\d+$/.test(value)))];
   const isAllTarget = () => document.querySelector('input[name="n-target"]:checked').value === 'all';
+  const withPush = () => document.querySelector('input[name="n-channel"]:checked').value === 'push';
   let recipientTimer = null;
   let recipientCount = null;
 
@@ -826,6 +827,9 @@
     refreshRecipients();
   }));
   noticeIds.addEventListener('input', refreshRecipients);
+  document.querySelectorAll('input[name="n-channel"]').forEach(radio => radio.addEventListener('change', () => {
+    $('n-push-hint').hidden = !withPush();
+  }));
   loaders.settings = refreshRecipients;
 
   const noticeMessage = (text, error) => {
@@ -843,7 +847,9 @@
     $('n-done').hidden = true;
     $('pv-title').textContent = title;
     $('pv-body').textContent = bodyText;
-    $('pv-count').innerHTML = `<b>${recipientCount === null ? '-' : num(recipientCount)}명</b>에게 발행해요. 같은 제목·본문을 이미 받은 회원은 건너뛰어요.`;
+    $('pv-channel').textContent = withPush() ? '피드 + 푸시로 보내요. 피드에는 이렇게 보이고, 푸시도 같은 제목·본문으로 가요' : '피드만 보내요. 회원 알림 피드에는 이렇게 보여요';
+    $('pv-count').innerHTML = `<b>${recipientCount === null ? '-' : num(recipientCount)}명</b>에게 발행해요.${withPush() ? ' 그중 이벤트 알림을 켠 회원에게 푸시도 가요.' : ''} 같은 제목·본문을 이미 받은 회원은 건너뛰어요.`;
+    $('n-publish').textContent = withPush() ? '피드 + 푸시 발행하기' : '피드에 발행하기';
     $('notice-step1').hidden = true;
     $('notice-step2').hidden = false;
   });
@@ -859,10 +865,11 @@
         body: {
           title: $('n-title').value.trim(),
           body: $('n-body').value.trim(),
+          push: withPush(),
           ...(isAllTarget() ? {} : { userIds: parseIds() })
         }
       });
-      noticeMessage(`발행했어요. ${num(result.publishedCount)}명의 알림 피드에 새로 들어갔어요.`);
+      noticeMessage(`발행했어요. ${num(result.publishedCount)}명의 알림 피드에 새로 들어갔어요.${withPush() ? ' 이 회원들 중 이벤트 알림을 켠 회원에게 푸시를 보냈어요.' : ''}`);
       $('notice-step1').hidden = false;
       $('notice-step2').hidden = true;
     } catch (error) {

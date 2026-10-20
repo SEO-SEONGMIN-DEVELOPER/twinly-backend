@@ -142,10 +142,18 @@
     <section class="view" id="v-settings" data-title="운영자 API" data-desc="앱 내 공지를 전체 회원 또는 지정 회원에게 발행합니다." hidden>
       <div class="settings">
         <article class="card">
-          <div class="card-head"><h2>공지 발행</h2><span class="card-sub">알림 피드에만 들어가고 푸시는 보내지 않아요</span></div>
+          <div class="card-head"><h2>공지 발행</h2><span class="card-sub">같은 제목·본문을 이미 받은 회원은 피드와 푸시 모두 건너뛰어요</span></div>
           <div class="form">
             <div class="field"><label for="n-title">제목</label><input class="ctl" id="n-title" maxlength="100"></div>
             <div class="field"><label for="n-body">본문</label><textarea class="ctl" id="n-body" maxlength="2000"></textarea></div>
+            <div class="field">
+              <span class="lbl">보내는 방식</span>
+              <div class="target-options" role="radiogroup" aria-label="보내는 방식">
+                <label class="target-option"><input type="radio" name="n-channel" value="feed" checked><span class="t">피드만</span><span class="d">알림 피드에만 넣어요</span></label>
+                <label class="target-option"><input type="radio" name="n-channel" value="push"><span class="t">피드 + 푸시</span><span class="d">피드에 넣고 휴대폰 푸시도 보내요</span></label>
+              </div>
+              <span class="hint" id="n-push-hint" hidden>푸시는 이번에 새로 피드를 받은 회원 중 이벤트 알림을 켠 회원에게만 가요. 보낸 푸시는 되돌릴 수 없어요.</span>
+            </div>
             <div class="field">
               <span class="lbl">받는 사람</span>
               <div class="target-options" role="radiogroup" aria-label="받는 사람">
@@ -158,7 +166,7 @@
             <div id="notice-step1"><button class="btn" type="button" id="n-review">발행 전 확인</button></div>
             <div id="notice-step2" hidden class="form">
               <div class="preview">
-                <span class="hint">회원 알림 피드에는 이렇게 보여요</span>
+                <span class="hint" id="pv-channel">회원 알림 피드에는 이렇게 보여요</span>
                 <div class="feed"><strong id="pv-title"></strong><p id="pv-body"></p></div>
                 <span class="num" id="pv-count"></span>
               </div>
