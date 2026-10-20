@@ -774,18 +774,19 @@
         const same = Math.round(Number(pct(partners.sameGender, total)));
         return `<div class="bar-row"><span>${label}</span><div class="stack">${total ? `<span class="same" style="width:${same}%">동성 ${same}%</span><span class="opp" style="flex:1">이성 ${100 - same}%</span>` : '<span class="same" style="flex:1">기록 없음</span>'}</div><span class="val">방 ${num(total)}개</span></div>`;
       };
-      const userCard = (title, usersLabel, users) => `<article class="card">
+      const userCard = (title, usersLabel, users, base, baseLabel) => `<article class="card">
           <div class="card-head"><h2>${title}</h2></div>
           <div class="stat-row two">
             <div class="stat"><span class="l">${usersLabel}</span><span class="v num">${num(users.total)}명</span><span class="s num">남 ${num(users.male)} · 여 ${num(users.female)}</span></div>
-            <div class="stat"><span class="l">사용 비율</span><span class="v num">${pct(users.total, subs.total)}%</span><span class="s">구독자(시즌 참가자) 대비</span></div>
+            <div class="stat"><span class="l">사용 비율</span><span class="v num">${pct(users.total, base.total)}%</span><span class="s">${baseLabel} 대비</span></div>
           </div>
           <div class="section-label">성별 사용 비율</div>
-          <div class="bars num">${bar('전체', '', users.total, subs.total, '명')}${bar('남성', 'm', users.male, subs.male, '명')}${bar('여성', 'f', users.female, subs.female, '명')}</div>
+          <div class="bars num">${bar('전체', '', users.total, base.total, '명')}${bar('남성', 'm', users.male, base.male, '명')}${bar('여성', 'f', users.female, base.female, '명')}</div>
         </article>`;
       body.innerHTML = `<div class="usage-grid">
-        ${userCard('밸런스 게임', '이용자 수', u.balanceGame.users)}
-        ${userCard('망설임 질문', '답변한 회원', u.hesitation.users)}
+        ${userCard('밸런스 게임', '이용자 수', u.balanceGame.users, subs, '구독자(시즌 참가자)')}
+        ${userCard('망설임 질문', '답변한 회원', u.hesitation.users, subs, '구독자(시즌 참가자)')}
+        ${userCard('평행우주 관계', '이용자 수', u.parallelRelation.users, u.members, '가입자')}
         <article class="card">
           <div class="card-head"><h2>채팅방</h2></div>
           <div class="stat-row two">

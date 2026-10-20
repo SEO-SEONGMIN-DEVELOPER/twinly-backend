@@ -435,6 +435,29 @@ class AdminConsoleIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("기능 이용 현황: 평행우주 관계는 결과를 받은 양쪽 회원을 한 번씩 세고, 분모로 가입자 수를 준다")
+    void usage_countsParallelRelationUsers() throws Exception {
+        // given: 남성 A 가 두 명과 관계 결과를 받았고, 코드만 발급한 남성 D 는 결과가 없다
+        JsonNode before = body(mockMvc.perform(admin(get("/admin/usage"))));
+        User a = saveMember("평행남", Gender.MALE, "평행대학교", "p1@pyeong.ac.kr");
+        User b = saveMember("평행여", Gender.FEMALE, "평행대학교", "p2@pyeong.ac.kr");
+        User c = saveMember("평행여2", Gender.FEMALE, "평행대학교", "p3@pyeong.ac.kr");
+        User codeOnly = saveMember("코드만", Gender.MALE, "평행대학교", "p4@pyeong.ac.kr");
+        parallelRelation(a, b);
+        parallelRelation(c, a);
+        jdbcTemplate.update("INSERT INTO parallel_relation_codes (user_id, code) VALUES (?, 'PAR001')", codeOnly.getId());
+        flushAndClear();
+
+        // when
+        JsonNode after = body(mockMvc.perform(admin(get("/admin/usage"))).andExpect(status().isOk()));
+
+        // then
+        assertThat(delta(before, after, "/parallelRelation/users/male")).isEqualTo(1);
+        assertThat(delta(before, after, "/parallelRelation/users/female")).isEqualTo(2);
+        assertThat(delta(before, after, "/members/total")).isEqualTo(4);
+    }
+
+    @Test
     @DisplayName("기능 이용 현황: 시드가 낀 방은 빼고 회원별 열린 건수 대비 입장 건수와 상대 성별을 센다")
     void usage_countsEntriesAndPartnerGenders() throws Exception {
         // given: 현재까지의 집계를 기억해 두고 남-여 방(둘 다 입장), 남-남 방(한 명만 입장) 추가
@@ -527,6 +550,13 @@ class AdminConsoleIntegrationTest extends AbstractIntegrationTest {
                 "010" + unique, "phoneHash" + unique,
                 email, blindIndexHasher.hash(email), null, null,
                 null, null));
+    }
+
+    private void parallelRelation(User codeOwner, User submitter) {
+        jdbcTemplate.update("""
+                INSERT INTO parallel_relations (user_a_id, user_b_id, code_owner_id, similarity, raw_similarity, relation, story_index)
+                VALUES (?, ?, ?, 72, 0.5, 'CLOSE', 0)
+                """, Math.min(codeOwner.getId(), submitter.getId()), Math.max(codeOwner.getId(), submitter.getId()), codeOwner.getId());
     }
 
     private void question(User user, String type, boolean answered, boolean skipped) {
