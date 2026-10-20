@@ -27,7 +27,7 @@ public class AppNotificationAdminController {
     private final AppNotificationNoticeService appNotificationNoticeService;
 
     @Operation(summary = "공지 발행",
-            description = "활성 가입자(탈퇴·탈퇴 유예·시드 제외)의 알림 피드에 공지를 넣는다. 푸시는 보내지 않는다. 같은 제목·본문의 공지를 이미 받은 유저는 건너뛰므로 다시 호출해도 중복되지 않는다.")
+            description = "활성 가입자(탈퇴·탈퇴 유예·시드 제외)의 알림 피드에 공지를 넣는다. push 가 true 면 이번에 새로 피드를 받은 유저 중 이벤트 알림을 켠 유저에게 notice 타입 푸시도 보낸다. 같은 제목·본문의 공지를 이미 받은 유저는 피드와 푸시 모두 건너뛰므로 다시 호출해도 중복되지 않는다.")
     @ApiResponse(responseCode = "400", description = "INVALID_REQUEST")
     @ApiResponse(responseCode = "401", description = "UNAUTHORIZED")
     @ApiResponse(responseCode = "403", description = "FORBIDDEN")

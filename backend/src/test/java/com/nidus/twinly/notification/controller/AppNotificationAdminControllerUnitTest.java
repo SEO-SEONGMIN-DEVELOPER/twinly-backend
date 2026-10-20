@@ -59,7 +59,7 @@ class AppNotificationAdminControllerUnitTest {
                 .header(ADMIN_TOKEN_HEADER, ADMIN_TOKEN)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                        {"title": "처리방침이 바뀌어요", "body": "본문\\n\\n전문: https://trytwinly.com", "userIds": ["11", "12"]}
+                        {"title": "처리방침이 바뀌어요", "body": "본문\\n\\n전문: https://trytwinly.com", "push": true, "userIds": ["11", "12"]}
                         """));
 
         // then: 200 + 발행 수, 커맨드에 제목·본문(줄바꿈 포함)·대상이 그대로 담김
@@ -68,7 +68,7 @@ class AppNotificationAdminControllerUnitTest {
         ArgumentCaptor<AppNotificationNoticePublishCommand> captor = ArgumentCaptor.forClass(AppNotificationNoticePublishCommand.class);
         then(appNotificationNoticeService).should().publish(captor.capture());
         assertThat(captor.getValue()).isEqualTo(new AppNotificationNoticePublishCommand(
-                "처리방침이 바뀌어요", "본문\n\n전문: https://trytwinly.com", List.of(11L, 12L)));
+                "처리방침이 바뀌어요", "본문\n\n전문: https://trytwinly.com", true, List.of(11L, 12L)));
     }
 
     @Test
@@ -82,7 +82,7 @@ class AppNotificationAdminControllerUnitTest {
                 .header(ADMIN_TOKEN_HEADER, ADMIN_TOKEN)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                        {"title": "제목", "body": "본문"}
+                        {"title": "제목", "body": "본문", "push": true}
                         """));
 
         // then: 200 반환 + 커맨드의 userIds 가 null 이라 서비스가 전체 발행으로 처리할 수 있음
@@ -93,6 +93,43 @@ class AppNotificationAdminControllerUnitTest {
     }
 
     @Test
+    @DisplayName("push 를 false 로 보내면 피드 전용 발행으로 서비스에 전달한다")
+    void publishNotice_feedOnly_passesPushFalse() throws Exception {
+        // given: 서비스가 100건 발행했다고 응답
+        given(appNotificationNoticeService.publish(any())).willReturn(new AppNotificationNoticePublishResult(100));
+
+        // when: push false 로 발행
+        var result = mockMvc.perform(post(PATH)
+                .header(ADMIN_TOKEN_HEADER, ADMIN_TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"title": "제목", "body": "본문", "push": false}
+                        """));
+
+        // then: 200 반환 + 커맨드의 push 가 false
+        result.andExpect(status().isOk());
+        ArgumentCaptor<AppNotificationNoticePublishCommand> captor = ArgumentCaptor.forClass(AppNotificationNoticePublishCommand.class);
+        then(appNotificationNoticeService).should().publish(captor.capture());
+        assertThat(captor.getValue().push()).isFalse();
+    }
+
+    @Test
+    @DisplayName("push 를 빠뜨리면 400을 반환하고 서비스를 호출하지 않는다")
+    void publishNotice_withoutPush_badRequest() throws Exception {
+        // when: push 없이 발행
+        var result = mockMvc.perform(post(PATH)
+                .header(ADMIN_TOKEN_HEADER, ADMIN_TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"title": "제목", "body": "본문"}
+                        """));
+
+        // then: 되돌릴 수 없는 전체 푸시를 기본값으로 정하지 않도록 반드시 명시해야 한다
+        result.andExpect(status().isBadRequest());
+        then(appNotificationNoticeService).should(never()).publish(any());
+    }
+
+    @Test
     @DisplayName("제목이 비어 있으면 400을 반환하고 서비스를 호출하지 않는다")
     void publishNotice_blankTitle_badRequest() throws Exception {
         // when: 공백뿐인 제목으로 발행
@@ -100,7 +137,7 @@ class AppNotificationAdminControllerUnitTest {
                 .header(ADMIN_TOKEN_HEADER, ADMIN_TOKEN)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                        {"title": " ", "body": "본문"}
+                        {"title": " ", "body": "본문", "push": true}
                         """));
 
         // then: 400 반환 + 서비스는 호출되지 않음
@@ -115,7 +152,7 @@ class AppNotificationAdminControllerUnitTest {
         var result = mockMvc.perform(post(PATH)
                 .header(ADMIN_TOKEN_HEADER, ADMIN_TOKEN)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"title\": \"제목\", \"body\": \"" + "가".repeat(2001) + "\"}"));
+                .content("{\"title\": \"제목\", \"body\": \"" + "가".repeat(2001) + "\", \"push\": true}"));
 
         // then: 400 반환 + 서비스는 호출되지 않음
         result.andExpect(status().isBadRequest());
@@ -130,7 +167,7 @@ class AppNotificationAdminControllerUnitTest {
                 .header(ADMIN_TOKEN_HEADER, ADMIN_TOKEN)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                        {"title": "제목", "body": "본문", "userIds": []}
+                        {"title": "제목", "body": "본문", "push": true, "userIds": []}
                         """));
 
         // then: 400 반환 + 서비스는 호출되지 않음
@@ -146,7 +183,7 @@ class AppNotificationAdminControllerUnitTest {
                 .header(ADMIN_TOKEN_HEADER, ADMIN_TOKEN)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                        {"title": "제목", "body": "본문", "userIds": ["11", "abc"]}
+                        {"title": "제목", "body": "본문", "push": true, "userIds": ["11", "abc"]}
                         """));
 
         // then: 400 반환 + 서비스는 호출되지 않음
@@ -161,7 +198,7 @@ class AppNotificationAdminControllerUnitTest {
         var result = mockMvc.perform(post(PATH)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                        {"title": "제목", "body": "본문"}
+                        {"title": "제목", "body": "본문", "push": true}
                         """));
 
         // then: 401 반환 + 서비스는 호출되지 않음
@@ -177,7 +214,7 @@ class AppNotificationAdminControllerUnitTest {
                 .header(ADMIN_TOKEN_HEADER, "wrong-token")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                        {"title": "제목", "body": "본문"}
+                        {"title": "제목", "body": "본문", "push": true}
                         """));
 
         // then: 401 반환 + 서비스는 호출되지 않음

@@ -10,7 +10,8 @@ public enum PushType {
     @JsonProperty("twinView")        TWIN_VIEW,
     @JsonProperty("oneTime")         ONE_TIME,
     @JsonProperty("oneTimePushOnly") ONE_TIME_PUSH_ONLY,
-    @JsonProperty("intimacyQuiz")    INTIMACY_QUIZ;
+    @JsonProperty("intimacyQuiz")    INTIMACY_QUIZ,
+    @JsonProperty("notice")          NOTICE;
 
     public static PushType from(AppNotificationFeedType feedType) {
         return switch (feedType) {
@@ -18,7 +19,7 @@ public enum PushType {
             case MATCH -> MATCH;
             case TWIN_VIEW -> TWIN_VIEW;
             case ONE_TIME -> ONE_TIME;
-            case NOTICE -> throw new IllegalArgumentException("공지는 푸시하지 않는다");
+            case NOTICE -> NOTICE;
         };
     }
 }

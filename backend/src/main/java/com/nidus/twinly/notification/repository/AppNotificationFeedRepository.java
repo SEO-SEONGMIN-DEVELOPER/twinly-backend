@@ -34,6 +34,12 @@ public interface AppNotificationFeedRepository extends JpaRepository<AppNotifica
                                                        @Param("type") String type,
                                                        @Param("limit") Integer limit);
 
+    @Query("SELECT COALESCE(MAX(f.id), 0) FROM AppNotificationFeed f")
+    Long findMaxId();
+
+    List<AppNotificationFeed> findAllByIdGreaterThanAndTypeAndTitleAndBody(Long id, AppNotificationFeedType type,
+                                                                          String title, String body);
+
     @Modifying
     @Query(value = """
             INSERT INTO app_notification_feeds (user_id, title, body, type)
