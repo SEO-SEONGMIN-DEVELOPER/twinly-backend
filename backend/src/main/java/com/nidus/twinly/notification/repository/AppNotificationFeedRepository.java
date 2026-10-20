@@ -70,6 +70,25 @@ public interface AppNotificationFeedRepository extends JpaRepository<AppNotifica
     int insertNoticeForActiveUsersIn(@Param("title") String title, @Param("body") String body,
                                      @Param("userIds") List<Long> userIds);
 
+    @Query(value = """
+            SELECT COUNT(*)
+            FROM users u
+            WHERE u.deleted_at IS NULL
+              AND u.withdrawal_requested_at IS NULL
+              AND u.is_seed = FALSE
+            """, nativeQuery = true)
+    long countNoticeRecipients();
+
+    @Query(value = """
+            SELECT COUNT(*)
+            FROM users u
+            WHERE u.id IN (:userIds)
+              AND u.deleted_at IS NULL
+              AND u.withdrawal_requested_at IS NULL
+              AND u.is_seed = FALSE
+            """, nativeQuery = true)
+    long countNoticeRecipientsIn(@Param("userIds") List<Long> userIds);
+
     @Modifying
     @Query("DELETE FROM AppNotificationFeed f WHERE f.userId IN :userIds AND f.type = :type")
     void deleteAllByUserIdInAndType(@Param("userIds") List<Long> userIds, @Param("type") AppNotificationFeedType type);

@@ -1,17 +1,23 @@
 package com.nidus.twinly.notification.controller;
 
+import com.nidus.twinly.common.web.RequestId;
 import com.nidus.twinly.notification.dto.command.AppNotificationNoticePublishCommand;
 import com.nidus.twinly.notification.dto.request.AppNotificationNoticePublishRequest;
 import com.nidus.twinly.notification.dto.response.AppNotificationNoticePublishResponse;
+import com.nidus.twinly.notification.dto.response.AppNotificationNoticeRecipientCountResponse;
 import com.nidus.twinly.notification.service.AppNotificationNoticeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @Tag(name = "알림 (관리자)")
 @RestController
@@ -29,5 +35,18 @@ public class AppNotificationAdminController {
     public AppNotificationNoticePublishResponse publishNotice(@Valid @RequestBody AppNotificationNoticePublishRequest request) {
         return AppNotificationNoticePublishResponse.from(
                 appNotificationNoticeService.publish(AppNotificationNoticePublishCommand.from(request)));
+    }
+
+    @Operation(summary = "공지 수신 대상 수", description = "userIds를 비우면 활성 가입자 전체 수, 주면 그중 활성 가입자 수")
+    @ApiResponse(responseCode = "400", description = "INVALID_REQUEST")
+    @ApiResponse(responseCode = "401", description = "UNAUTHORIZED")
+    @ApiResponse(responseCode = "403", description = "FORBIDDEN")
+    @GetMapping("/admin/app-notifications/notices/recipient-count")
+    public AppNotificationNoticeRecipientCountResponse countRecipients(@RequestParam(required = false) List<String> userIds) {
+        List<Long> ids = userIds == null ? null : userIds.stream()
+                .map(userId -> RequestId.toLong(userId, "userIds"))
+                .toList();
+
+        return new AppNotificationNoticeRecipientCountResponse(appNotificationNoticeService.countRecipients(ids));
     }
 }
