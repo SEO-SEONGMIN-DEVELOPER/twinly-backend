@@ -7,10 +7,11 @@ import java.util.List;
 public record AppNotificationNoticePublishCommand(
         String title,
         String body,
+        Boolean push,
         List<Long> userIds
 ) {
 
     public static AppNotificationNoticePublishCommand from(AppNotificationNoticePublishRequest request) {
-        return new AppNotificationNoticePublishCommand(request.title(), request.body(), request.userIds());
+        return new AppNotificationNoticePublishCommand(request.title(), request.body(), request.push(), request.userIds());
     }
 }

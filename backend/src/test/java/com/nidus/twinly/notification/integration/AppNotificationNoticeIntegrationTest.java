@@ -1,5 +1,8 @@
 package com.nidus.twinly.notification.integration;
 
+import com.nidus.twinly.notification.domain.AppNotificationFeedType;
+import com.nidus.twinly.notification.entity.AppNotificationFeed;
+import com.nidus.twinly.notification.event.AppNotificationFeedCreatedEvent;
 import com.nidus.twinly.support.AbstractIntegrationTest;
 import com.nidus.twinly.user.entity.User;
 import jakarta.persistence.EntityManager;
@@ -8,6 +11,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.event.ApplicationEvents;
+import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.test.web.servlet.ResultActions;
 
 import java.time.Duration;
@@ -19,6 +24,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+@RecordApplicationEvents
 class AppNotificationNoticeIntegrationTest extends AbstractIntegrationTest {
 
     private static final String PATH = "/admin/app-notifications/notices";
@@ -30,6 +36,9 @@ class AppNotificationNoticeIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     EntityManager entityManager;
+
+    @Autowired
+    ApplicationEvents applicationEvents;
 
     @Test
     @DisplayName("전체 발행: 활성 가입자에게만 공지가 들어가고 탈퇴 신청·삭제·시드 계정은 빠지며, 다시 호출해도 중복되지 않는다")
@@ -46,7 +55,7 @@ class AppNotificationNoticeIntegrationTest extends AbstractIntegrationTest {
 
         // when: 대상 없이 공지 발행
         publish("""
-                {"title": "처리방침이 바뀌어요", "body": "본문"}
+                {"title": "처리방침이 바뀌어요", "body": "본문", "push": true}
                 """)
                 .andExpect(status().isOk());
 
@@ -58,7 +67,7 @@ class AppNotificationNoticeIntegrationTest extends AbstractIntegrationTest {
 
         // when & then: 같은 공지를 다시 발행하면 새로 들어가는 건이 없다
         publish("""
-                {"title": "처리방침이 바뀌어요", "body": "본문"}
+                {"title": "처리방침이 바뀌어요", "body": "본문", "push": true}
                 """)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.publishedCount").value(0));
@@ -77,7 +86,7 @@ class AppNotificationNoticeIntegrationTest extends AbstractIntegrationTest {
 
         // when: 테스트 계정 둘을 지정해 발행
         publish("""
-                {"title": "테스트 공지", "body": "본문", "userIds": ["%d", "%d"]}
+                {"title": "테스트 공지", "body": "본문", "push": true, "userIds": ["%d", "%d"]}
                 """.formatted(tester.getId(), withdrawingTester.getId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.publishedCount").value(1));
@@ -89,13 +98,93 @@ class AppNotificationNoticeIntegrationTest extends AbstractIntegrationTest {
 
         // when: 같은 공지를 전체 발행
         publish("""
-                {"title": "테스트 공지", "body": "본문"}
+                {"title": "테스트 공지", "body": "본문", "push": true}
                 """)
                 .andExpect(status().isOk());
 
         // then: 이미 받은 테스트 계정은 그대로 1건, 나머지가 새로 받는다
         assertThat(noticeCount(tester)).isEqualTo(1);
         assertThat(noticeCount(other)).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("푸시 대상: 이번 호출로 새로 들어간 공지만 푸시 이벤트에 실리고, 이미 받은 유저와 다른 공지는 빠진다")
+    void publish_pushEventCarriesNewlyInsertedNoticesOnly() throws Exception {
+        // given: 같은 공지를 이미 받은 유저, 아직 안 받은 유저, 다른 공지만 받은 유저
+        User alreadyReceived = saveUser();
+        User fresh = saveUser();
+        User otherNoticeOnly = saveUser();
+        flushAndClear();
+        publish("""
+                {"title": "점검 안내", "body": "본문", "push": true, "userIds": ["%d"]}
+                """.formatted(alreadyReceived.getId()))
+                .andExpect(status().isOk());
+        publish("""
+                {"title": "다른 공지", "body": "본문", "push": true, "userIds": ["%d"]}
+                """.formatted(otherNoticeOnly.getId()))
+                .andExpect(status().isOk());
+        applicationEvents.clear();
+
+        // when: 같은 공지를 전체 발행
+        publish("""
+                {"title": "점검 안내", "body": "본문", "push": true}
+                """)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.publishedCount").value(2));
+
+        // then: 이벤트에는 이번에 들어간 두 명의 "점검 안내" 공지만 실린다
+        List<AppNotificationFeed> feeds = applicationEvents.stream(AppNotificationFeedCreatedEvent.class)
+                .flatMap(event -> event.feeds().stream())
+                .toList();
+        assertThat(feeds).extracting(AppNotificationFeed::getUserId)
+                .containsExactlyInAnyOrder(fresh.getId(), otherNoticeOnly.getId());
+        assertThat(feeds).allSatisfy(feed -> {
+            assertThat(feed.getType()).isEqualTo(AppNotificationFeedType.NOTICE);
+            assertThat(feed.getTitle()).isEqualTo("점검 안내");
+            assertThat(feed.getId()).isNotNull();
+            assertThat(feed.getCreatedAt()).isNotNull();
+        });
+    }
+
+    @Test
+    @DisplayName("같은 공지를 다시 발행해 새로 들어간 건이 없으면 푸시 이벤트를 내지 않는다")
+    void publish_again_publishesNoPushEvent() throws Exception {
+        // given: 활성 유저 1명이 이미 공지를 받음
+        saveUser();
+        flushAndClear();
+        publish("""
+                {"title": "점검 안내", "body": "본문", "push": true}
+                """)
+                .andExpect(status().isOk());
+        applicationEvents.clear();
+
+        // when: 같은 공지를 다시 발행
+        publish("""
+                {"title": "점검 안내", "body": "본문", "push": true}
+                """)
+                .andExpect(status().isOk());
+
+        // then: 재호출로 푸시가 다시 나가지 않는다
+        assertThat(applicationEvents.stream(AppNotificationFeedCreatedEvent.class)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("피드 전용 발행: push 가 false 면 피드는 들어가지만 푸시 이벤트는 내지 않는다")
+    void publish_feedOnly_insertsFeedWithoutPushEvent() throws Exception {
+        // given: 활성 유저 1명
+        User active = saveUser();
+        flushAndClear();
+
+        // when: push false 로 발행
+        publish("""
+                {"title": "처리방침이 바뀌어요", "body": "본문", "push": false}
+                """)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.publishedCount").value(1));
+
+        // then: 피드에는 남고, 푸시는 나가지 않는다
+        assertThat(noticeCount(active)).isEqualTo(1);
+        assertThat(applicationEvents.stream(AppNotificationFeedCreatedEvent.class)).isEmpty();
     }
 
     @Test
@@ -110,7 +199,7 @@ class AppNotificationNoticeIntegrationTest extends AbstractIntegrationTest {
                 .header("X-Admin-Token", "wrong-token")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                        {"title": "제목", "body": "본문"}
+                        {"title": "제목", "body": "본문", "push": true}
                         """));
 
         // then: 401 반환 + DB 에 공지가 들어가지 않음
