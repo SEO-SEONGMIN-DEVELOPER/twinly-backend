@@ -10,6 +10,8 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class AppNotificationNoticeService {
@@ -32,5 +34,14 @@ public class AppNotificationNoticeService {
         }
 
         return new AppNotificationNoticePublishResult(publishedCount);
+    }
+
+    @Transactional(readOnly = true)
+    public long countRecipients(List<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return appNotificationFeedRepository.countNoticeRecipients();
+        }
+
+        return appNotificationFeedRepository.countNoticeRecipientsIn(userIds);
     }
 }

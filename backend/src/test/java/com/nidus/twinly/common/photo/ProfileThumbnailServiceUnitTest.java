@@ -26,7 +26,7 @@ import static org.mockito.Mockito.never;
 @ExtendWith(MockitoExtension.class)
 class ProfileThumbnailServiceUnitTest {
 
-    private static final String SOURCE_KEY = "profile/1/abc";
+    private static final String SOURCE_KEY = "profile/1/original";
     private static final long SOURCE_BYTES = 1024L;
 
     @Mock
@@ -48,8 +48,8 @@ class ProfileThumbnailServiceUnitTest {
         String thumbnailKey = profileThumbnailService.generate(SOURCE_KEY, position(), SOURCE_BYTES);
 
         // then: 원본 key를 그대로 유도한 key로 업로드되고 그 key가 반환된다
-        assertThat(thumbnailKey).isEqualTo("profile/1/abc-thumb");
-        then(s3Service).should().upload("profile/1/abc-thumb", new byte[]{1, 2, 3}, "image/jpeg");
+        assertThat(thumbnailKey).isEqualTo("profile/1/original-thumb");
+        then(s3Service).should().upload("profile/1/original-thumb", new byte[]{1, 2, 3}, "image/jpeg");
     }
 
     @Test
@@ -75,7 +75,7 @@ class ProfileThumbnailServiceUnitTest {
         String thumbnailKey = profileThumbnailService.generate(SOURCE_KEY, position());
 
         // then: 스스로 HEAD를 한 번 날려 크기를 얻고 정상 처리한다
-        assertThat(thumbnailKey).isEqualTo("profile/1/abc-thumb");
+        assertThat(thumbnailKey).isEqualTo("profile/1/original-thumb");
         then(s3Service).should().contentLength(SOURCE_KEY);
     }
 
@@ -182,7 +182,7 @@ class ProfileThumbnailServiceUnitTest {
 
         // then: 원본 key·사용자 ID 가 드러나지 않는 key 로, 크롭 영역 그대로 8px 변환해 올린다
         assertThat(previewKey).matches("preview/[0-9a-f-]{36}");
-        assertThat(previewKey).doesNotContain("profile").doesNotContain("abc");
+        assertThat(previewKey).doesNotContain("profile").doesNotContain("original");
         then(thumbnailGenerator).should().generate(any(), eq(position()), eq(8));
         then(s3Service).should().upload(previewKey, new byte[]{1, 2}, "image/jpeg");
     }

@@ -1,6 +1,7 @@
 package com.nidus.twinly.report.entity;
 
 import com.nidus.twinly.report.domain.ReportStatus;
+import com.nidus.twinly.report.domain.ViolationKind;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -35,6 +36,17 @@ public class AiUtteranceReport {
     @Enumerated(EnumType.STRING)
     private ReportStatus status;
 
+    @Enumerated(EnumType.STRING)
+    private ViolationKind violationKind;
+
+    @Column(columnDefinition = "TEXT")
+    private String reviewNote;
+
+    @Column(columnDefinition = "TEXT")
+    private String actionNote;
+
+    private Instant processedAt;
+
     private Instant createdAt;
 
     public static AiUtteranceReport create(Long userId, Long reportedUserId, Long sceneId, String utteranceText, String reason) {
@@ -49,5 +61,13 @@ public class AiUtteranceReport {
         report.createdAt = Instant.now();
 
         return report;
+    }
+
+    public void review(ReportStatus status, ViolationKind violationKind, String reviewNote, String actionNote, Instant now) {
+        this.status = status;
+        this.violationKind = violationKind;
+        this.reviewNote = reviewNote;
+        this.actionNote = actionNote;
+        this.processedAt = status.isProcessed() ? now : null;
     }
 }

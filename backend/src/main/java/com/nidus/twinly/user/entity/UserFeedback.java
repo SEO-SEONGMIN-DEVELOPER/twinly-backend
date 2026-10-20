@@ -1,6 +1,7 @@
 package com.nidus.twinly.user.entity;
 
 import com.nidus.twinly.app.domain.AppPlatform;
+import com.nidus.twinly.common.feedback.FeedbackStatus;
 import com.nidus.twinly.common.feedback.FeedbackType;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -33,6 +34,12 @@ public class UserFeedback {
 
     private String appVersion;
 
+    @Enumerated(EnumType.STRING)
+    private FeedbackStatus status;
+
+    @Column(columnDefinition = "TEXT")
+    private String memo;
+
     private Instant createdAt;
 
     public static UserFeedback create(Long userId, FeedbackType type, String detail, AppPlatform appPlatform, String appVersion) {
@@ -42,7 +49,13 @@ public class UserFeedback {
         userFeedback.detail = detail;
         userFeedback.appPlatform = appPlatform;
         userFeedback.appVersion = appVersion;
+        userFeedback.status = FeedbackStatus.RECEIVED;
         userFeedback.createdAt = Instant.now();
         return userFeedback;
+    }
+
+    public void review(FeedbackStatus status, String memo) {
+        this.status = status;
+        this.memo = memo;
     }
 }

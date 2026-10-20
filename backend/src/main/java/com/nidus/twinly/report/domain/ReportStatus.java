@@ -4,5 +4,9 @@ public enum ReportStatus {
     PENDING,
     IN_REVIEW,
     REJECTED,
-    RESOLVED
+    RESOLVED;
+
+    public boolean isProcessed() {
+        return this == REJECTED || this == RESOLVED;
+    }
 }

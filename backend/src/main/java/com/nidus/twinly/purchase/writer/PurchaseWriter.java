@@ -66,9 +66,10 @@ public class PurchaseWriter {
             UserEntitlement existing = removed.remove(entitlement.entitlement());
 
             if (existing == null) {
-                userEntitlementRepository.save(UserEntitlement.create(userId, entitlement.entitlement(), entitlement.expiresAt(), syncedAt));
+                userEntitlementRepository.save(UserEntitlement.create(userId, entitlement.entitlement(), entitlement.expiresAt(),
+                        entitlement.store(), entitlement.periodType(), syncedAt));
             } else {
-                existing.sync(entitlement.expiresAt(), syncedAt);
+                existing.sync(entitlement.expiresAt(), entitlement.store(), entitlement.periodType(), syncedAt);
             }
         }
 

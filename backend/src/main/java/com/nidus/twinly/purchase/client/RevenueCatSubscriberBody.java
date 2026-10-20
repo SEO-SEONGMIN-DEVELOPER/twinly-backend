@@ -18,8 +18,18 @@ public record RevenueCatSubscriberBody(
 
         return subscriber.entitlements().entrySet().stream()
                 .filter(entry -> subscriber.purchasedIn(entry.getValue().productIdentifier(), environment))
-                .map(entry -> new RevenueCatEntitlement(entry.getKey(), entry.getValue().expiresDate()))
+                .map(entry -> toEntitlement(entry.getKey(), entry.getValue()))
                 .toList();
+    }
+
+    private RevenueCatEntitlement toEntitlement(String name, Entitlement entitlement) {
+        Purchase purchase = subscriber.purchaseOf(entitlement.productIdentifier());
+
+        return new RevenueCatEntitlement(
+                name,
+                entitlement.expiresDate(),
+                purchase == null ? null : purchase.store(),
+                purchase == null ? null : purchase.periodType());
     }
 
     public record Subscriber(
@@ -28,6 +38,18 @@ public record RevenueCatSubscriberBody(
             @JsonProperty("non_subscriptions")
             Map<String, List<Purchase>> nonSubscriptions
     ) {
+
+        Purchase purchaseOf(String productIdentifier) {
+            Purchase subscription = subscriptions == null ? null : subscriptions.get(productIdentifier);
+
+            if (subscription != null) {
+                return subscription;
+            }
+
+            List<Purchase> purchases = nonSubscriptions == null ? null : nonSubscriptions.get(productIdentifier);
+
+            return purchases == null || purchases.isEmpty() ? null : purchases.getLast();
+        }
 
         boolean purchasedIn(String productIdentifier, RevenueCatEnvironment environment) {
             Purchase subscription = subscriptions == null ? null : subscriptions.get(productIdentifier);
@@ -60,7 +82,9 @@ public record RevenueCatSubscriberBody(
     public record Purchase(
             @JsonProperty("is_sandbox")
             Boolean isSandbox,
-            String store
+            String store,
+            @JsonProperty("period_type")
+            String periodType
     ) {
 
         private static final String PROMOTIONAL_STORE = "promotional";

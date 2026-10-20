@@ -48,12 +48,33 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  admin-web:
+    image: nginx:1.27.5-alpine
+    container_name: admin-web-container-twinly
+    restart: unless-stopped
+    environment:
+      ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:?ADMIN_API_TOKEN is not set}
+      ADMIN_API_UPSTREAM: ${ADMIN_API_UPSTREAM:?ADMIN_API_UPSTREAM is not set}
+      ADMIN_WEB_RESOLVER: 127.0.0.11
+    ports:
+      - "127.0.0.1:8090:80"
+    volumes:
+      - ./admin-web/public:/usr/share/nginx/html:ro
+      - ./admin-web/nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+    mem_limit: 64m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   cloudflared:
     image: cloudflare/cloudflared:2026.9.3
     container_name: cloudflared-container-twinly
     restart: unless-stopped
     depends_on:
       - grafana
+      - admin-web
     command:
       - tunnel
       - --metrics=0.0.0.0:20241
