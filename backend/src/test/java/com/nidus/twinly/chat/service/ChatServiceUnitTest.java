@@ -974,12 +974,15 @@ class ChatServiceUnitTest {
         assertThat(result.partner().gameIntimacy()).isEqualTo(6);
         assertThat(result.partner().relationshipSpecificType())
                 .isEqualTo(RelationshipSpecificType.CLOSE);
+        assertThat(result.partner().gender()).isEqualTo(Gender.MALE);
+        assertThat(result.partner().organization()).isEqualTo("organization");
+        assertThat(result.partner().birthYear()).isEqualTo("00");
         assertThat(result.entryStatus().myEntryAgreed()).isTrue();
         assertThat(result.entryStatus().partnerEntryAgreed()).isFalse();
     }
 
     @Test
-    @DisplayName("채팅방 상세에서 탈퇴한 상대는 닉네임은 그대로 두고 사진·공개 필드는 가리며 조회하지 않는다")
+    @DisplayName("채팅방 상세에서 탈퇴한 상대는 닉네임은 그대로 두고 사진·공개 필드·성별·학교·출생연도는 가리며 조회하지 않는다")
     void roomDetail_of_withdrawn_partner_is_masked() {
         // given: 탈퇴한 상대와의 채팅방
         given(currentSeasonReader.read()).willReturn(currentSeason());
@@ -997,10 +1000,13 @@ class ChatServiceUnitTest {
         // when: 채팅방 상세 조회
         ChatRoomDetailResult result = chatService.roomDetail(ME, ROOM_ID);
 
-        // then: 닉네임은 그대로, 사진·공개 필드는 가려진다
+        // then: 닉네임은 그대로, 사진·공개 필드·성별·학교·출생연도는 가려진다
         assertThat(result.partner().userName()).isEqualTo("partnerNick");
         assertThat(result.partner().profilePhoto()).isNull();
         assertThat(result.partner().disclosedFields().affiliation()).isNull();
+        assertThat(result.partner().gender()).isNull();
+        assertThat(result.partner().organization()).isNull();
+        assertThat(result.partner().birthYear()).isNull();
 
         // then: 가려질 값이므로 사진·공개 동의는 조회하지 않는다
         then(photoRepository).should(never()).findByUserIdAndType(eq(PARTNER), any());

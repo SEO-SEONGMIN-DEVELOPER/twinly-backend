@@ -2,6 +2,7 @@ package com.nidus.twinly.chat.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.nidus.twinly.chat.dto.result.ChatRoomDetailPartnerResult;
+import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.photo.ProfilePhotoInfo;
 import io.swagger.v3.oas.annotations.media.Schema;
 import com.nidus.twinly.relationship.domain.RelationshipSpecificType;
@@ -12,6 +13,12 @@ public record ChatRoomDetailPartnerResponse(
         @JsonFormat(shape = JsonFormat.Shape.STRING)
         Long userId,
         String userName,
+        @Schema(nullable = true)
+        Gender gender,
+        @Schema(nullable = true)
+        String organization,
+        @Schema(nullable = true)
+        String birthYear,
         @Schema(nullable = true)
         ProfilePhotoInfo profilePhoto,
         Integer intimacy,
@@ -25,6 +32,9 @@ public record ChatRoomDetailPartnerResponse(
         return new ChatRoomDetailPartnerResponse(
                 result.userId(),
                 result.userName(),
+                result.gender(),
+                result.organization(),
+                result.birthYear(),
                 result.profilePhoto(),
                 result.intimacy(),
                 result.gameIntimacy(),
