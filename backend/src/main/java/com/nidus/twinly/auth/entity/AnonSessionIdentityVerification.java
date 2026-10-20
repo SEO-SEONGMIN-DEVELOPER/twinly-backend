@@ -10,7 +10,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.DynamicUpdate;
 
-import java.time.Duration;
 import java.time.Instant;
 
 @Entity
@@ -62,10 +61,6 @@ public class AnonSessionIdentityVerification {
     @Column(columnDefinition = "TEXT")
     private String diHash;
 
-    private Instant issueWindowStartedAt;
-
-    private int issueCount;
-
     private Instant createdAt;
 
     public static AnonSessionIdentityVerification create(Long anonSessionId, String requestNo, String transactionId, Instant expiresAt) {
@@ -75,8 +70,6 @@ public class AnonSessionIdentityVerification {
         verification.requestNo = requestNo;
         verification.transactionId = transactionId;
         verification.expiresAt = expiresAt;
-        verification.issueWindowStartedAt = Instant.now();
-        verification.issueCount = 1;
         verification.createdAt = Instant.now();
 
         return verification;
@@ -88,20 +81,6 @@ public class AnonSessionIdentityVerification {
 
     public boolean isExpired(Instant now) {
         return expiresAt.isBefore(now);
-    }
-
-    public boolean isRateLimited(Instant now, Duration issueWindow, int issueLimit) {
-        return issueWindowStartedAt.plus(issueWindow).isAfter(now) && issueCount >= issueLimit;
-    }
-
-    public void countIssue(Instant now, Duration issueWindow) {
-        if (issueWindowStartedAt.plus(issueWindow).isAfter(now)) {
-            this.issueCount++;
-            return;
-        }
-
-        this.issueWindowStartedAt = now;
-        this.issueCount = 1;
     }
 
     public void refresh(String requestNo, String transactionId, Instant expiresAt) {
