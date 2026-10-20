@@ -519,21 +519,20 @@ class PeopleServiceUnitTest {
     }
 
     @Test
-    @DisplayName("즐겨찾기 해제는 기존 EncounterPreference를 isFavorited=false로 바꿔 저장한다")
+    @DisplayName("즐겨찾기 해제는 조회한 EncounterPreference를 isFavorited=false로 바꾸고 변경 감지에 맡겨 save를 부르지 않는다")
     void deleteFavorites_updates_preference() {
         // given: 이미 즐겨찾기된 상태
-        given(encounterRepository.findByUserAIdAndUserBId(ME, 20L)).willReturn(Optional.of(encounter(9L, ME, 20L)));
+        EncounterPreference favorited = preference(9L, ME, true);
         given(encounterRepository.findByUserAIdAndUserBId(ME, 20L)).willReturn(Optional.of(encounter(9L, ME, 20L)));
         given(encounterPreferenceRepository.findByEncounterIdAndUserId(9L, ME))
-                .willReturn(Optional.of(preference(9L, ME, true)));
+                .willReturn(Optional.of(favorited));
 
         // when: 즐겨찾기 해제
         peopleService.deleteFavorite(ME, 20L);
 
-        // then: isFavorited=false로 저장됨
-        ArgumentCaptor<EncounterPreference> captor = ArgumentCaptor.forClass(EncounterPreference.class);
-        then(encounterPreferenceRepository).should().save(captor.capture());
-        assertThat(captor.getValue().getIsFavorited()).isFalse();
+        // then: 영속 상태 엔티티의 값만 바뀌고, 반영은 트랜잭션 커밋 시 변경 감지가 맡는다
+        assertThat(favorited.getIsFavorited()).isFalse();
+        then(encounterPreferenceRepository).should(never()).save(any());
     }
 
     @Test

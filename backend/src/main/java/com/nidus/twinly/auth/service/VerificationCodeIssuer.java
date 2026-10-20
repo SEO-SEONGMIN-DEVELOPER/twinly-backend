@@ -40,18 +40,12 @@ public class VerificationCodeIssuer {
             return;
         }
 
-        if (type == VerificationType.EMAIL) {
-            sesService.send(
-                    contact,
-                    "[트윈리] 인증번호 발송",
-                    "인증번호는 [%s] 입니다. %d분 이내에 입력해주세요.".formatted(code, CODE_EXPIRES_MINUTES)
-            );
-            return;
-        }
+        String message = "인증번호는 [%s] 입니다. %d분 이내에 입력해주세요.".formatted(code, CODE_EXPIRES_MINUTES);
 
-        solapiService.send(
-                contact,
-                "[트윈리] 인증번호는 [%s] 입니다. %d분 이내에 입력해주세요.".formatted(code, CODE_EXPIRES_MINUTES)
-        );
+        switch (type) {
+            case EMAIL -> sesService.send(contact, "[트윈리] 인증번호 발송", message);
+            case SMS -> solapiService.send(contact, "[트윈리] " + message);
+            default -> throw new IllegalArgumentException("인증번호를 보낼 수 없는 인증 유형입니다. type=" + type);
+        }
     }
 }

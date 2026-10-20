@@ -10,6 +10,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
+import java.time.Instant;
+
 import static com.nidus.twinly.common.logging.LogField.field;
 
 @Slf4j
@@ -18,6 +21,12 @@ import static com.nidus.twinly.common.logging.LogField.field;
 public class IdentityVerificationLogService {
 
     private final IdentityVerificationLogRepository identityVerificationLogRepository;
+
+    @Transactional(readOnly = true)
+    public boolean isRateLimited(Long anonSessionId, Instant now, Duration window, int limit) {
+        return identityVerificationLogRepository
+                .countByAnonSessionIdAndCreatedAtAfter(anonSessionId, now.minus(window)) >= limit;
+    }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void issued(Long anonSessionId, String requestNo, String transactionId) {

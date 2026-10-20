@@ -1,6 +1,6 @@
 package com.nidus.twinly.auth.dto.result;
 
-public record NiceAuthUrlResult(
+public record IdentityAuthUrlResult(
         String authUrl,
         String transactionId,
         String returnUrl,

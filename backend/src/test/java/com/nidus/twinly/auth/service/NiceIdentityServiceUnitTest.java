@@ -2,6 +2,8 @@ package com.nidus.twinly.auth.service;
 
 import com.nidus.twinly.auth.client.NiceAuthClient;
 import com.nidus.twinly.auth.client.NiceAuthResult;
+import com.nidus.twinly.auth.domain.InvalidIdentityResultException;
+import com.nidus.twinly.auth.domain.VerifiedIdentity;
 import com.nidus.twinly.auth.client.NiceAuthResultBody;
 import com.nidus.twinly.auth.client.NiceAuthUrlBody;
 import com.nidus.twinly.auth.client.NiceResultDecryptor;
@@ -10,7 +12,7 @@ import com.nidus.twinly.auth.client.NiceToken;
 import com.nidus.twinly.auth.client.NiceTokenProvider;
 import com.nidus.twinly.auth.client.NiceTokenRejectedException;
 import com.nidus.twinly.auth.config.NiceProperties;
-import com.nidus.twinly.auth.dto.result.NiceAuthUrlResult;
+import com.nidus.twinly.auth.dto.result.IdentityAuthUrlResult;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import org.junit.jupiter.api.BeforeEach;
@@ -69,7 +71,7 @@ class NiceIdentityServiceUnitTest {
         given(niceAuthClient.requestAuthUrl("token-1", REQUEST_NO)).willReturn(URL_BODY);
 
         // when
-        NiceAuthUrlResult result = niceIdentityService.requestAuthUrl(REQUEST_NO);
+        IdentityAuthUrlResult result = niceIdentityService.requestAuthUrl(REQUEST_NO);
 
         // then
         assertThat(result.authUrl()).isEqualTo("https://auth.niceid.co.kr/ido/cert/request/S1");
@@ -88,7 +90,7 @@ class NiceIdentityServiceUnitTest {
         given(niceAuthClient.requestAuthUrl("token-2", REQUEST_NO)).willReturn(URL_BODY);
 
         // when
-        NiceAuthUrlResult result = niceIdentityService.requestAuthUrl(REQUEST_NO);
+        IdentityAuthUrlResult result = niceIdentityService.requestAuthUrl(REQUEST_NO);
 
         // then: 하루 종일 죽은 토큰을 들고 있지 않도록 invalidate 후 재시도
         assertThat(result.transactionId()).isEqualTo("tx-1");
@@ -111,7 +113,7 @@ class NiceIdentityServiceUnitTest {
     }
 
     @Test
-    @DisplayName("결과 요청: 결과 요청 헤더에 쓴 토큰과 같은 토큰(ticket)으로 복호화한다")
+    @DisplayName("결과 요청: 결과 요청 헤더에 쓴 토큰과 같은 토큰(ticket)으로 복호화하고 검증된 본인 정보로 바꿔 돌려준다")
     void fetchResult_decrypts_with_same_token() {
         // given
         NiceAuthResultBody resultBody = new NiceAuthResultBody("0000", "응답성공", "enc", "integrity");
@@ -121,10 +123,10 @@ class NiceIdentityServiceUnitTest {
         given(niceResultDecryptor.decrypt(TOKEN_1, "tx-1", "enc", "integrity")).willReturn(decrypted);
 
         // when
-        NiceAuthResult result = niceIdentityService.fetchResult(REQUEST_NO, "tx-1", "web-tx");
+        VerifiedIdentity result = niceIdentityService.fetchResult(REQUEST_NO, "tx-1", "web-tx");
 
         // then
-        assertThat(result).isEqualTo(decrypted);
+        assertThat(result).isEqualTo(decrypted.toVerifiedIdentity());
         then(niceTokenProvider).should(never()).invalidate();
     }
 
@@ -140,12 +142,31 @@ class NiceIdentityServiceUnitTest {
         given(niceResultDecryptor.decrypt(TOKEN_2, "tx-1", "enc", "integrity")).willReturn(decrypted);
 
         // when
-        NiceAuthResult result = niceIdentityService.fetchResult(REQUEST_NO, "tx-1", "web-tx");
+        VerifiedIdentity result = niceIdentityService.fetchResult(REQUEST_NO, "tx-1", "web-tx");
 
         // then
-        assertThat(result).isEqualTo(decrypted);
+        assertThat(result).isEqualTo(decrypted.toVerifiedIdentity());
         then(niceTokenProvider).should(times(1)).invalidate();
         then(niceResultDecryptor).should(never()).decrypt(eq(TOKEN_1), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("결과 요청: 복호화한 결과를 검증하지 못하면 DI 를 담은 InvalidIdentityResultException 이 재시도 없이 올라간다")
+    void fetchResult_propagates_invalid_result_without_retry() {
+        // given: 복호화는 됐지만 생년월일 형식이 깨진 결과
+        NiceAuthResultBody resultBody = new NiceAuthResultBody("0000", "응답성공", "enc", "integrity");
+        NiceAuthResult broken = new NiceAuthResult("홍길동", "1999-03-14", "1", "0", "di-1", "1", "01012345678");
+        given(niceTokenProvider.getToken()).willReturn(TOKEN_1);
+        given(niceAuthClient.requestResult("token-1", "web-tx", "tx-1", REQUEST_NO)).willReturn(resultBody);
+        given(niceResultDecryptor.decrypt(TOKEN_1, "tx-1", "enc", "integrity")).willReturn(broken);
+
+        // when & then: 토큰 문제가 아니므로 토큰을 버리지도, NICE 를 다시 부르지도 않는다
+        assertThatThrownBy(() -> niceIdentityService.fetchResult(REQUEST_NO, "tx-1", "web-tx"))
+                .isInstanceOf(InvalidIdentityResultException.class)
+                .extracting(e -> ((InvalidIdentityResultException) e).getDi())
+                .isEqualTo("di-1");
+        then(niceTokenProvider).should(never()).invalidate();
+        then(niceAuthClient).should(times(1)).requestResult(anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
