@@ -55,6 +55,8 @@ import com.nidus.twinly.relationship.domain.RelationshipType;
 import com.nidus.twinly.relationship.entity.Relationship;
 import com.nidus.twinly.relationship.reader.IntimacyReader;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
+import com.nidus.twinly.season.entity.Season;
+import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.user.domain.DisclosureField;
 import com.nidus.twinly.user.entity.DisclosureAgreement;
 import com.nidus.twinly.user.entity.Photo;
@@ -152,6 +154,9 @@ class PeopleServiceUnitTest {
 
     @Mock
     BalanceGameRoundRepository balanceGameRoundRepository;
+
+    @Mock
+    CurrentSeasonReader currentSeasonReader;
 
     @Spy
     SceneNameRenderer sceneNameRenderer = new SceneNameRenderer();
@@ -1229,11 +1234,12 @@ class PeopleServiceUnitTest {
     // ---------------------------------------------------------------- 친밀도 퀴즈 일치도
 
     @Test
-    @DisplayName("서로에게 답한 회차 중 같은 답이었던 비율을 소수 첫째 자리까지 반올림해 돌려준다")
+    @DisplayName("이번 시즌에 서로에게 답한 회차 중 같은 답이었던 비율을 소수 첫째 자리까지 반올림해 돌려준다")
     void intimacyQuizMatchRate_rounds_rate() {
-        // given: 서로 답한 3회차 중 2회 일치
+        // given: 이번 시즌에 서로 답한 3회차 중 2회 일치
         given(userRepository.existsById(20L)).willReturn(true);
-        given(balanceGameAnswerRepository.countMatchRate(ME, 20L)).willReturn(matchRate(3L, 2L));
+        givenCurrentSeason(3L);
+        given(balanceGameAnswerRepository.countMatchRate(ME, 20L, 3L)).willReturn(matchRate(3L, 2L));
 
         // when
         PeopleIntimacyQuizMatchRateResult result = peopleService.intimacyQuizMatchRate(ME, 20L);
@@ -1247,7 +1253,8 @@ class PeopleServiceUnitTest {
     void intimacyQuizMatchRate_is_null_without_comparison() {
         // given
         given(userRepository.existsById(20L)).willReturn(true);
-        given(balanceGameAnswerRepository.countMatchRate(ME, 20L)).willReturn(matchRate(0L, 0L));
+        givenCurrentSeason(3L);
+        given(balanceGameAnswerRepository.countMatchRate(ME, 20L, 3L)).willReturn(matchRate(0L, 0L));
 
         // when
         PeopleIntimacyQuizMatchRateResult result = peopleService.intimacyQuizMatchRate(ME, 20L);
@@ -1267,7 +1274,13 @@ class PeopleServiceUnitTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.USER_NOT_FOUND);
-        then(balanceGameAnswerRepository).should(never()).countMatchRate(any(), any());
+        then(balanceGameAnswerRepository).should(never()).countMatchRate(any(), any(), any());
+    }
+
+    private void givenCurrentSeason(Long seasonId) {
+        Season season = newInstance(Season.class);
+        ReflectionTestUtils.setField(season, "id", seasonId);
+        given(currentSeasonReader.read()).willReturn(season);
     }
 
     private MatchRateProjection matchRate(Long comparedCount, Long matchedCount) {

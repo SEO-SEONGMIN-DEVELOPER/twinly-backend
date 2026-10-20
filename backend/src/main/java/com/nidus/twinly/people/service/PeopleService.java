@@ -44,6 +44,7 @@ import com.nidus.twinly.relationship.domain.RelationshipType;
 import com.nidus.twinly.relationship.entity.Relationship;
 import com.nidus.twinly.relationship.reader.IntimacyReader;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
+import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.user.domain.DisclosureField;
 import com.nidus.twinly.user.entity.DisclosureAgreement;
 import com.nidus.twinly.user.entity.Photo;
@@ -107,6 +108,7 @@ public class PeopleService {
     private final IntimacyReader intimacyReader;
     private final BalanceGameAnswerRepository balanceGameAnswerRepository;
     private final BalanceGameRoundRepository balanceGameRoundRepository;
+    private final CurrentSeasonReader currentSeasonReader;
 
     public PeopleResult people(Long userId, Long cursor, Integer limit) {
         int effectiveLimit = (limit != null && limit > 0) ? limit : DEFAULT_PEOPLE_LIMIT;
@@ -612,7 +614,7 @@ public class PeopleService {
             throw new BusinessException(ErrorCode.USER_NOT_FOUND);
         }
 
-        MatchRateProjection counts = balanceGameAnswerRepository.countMatchRate(userId, partnerUserId);
+        MatchRateProjection counts = balanceGameAnswerRepository.countMatchRate(userId, partnerUserId, currentSeasonReader.read().getId());
         int comparedCount = counts.getComparedCount().intValue();
         int matchedCount = counts.getMatchedCount().intValue();
 

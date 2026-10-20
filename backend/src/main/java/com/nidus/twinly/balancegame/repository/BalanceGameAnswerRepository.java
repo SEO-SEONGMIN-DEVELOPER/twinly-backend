@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -37,10 +38,50 @@ public interface BalanceGameAnswerRepository extends JpaRepository<BalanceGameAn
               ON theirs.round_id = mine.round_id
              AND theirs.user_id = mine.partner_user_id
              AND theirs.partner_user_id = mine.user_id
+            JOIN balance_game_rounds r
+              ON r.id = mine.round_id
+             AND r.season_id = :seasonId
             WHERE mine.user_id = :userId
               AND mine.partner_user_id = :partnerUserId
             """, nativeQuery = true)
-    MatchRateProjection countMatchRate(@Param("userId") Long userId, @Param("partnerUserId") Long partnerUserId);
+    MatchRateProjection countMatchRate(@Param("userId") Long userId,
+                                       @Param("partnerUserId") Long partnerUserId,
+                                       @Param("seasonId") Long seasonId);
+
+    @Query(value = """
+            SELECT r.id AS roundId,
+                   r.question_id AS questionId,
+                   mine.option_id AS myOptionId,
+                   theirs.option_id AS partnerOptionId
+            FROM balance_game_partner_answers mine
+            JOIN balance_game_partner_answers theirs
+              ON theirs.round_id = mine.round_id
+             AND theirs.user_id = mine.partner_user_id
+             AND theirs.partner_user_id = mine.user_id
+            JOIN balance_game_rounds r
+              ON r.id = mine.round_id
+             AND r.season_id = :seasonId
+            WHERE mine.user_id = :userId
+              AND mine.partner_user_id = :partnerUserId
+              AND (:cursorStartsAt IS NULL OR r.starts_at < :cursorStartsAt)
+            ORDER BY r.starts_at DESC
+            LIMIT :limit
+            """, nativeQuery = true)
+    List<HistoryProjection> findHistory(@Param("userId") Long userId,
+                                        @Param("partnerUserId") Long partnerUserId,
+                                        @Param("seasonId") Long seasonId,
+                                        @Param("cursorStartsAt") Instant cursorStartsAt,
+                                        @Param("limit") int limit);
+
+    interface HistoryProjection {
+        Long getRoundId();
+
+        Long getQuestionId();
+
+        Long getMyOptionId();
+
+        Long getPartnerOptionId();
+    }
 
     interface MatchRateProjection {
         Long getComparedCount();

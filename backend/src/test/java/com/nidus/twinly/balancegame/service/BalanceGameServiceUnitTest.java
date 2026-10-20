@@ -3,10 +3,12 @@ package com.nidus.twinly.balancegame.service;
 import com.nidus.twinly.balancegame.domain.BalanceGameSchedule;
 import com.nidus.twinly.balancegame.domain.BalanceGameStatus;
 import com.nidus.twinly.balancegame.dto.command.BalanceGameAnswerCommand;
+import com.nidus.twinly.balancegame.dto.result.BalanceGameHistoryResult;
 import com.nidus.twinly.balancegame.dto.result.BalanceGameResult;
 import com.nidus.twinly.balancegame.entity.BalanceGameAnswer;
 import com.nidus.twinly.balancegame.entity.BalanceGameRound;
 import com.nidus.twinly.balancegame.repository.BalanceGameAnswerRepository;
+import com.nidus.twinly.balancegame.repository.BalanceGameAnswerRepository.HistoryProjection;
 import com.nidus.twinly.balancegame.repository.BalanceGameRoundRepository;
 import com.nidus.twinly.block.repository.BlockRepository;
 import com.nidus.twinly.chat.opener.ChatRoomOpener;
@@ -22,6 +24,8 @@ import com.nidus.twinly.relationship.entity.Relationship;
 import com.nidus.twinly.relationship.reader.IntimacyReader;
 import com.nidus.twinly.relationship.repository.IntimacyBonusRepository;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
+import com.nidus.twinly.season.entity.Season;
+import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.UserRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -38,10 +42,13 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.LongStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
@@ -53,6 +60,7 @@ class BalanceGameServiceUnitTest {
     private static final Long ME = 10L;
     private static final Long PARTNER = 20L;
     private static final Long ROUND_ID = 100L;
+    private static final Long SEASON_ID = 3L;
     private static final BalanceGameQuestion QUESTION = new BalanceGameQuestion(7L, "평생 하나만 먹어야 한다면?",
             List.of(new BalanceGameOption(1L, "평생 라면"), new BalanceGameOption(2L, "평생 치킨")));
 
@@ -83,6 +91,9 @@ class BalanceGameServiceUnitTest {
     @Mock
     ChatRoomOpener chatRoomOpener;
 
+    @Mock
+    CurrentSeasonReader currentSeasonReader;
+
     @InjectMocks
     BalanceGameService balanceGameService;
 
@@ -98,8 +109,8 @@ class BalanceGameServiceUnitTest {
         // when
         BalanceGameResult result = balanceGameService.current(ME, PARTNER);
 
-        // then: 이번 회차를 (이미 있으면 그대로) 만들고 공통 질문을 담는다
-        then(balanceGameRoundRepository).should().upsert(startsAt, 7L);
+        // then: 이번 회차를 (이미 있으면 그대로) 이번 시즌 회차로 만들고 공통 질문을 담는다
+        then(balanceGameRoundRepository).should().upsert(startsAt, 7L, SEASON_ID);
         assertThat(result.roundId()).isEqualTo(ROUND_ID);
         assertThat(result.partnerId()).isEqualTo(PARTNER);
         assertThat(result.question().text()).isEqualTo("평생 하나만 먹어야 한다면?");
@@ -186,7 +197,7 @@ class BalanceGameServiceUnitTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.USER_NOT_FOUND);
-        then(balanceGameRoundRepository).should(never()).upsert(any(), any());
+        then(balanceGameRoundRepository).should(never()).upsert(any(), any(), any());
     }
 
     @Test
@@ -371,8 +382,109 @@ class BalanceGameServiceUnitTest {
         then(intimacyBonusRepository).should(never()).save(any());
     }
 
+    // ---------------------------------------------------------------- 기록 조회
+
+    @Test
+    @DisplayName("첫 페이지는 cursor 없이 이번 시즌 기록을 20개 넘게 조회해 20개만 담고, 마지막 회차 id 를 다음 cursor 로 준다")
+    void history_first_page_returns_20_and_next_cursor() {
+        // given: 서로 답한 회차가 21개 이상 (조회는 한 개 더 가져와 다음 페이지 여부를 판단)
+        givenVisiblePartner();
+        givenCurrentSeason();
+        given(balanceGameQuestionLoader.findQuestion(7L)).willReturn(Optional.of(QUESTION));
+        List<HistoryProjection> rows = LongStream.rangeClosed(1, 21)
+                .mapToObj(i -> historyRow(1000L - i, 1L, 1L))
+                .toList();
+        given(balanceGameAnswerRepository.findHistory(ME, PARTNER, SEASON_ID, null, 21)).willReturn(rows);
+
+        // when: cursor 없이 첫 페이지 조회
+        BalanceGameHistoryResult result = balanceGameService.history(ME, PARTNER, null);
+
+        // then: 20개만 최신 회차부터 담고, 20번째 회차 id 가 다음 cursor
+        assertThat(result.questions()).hasSize(20);
+        assertThat(result.questions().getFirst().roundId()).isEqualTo(999L);
+        assertThat(result.nextCursor()).isEqualTo(980L);
+    }
+
+    @Test
+    @DisplayName("기록 한 행에는 그 회차 질문과 내 답, 서로 같은 답이었는지를 담는다")
+    void history_item_has_question_my_option_and_matched() {
+        // given: 최신 회차는 서로 1번(일치), 그 전 회차는 나 1번·트윈 2번(불일치)
+        givenVisiblePartner();
+        givenCurrentSeason();
+        given(balanceGameQuestionLoader.findQuestion(7L)).willReturn(Optional.of(QUESTION));
+        given(balanceGameAnswerRepository.findHistory(ME, PARTNER, SEASON_ID, null, 21))
+                .willReturn(List.of(historyRow(102L, 1L, 1L), historyRow(101L, 1L, 2L)));
+
+        // when: 첫 페이지 조회
+        BalanceGameHistoryResult result = balanceGameService.history(ME, PARTNER, null);
+
+        // then: 더 이전 회차가 없으므로 nextCursor 는 null
+        assertThat(result.questions()).satisfiesExactly(
+                first -> {
+                    assertThat(first.roundId()).isEqualTo(102L);
+                    assertThat(first.question().text()).isEqualTo("평생 하나만 먹어야 한다면?");
+                    assertThat(first.question().options()).hasSize(2);
+                    assertThat(first.myOptionId()).isEqualTo(1L);
+                    assertThat(first.matched()).isTrue();
+                },
+                second -> assertThat(second.matched()).isFalse());
+        assertThat(result.nextCursor()).isNull();
+    }
+
+    @Test
+    @DisplayName("cursor 를 주면 그 회차 시작 시각보다 이른 회차부터 조회한다")
+    void history_with_cursor_reads_before_cursor_round() {
+        // given: cursor 회차는 2026-10-01 12시 회차
+        givenVisiblePartner();
+        givenCurrentSeason();
+        Instant cursorStartsAt = Instant.parse("2026-10-01T03:00:00Z");
+        given(balanceGameRoundRepository.findById(ROUND_ID)).willReturn(Optional.of(round(cursorStartsAt)));
+        given(balanceGameAnswerRepository.findHistory(ME, PARTNER, SEASON_ID, cursorStartsAt, 21)).willReturn(List.of());
+
+        // when: cursor 회차 id 로 다음 페이지 조회
+        BalanceGameHistoryResult result = balanceGameService.history(ME, PARTNER, ROUND_ID);
+
+        // then: cursor 회차 시작 시각 기준으로 조회했고, 더 이전 회차가 없어 빈 목록·null cursor
+        assertThat(result.questions()).isEmpty();
+        assertThat(result.nextCursor()).isNull();
+    }
+
+    @Test
+    @DisplayName("없는 회차를 cursor 로 주면 INVALID_REQUEST 이고 기록을 조회하지 않는다")
+    void history_with_unknown_cursor_throws() {
+        // given: 사람 목록에 있는 트윈, cursor 로 받은 회차는 없다
+        givenVisiblePartner();
+        given(balanceGameRoundRepository.findById(ROUND_ID)).willReturn(Optional.empty());
+
+        // when & then: INVALID_REQUEST 예외 + 기록 조회 안 함
+        assertThatThrownBy(() -> balanceGameService.history(ME, PARTNER, ROUND_ID))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_REQUEST);
+        then(balanceGameAnswerRepository).should(never()).findHistory(anyLong(), anyLong(), anyLong(), any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("트윈이 나를 차단했으면 기록도 RELATIONSHIP_NOT_FOUND 이고 조회하지 않는다")
+    void history_blocked_by_partner_throws() {
+        // given: 관계는 있지만 트윈이 나를 차단했다
+        given(userRepository.findById(PARTNER)).willReturn(Optional.of(user(PARTNER)));
+        given(relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(eq(ME), eq(PARTNER), any(LocalDateTime.class)))
+                .willReturn(Optional.of(BeanUtils.instantiateClass(Relationship.class)));
+        given(blockRepository.existsByUserIdAndBlockedUserId(ME, PARTNER)).willReturn(false);
+        given(blockRepository.existsByUserIdAndBlockedUserId(PARTNER, ME)).willReturn(true);
+
+        // when & then: RELATIONSHIP_NOT_FOUND 예외 + 기록 조회 안 함
+        assertThatThrownBy(() -> balanceGameService.history(ME, PARTNER, null))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.RELATIONSHIP_NOT_FOUND);
+        then(balanceGameAnswerRepository).should(never()).findHistory(anyLong(), anyLong(), anyLong(), any(), anyInt());
+    }
+
     private Instant givenVisiblePartnerAndRound() {
         givenVisiblePartner();
+        givenCurrentSeason();
         Instant startsAt = thisRound();
         given(balanceGameQuestionLoader.questionFor(BalanceGameSchedule.sequenceOf(startsAt))).willReturn(QUESTION);
         given(balanceGameQuestionLoader.findQuestion(7L)).willReturn(Optional.of(QUESTION));
@@ -397,6 +509,36 @@ class BalanceGameServiceUnitTest {
                 .willReturn(Optional.ofNullable(myOptionId).map(optionId -> answer(ME, PARTNER, optionId)));
         given(balanceGameAnswerRepository.findByRoundIdAndUserIdAndPartnerUserId(ROUND_ID, PARTNER, ME))
                 .willReturn(Optional.ofNullable(partnerOptionId).map(optionId -> answer(PARTNER, ME, optionId)));
+    }
+
+    private void givenCurrentSeason() {
+        Season season = BeanUtils.instantiateClass(Season.class);
+        ReflectionTestUtils.setField(season, "id", SEASON_ID);
+        given(currentSeasonReader.read()).willReturn(season);
+    }
+
+    private HistoryProjection historyRow(Long roundId, Long myOptionId, Long partnerOptionId) {
+        return new HistoryProjection() {
+            @Override
+            public Long getRoundId() {
+                return roundId;
+            }
+
+            @Override
+            public Long getQuestionId() {
+                return 7L;
+            }
+
+            @Override
+            public Long getMyOptionId() {
+                return myOptionId;
+            }
+
+            @Override
+            public Long getPartnerOptionId() {
+                return partnerOptionId;
+            }
+        };
     }
 
     private Instant thisRound() {

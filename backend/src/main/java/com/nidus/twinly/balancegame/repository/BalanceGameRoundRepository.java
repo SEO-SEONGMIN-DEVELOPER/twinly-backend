@@ -15,11 +15,11 @@ public interface BalanceGameRoundRepository extends JpaRepository<BalanceGameRou
 
     @Modifying
     @Query(value = """
-            INSERT INTO balance_game_rounds (starts_at, question_id, created_at)
-            VALUES (:startsAt, :questionId, UTC_TIMESTAMP(6))
+            INSERT INTO balance_game_rounds (starts_at, question_id, season_id, created_at)
+            VALUES (:startsAt, :questionId, :seasonId, UTC_TIMESTAMP(6))
             ON DUPLICATE KEY UPDATE id = id
             """, nativeQuery = true)
-    void upsert(@Param("startsAt") Instant startsAt, @Param("questionId") Long questionId);
+    void upsert(@Param("startsAt") Instant startsAt, @Param("questionId") Long questionId, @Param("seasonId") Long seasonId);
 
     Optional<BalanceGameRound> findByStartsAt(Instant startsAt);
 

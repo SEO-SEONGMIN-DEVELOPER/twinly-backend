@@ -21,6 +21,8 @@ import com.nidus.twinly.people.repository.EncounterRepository;
 import com.nidus.twinly.people.repository.TwinViewRepository;
 import com.nidus.twinly.relationship.entity.Relationship;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
+import com.nidus.twinly.season.entity.Season;
+import com.nidus.twinly.season.repository.SeasonRepository;
 import com.nidus.twinly.support.AbstractIntegrationTest;
 import com.nidus.twinly.common.photo.PhotoType;
 import com.nidus.twinly.user.entity.Photo;
@@ -88,6 +90,9 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     BalanceGameAnswerRepository balanceGameAnswerRepository;
 
+    @Autowired
+    SeasonRepository seasonRepository;
+
     @Test
     @DisplayName("사람 목록 조회: 실제 관계 데이터를 파트너 id 오름차순으로 관통 조회해 친밀도·관계 타입을 내려준다")
     void people_success_end_to_end() throws Exception {
@@ -119,6 +124,22 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.threshold.bestFriend").value(70))
                 .andExpect(jsonPath("$.page.hasMore").value(false))
                 .andExpect(jsonPath("$.page.nextCursor").isEmpty());
+    }
+
+    @Test
+    @DisplayName("사람 목록 조회: 관계가 없는 시즌 미참여자는 오류 없이 200 과 빈 목록을 받는다")
+    void people_without_relationship_returns_empty() throws Exception {
+        // given: 시즌 참여·관계가 없는 사용자
+        User me = saveUser();
+
+        // when: 사람 목록 조회
+        var result = mockMvc.perform(get("/api/v1/people")
+                .header("Authorization", bearer(me.getId())));
+
+        // then: 200 + 빈 목록, 다음 페이지 없음
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.people.length()").value(0))
+                .andExpect(jsonPath("$.page.hasMore").value(false));
     }
 
     @Test
@@ -158,8 +179,9 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
 
         Instant currentStartsAt = BalanceGameSchedule.roundStartOf(KstTimes.now());
         Instant previousStartsAt = BalanceGameSchedule.previousRoundStartOf(KstTimes.now());
-        balanceGameRoundRepository.upsert(currentStartsAt, 1L);
-        balanceGameRoundRepository.upsert(previousStartsAt, 1L);
+        Long seasonId = seasonRepository.save(Season.create(Instant.now().minusSeconds(86400), Instant.now().plusSeconds(86400))).getId();
+        balanceGameRoundRepository.upsert(currentStartsAt, 1L, seasonId);
+        balanceGameRoundRepository.upsert(previousStartsAt, 1L, seasonId);
         Long currentRoundId = balanceGameRoundRepository.findByStartsAt(currentStartsAt).orElseThrow().getId();
         Long previousRoundId = balanceGameRoundRepository.findByStartsAt(previousStartsAt).orElseThrow().getId();
         balanceGameAnswerRepository.saveAll(List.of(
