@@ -20,6 +20,7 @@ import com.nidus.twinly.chat.dto.result.ChatRoomResult;
 import com.nidus.twinly.chat.dto.result.ChatRoomsResult;
 import com.nidus.twinly.chat.dto.result.ChatSendMessageResult;
 import com.nidus.twinly.chat.service.ChatService;
+import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.relationship.domain.RelationshipSpecificType;
 import com.nidus.twinly.user.dto.header.UserInfo;
 import com.nidus.twinly.user.service.UserService;
@@ -218,6 +219,9 @@ class ChatControllerUnitTest {
                 .andExpect(jsonPath("$.roomId").value("10"))
                 .andExpect(jsonPath("$.matchId").value("100"))
                 .andExpect(jsonPath("$.partner.userId").value("2"))
+                .andExpect(jsonPath("$.partner.gender").value("female"))
+                .andExpect(jsonPath("$.partner.organization").value("성균관대"))
+                .andExpect(jsonPath("$.partner.birthYear").value("01"))
                 .andExpect(jsonPath("$.partner.intimacy").value(45))
                 .andExpect(jsonPath("$.partner.gameIntimacy").value(6))
                 .andExpect(jsonPath("$.partner.relationshipSpecificType").value("친한 사이"))
@@ -400,6 +404,9 @@ class ChatControllerUnitTest {
                 new ChatRoomDetailPartnerResult(
                         2L,
                         "partner",
+                        Gender.FEMALE,
+                        "성균관대",
+                        "01",
                         null,
                         45,
                         6,
