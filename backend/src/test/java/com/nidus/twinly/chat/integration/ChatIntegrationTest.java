@@ -224,6 +224,9 @@ class ChatIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.entryStatus.partnerEntryAgreed").value(true))
                 .andExpect(jsonPath("$.partner.userId").value(fixture.partner().getId().toString()))
                 .andExpect(jsonPath("$.partner.userName").value(fixture.partner().displayNickname()))
+                .andExpect(jsonPath("$.partner.gender").value("male"))
+                .andExpect(jsonPath("$.partner.organization").value(fixture.partner().shortOrganization()))
+                .andExpect(jsonPath("$.partner.birthYear").value("00"))
                 .andExpect(jsonPath("$.isCurrentSeason").value(true));
     }
 

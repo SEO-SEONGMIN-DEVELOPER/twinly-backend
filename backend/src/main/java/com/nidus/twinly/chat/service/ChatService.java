@@ -353,6 +353,9 @@ public class ChatService {
                 new ChatRoomDetailPartnerResult(
                         partner.getId(),
                         partner.displayNickname(),
+                        partner.isWithdrawn() ? null : partner.getGender(),
+                        partner.isWithdrawn() ? null : partner.shortOrganization(),
+                        partner.isWithdrawn() ? null : partner.shortBirthYear(),
                         toProfilePhotoInfo(partner, partnerPhoto),
                         intimacy.value(),
                         intimacy.game(),
