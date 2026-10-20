@@ -52,9 +52,9 @@ import com.nidus.twinly.user.repository.PhotoRepository;
 import com.nidus.twinly.user.repository.UserRepository;
 import com.nidus.twinly.user.repository.VerificationRepository;
 import io.jsonwebtoken.JwtException;
-import com.nidus.twinly.auth.dto.result.NiceAuthUrlResult;
-import com.nidus.twinly.auth.client.NiceAuthResult;
-import com.nidus.twinly.auth.client.NiceResultNotAvailableException;
+import com.nidus.twinly.auth.dto.result.IdentityAuthUrlResult;
+import com.nidus.twinly.auth.domain.InvalidIdentityResultException;
+import com.nidus.twinly.auth.domain.VerifiedIdentity;
 import com.nidus.twinly.auth.dto.command.AuthIdentityVerifyCommand;
 import com.nidus.twinly.common.domain.MobileCarrier;
 import com.nidus.twinly.common.domain.NationalInfo;
@@ -77,7 +77,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.sql.SQLException;
 import java.time.Duration;
-import java.time.format.DateTimeFormatter;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -89,6 +88,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -111,7 +111,7 @@ class AuthServiceUnitTest {
     private static final String CODE = "123456";
     private static final String IDENTITY_REQUEST_NO = "TWINLY-11111111-2222-3333-4444-555555555555";
     private static final String IDENTITY_TRANSACTION_ID = "UzE0MUQyNkFDOEQ3NzYyMDIwMjUxMTEzMTAwMjM3MzM4OTQ5QUMwMkU";
-    private static final String IDENTITY_AUTH_URL = "https://auth.niceid.co.kr/ido/cert/request/S1afc40674-b094-44e7-be4b-3e42011b5f81";
+    private static final String IDENTITY_AUTH_URL = "https://identity.example.com/cert/request/S1afc40674-b094-44e7-be4b-3e42011b5f81";
     private static final String IDENTITY_RETURN_URL = "https://stage-api.trytwinly.com/api/v1/auth/onboarding/identity/return";
     private static final String IDENTITY_CLOSE_URL = "https://stage-api.trytwinly.com/api/v1/auth/onboarding/identity/close";
     private static final String WEB_TRANSACTION_ID = "ZGIxOGZkYjUtMjE4NC00MDZmLTkxZjgtM2ZhNjA0OTdiZTY2";
@@ -151,7 +151,7 @@ class AuthServiceUnitTest {
     AnonSessionIdentityVerificationRepository anonSessionIdentityVerificationRepository;
 
     @Mock
-    NiceIdentityService niceIdentityService;
+    IdentityVerificationProvider identityVerificationProvider;
 
     @Mock
     IdentityVerificationLogService identityVerificationLogService;
@@ -447,17 +447,18 @@ class AuthServiceUnitTest {
     // ---------- 온보딩 본인인증 ----------
 
     @Test
-    @DisplayName("본인인증 발급: 발급 이력이 없으면 NICE 인증 URL을 받아 새 인증 건을 저장하고 authUrl과 return/close URL을 반환한다")
+    @DisplayName("본인인증 발급: 발급 이력이 없으면 본인인증 업체의 인증 URL을 받아 새 인증 건을 저장하고 authUrl과 return/close URL을 반환한다")
     void identityPrepare_creates_new_verification() {
-        // given: 이 익명 세션의 본인인증 행이 아직 없고, NICE가 인증 URL을 정상 발급
+        // given: 이 익명 세션의 본인인증 행이 아직 없고, 본인인증 업체가 인증 URL을 정상 발급
+        givenLockedAnonSession();
         given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
                 .willReturn(Optional.empty());
-        givenNiceAuthUrl();
+        givenAuthUrl();
 
         // when: 본인인증 발급
         AuthIdentityPrepareResult result = authService.onboardingIdentityPrepare(SNAPSHOT);
 
-        // then: 서버가 만든 request_no와 NICE가 준 transaction_id가 세션에 묶여 저장되고, 발급 횟수는 1로 시작한다
+        // then: 서버가 만든 request_no와 본인인증 업체가 준 transaction_id가 세션에 묶여 저장된다
         ArgumentCaptor<AnonSessionIdentityVerification> captor =
                 ArgumentCaptor.forClass(AnonSessionIdentityVerification.class);
         then(anonSessionIdentityVerificationRepository).should().save(captor.capture());
@@ -466,31 +467,33 @@ class AuthServiceUnitTest {
         assertThat(saved.getAnonSessionId()).isEqualTo(ANON_SESSION_ID);
         assertThat(saved.getRequestNo()).startsWith("TWINLY-");
         assertThat(saved.getTransactionId()).isEqualTo(IDENTITY_TRANSACTION_ID);
-        assertThat(saved.getIssueCount()).isEqualTo(1);
         assertThat(saved.isVerified()).isFalse();
 
-        // then: NICE에 보낸 request_no와 저장된 값이 같다
-        then(niceIdentityService).should().requestAuthUrl(saved.getRequestNo());
+        // then: 본인인증 업체에 보낸 request_no와 저장된 값이 같고, 같은 값으로 발급 로그가 남는다
+        then(identityVerificationProvider).should().requestAuthUrl(saved.getRequestNo());
+        then(identityVerificationLogService).should()
+                .issued(ANON_SESSION_ID, saved.getRequestNo(), IDENTITY_TRANSACTION_ID);
 
         // then: 앱에는 authUrl, return/close URL이 나가고 transaction_id는 나가지 않는다
         assertThat(result.authUrl()).isEqualTo(IDENTITY_AUTH_URL);
         assertThat(result.returnUrl()).isEqualTo(IDENTITY_RETURN_URL);
         assertThat(result.closeUrl()).isEqualTo(IDENTITY_CLOSE_URL);
 
-        // then: 만료는 NICE transaction_id 유효시간에 맞춘 10분 뒤이고 응답의 만료 시각과 같다
+        // then: 만료는 본인인증 업체 transaction_id 유효시간에 맞춘 10분 뒤이고 응답의 만료 시각과 같다
         assertThat(result.expiresAt()).isEqualTo(saved.getExpiresAt());
         assertThat(result.expiresAt()).isBetween(Instant.now().plus(9, ChronoUnit.MINUTES), Instant.now().plus(10, ChronoUnit.MINUTES));
     }
 
     @Test
-    @DisplayName("본인인증 발급: 이미 발급 이력이 있으면 새로 저장하지 않고 request_no·transaction_id를 교체하며 발급 횟수를 올린다")
+    @DisplayName("본인인증 발급: 이미 발급 이력이 있으면 새로 저장하지 않고 request_no·transaction_id를 교체하며 발급 로그를 남긴다")
     void identityPrepare_replaces_previous_request() {
         // given: 아직 인증되지 않은 발급 이력이 1회 존재
+        givenLockedAnonSession();
         AnonSessionIdentityVerification existing = issuedIdentity();
         String previousRequestNo = existing.getRequestNo();
         given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
                 .willReturn(Optional.of(existing));
-        given(niceIdentityService.requestAuthUrl(anyString())).willReturn(new NiceAuthUrlResult(
+        given(identityVerificationProvider.requestAuthUrl(anyString())).willReturn(new IdentityAuthUrlResult(
                 IDENTITY_AUTH_URL, "tx-second", IDENTITY_RETURN_URL, IDENTITY_CLOSE_URL));
 
         // when: 본인인증 재발급
@@ -502,14 +505,16 @@ class AuthServiceUnitTest {
         assertThat(existing.getTransactionId()).isEqualTo("tx-second");
         assertThat(result.authUrl()).isEqualTo(IDENTITY_AUTH_URL);
 
-        // then: 발급 횟수가 누적된다 (재발급으로 초기화되지 않는다)
-        assertThat(existing.getIssueCount()).isEqualTo(2);
+        // then: 재발급도 발급 횟수에 들어가도록 로그가 남는다
+        then(identityVerificationLogService).should()
+                .issued(ANON_SESSION_ID, existing.getRequestNo(), "tx-second");
     }
 
     @Test
-    @DisplayName("본인인증 발급: 이미 인증이 끝난 세션이면 NICE를 호출하지 않고 IDENTITY_ALREADY_VERIFIED 예외가 발생한다")
+    @DisplayName("본인인증 발급: 이미 인증이 끝난 세션이면 본인인증 업체를 호출하지 않고 IDENTITY_ALREADY_VERIFIED 예외가 발생한다")
     void identityPrepare_when_already_verified_throws() {
         // given: 이미 본인인증을 마친 세션
+        givenLockedAnonSession();
         given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
                 .willReturn(Optional.of(verifiedIdentity()));
 
@@ -518,56 +523,94 @@ class AuthServiceUnitTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.IDENTITY_ALREADY_VERIFIED);
-        then(niceIdentityService).shouldHaveNoInteractions();
+        then(identityVerificationProvider).shouldHaveNoInteractions();
     }
 
     @Test
-    @DisplayName("본인인증 발급: 같은 시간 창에서 5회를 채웠으면 NICE를 호출하지 않고 IDENTITY_RATE_LIMITED 예외가 발생하며 인증 건을 바꾸지 않는다")
+    @DisplayName("본인인증 발급: 최근 1시간 발급 로그가 5건이면 본인인증 업체를 호출하지 않고 IDENTITY_RATE_LIMITED 예외가 발생하며 인증 건을 바꾸지 않는다")
     void identityPrepare_when_rate_limited_throws() {
-        // given: 1시간 창 안에서 이미 5회 발급한 세션
+        // given: 발급 이력이 있고, 로그 기준으로 1시간 안에 5회를 채운 세션
+        givenLockedAnonSession();
         AnonSessionIdentityVerification existing = issuedIdentity();
-        ReflectionTestUtils.setField(existing, "issueCount", 5);
         String previousRequestNo = existing.getRequestNo();
         given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
                 .willReturn(Optional.of(existing));
+        given(identityVerificationLogService.isRateLimited(eq(ANON_SESSION_ID), any(), eq(Duration.ofHours(1)), eq(5)))
+                .willReturn(true);
 
-        // when & then: 429로 막고, NICE 호출 없이 발급 상태는 그대로 유지된다
+        // when & then: 429로 막고, 본인인증 업체 호출도 발급 로그도 없이 발급 상태는 그대로 유지된다
         assertThatThrownBy(() -> authService.onboardingIdentityPrepare(SNAPSHOT))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.IDENTITY_RATE_LIMITED);
 
-        then(niceIdentityService).shouldHaveNoInteractions();
+        then(identityVerificationProvider).shouldHaveNoInteractions();
+        then(identityVerificationLogService).should(never()).issued(any(), any(), any());
         assertThat(existing.getRequestNo()).isEqualTo(previousRequestNo);
-        assertThat(existing.getIssueCount()).isEqualTo(5);
     }
 
     @Test
-    @DisplayName("본인인증 발급: 시간 창이 지났으면 발급 횟수를 1로 초기화하고 다시 발급한다")
-    void identityPrepare_resets_expired_issue_window() {
-        // given: 5회를 채웠지만 발급 창이 1시간을 넘긴 세션
-        AnonSessionIdentityVerification existing = issuedIdentity();
-        ReflectionTestUtils.setField(existing, "issueCount", 5);
-        ReflectionTestUtils.setField(existing, "issueWindowStartedAt", Instant.now().minus(Duration.ofHours(2)));
-        given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
-                .willReturn(Optional.of(existing));
-        givenNiceAuthUrl();
-
-        // when: 본인인증 발급
-        AuthIdentityPrepareResult result = authService.onboardingIdentityPrepare(SNAPSHOT);
-
-        // then: 새 창이 시작되어 발급이 허용된다
-        assertThat(result.authUrl()).isEqualTo(IDENTITY_AUTH_URL);
-        assertThat(existing.getIssueCount()).isEqualTo(1);
-    }
-
-    @Test
-    @DisplayName("본인인증 발급: NICE 인증 URL 발급이 실패하면 예외가 그대로 올라가고 인증 건은 저장·변경되지 않는다")
-    void identityPrepare_when_nice_fails_does_not_persist() {
-        // given: 발급 이력이 없고, NICE 연동이 실패
+    @DisplayName("본인인증 발급: 인증 행이 없어도 발급 로그가 5건이면 IDENTITY_RATE_LIMITED 예외가 발생한다")
+    void identityPrepare_when_rate_limited_without_verification_throws() {
+        // given: 이전 발급에서 본인인증 업체 호출·로그 기록 뒤 인증 행 저장이 롤백되어 행은 없고 로그만 5건 남은 세션
+        givenLockedAnonSession();
         given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
                 .willReturn(Optional.empty());
-        given(niceIdentityService.requestAuthUrl(anyString()))
+        given(identityVerificationLogService.isRateLimited(eq(ANON_SESSION_ID), any(), eq(Duration.ofHours(1)), eq(5)))
+                .willReturn(true);
+
+        // when & then: 행 유무와 상관없이 로그 기준으로 막는다
+        assertThatThrownBy(() -> authService.onboardingIdentityPrepare(SNAPSHOT))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.IDENTITY_RATE_LIMITED);
+
+        then(identityVerificationProvider).shouldHaveNoInteractions();
+        then(anonSessionIdentityVerificationRepository).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("본인인증 발급: 동시 요청을 한 줄로 세우기 위해 익명 세션 락을 인증 행 조회·발급 횟수 조회보다 먼저 잡는다")
+    void identityPrepare_locks_anon_session_before_reading() {
+        // given: 발급 이력이 없고, 본인인증 업체가 인증 URL을 정상 발급
+        givenLockedAnonSession();
+        given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
+                .willReturn(Optional.empty());
+        givenAuthUrl();
+
+        // when: 본인인증 발급
+        authService.onboardingIdentityPrepare(SNAPSHOT);
+
+        // then: 락이 첫 조회여야 대기 뒤 발급 횟수 조회가 앞선 요청의 로그까지 본다
+        InOrder inOrder = inOrder(anonSessionRepository, anonSessionIdentityVerificationRepository, identityVerificationLogService);
+        inOrder.verify(anonSessionRepository).findWithLockById(ANON_SESSION_ID);
+        inOrder.verify(anonSessionIdentityVerificationRepository).findByAnonSessionId(ANON_SESSION_ID);
+        inOrder.verify(identityVerificationLogService).isRateLimited(eq(ANON_SESSION_ID), any(), any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("본인인증 발급: 익명 세션 행이 없으면 본인인증 업체를 호출하지 않고 INVALID_ANON_SESSION 예외가 발생한다")
+    void identityPrepare_when_anon_session_missing_throws() {
+        // given: 토큰 인증 뒤 세션 행이 삭제된 상태
+        given(anonSessionRepository.findWithLockById(ANON_SESSION_ID)).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> authService.onboardingIdentityPrepare(SNAPSHOT))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_ANON_SESSION);
+        then(identityVerificationProvider).shouldHaveNoInteractions();
+        then(identityVerificationLogService).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("본인인증 발급: 본인인증 업체의 인증 URL 발급이 실패하면 예외가 그대로 올라가고 인증 건은 저장·변경되지 않는다")
+    void identityPrepare_when_provider_fails_does_not_persist() {
+        // given: 발급 이력이 없고, 본인인증 업체 연동이 실패
+        givenLockedAnonSession();
+        given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
+                .willReturn(Optional.empty());
+        given(identityVerificationProvider.requestAuthUrl(anyString()))
                 .willThrow(new BusinessException(ErrorCode.IDENTITY_VERIFICATION_FAILED));
 
         // when & then: 502로 나가고, transaction_id 없는 반쪽 인증 건이 남지 않는다
@@ -579,19 +622,19 @@ class AuthServiceUnitTest {
     }
 
     @Test
-    @DisplayName("본인인증 검증: NICE 결과를 받으면 이름·생년월일·성별·내외국인·연락처·통신사·DI를 세션에 기록한다")
+    @DisplayName("본인인증 검증: 본인인증 업체 결과를 받으면 이름·생년월일·성별·내외국인·연락처·통신사·DI를 세션에 기록한다")
     void identityVerify_success_records_result() {
-        // given: 발급된 인증 건이 있고, NICE 가 휴대폰 인증 결과 7개 항목을 돌려줌
+        // given: 발급된 인증 건이 있고, 본인인증 업체가 휴대폰 인증 결과 7개 항목을 돌려줌
         AnonSessionIdentityVerification issued = issuedIdentity();
         givenIssuedIdentity(issued);
-        givenNiceResult(niceResult(compact(adult())));
+        givenIdentity(identity(adult()));
         given(blindIndexHasher.hash(DI)).willReturn("hash:" + DI);
         given(userRepository.existsByDiHash("hash:" + DI)).willReturn(false);
 
         // when: 앱이 웹뷰에서 가로챈 web_transaction_id 로 검증
         authService.onboardingIdentityVerify(SNAPSHOT, VERIFY_COMMAND);
 
-        // then: NICE 코드값이 우리 enum 으로, yyyymmdd 가 yyyy-MM-dd 로 바뀌어 기록된다
+        // then: 검증된 본인 정보가 그대로 세션에 기록되고 생년월일은 yyyy-MM-dd 로 남는다
         assertThat(issued.isVerified()).isTrue();
         assertThat(issued.getName()).isEqualTo(IDENTITY_NAME);
         assertThat(issued.getBirthDate()).isEqualTo(adult().toString());
@@ -603,11 +646,11 @@ class AuthServiceUnitTest {
         assertThat(issued.getDiHash()).isEqualTo("hash:" + DI);
 
         // then: 결과 조회에 저장된 request_no·transaction_id 와 앱이 보낸 web_transaction_id 세 값을 함께 쓴다
-        then(niceIdentityService).should().fetchResult(IDENTITY_REQUEST_NO, IDENTITY_TRANSACTION_ID, WEB_TRANSACTION_ID);
+        then(identityVerificationProvider).should().fetchResult(IDENTITY_REQUEST_NO, IDENTITY_TRANSACTION_ID, WEB_TRANSACTION_ID);
     }
 
     @Test
-    @DisplayName("본인인증 검증: 발급 이력이 없으면 IDENTITY_NOT_VERIFIED 예외가 발생하고 NICE 를 조회하지 않는다")
+    @DisplayName("본인인증 검증: 발급 이력이 없으면 IDENTITY_NOT_VERIFIED 예외가 발생하고 본인인증 업체를 조회하지 않는다")
     void identityVerify_without_issued_throws() {
         // given
         given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
@@ -618,11 +661,11 @@ class AuthServiceUnitTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.IDENTITY_NOT_VERIFIED);
-        then(niceIdentityService).shouldHaveNoInteractions();
+        then(identityVerificationProvider).shouldHaveNoInteractions();
     }
 
     @Test
-    @DisplayName("본인인증 검증: 이미 인증된 세션의 재호출은 NICE 조회 없이 성공으로 끝난다 (결과 조회는 1회만 가능하므로 멱등이어야 한다)")
+    @DisplayName("본인인증 검증: 이미 인증된 세션의 재호출은 본인인증 업체 조회 없이 성공으로 끝난다 (결과 조회는 1회만 가능하므로 멱등이어야 한다)")
     void identityVerify_when_already_verified_is_idempotent() {
         // given
         given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
@@ -632,11 +675,11 @@ class AuthServiceUnitTest {
         authService.onboardingIdentityVerify(SNAPSHOT, VERIFY_COMMAND);
 
         // then
-        then(niceIdentityService).shouldHaveNoInteractions();
+        then(identityVerificationProvider).shouldHaveNoInteractions();
     }
 
     @Test
-    @DisplayName("본인인증 검증: 발급한 인증 건이 만료되었으면 IDENTITY_NOT_VERIFIED 예외가 발생하고 NICE 를 조회하지 않는다")
+    @DisplayName("본인인증 검증: 발급한 인증 건이 만료되었으면 IDENTITY_NOT_VERIFIED 예외가 발생하고 본인인증 업체를 조회하지 않는다")
     void identityVerify_with_expired_throws() {
         // given
         AnonSessionIdentityVerification expired = issuedIdentity();
@@ -648,32 +691,48 @@ class AuthServiceUnitTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.IDENTITY_NOT_VERIFIED);
-        then(niceIdentityService).shouldHaveNoInteractions();
+        then(identityVerificationProvider).shouldHaveNoInteractions();
     }
 
     @Test
-    @DisplayName("본인인증 검증: transaction_id 가 없는 행(NICE 전환 전 발급 건)이면 IDENTITY_NOT_VERIFIED 로 재발급을 유도한다")
-    void identityVerify_without_transaction_id_throws() {
-        // given
+    @DisplayName("본인인증 검증: 만료 전인데 transaction_id 가 없으면 데이터 이상이므로 IllegalStateException 이 발생하고 본인인증 업체를 조회하지 않는다")
+    void identityVerify_without_transaction_id_throws_illegal_state() {
+        // given: 지금 코드로는 생길 수 없는, 만료 전이면서 transaction_id 가 빈 행
+        AnonSessionIdentityVerification broken = issuedIdentity();
+        ReflectionTestUtils.setField(broken, "transactionId", null);
+        givenIssuedIdentity(broken);
+
+        // when & then: 사용자 상황이 아닌 서버 데이터 이상이므로 500 으로 올라가 ERROR 로그가 남는다
+        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT, VERIFY_COMMAND))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("anonSessionId=" + ANON_SESSION_ID);
+        then(identityVerificationProvider).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("본인인증 검증: transaction_id 가 없는 옛 행(NICE 전환 전 발급 건)은 이미 만료되었으므로 IDENTITY_NOT_VERIFIED 로 재발급을 유도한다")
+    void identityVerify_legacy_without_transaction_id_throws_not_verified() {
+        // given: NICE 전환 전에 발급되어 transaction_id 가 없고 오래전에 만료된 행
         AnonSessionIdentityVerification legacy = issuedIdentity();
         ReflectionTestUtils.setField(legacy, "transactionId", null);
+        ReflectionTestUtils.setField(legacy, "expiresAt", Instant.now().minusSeconds(1));
         givenIssuedIdentity(legacy);
 
-        // when & then
+        // when & then: 만료 검사가 먼저라 재발급 유도 응답이 나간다
         assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT, VERIFY_COMMAND))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.IDENTITY_NOT_VERIFIED);
-        then(niceIdentityService).shouldHaveNoInteractions();
+        then(identityVerificationProvider).shouldHaveNoInteractions();
     }
 
     @Test
-    @DisplayName("본인인증 검증: NICE 가 결과를 제공하지 않으면(미완료·만료·기제공) IDENTITY_NOT_VERIFIED 가 그대로 올라간다")
-    void identityVerify_when_nice_result_not_available_throws() {
+    @DisplayName("본인인증 검증: 본인인증 업체가 결과를 제공하지 않으면(미완료·만료·기제공) IDENTITY_NOT_VERIFIED 가 그대로 올라간다")
+    void identityVerify_when_provider_result_not_available_throws() {
         // given
         givenIssuedIdentity(issuedIdentity());
-        given(niceIdentityService.fetchResult(IDENTITY_REQUEST_NO, IDENTITY_TRANSACTION_ID, WEB_TRANSACTION_ID))
-                .willThrow(new NiceResultNotAvailableException("3032"));
+        given(identityVerificationProvider.fetchResult(IDENTITY_REQUEST_NO, IDENTITY_TRANSACTION_ID, WEB_TRANSACTION_ID))
+                .willThrow(new BusinessException(ErrorCode.IDENTITY_NOT_VERIFIED));
 
         // when & then
         assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT, VERIFY_COMMAND))
@@ -688,7 +747,7 @@ class AuthServiceUnitTest {
         // given
         AnonSessionIdentityVerification issued = issuedIdentity();
         givenIssuedIdentity(issued);
-        givenNiceResult(niceResult(compact(KstTimes.today().minusYears(19))));
+        givenIdentity(identity(KstTimes.today().minusYears(19)));
         given(blindIndexHasher.hash(DI)).willReturn("hash:" + DI);
         given(userRepository.existsByDiHash("hash:" + DI)).willReturn(false);
 
@@ -704,7 +763,7 @@ class AuthServiceUnitTest {
     void identityVerify_below_min_age_throws() {
         // given
         givenIssuedIdentity(issuedIdentity());
-        givenNiceResult(niceResult(compact(KstTimes.today().minusYears(19).plusDays(1))));
+        givenIdentity(identity(KstTimes.today().minusYears(19).plusDays(1)));
 
         // when & then
         assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT, VERIFY_COMMAND))
@@ -719,7 +778,7 @@ class AuthServiceUnitTest {
         // given
         AnonSessionIdentityVerification issued = issuedIdentity();
         givenIssuedIdentity(issued);
-        givenNiceResult(niceResult(compact(KstTimes.today().minusYears(60))));
+        givenIdentity(identity(KstTimes.today().minusYears(60)));
         given(blindIndexHasher.hash(DI)).willReturn("hash:" + DI);
         given(userRepository.existsByDiHash("hash:" + DI)).willReturn(false);
 
@@ -731,59 +790,19 @@ class AuthServiceUnitTest {
     }
 
     @Test
-    @DisplayName("본인인증 검증: 결과에 DI 가 없으면 IDENTITY_VERIFICATION_FAILED 예외가 발생한다 (계약·연동 이상)")
-    void identityVerify_without_di_throws() {
-        // given
-        givenIssuedIdentity(issuedIdentity());
-        givenNiceResult(niceResult(compact(adult()), "1", "0", null, "1", IDENTITY_PHONE));
+    @DisplayName("본인인증 검증: 결과 검증에 실패하면 IDENTITY_VERIFICATION_FAILED 가 그대로 올라가고 세션에 기록하지 않는다")
+    void identityVerify_with_invalid_result_throws() {
+        // given: 본인인증 업체 결과를 우리 값으로 바꾸지 못한 상태
+        AnonSessionIdentityVerification issued = issuedIdentity();
+        givenIssuedIdentity(issued);
+        givenInvalidResult(DI);
 
         // when & then
         assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT, VERIFY_COMMAND))
-                .isInstanceOf(BusinessException.class)
+                .isInstanceOf(InvalidIdentityResultException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.IDENTITY_VERIFICATION_FAILED);
-    }
-
-    @Test
-    @DisplayName("본인인증 검증: 성별 코드가 0/1 이 아니면 IDENTITY_VERIFICATION_FAILED 예외가 발생한다")
-    void identityVerify_with_unknown_gender_code_throws() {
-        // given
-        givenIssuedIdentity(issuedIdentity());
-        givenNiceResult(niceResult(compact(adult()), "9", "0", DI, "1", IDENTITY_PHONE));
-
-        // when & then
-        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT, VERIFY_COMMAND))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(ErrorCode.IDENTITY_VERIFICATION_FAILED);
-    }
-
-    @Test
-    @DisplayName("본인인증 검증: 통신사 코드가 정의되지 않은 값이면 IDENTITY_VERIFICATION_FAILED 예외가 발생한다")
-    void identityVerify_with_unknown_carrier_code_throws() {
-        // given: NICE 가 새 코드를 추가했는데 우리가 모르는 상태를 조용히 넘기지 않는다
-        givenIssuedIdentity(issuedIdentity());
-        givenNiceResult(niceResult(compact(adult()), "1", "0", DI, "8", IDENTITY_PHONE));
-
-        // when & then
-        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT, VERIFY_COMMAND))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(ErrorCode.IDENTITY_VERIFICATION_FAILED);
-    }
-
-    @Test
-    @DisplayName("본인인증 검증: 생년월일이 yyyymmdd 형식이 아니면 IDENTITY_VERIFICATION_FAILED 예외가 발생한다")
-    void identityVerify_with_broken_birthdate_throws() {
-        // given
-        givenIssuedIdentity(issuedIdentity());
-        givenNiceResult(niceResult("1999-03-14"));
-
-        // when & then
-        assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT, VERIFY_COMMAND))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(ErrorCode.IDENTITY_VERIFICATION_FAILED);
+        assertThat(issued.isVerified()).isFalse();
     }
 
     @Test
@@ -792,7 +811,7 @@ class AuthServiceUnitTest {
         // given
         AnonSessionIdentityVerification issued = issuedIdentity();
         givenIssuedIdentity(issued);
-        givenNiceResult(niceResult(compact(adult())));
+        givenIdentity(identity(adult()));
         given(blindIndexHasher.hash(DI)).willReturn("hash:" + DI);
         given(userRepository.existsByDiHash("hash:" + DI)).willReturn(true);
 
@@ -807,17 +826,18 @@ class AuthServiceUnitTest {
     // ---------- 본인인증 정산 기록 ----------
 
     @Test
-    @DisplayName("본인인증 발급: NICE 가 인증 URL 을 주면 같은 request_no·transaction_id 로 ISSUED 기록을 남긴다")
+    @DisplayName("본인인증 발급: 본인인증 업체가 인증 URL 을 주면 같은 request_no·transaction_id 로 ISSUED 기록을 남긴다")
     void identityPrepare_records_issued_log() {
         // given
+        givenLockedAnonSession();
         given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
                 .willReturn(Optional.empty());
-        givenNiceAuthUrl();
+        givenAuthUrl();
 
         // when
         authService.onboardingIdentityPrepare(SNAPSHOT);
 
-        // then: 세션에 저장된 request_no 와 기록된 request_no 가 같아야 NICE 청구 내역과 대조할 수 있다
+        // then: 세션에 저장된 request_no 와 기록된 request_no 가 같아야 본인인증 업체 청구 내역과 대조할 수 있다
         ArgumentCaptor<AnonSessionIdentityVerification> captor =
                 ArgumentCaptor.forClass(AnonSessionIdentityVerification.class);
         then(anonSessionIdentityVerificationRepository).should().save(captor.capture());
@@ -826,18 +846,19 @@ class AuthServiceUnitTest {
     }
 
     @Test
-    @DisplayName("본인인증 발급: NICE 인증 URL 발급이 실패하면 transaction_id 가 없으므로 기록을 남기지 않는다")
-    void identityPrepare_records_nothing_when_nice_fails() {
+    @DisplayName("본인인증 발급: 본인인증 업체의 인증 URL 발급이 실패하면 transaction_id 가 없으므로 기록을 남기지 않는다")
+    void identityPrepare_records_nothing_when_provider_fails() {
         // given
+        givenLockedAnonSession();
         given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
                 .willReturn(Optional.empty());
-        given(niceIdentityService.requestAuthUrl(anyString()))
+        given(identityVerificationProvider.requestAuthUrl(anyString()))
                 .willThrow(new BusinessException(ErrorCode.IDENTITY_VERIFICATION_FAILED));
 
         // when & then
         assertThatThrownBy(() -> authService.onboardingIdentityPrepare(SNAPSHOT))
                 .isInstanceOf(BusinessException.class);
-        then(identityVerificationLogService).shouldHaveNoInteractions();
+        then(identityVerificationLogService).should(never()).issued(any(), any(), any());
     }
 
     @Test
@@ -845,7 +866,7 @@ class AuthServiceUnitTest {
     void identityVerify_success_records_verified_log() {
         // given
         givenIssuedIdentity(issuedIdentity());
-        givenNiceResult(niceResult(compact(adult())));
+        givenIdentity(identity(adult()));
         given(blindIndexHasher.hash(DI)).willReturn("hash:" + DI);
         given(userRepository.existsByDiHash("hash:" + DI)).willReturn(false);
 
@@ -859,11 +880,11 @@ class AuthServiceUnitTest {
     }
 
     @Test
-    @DisplayName("본인인증 검증: 최소 나이 미만이면 예외가 나가더라도 AGE_NOT_ALLOWED 와 di_hash 를 기록한다 (NICE 는 이미 과금)")
+    @DisplayName("본인인증 검증: 최소 나이 미만이면 예외가 나가더라도 AGE_NOT_ALLOWED 와 di_hash 를 기록한다 (본인인증 업체는 이미 과금)")
     void identityVerify_age_not_allowed_records_log() {
         // given
         givenIssuedIdentity(issuedIdentity());
-        givenNiceResult(niceResult(compact(KstTimes.today().minusYears(18))));
+        givenIdentity(identity(KstTimes.today().minusYears(18)));
         given(blindIndexHasher.hash(DI)).willReturn("hash:" + DI);
 
         // when & then
@@ -879,7 +900,7 @@ class AuthServiceUnitTest {
     void identityVerify_duplicated_di_records_log() {
         // given
         givenIssuedIdentity(issuedIdentity());
-        givenNiceResult(niceResult(compact(adult())));
+        givenIdentity(identity(adult()));
         given(blindIndexHasher.hash(DI)).willReturn("hash:" + DI);
         given(userRepository.existsByDiHash("hash:" + DI)).willReturn(true);
 
@@ -892,11 +913,11 @@ class AuthServiceUnitTest {
     }
 
     @Test
-    @DisplayName("본인인증 검증: 결과에 DI 가 없으면 INVALID_RESULT 를 di_hash 없이 기록한다")
+    @DisplayName("본인인증 검증: 결과 검증 실패에 DI 가 없으면 INVALID_RESULT 를 di_hash 없이 기록한다")
     void identityVerify_missing_di_records_invalid_result_without_di_hash() {
         // given
         givenIssuedIdentity(issuedIdentity());
-        givenNiceResult(niceResult(compact(adult()), "1", "0", null, "1", IDENTITY_PHONE));
+        givenInvalidResult(null);
 
         // when & then
         assertThatThrownBy(() -> authService.onboardingIdentityVerify(SNAPSHOT, VERIFY_COMMAND))
@@ -907,11 +928,11 @@ class AuthServiceUnitTest {
     }
 
     @Test
-    @DisplayName("본인인증 검증: 생년월일 형식이 잘못되면 INVALID_RESULT 를 di_hash 와 함께 기록한다")
-    void identityVerify_invalid_birthdate_records_invalid_result_with_di_hash() {
+    @DisplayName("본인인증 검증: 결과 검증 실패에 DI 가 있으면 INVALID_RESULT 를 di_hash 와 함께 기록한다")
+    void identityVerify_invalid_result_records_invalid_result_with_di_hash() {
         // given
         givenIssuedIdentity(issuedIdentity());
-        givenNiceResult(niceResult("1999-03-14"));
+        givenInvalidResult(DI);
         given(blindIndexHasher.hash(DI)).willReturn("hash:" + DI);
 
         // when & then
@@ -923,11 +944,11 @@ class AuthServiceUnitTest {
     }
 
     @Test
-    @DisplayName("본인인증 검증: NICE 결과 조회가 실패하면 결과를 받은 것이 아니므로 기록을 갱신하지 않는다 (ISSUED 유지)")
+    @DisplayName("본인인증 검증: 본인인증 업체 결과 조회가 실패하면 결과를 받은 것이 아니므로 기록을 갱신하지 않는다 (ISSUED 유지)")
     void identityVerify_records_nothing_when_result_unavailable() {
         // given
         givenIssuedIdentity(issuedIdentity());
-        given(niceIdentityService.fetchResult(IDENTITY_REQUEST_NO, IDENTITY_TRANSACTION_ID, WEB_TRANSACTION_ID))
+        given(identityVerificationProvider.fetchResult(IDENTITY_REQUEST_NO, IDENTITY_TRANSACTION_ID, WEB_TRANSACTION_ID))
                 .willThrow(new BusinessException(ErrorCode.IDENTITY_VERIFICATION_FAILED));
 
         // when & then
@@ -1434,8 +1455,13 @@ class AuthServiceUnitTest {
                 ANON_SESSION_ID, IDENTITY_REQUEST_NO, IDENTITY_TRANSACTION_ID, Instant.now().plus(10, ChronoUnit.MINUTES));
     }
 
-    private void givenNiceAuthUrl() {
-        given(niceIdentityService.requestAuthUrl(anyString())).willReturn(new NiceAuthUrlResult(
+    private void givenLockedAnonSession() {
+        given(anonSessionRepository.findWithLockById(ANON_SESSION_ID))
+                .willReturn(Optional.of(AnonSession.create(SNAPSHOT.token(), Instant.now().plusSeconds(3600))));
+    }
+
+    private void givenAuthUrl() {
+        given(identityVerificationProvider.requestAuthUrl(anyString())).willReturn(new IdentityAuthUrlResult(
                 IDENTITY_AUTH_URL, IDENTITY_TRANSACTION_ID, IDENTITY_RETURN_URL, IDENTITY_CLOSE_URL));
     }
 
@@ -1445,24 +1471,21 @@ class AuthServiceUnitTest {
         return verification;
     }
 
-    private void givenNiceResult(NiceAuthResult result) {
-        given(niceIdentityService.fetchResult(IDENTITY_REQUEST_NO, IDENTITY_TRANSACTION_ID, WEB_TRANSACTION_ID)).willReturn(result);
+    private void givenIdentity(VerifiedIdentity identity) {
+        given(identityVerificationProvider.fetchResult(IDENTITY_REQUEST_NO, IDENTITY_TRANSACTION_ID, WEB_TRANSACTION_ID)).willReturn(identity);
     }
 
-    private NiceAuthResult niceResult(String birthdate) {
-        return niceResult(birthdate, "1", "0", DI, "1", IDENTITY_PHONE);
+    private void givenInvalidResult(String di) {
+        given(identityVerificationProvider.fetchResult(IDENTITY_REQUEST_NO, IDENTITY_TRANSACTION_ID, WEB_TRANSACTION_ID))
+                .willThrow(new InvalidIdentityResultException("본인인증 결과를 해석할 수 없습니다.", di));
     }
 
-    private NiceAuthResult niceResult(String birthdate, String gender, String nationalInfo, String di, String mobileCo, String mobileNo) {
-        return new NiceAuthResult(IDENTITY_NAME, birthdate, gender, nationalInfo, di, mobileCo, mobileNo);
+    private VerifiedIdentity identity(LocalDate birthDate) {
+        return new VerifiedIdentity(IDENTITY_NAME, birthDate, Gender.MALE, NationalInfo.DOMESTIC, IDENTITY_PHONE, MobileCarrier.SKT, DI);
     }
 
     private LocalDate adult() {
         return KstTimes.today().minusYears(25);
-    }
-
-    private String compact(LocalDate date) {
-        return date.format(DateTimeFormatter.BASIC_ISO_DATE);
     }
 
     private String adultBirthDate() {

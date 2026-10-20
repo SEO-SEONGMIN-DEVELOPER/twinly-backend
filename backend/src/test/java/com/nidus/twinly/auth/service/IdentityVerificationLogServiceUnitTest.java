@@ -11,6 +11,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -32,6 +34,21 @@ class IdentityVerificationLogServiceUnitTest {
 
     @InjectMocks
     IdentityVerificationLogService identityVerificationLogService;
+
+    @Test
+    @DisplayName("발급 제한: 시간 창 시작 이후 발급 로그가 한도 이상이면 제한하고, 한도 미만이면 통과시킨다")
+    void isRateLimited_counts_logs_within_window() {
+        // given: 지금으로부터 1시간 전 이후의 로그 수를 세도록 요청
+        Instant now = Instant.parse("2026-10-20T03:00:00Z");
+        Instant windowStart = Instant.parse("2026-10-20T02:00:00Z");
+        given(identityVerificationLogRepository.countByAnonSessionIdAndCreatedAtAfter(ANON_SESSION_ID, windowStart))
+                .willReturn(5L)
+                .willReturn(4L);
+
+        // when & then: 5건이면 제한, 4건이면 통과
+        assertThat(identityVerificationLogService.isRateLimited(ANON_SESSION_ID, now, Duration.ofHours(1), 5)).isTrue();
+        assertThat(identityVerificationLogService.isRateLimited(ANON_SESSION_ID, now, Duration.ofHours(1), 5)).isFalse();
+    }
 
     @Test
     @DisplayName("발급 기록: 세션·request_no·transaction_id 를 담아 ISSUED 상태로 저장하고 결과 관련 값은 비워둔다")

@@ -17,13 +17,13 @@ import com.nidus.twinly.auth.entity.RefreshToken;
 import com.nidus.twinly.auth.event.UserSignedUpEvent;
 import com.nidus.twinly.auth.repository.RefreshTokenRepository;
 import com.nidus.twinly.common.logging.InfoLog;
-import com.nidus.twinly.common.logging.WarnLog;
 import com.nidus.twinly.legal.domain.PolicyKind;
 import com.nidus.twinly.legal.entity.Agreement;
 import com.nidus.twinly.legal.repository.AgreementRepository;
 import com.nidus.twinly.legal.service.PolicyCatalog;
-import com.nidus.twinly.auth.client.NiceAuthResult;
 import com.nidus.twinly.auth.domain.IdentityVerificationResult;
+import com.nidus.twinly.auth.domain.InvalidIdentityResultException;
+import com.nidus.twinly.auth.domain.VerifiedIdentity;
 import com.nidus.twinly.auth.dto.command.*;
 import com.nidus.twinly.auth.dto.result.*;
 import com.nidus.twinly.auth.entity.AnonSessionIdentityVerification;
@@ -33,9 +33,6 @@ import com.nidus.twinly.auth.repository.AnonSessionIdentityVerificationRepositor
 import com.nidus.twinly.auth.repository.AnonSessionVerificationSessionRepository;
 import com.nidus.twinly.auth.repository.VerificationSessionRepository;
 import com.nidus.twinly.common.crypto.BlindIndexHasher;
-import com.nidus.twinly.common.domain.Gender;
-import com.nidus.twinly.common.domain.MobileCarrier;
-import com.nidus.twinly.common.domain.NationalInfo;
 import com.nidus.twinly.common.domain.VerificationType;
 import com.nidus.twinly.common.jwt.JwtService;
 import com.nidus.twinly.common.photo.ProfileThumbnailService;
@@ -67,8 +64,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Period;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Set;
@@ -93,7 +88,7 @@ public class AuthService {
     private final VerificationService verificationService;
     private final OrganizationCatalog organizationCatalog;
     private final PolicyCatalog policyCatalog;
-    private final NiceIdentityService niceIdentityService;
+    private final IdentityVerificationProvider identityVerificationProvider;
     private final IdentityVerificationLogService identityVerificationLogService;
 
     private final VerificationSessionRepository verificationSessionRepository;
@@ -151,23 +146,24 @@ public class AuthService {
     public AuthIdentityPrepareResult onboardingIdentityPrepare(AnonSessionSnapshot anonSessionSnapshot) {
         Instant now = Instant.now();
 
+        anonSessionRepository.findWithLockById(anonSessionSnapshot.id())
+                .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_ANON_SESSION));
+
         AnonSessionIdentityVerification verification = anonSessionIdentityVerificationRepository
                 .findByAnonSessionId(anonSessionSnapshot.id())
                 .orElse(null);
 
-        if (verification != null) {
-            if (verification.isVerified()) {
-                throw new BusinessException(ErrorCode.IDENTITY_ALREADY_VERIFIED);
-            }
+        if (verification != null && verification.isVerified()) {
+            throw new BusinessException(ErrorCode.IDENTITY_ALREADY_VERIFIED);
+        }
 
-            if (verification.isRateLimited(now, IDENTITY_ISSUE_WINDOW, IDENTITY_ISSUE_LIMIT)) {
-                throw new BusinessException(ErrorCode.IDENTITY_RATE_LIMITED);
-            }
+        if (identityVerificationLogService.isRateLimited(anonSessionSnapshot.id(), now, IDENTITY_ISSUE_WINDOW, IDENTITY_ISSUE_LIMIT)) {
+            throw new BusinessException(ErrorCode.IDENTITY_RATE_LIMITED);
         }
 
         String requestNo = IDENTITY_REQUEST_NO_PREFIX + UUID.randomUUID();
         Instant expiresAt = now.plus(IDENTITY_EXPIRES_MINUTES, ChronoUnit.MINUTES);
-        NiceAuthUrlResult authUrl = niceIdentityService.requestAuthUrl(requestNo);
+        IdentityAuthUrlResult authUrl = identityVerificationProvider.requestAuthUrl(requestNo);
 
         identityVerificationLogService.issued(anonSessionSnapshot.id(), requestNo, authUrl.transactionId());
 
@@ -175,7 +171,6 @@ public class AuthService {
             anonSessionIdentityVerificationRepository.save(AnonSessionIdentityVerification.create(
                     anonSessionSnapshot.id(), requestNo, authUrl.transactionId(), expiresAt));
         } else {
-            verification.countIssue(now, IDENTITY_ISSUE_WINDOW);
             verification.refresh(requestNo, authUrl.transactionId(), expiresAt);
         }
 
@@ -194,41 +189,27 @@ public class AuthService {
             return;
         }
 
-        if (verification.isExpired(Instant.now()) || verification.getTransactionId() == null) {
+        if (verification.isExpired(Instant.now())) {
             throw new BusinessException(ErrorCode.IDENTITY_NOT_VERIFIED);
         }
 
-        NiceAuthResult result = niceIdentityService.fetchResult(
-                verification.getRequestNo(), verification.getTransactionId(), command.webTransactionId());
-
-        if (isBlank(result.name()) || isBlank(result.birthdate()) || isBlank(result.gender())
-                || isBlank(result.di()) || isBlank(result.mobileNo())) {
-            WarnLog.log(log, "NICE 인증 결과에 필수 항목이 없습니다.", field("anonSessionId", anonSessionId));
-            logIdentityResult(verification, IdentityVerificationResult.INVALID_RESULT, null);
-            throw new BusinessException(ErrorCode.IDENTITY_VERIFICATION_FAILED);
+        if (verification.getTransactionId() == null) {
+            throw new IllegalStateException("만료 전 본인인증 건에 transaction_id 가 없습니다. anonSessionId=" + anonSessionId);
         }
 
-        String diHash = blindIndexHasher.hash(result.di());
-
-        Gender gender = Gender.fromNiceCode(result.gender());
-        NationalInfo nationalInfo = NationalInfo.fromNiceCode(result.nationalInfo());
-        MobileCarrier mobileCarrier = MobileCarrier.fromNiceCode(result.mobileCo());
-
-        if (gender == null || nationalInfo == null || mobileCarrier == null) {
-            WarnLog.log(log, "NICE 인증 결과의 코드값을 해석할 수 없습니다.", field("anonSessionId", anonSessionId), field("gender", result.gender()), field("nationalInfo", result.nationalInfo()), field("mobileCo", result.mobileCo()));
-            logIdentityResult(verification, IdentityVerificationResult.INVALID_RESULT, diHash);
-            throw new BusinessException(ErrorCode.IDENTITY_VERIFICATION_FAILED);
+        VerifiedIdentity identity;
+        try {
+            identity = identityVerificationProvider.fetchResult(
+                    verification.getRequestNo(), verification.getTransactionId(), command.webTransactionId());
+        } catch (InvalidIdentityResultException e) {
+            logIdentityResult(verification, IdentityVerificationResult.INVALID_RESULT,
+                    isBlank(e.getDi()) ? null : blindIndexHasher.hash(e.getDi()));
+            throw e;
         }
 
-        LocalDate birthDate = parseBirthDate(result.birthdate());
+        String diHash = blindIndexHasher.hash(identity.di());
 
-        if (birthDate == null) {
-            WarnLog.log(log, "NICE 인증 결과의 생년월일 형식을 해석할 수 없습니다.", field("anonSessionId", anonSessionId));
-            logIdentityResult(verification, IdentityVerificationResult.INVALID_RESULT, diHash);
-            throw new BusinessException(ErrorCode.IDENTITY_VERIFICATION_FAILED);
-        }
-
-        if (!isAllowedAge(birthDate)) {
+        if (!isAllowedAge(identity.birthDate())) {
             logIdentityResult(verification, IdentityVerificationResult.AGE_NOT_ALLOWED, diHash);
             throw new BusinessException(ErrorCode.IDENTITY_AGE_NOT_ALLOWED);
         }
@@ -239,14 +220,14 @@ public class AuthService {
         }
 
         verification.verify(
-                result.name(),
-                birthDate.toString(),
-                gender,
-                result.mobileNo(),
-                result.di(),
+                identity.name(),
+                identity.birthDate().toString(),
+                identity.gender(),
+                identity.phoneNumber(),
+                identity.di(),
                 diHash,
-                nationalInfo,
-                mobileCarrier
+                identity.nationalInfo(),
+                identity.mobileCarrier()
         );
 
         logIdentityResult(verification, IdentityVerificationResult.VERIFIED, diHash);
@@ -259,14 +240,6 @@ public class AuthService {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
-    }
-
-    private LocalDate parseBirthDate(String birthDate) {
-        try {
-            return LocalDate.parse(birthDate, DateTimeFormatter.BASIC_ISO_DATE);
-        } catch (DateTimeParseException e) {
-            return null;
-        }
     }
 
     private boolean isAllowedAge(LocalDate birthDate) {

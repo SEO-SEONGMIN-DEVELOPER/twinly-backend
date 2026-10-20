@@ -12,10 +12,12 @@ import com.nidus.twinly.anon.repository.AnonSessionAgreementRepository;
 import com.nidus.twinly.anon.repository.AnonSessionRepository;
 import com.nidus.twinly.auth.entity.AnonSessionIdentityVerification;
 import com.nidus.twinly.auth.entity.AnonSessionVerificationSession;
+import com.nidus.twinly.auth.entity.IdentityVerificationLog;
 import com.nidus.twinly.auth.entity.RefreshToken;
 import com.nidus.twinly.auth.entity.VerificationSession;
 import com.nidus.twinly.auth.repository.AnonSessionIdentityVerificationRepository;
 import com.nidus.twinly.auth.repository.AnonSessionVerificationSessionRepository;
+import com.nidus.twinly.auth.repository.IdentityVerificationLogRepository;
 import com.nidus.twinly.auth.repository.RefreshTokenRepository;
 import com.nidus.twinly.auth.dto.result.AuthTokenResult;
 import com.nidus.twinly.auth.repository.VerificationSessionRepository;
@@ -78,6 +80,9 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     AnonSessionIdentityVerificationRepository anonSessionIdentityVerificationRepository;
+
+    @Autowired
+    IdentityVerificationLogRepository identityVerificationLogRepository;
 
     @MockitoBean
     NiceAuthClient niceAuthClient;
@@ -201,7 +206,6 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
                 .findByAnonSessionId(anonSession.getId()).orElseThrow();
         assertThat(saved.getRequestNo()).startsWith("TWINLY-");
         assertThat(saved.getTransactionId()).isEqualTo("tx-1");
-        assertThat(saved.getIssueCount()).isEqualTo(1);
         String firstRequestNo = saved.getRequestNo();
         then(niceAuthClient).should().requestAuthUrl("access-token", firstRequestNo);
 
@@ -216,7 +220,43 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
                 .findByAnonSessionId(anonSession.getId()).orElseThrow();
         assertThat(reissued.getRequestNo()).isNotEqualTo(firstRequestNo);
         assertThat(reissued.getTransactionId()).isEqualTo("tx-2");
-        assertThat(reissued.getIssueCount()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("본인인증 발급 제한: 인증 행이 없어도 최근 1시간 발급 로그가 5건이면 429를 반환하고 NICE를 호출하지 않는다")
+    void identityPrepare_rate_limited_by_logs_returns_429() throws Exception {
+        // given: 인증 행 없이 발급 로그만 1시간 안에 5건 남은 세션
+        UUID anonToken = UUID.randomUUID();
+        AnonSession anonSession = savedAnonSession(anonToken);
+        saveIssuedLogs(anonSession.getId(), 5, Instant.now());
+
+        // when: 본인인증 발급 API 호출
+        var result = mockMvc.perform(post("/api/v1/auth/onboarding/identity/prepare")
+                .header("Authorization", "Bearer " + anonToken));
+
+        // then: 429 + IDENTITY_RATE_LIMITED, NICE 호출도 인증 행도 없다
+        result.andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.code").value(ErrorCode.IDENTITY_RATE_LIMITED.name()));
+        then(niceAuthClient).shouldHaveNoInteractions();
+        assertThat(anonSessionIdentityVerificationRepository.findByAnonSessionId(anonSession.getId())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("본인인증 발급 제한: 1시간이 지난 발급 로그는 세지 않아 다시 발급된다")
+    void identityPrepare_ignores_logs_outside_window() throws Exception {
+        // given: 발급 로그 5건이 모두 2시간 전 것인 세션
+        UUID anonToken = UUID.randomUUID();
+        AnonSession anonSession = savedAnonSession(anonToken);
+        saveIssuedLogs(anonSession.getId(), 5, Instant.now().minus(Duration.ofHours(2)));
+        givenNiceToken();
+        given(niceAuthClient.requestAuthUrl(anyString(), anyString()))
+                .willReturn(new NiceAuthUrlBody("0000", "응답성공", "https://auth.niceid.co.kr/ido/cert/request/S1", "tx-1"));
+
+        // when & then: 시간 창 밖의 로그는 제외되어 발급된다
+        mockMvc.perform(post("/api/v1/auth/onboarding/identity/prepare")
+                        .header("Authorization", "Bearer " + anonToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.authUrl").value("https://auth.niceid.co.kr/ido/cert/request/S1"));
     }
 
     @Test
@@ -954,6 +994,14 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
 
     private AnonSession savedAnonSession(UUID anonToken) {
         return anonSessionRepository.save(AnonSession.create(anonToken, Instant.now().plus(Duration.ofDays(1))));
+    }
+
+    private void saveIssuedLogs(Long anonSessionId, int count, Instant createdAt) {
+        for (int i = 0; i < count; i++) {
+            IdentityVerificationLog log = IdentityVerificationLog.issue(anonSessionId, "TWINLY-" + UUID.randomUUID(), "tx-old-" + i);
+            ReflectionTestUtils.setField(log, "createdAt", createdAt);
+            identityVerificationLogRepository.save(log);
+        }
     }
 
     private AnonSessionVerificationSession verifiedAnonSession(Long anonSessionId, VerificationType type, String contact) {
