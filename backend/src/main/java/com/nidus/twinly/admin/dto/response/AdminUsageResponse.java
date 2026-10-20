@@ -4,7 +4,7 @@ import com.nidus.twinly.admin.dto.result.AdminUsageResult;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 public record AdminUsageResponse(
-        @Schema(description = "사용 비율의 분모가 되는 구독자 수")
+        @Schema(description = "사용 비율의 분모가 되는 구독자(현재 시즌 참가자) 수")
         AdminGenderCountResponse subscribers,
         BalanceGame balanceGame,
         ChatRoom chatRoom

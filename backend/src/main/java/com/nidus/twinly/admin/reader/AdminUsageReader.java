@@ -25,11 +25,10 @@ public class AdminUsageReader {
 
     private static final String SUBSCRIBERS = """
             SELECT u.gender, COUNT(*) AS cnt
-            FROM user_entitlements e
-            JOIN users u ON u.id = e.user_id
+            FROM users u
             WHERE %s AND %s
             GROUP BY u.gender
-            """.formatted(AdminSql.ACTIVE_USER, AdminSql.ACTIVE_SIMULATION_ACCESS);
+            """.formatted(AdminSql.ACTIVE_USER, AdminSql.CURRENT_SEASON_PARTICIPANT);
 
     private static final String BALANCE_GAME_USERS = """
             SELECT u.gender, COUNT(DISTINCT a.user_id) AS cnt

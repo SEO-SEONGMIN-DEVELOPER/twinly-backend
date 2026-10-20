@@ -33,12 +33,12 @@ public class AdminDashboardReader {
             """.formatted(AdminSql.ACTIVE_USER);
 
     private static final String SUBSCRIBER_COUNTS = """
-            SELECT u.gender, %s AS kind, COUNT(*) AS cnt
-            FROM user_entitlements e
-            JOIN users u ON u.id = e.user_id
+            SELECT u.gender, CASE WHEN e.id IS NULL THEN 'NONE' ELSE %s END AS kind, COUNT(*) AS cnt
+            FROM users u
+            LEFT JOIN user_entitlements e ON e.user_id = u.id AND %s
             WHERE %s AND %s
             GROUP BY u.gender, kind
-            """.formatted(AdminSql.SUBSCRIPTION_KIND, AdminSql.ACTIVE_USER, AdminSql.ACTIVE_SIMULATION_ACCESS);
+            """.formatted(AdminSql.SUBSCRIPTION_KIND, AdminSql.ACTIVE_SIMULATION_ACCESS, AdminSql.ACTIVE_USER, AdminSql.CURRENT_SEASON_PARTICIPANT);
 
     private static final String WITHDRAWN_COUNTS = """
             SELECT u.gender, u.deleted_at IS NOT NULL AS completed, COUNT(*) AS cnt
@@ -57,11 +57,10 @@ public class AdminDashboardReader {
             """.formatted(AdminSql.ACTIVE_USER);
 
     private static final String BIRTH_DATES = """
-            SELECT u.birth_date,
-                   EXISTS (SELECT 1 FROM user_entitlements e WHERE e.user_id = u.id AND %s) AS subscribed
+            SELECT u.birth_date, %s AS subscribed
             FROM users u
             WHERE %s
-            """.formatted(AdminSql.ACTIVE_SIMULATION_ACCESS, AdminSql.ACTIVE_USER);
+            """.formatted(AdminSql.CURRENT_SEASON_PARTICIPANT, AdminSql.ACTIVE_USER);
 
     private static final int BIRTH_YEAR_LENGTH = 4;
     private static final int MIN_BIRTH_YEAR = 1900;

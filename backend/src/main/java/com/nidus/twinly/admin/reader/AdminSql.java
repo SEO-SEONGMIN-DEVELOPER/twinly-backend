@@ -6,6 +6,11 @@ final class AdminSql {
 
     static final String ACTIVE_SIMULATION_ACCESS = "e.entitlement = 'simulation_access' AND (e.expires_at IS NULL OR e.expires_at > UTC_TIMESTAMP(6))";
 
+    static final String CURRENT_SEASON_PARTICIPANT = """
+            EXISTS (SELECT 1 FROM season_participations sp
+                    WHERE sp.user_id = u.id
+                      AND sp.season_id = (SELECT s.id FROM seasons s WHERE s.is_active = TRUE ORDER BY s.id DESC LIMIT 1))""";
+
     static final String SUBSCRIPTION_KIND = """
             CASE
                 WHEN LOWER(e.store) = 'promotional'

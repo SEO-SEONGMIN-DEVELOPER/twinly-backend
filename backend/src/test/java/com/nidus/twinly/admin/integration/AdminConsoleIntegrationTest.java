@@ -63,6 +63,7 @@ class AdminConsoleIntegrationTest extends AbstractIntegrationTest {
 
     private static final String ADMIN_TOKEN = "test-admin-token";
     private static final long SEASON_ID = 990_001L;
+    private static final long ACTIVE_SEASON_ID = 990_002L;
 
     @Autowired JdbcTemplate jdbcTemplate;
     @Autowired EntityManager entityManager;
@@ -81,6 +82,7 @@ class AdminConsoleIntegrationTest extends AbstractIntegrationTest {
     @Autowired UserFeedbackOptionRepository userFeedbackOptionRepository;
 
     private final AtomicInteger memberSeq = new AtomicInteger();
+    private long activeSeasonId;
 
     @BeforeEach
     void insertSeason() {
@@ -88,6 +90,16 @@ class AdminConsoleIntegrationTest extends AbstractIntegrationTest {
                 INSERT IGNORE INTO seasons (id, started_at, ended_at, is_active, created_at)
                 VALUES (?, UTC_TIMESTAMP(6) - INTERVAL 30 DAY, UTC_TIMESTAMP(6) + INTERVAL 30 DAY, 0, UTC_TIMESTAMP(6))
                 """, SEASON_ID);
+        List<Long> active = jdbcTemplate.queryForList("SELECT id FROM seasons WHERE is_active = 1 ORDER BY id DESC LIMIT 1", Long.class);
+        if (active.isEmpty()) {
+            jdbcTemplate.update("""
+                    INSERT INTO seasons (id, started_at, ended_at, is_active, created_at)
+                    VALUES (?, UTC_TIMESTAMP(6) - INTERVAL 30 DAY, UTC_TIMESTAMP(6) + INTERVAL 30 DAY, 1, UTC_TIMESTAMP(6))
+                    """, ACTIVE_SEASON_ID);
+            activeSeasonId = ACTIVE_SEASON_ID;
+        } else {
+            activeSeasonId = active.getFirst();
+        }
     }
 
     @Test
@@ -99,9 +111,10 @@ class AdminConsoleIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("대시보드: 가입자·구독 종류·탈퇴자·학교를 세고 시드 회원은 모든 집계에서 뺀다")
+    @DisplayName("대시보드: 가입자·구독자(현재 시즌 참가자)·구독 종류·탈퇴자·학교를 세고 시드 회원은 모든 집계에서 뺀다")
     void dashboard_countsMembersSubscribersWithdrawnAndSchools() throws Exception {
-        // given: 활성 남2·여1, 시드 1, 탈퇴 유예 1, 탈퇴 완료 1
+        // given: 지금까지의 집계를 기억해 두고, 시즌에 참가한 활성 남2·여1, 이용권만 있고 시즌 미참가 1명, 시드 1, 탈퇴 유예 1, 탈퇴 완료 1 추가
+        JsonNode before = body(mockMvc.perform(admin(get("/admin/dashboard"))));
         User paid = saveMember("유료남", Gender.MALE, "가나대학교", "paid@ganada.ac.kr");
         User trial = saveMember("체험여", Gender.FEMALE, "가나대학교", "trial@ganada.ac.kr");
         User early = saveMember("선착남", Gender.MALE, "다라대학교", "early@dara.ac.kr");
@@ -113,35 +126,46 @@ class AdminConsoleIntegrationTest extends AbstractIntegrationTest {
         entitle(trial, "play_store", "trial", true);
         entitle(early, "promotional", "normal", true);
         entitle(seed, null, null, true);
+        User entitledOnly = saveMember("미참가", Gender.FEMALE, "다라대학교", "only@dara.ac.kr");
+        entitle(entitledOnly, "promotional", "normal", true);
+        participate(paid);
+        participate(trial);
+        participate(early);
+        participate(seed);
         flushAndClear();
-        long baseMembers = countActiveMembers() - 3;
+        long baseMembers = countActiveMembers() - 4;
 
         // when
         JsonNode dashboard = body(mockMvc.perform(admin(get("/admin/dashboard"))).andExpect(status().isOk()));
 
         // then
-        assertThat(dashboard.at("/members/total").asLong()).isEqualTo(baseMembers + 3);
-        assertThat(dashboard.at("/subscribers/count/total").asLong()).isGreaterThanOrEqualTo(3);
-        assertThat(dashboard.at("/subscribers/paid").asLong()).isGreaterThanOrEqualTo(1);
-        assertThat(dashboard.at("/subscribers/trial").asLong()).isGreaterThanOrEqualTo(1);
-        assertThat(dashboard.at("/subscribers/earlyGrant").asLong()).isGreaterThanOrEqualTo(1);
+        // then: 구독자는 이용권이 아니라 현재 시즌 참가로 세므로 이용권만 있는 회원은 빠진다
+        assertThat(dashboard.at("/members/total").asLong()).isEqualTo(baseMembers + 4);
+        assertThat(delta(before, dashboard, "/subscribers/count/total")).isEqualTo(3);
+        assertThat(delta(before, dashboard, "/subscribers/count/male")).isEqualTo(2);
+        assertThat(delta(before, dashboard, "/subscribers/paid")).isEqualTo(1);
+        assertThat(delta(before, dashboard, "/subscribers/trial")).isEqualTo(1);
+        assertThat(delta(before, dashboard, "/subscribers/earlyGrant")).isEqualTo(1);
         assertThat(dashboard.at("/withdrawn/completed").asLong()).isGreaterThanOrEqualTo(1);
         assertThat(dashboard.at("/withdrawn/pending").asLong()).isGreaterThanOrEqualTo(1);
         assertThat(schoolCount(dashboard, "가나대학교")).isEqualTo(2);
-        assertThat(schoolCount(dashboard, "다라대학교")).isEqualTo(1);
+        assertThat(schoolCount(dashboard, "다라대학교")).isEqualTo(2);
     }
 
     @Test
     @DisplayName("대시보드 나이 통계: 생년월일을 복호화해 출생연도별 가입자·구독자를 세고, 시드와 탈퇴 회원은 뺀다")
     void dashboard_countsBirthYears() throws Exception {
-        // given: 1971년생 구독자 1명, 1972년생 미구독자 1명, 1971년생 시드·탈퇴 유예 회원 각 1명
+        // given: 1971년생 시즌 참가자 1명, 1972년생 이용권만 있는 미참가자 1명, 1971년생 시드·탈퇴 유예 회원 각 1명
         User subscribed = saveMember("칠일", Gender.MALE, "타파대학교", "s71@tapa.ac.kr", "1971-03-01");
-        saveMember("칠이", Gender.FEMALE, "타파대학교", "n72@tapa.ac.kr", "19720701");
+        User notParticipating = saveMember("칠이", Gender.FEMALE, "타파대학교", "n72@tapa.ac.kr", "19720701");
         User seed = saveMember("시드칠일", Gender.FEMALE, "타파대학교", "seed71@tapa.ac.kr", "1971-05-05");
         userRepository.markSeed(List.of(seed.getId()));
         saveMember("유예칠일", Gender.MALE, "타파대학교", "w71@tapa.ac.kr", "1971-06-06").requestWithdrawal(Duration.ofDays(30));
         entitle(subscribed, "app_store", "normal", true);
+        entitle(notParticipating, "promotional", "normal", true);
         entitle(seed, null, null, true);
+        participate(subscribed);
+        participate(seed);
         flushAndClear();
 
         // when
@@ -453,6 +477,13 @@ class AdminConsoleIntegrationTest extends AbstractIntegrationTest {
                 "010" + unique, "phoneHash" + unique,
                 email, blindIndexHasher.hash(email), null, null,
                 null, null));
+    }
+
+    private void participate(User user) {
+        jdbcTemplate.update("""
+                INSERT INTO season_participations (user_id, season_id, participated_in_at, created_at)
+                VALUES (?, ?, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+                """, user.getId(), activeSeasonId);
     }
 
     private void entitle(User user, String store, String periodType, boolean active) {
