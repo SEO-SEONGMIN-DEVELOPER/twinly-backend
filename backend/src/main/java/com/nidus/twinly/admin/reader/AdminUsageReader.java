@@ -23,6 +23,13 @@ public class AdminUsageReader {
             HAVING SUM(u.is_seed) = 0
             """;
 
+    private static final String MEMBERS = """
+            SELECT u.gender, COUNT(*) AS cnt
+            FROM users u
+            WHERE %s
+            GROUP BY u.gender
+            """.formatted(AdminSql.ACTIVE_USER);
+
     private static final String SUBSCRIBERS = """
             SELECT u.gender, COUNT(*) AS cnt
             FROM users u
@@ -45,6 +52,16 @@ public class AdminUsageReader {
             WHERE %s
               AND q.type = 'PERSONA'
               AND q.answered_at IS NOT NULL
+            GROUP BY u.gender
+            """.formatted(AdminSql.ACTIVE_USER);
+
+    private static final String PARALLEL_RELATION_USERS = """
+            SELECT u.gender, COUNT(*) AS cnt
+            FROM users u
+            WHERE %s
+              AND u.id IN (SELECT pr.user_a_id FROM parallel_relations pr
+                           UNION
+                           SELECT pr.user_b_id FROM parallel_relations pr)
             GROUP BY u.gender
             """.formatted(AdminSql.ACTIVE_USER);
 
@@ -100,9 +117,11 @@ public class AdminUsageReader {
                 (rs, rowNum) -> new long[]{rs.getLong("opened"), rs.getLong("both_entered")});
 
         return new AdminUsageResult(
+                AdminGenderCountResult.from(countByGender(MEMBERS)),
                 AdminGenderCountResult.from(countByGender(SUBSCRIBERS)),
                 AdminGenderCountResult.from(countByGender(BALANCE_GAME_USERS)),
                 AdminGenderCountResult.from(countByGender(HESITATION_ANSWER_USERS)),
+                AdminGenderCountResult.from(countByGender(PARALLEL_RELATION_USERS)),
                 roomCounts == null ? 0 : roomCounts[0],
                 roomCounts == null ? 0 : roomCounts[1],
                 AdminGenderCountResult.from(opened),

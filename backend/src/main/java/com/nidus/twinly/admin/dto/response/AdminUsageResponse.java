@@ -4,18 +4,23 @@ import com.nidus.twinly.admin.dto.result.AdminUsageResult;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 public record AdminUsageResponse(
+        @Schema(description = "구독 없이 쓰는 기능(평행우주 관계)의 사용 비율 분모가 되는 가입자 수")
+        AdminGenderCountResponse members,
         @Schema(description = "사용 비율의 분모가 되는 구독자(현재 시즌 참가자) 수")
         AdminGenderCountResponse subscribers,
         BalanceGame balanceGame,
         Hesitation hesitation,
+        ParallelRelation parallelRelation,
         ChatRoom chatRoom
 ) {
 
     public static AdminUsageResponse from(AdminUsageResult result) {
         return new AdminUsageResponse(
+                AdminGenderCountResponse.from(result.members()),
                 AdminGenderCountResponse.from(result.subscribers()),
                 new BalanceGame(AdminGenderCountResponse.from(result.balanceGameUsers())),
                 new Hesitation(AdminGenderCountResponse.from(result.hesitationAnswerUsers())),
+                new ParallelRelation(AdminGenderCountResponse.from(result.parallelRelationUsers())),
                 new ChatRoom(
                         result.openedRooms(),
                         result.bothEnteredRooms(),
@@ -34,6 +39,12 @@ public record AdminUsageResponse(
 
     public record Hesitation(
             @Schema(description = "망설임 질문에 한 번이라도 답한 가입자 수. 건너뛰기는 답변이 아니다")
+            AdminGenderCountResponse users
+    ) {
+    }
+
+    public record ParallelRelation(
+            @Schema(description = "평행우주 관계 결과를 한 번이라도 받은 가입자 수. 코드를 발급한 쪽과 등록한 쪽 모두 센다")
             AdminGenderCountResponse users
     ) {
     }
