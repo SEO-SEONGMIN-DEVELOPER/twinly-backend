@@ -211,7 +211,7 @@
             <svg class="flow-arrow" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1l6 5-6 5" fill="none" stroke="currentColor" stroke-width="2"/></svg>
           </article>
           <article class="card kpi wide">
-            <div class="kpi-label">구독자 수 <span class="card-sub">유료 구독 + 무료 체험 + 선착순 무료</span></div>
+            <div class="kpi-label">구독자 수 <span class="card-sub">현재 시즌 참가자</span></div>
             <div class="kpi-value num">${num(subs.total)}<small>명</small></div>
             ${mfLine(subs)}${ratioBlock(subs.male, subs.female)}
             <div class="rates num"><span class="rate">가입자 대비 구독률<b>${pct(subs.total, members.total)}%</b></span><span class="rate">유료 구독<b>${num(d.subscribers.paid)}</b></span><span class="rate">무료 체험<b>${num(d.subscribers.trial)}</b></span><span class="rate">선착순 무료<b>${num(d.subscribers.earlyGrant)}</b></span></div>
@@ -772,7 +772,7 @@
           <div class="card-head"><h2>밸런스 게임</h2></div>
           <div class="stat-row">
             <div class="stat"><span class="l">이용자 수</span><span class="v num">${num(users.total)}명</span><span class="s num">남 ${num(users.male)} · 여 ${num(users.female)}</span></div>
-            <div class="stat"><span class="l">사용 비율</span><span class="v num">${pct(users.total, subs.total)}%</span><span class="s">구독자 대비</span></div>
+            <div class="stat"><span class="l">사용 비율</span><span class="v num">${pct(users.total, subs.total)}%</span><span class="s">구독자(시즌 참가자) 대비</span></div>
             <div class="stat"><span class="l">이용자 성비</span><span class="v num">${Math.round(Number(pct(users.male, users.total)))} : ${users.total ? 100 - Math.round(Number(pct(users.male, users.total))) : 0}</span><span class="s num">남 ${pct(users.male, users.total)}% · 여 ${pct(users.female, users.total)}%</span></div>
           </div>
           <div class="section-label">성별 사용 비율</div>
