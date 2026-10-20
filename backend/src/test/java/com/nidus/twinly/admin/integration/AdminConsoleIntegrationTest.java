@@ -47,6 +47,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -434,6 +435,29 @@ class AdminConsoleIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("기능 이용 현황: 망설임 질문은 한 번이라도 답한 회원만 세고 건너뛰기와 약속 질문은 뺀다")
+    void usage_countsHesitationAnswerUsers() throws Exception {
+        // given: 두 번 답한 남성, 건너뛰기만 한 여성, 약속 질문에만 답한 남성
+        JsonNode before = body(mockMvc.perform(admin(get("/admin/usage"))));
+        User answered = saveMember("답변남", Gender.MALE, "망대학교", "h1@mang.ac.kr");
+        User skipped = saveMember("건너뜀여", Gender.FEMALE, "망대학교", "h2@mang.ac.kr");
+        User promise = saveMember("약속남", Gender.MALE, "망대학교", "h3@mang.ac.kr");
+        question(answered, "PERSONA", true, false);
+        question(answered, "PERSONA", true, false);
+        question(skipped, "PERSONA", false, true);
+        question(promise, "PROMISE", true, false);
+        flushAndClear();
+
+        // when
+        JsonNode after = body(mockMvc.perform(admin(get("/admin/usage"))).andExpect(status().isOk()));
+
+        // then
+        assertThat(delta(before, after, "/hesitation/users/total")).isEqualTo(1);
+        assertThat(delta(before, after, "/hesitation/users/male")).isEqualTo(1);
+        assertThat(delta(before, after, "/hesitation/users/female")).isZero();
+    }
+
+    @Test
     @DisplayName("공지 수신 대상 수: 지정한 ID 중 활성 가입자만 센다")
     void noticeRecipientCount() throws Exception {
         // given
@@ -477,6 +501,13 @@ class AdminConsoleIntegrationTest extends AbstractIntegrationTest {
                 "010" + unique, "phoneHash" + unique,
                 email, blindIndexHasher.hash(email), null, null,
                 null, null));
+    }
+
+    private void question(User user, String type, boolean answered, boolean skipped) {
+        jdbcTemplate.update("""
+                INSERT INTO questions (user_id, `date`, version, `time`, type, `text`, options, choice, answered_at, is_skipped)
+                VALUES (?, CURRENT_DATE, 'v1', UTC_TIMESTAMP(6), ?, '질문', JSON_ARRAY('A', 'B'), ?, ?, ?)
+                """, user.getId(), type, answered ? "A" : null, answered ? Timestamp.from(Instant.now()) : null, skipped);
     }
 
     private void participate(User user) {

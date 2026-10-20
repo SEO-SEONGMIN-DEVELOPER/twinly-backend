@@ -7,6 +7,7 @@ public record AdminUsageResponse(
         @Schema(description = "사용 비율의 분모가 되는 구독자(현재 시즌 참가자) 수")
         AdminGenderCountResponse subscribers,
         BalanceGame balanceGame,
+        Hesitation hesitation,
         ChatRoom chatRoom
 ) {
 
@@ -14,6 +15,7 @@ public record AdminUsageResponse(
         return new AdminUsageResponse(
                 AdminGenderCountResponse.from(result.subscribers()),
                 new BalanceGame(AdminGenderCountResponse.from(result.balanceGameUsers())),
+                new Hesitation(AdminGenderCountResponse.from(result.hesitationAnswerUsers())),
                 new ChatRoom(
                         result.openedRooms(),
                         result.bothEnteredRooms(),
@@ -26,6 +28,12 @@ public record AdminUsageResponse(
 
     public record BalanceGame(
             @Schema(description = "한 번이라도 답한 가입자 수")
+            AdminGenderCountResponse users
+    ) {
+    }
+
+    public record Hesitation(
+            @Schema(description = "망설임 질문에 한 번이라도 답한 가입자 수. 건너뛰기는 답변이 아니다")
             AdminGenderCountResponse users
     ) {
     }

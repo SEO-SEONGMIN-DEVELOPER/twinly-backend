@@ -3,6 +3,7 @@ package com.nidus.twinly.admin.dto.result;
 public record AdminUsageResult(
         AdminGenderCountResult subscribers,
         AdminGenderCountResult balanceGameUsers,
+        AdminGenderCountResult hesitationAnswerUsers,
         long openedRooms,
         long bothEnteredRooms,
         AdminGenderCountResult openedEntries,
