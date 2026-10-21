@@ -1,6 +1,7 @@
 package com.nidus.twinly.admin.reader;
 
 import com.nidus.twinly.admin.domain.ChatEntryState;
+import com.nidus.twinly.admin.domain.ChatRoomSort;
 import com.nidus.twinly.admin.domain.MemberStatus;
 import com.nidus.twinly.admin.dto.result.AdminChatMessagePageResult;
 import com.nidus.twinly.admin.dto.result.AdminChatRoomResult;
@@ -67,7 +68,7 @@ public class AdminChatRoomReader {
     private final NamedParameterJdbcTemplate jdbcTemplate;
     private final AdminMemberReader adminMemberReader;
 
-    public AdminPageResult<AdminChatRoomResult> search(String query, ChatEntryState entryState, int page, int size) {
+    public AdminPageResult<AdminChatRoomResult> search(String query, ChatEntryState entryState, ChatRoomSort sort, int page, int size) {
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("size", size)
                 .addValue("offset", page * size);
@@ -80,7 +81,7 @@ public class AdminChatRoomReader {
                 GROUP BY r.id
                 HAVING """ + " " + having;
 
-        List<Long> roomIds = jdbcTemplate.queryForList(grouped + " ORDER BY r.id DESC LIMIT :size OFFSET :offset", params, Long.class);
+        List<Long> roomIds = jdbcTemplate.queryForList(grouped + " ORDER BY " + sort.orderBy() + " LIMIT :size OFFSET :offset", params, Long.class);
         Long total = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM (" + grouped + ") t", params, Long.class);
 
         return new AdminPageResult<>(rooms(roomIds), page, size, total == null ? 0 : total);

@@ -16,6 +16,8 @@ import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.domain.VerificationType;
 import com.nidus.twinly.common.feedback.FeedbackStatus;
 import com.nidus.twinly.common.feedback.FeedbackType;
+import com.nidus.twinly.common.time.KstTimes;
+import com.nidus.twinly.purchase.entity.EarlySignupGrantCounter;
 import com.nidus.twinly.purchase.entity.UserEntitlement;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.purchase.repository.UserEntitlementRepository;
@@ -204,6 +206,27 @@ class AdminConsoleIntegrationTest extends AbstractIntegrationTest {
         // when & then: 학교 이름 전체 일치
         mockMvc.perform(admin(get("/admin/members").param("key", "SCHOOL").param("query", "마바대학교")))
                 .andExpect(jsonPath("$.totalCount").value(1));
+    }
+
+    @Test
+    @DisplayName("회원 목록: 기본은 가입 시각이 늦은 회원부터, sort=ID 면 ID 가 큰 회원부터 보여 준다")
+    void members_sortedBySignupTimeDescending() throws Exception {
+        // given: 먼저 저장한 회원(작은 ID)의 가입 시각을 더 늦게 바꾼다
+        User laterSignup = saveMember("나중가입", Gender.MALE, "정렬대학교", "late@jung.ac.kr");
+        User earlierSignup = saveMember("먼저가입", Gender.FEMALE, "정렬대학교", "early@jung.ac.kr");
+        jdbcTemplate.update("UPDATE users SET created_at = UTC_TIMESTAMP(6) + INTERVAL 1 HOUR WHERE id = ?", laterSignup.getId());
+        jdbcTemplate.update("UPDATE users SET created_at = UTC_TIMESTAMP(6) - INTERVAL 1 HOUR WHERE id = ?", earlierSignup.getId());
+        flushAndClear();
+
+        // when & then: 기본은 최근 가입 순, sort=ID 면 ID 내림차순
+        mockMvc.perform(admin(get("/admin/members").param("key", "SCHOOL").param("query", "정렬대학교")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].id").value(String.valueOf(laterSignup.getId())))
+                .andExpect(jsonPath("$.items[1].id").value(String.valueOf(earlierSignup.getId())));
+        mockMvc.perform(admin(get("/admin/members").param("key", "SCHOOL").param("query", "정렬대학교").param("sort", "ID")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].id").value(String.valueOf(earlierSignup.getId())))
+                .andExpect(jsonPath("$.items[1].id").value(String.valueOf(laterSignup.getId())));
     }
 
     @Test
@@ -455,6 +478,75 @@ class AdminConsoleIntegrationTest extends AbstractIntegrationTest {
         assertThat(delta(before, after, "/parallelRelation/users/male")).isEqualTo(1);
         assertThat(delta(before, after, "/parallelRelation/users/female")).isEqualTo(2);
         assertThat(delta(before, after, "/members/total")).isEqualTo(4);
+    }
+
+    @Test
+    @DisplayName("대시보드 일별 통계: 최근 30일 날짜별로 가입·시즌 참가·탈퇴 완료·탈퇴 유예를 그날 기준으로 센다")
+    void dashboard_dailyEvents() throws Exception {
+        // given: 오늘 가입·참가한 남성, 3일 전 가입해 오늘 탈퇴 신청한 여성, 40일 전 가입해 오늘 탈퇴가 끝난 남성
+        JsonNode before = body(mockMvc.perform(admin(get("/admin/dashboard"))));
+        User joined = saveMember("오늘가입", Gender.MALE, "일별대학교", "d1@ilbyeol.ac.kr");
+        User requested = saveMember("유예신청", Gender.FEMALE, "일별대학교", "d2@ilbyeol.ac.kr");
+        User deleted = saveMember("탈퇴완료", Gender.MALE, "일별대학교", "d3@ilbyeol.ac.kr");
+        flushAndClear();
+        participate(joined);
+        jdbcTemplate.update("UPDATE users SET created_at = UTC_TIMESTAMP(6) - INTERVAL 3 DAY, withdrawal_requested_at = UTC_TIMESTAMP(6) WHERE id = ?", requested.getId());
+        jdbcTemplate.update("UPDATE users SET created_at = UTC_TIMESTAMP(6) - INTERVAL 40 DAY, withdrawal_requested_at = UTC_TIMESTAMP(6) - INTERVAL 1 DAY, deleted_at = UTC_TIMESTAMP(6) WHERE id = ?", deleted.getId());
+
+        // when
+        JsonNode after = body(mockMvc.perform(admin(get("/admin/dashboard"))).andExpect(status().isOk()));
+
+        // then: 30일치, 마지막이 오늘(KST)
+        assertThat(after.at("/daily").size()).isEqualTo(30);
+        assertThat(after.at("/daily/29/date").asString()).isEqualTo(KstTimes.today().toString());
+        assertThat(delta(before, after, "/daily/29/signups/male")).isEqualTo(1);
+        assertThat(delta(before, after, "/daily/29/subscriptions/male")).isEqualTo(1);
+        assertThat(delta(before, after, "/daily/29/withdrawalRequests/female")).isEqualTo(1);
+        assertThat(delta(before, after, "/daily/29/withdrawals/male")).isEqualTo(1);
+        assertThat(delta(before, after, "/daily/29/withdrawalRequests/male")).isZero();
+        assertThat(delta(before, after, "/daily/26/signups/female")).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("채팅방 목록: sort=MESSAGES 면 메시지 많은 방부터, 기본값은 최근에 열린 방부터 보여 준다")
+    void chatRooms_sortByMessages() throws Exception {
+        // given: 먼저 열린 방에 메시지 3개, 나중에 열린 방에 1개
+        User me = saveMember("정렬기준", Gender.MALE, "정렬방대학교", "s0@sortroom.ac.kr");
+        User first = saveMember("먼저방", Gender.FEMALE, "정렬방대학교", "s1@sortroom.ac.kr");
+        User second = saveMember("나중방", Gender.FEMALE, "정렬방대학교", "s2@sortroom.ac.kr");
+        Long busy = room(me, first, true, true);
+        Long quiet = room(me, second, true, true);
+        for (int i = 1; i <= 3; i++) {
+            chatRepository.save(Chat.create("busy" + i, busy, me.getId(), first.getId(), ChatMessageType.TEXT, "메시지" + i));
+        }
+        chatRepository.save(Chat.create("quiet1", quiet, me.getId(), second.getId(), ChatMessageType.TEXT, "메시지"));
+        flushAndClear();
+
+        // when & then
+        mockMvc.perform(admin(get("/admin/chat-rooms").param("query", String.valueOf(me.getId())).param("sort", "MESSAGES")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].id").value(String.valueOf(busy)))
+                .andExpect(jsonPath("$.items[1].id").value(String.valueOf(quiet)));
+        mockMvc.perform(admin(get("/admin/chat-rooms").param("query", String.valueOf(me.getId()))))
+                .andExpect(jsonPath("$.items[0].id").value(String.valueOf(quiet)))
+                .andExpect(jsonPath("$.items[1].id").value(String.valueOf(busy)));
+    }
+
+    @Test
+    @DisplayName("대시보드 선착순 무료 혜택: 성별 한도에서 배정된 수를 뺀 남은 자리를 주고, 한도를 넘겨도 0 아래로 내려가지 않는다")
+    void dashboard_earlyGrantRemainingSlots() throws Exception {
+        // given: 남성 40자리 배정, 여성은 한도보다 많이 배정된 상태
+        jdbcTemplate.update("UPDATE early_signup_grant_counters SET assigned_count = 40 WHERE gender = 'MALE'");
+        jdbcTemplate.update("UPDATE early_signup_grant_counters SET assigned_count = ? WHERE gender = 'FEMALE'",
+                EarlySignupGrantCounter.LIMIT_PER_GENDER + 3);
+
+        // when & then
+        mockMvc.perform(admin(get("/admin/dashboard")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.earlyGrantSlots.limitPerGender").value(EarlySignupGrantCounter.LIMIT_PER_GENDER))
+                .andExpect(jsonPath("$.earlyGrantSlots.maleRemaining").value(EarlySignupGrantCounter.LIMIT_PER_GENDER - 40))
+                .andExpect(jsonPath("$.earlyGrantSlots.femaleRemaining").value(0))
+                .andExpect(jsonPath("$.earlyGrantSlots.endsAt").isNotEmpty());
     }
 
     @Test
