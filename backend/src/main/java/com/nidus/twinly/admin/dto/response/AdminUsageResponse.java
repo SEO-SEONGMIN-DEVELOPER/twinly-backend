@@ -6,7 +6,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 public record AdminUsageResponse(
         @Schema(description = "구독 없이 쓰는 기능(평행우주 관계)의 사용 비율 분모가 되는 가입자 수")
         AdminGenderCountResponse members,
-        @Schema(description = "사용 비율의 분모가 되는 구독자(현재 시즌 참가자) 수")
+        @Schema(description = "사용 비율의 분모가 되는 시즌 참가자(현재 시즌) 수")
         AdminGenderCountResponse subscribers,
         BalanceGame balanceGame,
         Hesitation hesitation,

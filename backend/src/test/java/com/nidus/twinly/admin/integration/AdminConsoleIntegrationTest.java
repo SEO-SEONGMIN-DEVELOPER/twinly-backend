@@ -114,7 +114,7 @@ class AdminConsoleIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("대시보드: 가입자·구독자(현재 시즌 참가자)·구독 종류·탈퇴자·학교를 세고 시드 회원은 모든 집계에서 뺀다")
+    @DisplayName("대시보드: 가입자·시즌 참가자(현재 시즌)·구독 종류·탈퇴자·학교를 세고 시드 회원은 모든 집계에서 뺀다")
     void dashboard_countsMembersSubscribersWithdrawnAndSchools() throws Exception {
         // given: 지금까지의 집계를 기억해 두고, 시즌에 참가한 활성 남2·여1, 이용권만 있고 시즌 미참가 1명, 시드 1, 탈퇴 유예 1, 탈퇴 완료 1 추가
         JsonNode before = body(mockMvc.perform(admin(get("/admin/dashboard"))));
@@ -156,7 +156,7 @@ class AdminConsoleIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("대시보드 나이 통계: 생년월일을 복호화해 출생연도별 가입자·구독자를 세고, 시드와 탈퇴 회원은 뺀다")
+    @DisplayName("대시보드 나이 통계: 생년월일을 복호화해 출생연도별 가입자·시즌 참가자를 세고, 시드와 탈퇴 회원은 뺀다")
     void dashboard_countsBirthYears() throws Exception {
         // given: 1971년생 시즌 참가자 1명, 1972년생 이용권만 있는 미참가자 1명, 1971년생 시드·탈퇴 유예 회원 각 1명
         User subscribed = saveMember("칠일", Gender.MALE, "타파대학교", "s71@tapa.ac.kr", "1971-03-01");

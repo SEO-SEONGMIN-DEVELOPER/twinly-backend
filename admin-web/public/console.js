@@ -260,10 +260,10 @@
             <svg class="flow-arrow" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1l6 5-6 5" fill="none" stroke="currentColor" stroke-width="2"/></svg>
           </article>
           <article class="card kpi wide">
-            <div class="kpi-label">구독자 수 <span class="card-sub">현재 시즌 참가자</span></div>
+            <div class="kpi-label">시즌 참가자 수 <span class="card-sub">현재 시즌</span></div>
             <div class="kpi-value num">${num(subs.total)}<small>명</small></div>
             ${genderSummary(subs)}
-            <div class="rates num"><span class="rate">가입자 대비 구독률<b>${pct(subs.total, members.total)}%</b></span><span class="rate">유료 구독<b>${num(d.subscribers.paid)}</b></span><span class="rate">무료 체험<b>${num(d.subscribers.trial)}</b></span><span class="rate">선착순 무료<b>${num(d.subscribers.earlyGrant)}</b></span></div>
+            <div class="rates num"><span class="rate">가입자 대비 참가율<b>${pct(subs.total, members.total)}%</b></span><span class="rate">유료 구독<b>${num(d.subscribers.paid)}</b></span><span class="rate">무료 체험<b>${num(d.subscribers.trial)}</b></span><span class="rate">선착순 무료<b>${num(d.subscribers.earlyGrant)}</b></span></div>
           </article>
         </div>
         <article class="card daily-card" id="daily-card"></article>
@@ -316,7 +316,7 @@
   }
   const DAILY_SERIES = [
     ['signups', '가입', 'signup'],
-    ['subscriptions', '구독', 'subscribe'],
+    ['subscriptions', '시즌 참가', 'subscribe'],
     ['withdrawals', '탈퇴', 'withdrawn'],
     ['withdrawalRequests', '탈퇴 유예', 'pending']
   ];
@@ -328,7 +328,7 @@
     const max = Math.max(1, ...daily.map(day => DAILY_SERIES.reduce((sum, [key]) => sum + value(day, key), 0)));
     const sums = DAILY_SERIES.map(([key]) => daily.reduce((sum, day) => sum + value(day, key), 0));
     const dayLabel = date => `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`;
-    card.innerHTML = `<div class="card-head"><h2>일별 가입·구독·탈퇴</h2>
+    card.innerHTML = `<div class="card-head"><h2>일별 가입·시즌 참가·탈퇴</h2>
         <div class="chips" id="daily-gender">${DAILY_GENDER.map(([k, l]) => `<button class="chip" type="button" data-g="${k}" aria-pressed="${k === gender}">${l}</button>`).join('')}</div></div>
       <div class="daily-legend num">${DAILY_SERIES.map(([, label, cls], i) => `<span><i class="daily-sw ${cls}"></i>${label} <b>${num(sums[i])}</b></span>`).join('')}<span class="hint">최근 30일 합계 · 한국 시간 기준</span></div>
       <div class="daily-chart">
@@ -381,7 +381,7 @@
       <div class="card-head"><h2>나이 통계</h2><span class="card-sub">가입자 기준 · 나이는 만 나이 (올해 생일 전~후)</span></div>
       <div class="rates num"><span class="rate">평균 나이<b>${average.toFixed(1)}세</b></span><span class="rate">가장 많은 출생연도<b>${String(top.year).slice(2)}년생 ${num(top.members)}명</b></span>${unknown ? `<span class="rate">생년월일 확인 불가<b>${num(unknown)}명</b></span>` : ''}</div>
       <div class="table-wrap"><table class="age-table num">
-        <thead><tr><th>출생연도</th><th>가입자</th><th>구독자</th><th>구독률</th></tr></thead>
+        <thead><tr><th>출생연도</th><th>가입자</th><th>시즌 참가자</th><th>참가율</th></tr></thead>
         <tbody>${rows.map(r => `<tr class="${r.year === top.year && r.members === top.members ? 'top' : r.members ? '' : 'zero'}">
           <td>${r.label}</td>
           <td><div class="age-bar"><span class="track-wrap"><span class="stackbar" style="width:${r.members / max * 100}%"><span class="all" style="flex:1"></span></span></span><b>${num(r.members)}</b></div></td>
@@ -817,9 +817,9 @@
   function withdrawalTiming(timing) {
     if (!timing) return '<span class="dash">알 수 없음</span>';
     const subscribed = timing.stage === 'AFTER_SUBSCRIPTION';
-    const from = subscribed ? '구독' : '가입';
+    const from = subscribed ? '시즌 참가' : '가입';
     const elapsed = timing.days === 0 ? `${from} 당일 탈퇴` : `${from} 후 ${num(timing.days)}일 후 탈퇴`;
-    return `${pill(subscribed ? '구독 후' : '구독 전', subscribed ? 'ok' : 'idle', true)} <span class="hint num">${elapsed}</span>`;
+    return `${pill(subscribed ? '시즌 참가 후' : '시즌 참가 전', subscribed ? 'ok' : 'idle', true)} <span class="hint num">${elapsed}</span>`;
   }
 
   function openCase(key) {
@@ -970,8 +970,8 @@
           <div class="bars num">${bar('전체', '', users.total, base.total, '명')}${bar('남성', 'm', users.male, base.male, '명')}${bar('여성', 'f', users.female, base.female, '명')}</div>
         </article>`;
       body.innerHTML = `<div class="usage-grid">
-        ${userCard('밸런스 게임', '이용자 수', u.balanceGame.users, subs, '구독자(시즌 참가자)')}
-        ${userCard('망설임 질문', '답변한 회원', u.hesitation.users, subs, '구독자(시즌 참가자)')}
+        ${userCard('밸런스 게임', '이용자 수', u.balanceGame.users, subs, '시즌 참가자')}
+        ${userCard('망설임 질문', '답변한 회원', u.hesitation.users, subs, '시즌 참가자')}
         ${userCard('평행우주 관계', '이용자 수', u.parallelRelation.users, u.members, '가입자')}
         <article class="card">
           <div class="card-head"><h2>채팅방</h2></div>

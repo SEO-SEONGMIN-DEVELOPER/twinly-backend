@@ -15,7 +15,7 @@ public class AdminDashboardController {
 
     private final AdminDashboardService adminDashboardService;
 
-    @Operation(summary = "대시보드", description = "가입자·구독자·탈퇴자 수와 성별, 학교별 가입자 수")
+    @Operation(summary = "대시보드", description = "가입자·시즌 참가자·탈퇴자 수와 성별, 학교별 가입자 수")
     @GetMapping("/admin/dashboard")
     public AdminDashboardResponse dashboard() {
         return AdminDashboardResponse.from(adminDashboardService.dashboard());
