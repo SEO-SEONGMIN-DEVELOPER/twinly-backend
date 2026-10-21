@@ -20,13 +20,6 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AdminSurveyReader {
 
-    private static final String MEMBERS = """
-            SELECT u.gender, COUNT(*) AS cnt
-            FROM users u
-            WHERE u.is_seed = FALSE
-            GROUP BY u.gender
-            """;
-
     private static final String TENDENCY_ANSWERS = """
             SELECT a.question_id, a.option_id, u.gender, COUNT(*) AS cnt
             FROM user_tendency_answers a
@@ -39,14 +32,6 @@ public class AdminSurveyReader {
 
     @Transactional(readOnly = true)
     public AdminSurveyResult read(List<TendencyQuestion> questions) {
-        Map<Gender, Long> members = new EnumMap<>(Gender.class);
-        jdbcTemplate.query(MEMBERS, Map.of(), rs -> {
-            Gender gender = gender(rs.getString("gender"));
-            if (gender != null) {
-                members.put(gender, rs.getLong("cnt"));
-            }
-        });
-
         Map<Long, Map<Long, Map<Gender, Long>>> answers = new HashMap<>();
         jdbcTemplate.query(TENDENCY_ANSWERS, Map.of(), rs -> {
             Gender gender = gender(rs.getString("gender"));
@@ -58,7 +43,6 @@ public class AdminSurveyReader {
         });
 
         return new AdminSurveyResult(
-                AdminGenderCountResult.from(members),
                 questions.stream()
                         .map(question -> question(question, answers.getOrDefault(question.id(), Map.of())))
                         .toList()

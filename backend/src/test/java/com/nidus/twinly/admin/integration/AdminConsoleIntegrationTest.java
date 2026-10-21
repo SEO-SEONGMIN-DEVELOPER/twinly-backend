@@ -633,7 +633,7 @@ class AdminConsoleIntegrationTest extends AbstractIntegrationTest {
         assertThat(delta(before, after, "/questions/0/options/2/respondents/female")).isEqualTo(1);
         assertThat(delta(before, after, "/questions/1/respondents/total")).isEqualTo(1);
         assertThat(after.at("/questions").size()).isEqualTo(2);
-        assertThat(delta(before, after, "/members/total")).isEqualTo(5);
+        assertThat(after.has("members")).isFalse();
     }
 
     @Test

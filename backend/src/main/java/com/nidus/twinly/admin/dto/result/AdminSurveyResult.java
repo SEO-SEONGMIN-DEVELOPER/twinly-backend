@@ -3,7 +3,6 @@ package com.nidus.twinly.admin.dto.result;
 import java.util.List;
 
 public record AdminSurveyResult(
-        AdminGenderCountResult members,
         List<Question> questions
 ) {
 
