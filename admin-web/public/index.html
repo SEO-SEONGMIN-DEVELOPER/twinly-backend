@@ -26,6 +26,7 @@
       <button data-view="chats">채팅방 관리</button>
       <button data-view="subs">구독 관리</button>
       <button data-view="reports">신고·문의 관리 <span class="count num" id="pending-count" hidden></span></button>
+      <button data-view="survey">설문 통계</button>
       <button data-view="usage">기능 이용 현황</button>
       <button data-view="settings">운영자 API</button>
     </nav>
@@ -137,6 +138,15 @@
         <div style="height:16px"></div>
         <div id="report-body"></div>
       </div>
+    </section>
+
+    <section class="view" id="v-survey" data-title="설문 통계" data-desc="온보딩 성향 설문에서 회원들이 어떤 인연을 원한다고 답했는지 봅니다." hidden>
+      <div class="basis">
+        <span><b>집계 대상</b> 시드 회원 제외 (탈퇴·탈퇴 유예 회원 포함)</span>
+        <span><b>문항</b> 현재 앱에 나가는 문항만 (빠진 옛 문항 제외)</span>
+      </div>
+      <div style="height:16px"></div>
+      <div id="survey-body"></div>
     </section>
 
     <section class="view" id="v-usage" data-title="기능 이용 현황" data-desc="회원들이 밸런스 게임, 망설임 질문, 평행우주 관계, 채팅방을 얼마나 쓰는지 봅니다." hidden>

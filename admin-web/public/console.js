@@ -918,6 +918,34 @@
     });
   }
 
+  loaders.survey = async () => {
+    const body = $('survey-body');
+    body.innerHTML = '<div class="state-box">불러오는 중이에요…</div>';
+    try {
+      const s = await api('/admin/survey');
+      markRefreshed();
+      const bar = (label, cls, part, whole) => `<div class="bar-row"><span>${label}</span><div class="track"><div class="fill ${cls}" style="width:${pct(part, whole)}%"></div></div><span class="val"><b>${pct(part, whole)}%</b> ${num(part)}명</span></div>`;
+      const option = (o, all) => `<div class="survey-option">
+          <div class="survey-option-label">${esc(o.label)}</div>
+          <div class="bars num">${bar('전체', '', o.respondents.total, all.total)}${bar('남성', 'm', o.respondents.male, all.male)}${bar('여성', 'f', o.respondents.female, all.female)}</div>
+        </div>`;
+      const card = question => `<article class="card">
+          <div class="card-head"><h2>${esc(question.text)}</h2></div>
+          <div class="stat-row two">
+            <div class="stat"><span class="l">응답한 회원</span><span class="v num">${num(question.respondents.total)}명</span><span class="s num">남 ${num(question.respondents.male)} · 여 ${num(question.respondents.female)}</span></div>
+            <div class="stat"><span class="l">응답률</span><span class="v num">${pct(question.respondents.total, s.members.total)}%</span><span class="s num">가입자(탈퇴 포함) ${num(s.members.total)}명 대비</span></div>
+          </div>
+          <div class="section-label">선택지별 비율 <span class="hint">각 성별 응답자 중 몇 %가 골랐는지</span></div>
+          ${question.options.map(o => option(o, question.respondents)).join('')}
+        </article>`;
+      body.innerHTML = s.questions.length
+        ? `<div class="usage-grid">${s.questions.map(card).join('')}</div>`
+        : '<div class="state-box">집계할 설문 문항이 없어요.</div>';
+    } catch (error) {
+      body.innerHTML = `<div class="state-box error">${esc(error.message)}</div>`;
+    }
+  };
+
   loaders.usage = async () => {
     const body = $('usage-body');
     body.innerHTML = '<div class="state-box">불러오는 중이에요…</div>';
