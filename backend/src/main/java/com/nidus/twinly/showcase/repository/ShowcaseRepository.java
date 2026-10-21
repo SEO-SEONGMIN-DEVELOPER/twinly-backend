@@ -26,8 +26,13 @@ public interface ShowcaseRepository extends JpaRepository<Showcase, Long> {
                    OR u.organization_hash = (SELECT v.organization_hash FROM users v WHERE v.id = :viewerUserId))
               AND NOT EXISTS (
                   SELECT 1 FROM blocks b
-                  WHERE (b.user_id = :viewerUserId AND b.blocked_user_id = s.user_id)
-                     OR (b.user_id = s.user_id AND b.blocked_user_id = :viewerUserId)
+                  WHERE b.user_id = :viewerUserId
+                    AND b.blocked_user_id = s.user_id
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM blocks b
+                  WHERE b.user_id = s.user_id
+                    AND b.blocked_user_id = :viewerUserId
               )
             """, nativeQuery = true)
     List<Long> findAllTargetCandidateUserIds(@Param("viewerUserId") Long viewerUserId,
