@@ -1,6 +1,7 @@
 package com.nidus.twinly.admin.controller;
 
 import com.nidus.twinly.admin.domain.ChatEntryState;
+import com.nidus.twinly.admin.domain.ChatRoomSort;
 import com.nidus.twinly.admin.dto.response.AdminChatMessagePageResponse;
 import com.nidus.twinly.admin.dto.response.AdminChatRoomResponse;
 import com.nidus.twinly.admin.dto.response.AdminPageResponse;
@@ -26,14 +27,15 @@ public class AdminChatRoomController {
 
     private final AdminChatRoomService adminChatRoomService;
 
-    @Operation(summary = "채팅방 목록", description = "시드 회원이 있는 방은 빠진다. query가 숫자면 채팅방 번호나 회원 ID, 아니면 닉네임 일부로 찾는다.")
+    @Operation(summary = "채팅방 목록", description = "시드 회원이 있는 방은 빠진다. query가 숫자면 채팅방 번호나 회원 ID, 아니면 닉네임 일부로 찾는다. sort 는 LATEST(최근에 열린 순, 기본값) 또는 MESSAGES(메시지 많은 순)다.")
     @ApiResponse(responseCode = "400", description = "INVALID_REQUEST")
     @GetMapping("/admin/chat-rooms")
     public AdminPageResponse<AdminChatRoomResponse> search(@RequestParam(required = false) String query,
                                                            @RequestParam(required = false) ChatEntryState entryState,
+                                                           @RequestParam(defaultValue = "LATEST") ChatRoomSort sort,
                                                            @RequestParam(defaultValue = "0") @Min(0) Integer page,
                                                            @RequestParam(defaultValue = "20") @Min(1) @Max(100) Integer size) {
-        return AdminPageResponse.from(adminChatRoomService.search(query, entryState, page, size), AdminChatRoomResponse::from);
+        return AdminPageResponse.from(adminChatRoomService.search(query, entryState, sort, page, size), AdminChatRoomResponse::from);
     }
 
     @Operation(summary = "채팅방 상세")

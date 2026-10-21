@@ -43,7 +43,7 @@ public class AdminMemberReader {
                 .addValue("offset", command.page() * command.size());
 
         List<Long> ids = jdbcTemplate.queryForList(
-                "SELECT u.id FROM users u WHERE " + where + " ORDER BY u.id DESC LIMIT :size OFFSET :offset",
+                "SELECT u.id FROM users u WHERE " + where + " ORDER BY " + command.sort().orderBy() + " LIMIT :size OFFSET :offset",
                 pageParams, Long.class);
         Long total = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM users u WHERE " + where, pageParams, Long.class);
 
