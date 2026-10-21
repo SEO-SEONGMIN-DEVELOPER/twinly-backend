@@ -1,14 +1,15 @@
 [
     {
         "dbInstance": "twinly-prod-api-rds",
-        "databaseInsightsMode": "standard",
+        "databaseInsightsMode": "advanced",
         "performanceInsightsEnabled": true,
-        "performanceInsightsRetentionDays": 7,
+        "performanceInsightsRetentionDays": 465,
         "parameterGroup": "twinly-prod-mysql84",
         "parameters": {
             "performance_schema": "1"
         },
         "appliedAt": "2026-10-20T15:01:00+09:00",
-        "description": "Top SQL 과 쿼리별 통계(호출 수·지연·읽은 행)를 CloudWatch Database Insights 에서 보기 위한 설정. 보관 7일은 무료 범위다.\n\nperformance_schema 를 파라미터 그룹에서 직접 1 로 둔 것은 의도다. 보통은 상세 지표 수집만 켜면 RDS 가 performance_schema 를 자동 관리하지만, db.t4g.medium 은 자동 관리를 지원하지 않는다. 0 으로 두면 쿼리별 통계(SQL_LEVEL_STATISTICS)가 수집되지 않는다.\n\nperformance_schema 는 static 파라미터라 재부팅해야 반영된다. Multi-AZ 에서 failover 재부팅은 파라미터가 반영되지 않을 수 있어 일반 재부팅으로 적용했다. 2026-10-20 실측: 재부팅 요청부터 available 까지 50초, DB 가 실제로 내려가 있던 시간은 약 14초. 앱 점검 모드를 켠 상태에서 진행했다.\n\nstage(db.t4g.micro)에는 적용하지 않았다."
+        "description": "Top SQL 과 쿼리별 통계(호출 수·지연·읽은 행)를 CloudWatch Database Insights 에서 보기 위한 설정. 2026-10-20 Standard(보관 7일, 무료)로 켰고, 2026-10-21 Advanced 로 올렸다. Advanced 는 보관 465일이 필수이고 vCPU 시간당 과금된다. 모드 전환은 재부팅 없이 반영됐다.\n\nperformance_schema 를 파라미터 그룹에서 직접 1 로 둔 것은 의도다. 보통은 상세 지표 수집만 켜면 RDS 가 performance_schema 를 자동 관리하지만, db.t4g.medium 은 자동 관리를 지원하지 않는다. 0 으로 두면 쿼리별 통계(SQL_LEVEL_STATISTICS)가 수집되지 않는다.\n\nperformance_schema 는 static 파라미터라 재부팅해야 반영된다. Multi-AZ 에서 failover 재부팅은 파라미터가 반영되지 않을 수 있어 일반 재부팅으로 적용했다. 2026-10-20 실측: 재부팅 요청부터 available 까지 50초, DB 가 실제로 내려가 있던 시간은 약 14초. 앱 점검 모드를 켠 상태에서 진행했다.\n\nstage(db.t4g.micro)에는 적용하지 않았다.",
+        "advancedAppliedAt": "2026-10-21T14:19:41+09:00"
     }
 ]
