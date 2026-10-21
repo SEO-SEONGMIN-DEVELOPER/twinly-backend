@@ -988,7 +988,7 @@
         <article class="card">
           <div class="card-head"><h2>인연 탭 즐겨찾기</h2></div>
           <div class="stat-row two">
-            <div class="stat"><span class="l">이용자 수</span><span class="v num">${num(fav.participants.total)}명</span><span class="s num">역대 시즌 참가자 · 남 ${num(fav.participants.male)} · 여 ${num(fav.participants.female)}</span></div>
+            <div class="stat"><span class="l">이용자 수</span><span class="v num">${num(fav.participants.total)}명</span><span class="s num">역대 시즌 참가자(탈퇴 포함) · 남 ${num(fav.participants.male)} · 여 ${num(fav.participants.female)}</span></div>
             <div class="stat"><span class="l">사용 비율</span><span class="v num">${pct(fav.favoritedUsers.total, fav.participants.total)}%</span><span class="s num">즐겨찾기한 회원 ${num(fav.favoritedUsers.total)}명</span></div>
           </div>
           <div class="section-label">성별 사용 비율</div>

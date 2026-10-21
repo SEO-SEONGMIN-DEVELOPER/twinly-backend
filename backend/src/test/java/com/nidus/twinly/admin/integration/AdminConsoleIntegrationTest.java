@@ -637,29 +637,37 @@ class AdminConsoleIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("기능 이용 현황: 인연 탭 즐겨찾기는 시즌에 참가한 적 있는 회원을 이용자 수로, 한 번이라도 즐겨찾기한 회원을 사용자로 센다")
+    @DisplayName("기능 이용 현황: 인연 탭 즐겨찾기는 시즌에 참가한 적 있는 회원을 이용자 수로, 한 번이라도 즐겨찾기한 회원을 사용자로 세고 탈퇴·탈퇴 유예 회원도 포함한다")
     void usage_countsPeopleFavoriteUsers() throws Exception {
-        // given: 두 명을 즐겨찾기한 남성, 즐겨찾기했다 해제한 여성은 시즌 참가자, 인연만 있고 즐겨찾기하지 않은 여성은 미참가
+        // given: 두 명을 즐겨찾기한 남성, 즐겨찾기했다 해제한 여성, 탈퇴 유예 남성, 탈퇴 완료 여성은 시즌 참가자, 즐겨찾기하지 않은 여성은 미참가
         JsonNode before = body(mockMvc.perform(admin(get("/admin/usage"))));
         User favorer = saveMember("즐찾남", Gender.MALE, "즐찾대학교", "f1@jeulchat.ac.kr");
         User unfavored = saveMember("해제여", Gender.FEMALE, "즐찾대학교", "f2@jeulchat.ac.kr");
         User untouched = saveMember("안씀여", Gender.FEMALE, "즐찾대학교", "f3@jeulchat.ac.kr");
+        User withdrawing = saveMember("유예남", Gender.MALE, "즐찾대학교", "f4@jeulchat.ac.kr");
+        User deleted = saveMember("탈퇴여", Gender.FEMALE, "즐찾대학교", "f5@jeulchat.ac.kr");
+        withdrawing.requestWithdrawal(Duration.ofDays(30));
         flushAndClear();
+        jdbcTemplate.update("UPDATE users SET withdrawal_requested_at = UTC_TIMESTAMP(6), deleted_at = UTC_TIMESTAMP(6) WHERE id = ?", deleted.getId());
         participate(favorer);
         participate(unfavored);
+        participate(withdrawing);
+        participate(deleted);
         favorite(favorer, encounter(favorer, unfavored), true);
         favorite(favorer, encounter(favorer, untouched), true);
         favorite(unfavored, encounter(unfavored, untouched), false);
+        favorite(withdrawing, encounter(withdrawing, untouched), true);
+        favorite(deleted, encounter(deleted, favorer), true);
 
         // when
         JsonNode after = body(mockMvc.perform(admin(get("/admin/usage"))).andExpect(status().isOk()));
 
         // then
-        assertThat(delta(before, after, "/peopleFavorite/participants/male")).isEqualTo(1);
-        assertThat(delta(before, after, "/peopleFavorite/participants/female")).isEqualTo(1);
-        assertThat(delta(before, after, "/peopleFavorite/favoritedUsers/total")).isEqualTo(2);
-        assertThat(delta(before, after, "/peopleFavorite/favoritedUsers/male")).isEqualTo(1);
-        assertThat(delta(before, after, "/peopleFavorite/favoritedUsers/female")).isEqualTo(1);
+        assertThat(delta(before, after, "/peopleFavorite/participants/male")).isEqualTo(2);
+        assertThat(delta(before, after, "/peopleFavorite/participants/female")).isEqualTo(2);
+        assertThat(delta(before, after, "/peopleFavorite/favoritedUsers/total")).isEqualTo(4);
+        assertThat(delta(before, after, "/peopleFavorite/favoritedUsers/male")).isEqualTo(2);
+        assertThat(delta(before, after, "/peopleFavorite/favoritedUsers/female")).isEqualTo(2);
     }
 
     @Test
