@@ -45,8 +45,13 @@ public interface SeasonParticipationRepository extends JpaRepository<SeasonParti
               )
               AND NOT EXISTS (
                   SELECT 1 FROM blocks b
-                  WHERE (b.user_id = :userId AND b.blocked_user_id = p.user_id)
-                     OR (b.user_id = p.user_id AND b.blocked_user_id = :userId)
+                  WHERE b.user_id = :userId
+                    AND b.blocked_user_id = p.user_id
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM blocks b
+                  WHERE b.user_id = p.user_id
+                    AND b.blocked_user_id = :userId
               )
             """, nativeQuery = true)
     List<Long> findAllMapCandidateUserIds(@Param("userId") Long userId,
@@ -73,8 +78,13 @@ public interface SeasonParticipationRepository extends JpaRepository<SeasonParti
               )
               AND NOT EXISTS (
                   SELECT 1 FROM Block b
-                  WHERE (b.userId = :userId AND b.blockedUserId = p.userId)
-                     OR (b.userId = p.userId AND b.blockedUserId = :userId)
+                  WHERE b.userId = :userId
+                    AND b.blockedUserId = p.userId
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM Block b
+                  WHERE b.userId = p.userId
+                    AND b.blockedUserId = :userId
               )
             """)
     List<PreviewCandidateProjection> findAllPreviewCandidates(@Param("userId") Long userId,
