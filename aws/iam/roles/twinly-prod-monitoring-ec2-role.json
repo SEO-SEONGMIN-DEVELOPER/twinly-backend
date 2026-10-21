@@ -17,7 +17,8 @@
     "TwinlyProdMonitoringParameterBoundary",
     "TwinlyProdMonitoringReadEnv",
     "CloudWatchAgentServerPolicy",
-    "AmazonSSMManagedInstanceCore"
+    "AmazonSSMManagedInstanceCore",
+    "TwinlyProdPrometheusEc2Discovery"
   ],
   "inlinePolicies": []
 }

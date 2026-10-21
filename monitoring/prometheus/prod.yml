@@ -6,14 +6,16 @@ global:
 scrape_configs:
   - job_name: twinly-api
     metrics_path: /actuator/prometheus
-    static_configs:
-      - targets:
-          - 10.1.16.110:8081
-        labels:
-          env: prod
-          node: api-a
-      - targets:
-          - 10.1.22.142:8081
-        labels:
-          env: prod
-          node: api-c
+    ec2_sd_configs:
+      - region: ap-northeast-2
+        port: 8081
+        filters:
+          - name: tag:Name
+            values:
+              - twinly-prod-api-*
+    relabel_configs:
+      - source_labels: [__meta_ec2_tag_Name]
+        regex: twinly-prod-(api-.+)
+        target_label: node
+      - target_label: env
+        replacement: prod

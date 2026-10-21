@@ -18,7 +18,8 @@
     "TwinlyStageApiParameterBoundary",
     "CloudWatchAgentServerPolicy",
     "AmazonSSMManagedInstanceCore",
-    "AmazonEC2ContainerRegistryReadOnly"
+    "AmazonEC2ContainerRegistryReadOnly",
+    "TwinlyStagePrometheusEc2Discovery"
   ],
   "inlinePolicies": []
 }
