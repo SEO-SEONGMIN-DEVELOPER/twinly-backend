@@ -25,7 +25,7 @@
       <button data-view="members">회원 관리</button>
       <button data-view="chats">채팅방 관리</button>
       <button data-view="subs">구독 관리</button>
-      <button data-view="reports">신고·문의 <span class="count num" id="pending-count" hidden></span></button>
+      <button data-view="reports">신고·문의 관리 <span class="count num" id="pending-count" hidden></span></button>
       <button data-view="usage">기능 이용 현황</button>
       <button data-view="settings">운영자 API</button>
     </nav>
@@ -40,7 +40,6 @@
     <section class="view" id="v-dashboard" data-title="대시보드" data-desc="가입자·구독자·탈퇴자 현황과 구독 전환율을 한눈에 봅니다." hidden>
       <div class="basis">
         <span><b>집계 대상</b> 시드·탈퇴(유예 포함) 회원 제외</span>
-        <span><b>성비</b> 남성 : 여성 비율(%)</span>
       </div>
       <div id="dashboard-body"></div>
     </section>
@@ -64,12 +63,16 @@
             <option value="WITHDRAWING">탈퇴 유예</option>
             <option value="WITHDRAWN">탈퇴</option>
           </select>
+          <select class="ctl" id="m-sort" aria-label="정렬">
+            <option value="SIGNUP">최근 가입 순</option>
+            <option value="ID">ID 순</option>
+          </select>
           <button class="btn" type="submit">검색</button>
         </form>
         <p class="hint" id="m-hint">닉네임은 일부만 입력해도 찾을 수 있어요.</p>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>ID</th><th>닉네임</th><th>이메일</th><th>학교</th><th>가입일</th><th>구독</th><th>상태</th></tr></thead>
+            <thead><tr><th>ID</th><th>닉네임</th><th>이메일</th><th>학교</th><th>가입 시각</th><th>구독</th><th>상태</th></tr></thead>
             <tbody id="member-rows"></tbody>
           </table>
         </div>
@@ -91,7 +94,8 @@
             <button class="chip" type="button" data-f="ONE" aria-pressed="false">한 명만 입장</button>
             <button class="chip" type="button" data-f="NONE" aria-pressed="false">미입장</button>
           </div>
-          <span class="hint">시드 회원이 있는 방은 빼고 보여줘요</span>
+          <div class="toolbar"><span class="hint">시드 회원이 있는 방은 빼고 보여줘요</span>
+            <select class="ctl" id="c-sort" aria-label="정렬"><option value="LATEST">최근 열린 순</option><option value="MESSAGES">메시지 많은 순</option></select></div>
         </div>
         <div style="height:6px"></div>
         <div class="table-wrap">
@@ -121,7 +125,7 @@
       </div>
     </section>
 
-    <section class="view" id="v-reports" data-title="신고·문의" data-desc="신고는 접수 → 검토 중 → 처리 완료 순서로 처리합니다. 유저 신고는 접수 후 24시간 안에 검토해야 합니다." hidden>
+    <section class="view" id="v-reports" data-title="신고·문의 관리" data-desc="신고는 접수 → 검토 중 → 처리 완료 순서로 처리합니다. 유저 신고는 접수 후 24시간 안에 검토해야 합니다." hidden>
       <div class="card summary" id="case-summary"></div>
       <div class="card">
         <div class="tabs" role="tablist" id="report-tabs">
@@ -139,7 +143,7 @@
       <div id="usage-body"></div>
     </section>
 
-    <section class="view" id="v-settings" data-title="운영자 API" data-desc="앱 내 공지를 전체 회원 또는 지정 회원에게 발행합니다." hidden>
+    <section class="view" id="v-settings" data-title="운영자 API" data-desc="앱 내 공지를 발행하고, 앱 차단 정책(앱 강제 업데이트용)과 점검 상태를 바꿉니다." hidden>
       <div class="settings">
         <article class="card">
           <div class="card-head"><h2>공지 발행</h2><span class="card-sub">같은 제목·본문을 이미 받은 회원은 피드와 푸시 모두 건너뛰어요</span></div>
@@ -173,6 +177,62 @@
               <div class="toolbar"><button class="btn" type="button" id="n-publish">발행하기</button><button class="btn ghost" type="button" id="n-back">수정하기</button></div>
             </div>
             <p class="saved" id="n-done" hidden></p>
+          </div>
+        </article>
+        <article class="card">
+          <div class="card-head"><h2>앱 차단 정책 (앱 강제 업데이트용)</h2><button class="btn ghost" type="button" id="bp-reload">다시 불러오기</button></div>
+          <div class="form">
+            <div class="status-grid" id="bp-current"><div class="state-box">불러오는 중이에요…</div></div>
+            <div class="field">
+              <span class="lbl">최소 버전 변경</span>
+              <div class="target-options" role="radiogroup" aria-label="플랫폼">
+                <label class="target-option"><input type="radio" name="bp-platform" value="IOS" checked><span class="t">iOS</span><span class="d">App Store 앱</span></label>
+                <label class="target-option"><input type="radio" name="bp-platform" value="ANDROID"><span class="t">Android</span><span class="d">Play 스토어 앱</span></label>
+              </div>
+            </div>
+            <div class="field"><label for="bp-version">최소 버전</label><input class="ctl num" id="bp-version" placeholder="예: 1.3.5" inputmode="decimal" maxlength="32"></div>
+            <div class="field"><label for="bp-store">스토어 주소</label><input class="ctl" id="bp-store" placeholder="https://" maxlength="500"><span class="hint">플랫폼을 고르면 지금 트윈리 스토어 주소가 자동으로 채워져요</span></div>
+            <span class="hint">최소 버전보다 낮은 앱은 업데이트 안내가 떠서 앱을 쓸 수 없어요. 올리기 전에 스토어에 그 버전 이상이 출시됐는지 먼저 확인하세요. 막지 않으려면 0.0.0 으로 두면 돼요.</span>
+            <div id="bp-step1"><button class="btn" type="button" id="bp-review">변경 전 확인</button></div>
+            <div id="bp-step2" hidden class="form">
+              <div class="preview"><span id="bp-summary"></span></div>
+              <div class="toolbar"><button class="btn" type="button" id="bp-apply">변경하기</button><button class="btn ghost" type="button" id="bp-back">수정하기</button></div>
+            </div>
+            <p class="saved" id="bp-done" hidden></p>
+          </div>
+        </article>
+        <article class="card">
+          <div class="card-head"><h2>점검 상태 변경</h2><button class="btn ghost" type="button" id="mt-reload">다시 불러오기</button></div>
+          <div class="form">
+            <div class="status-grid" id="mt-current"><div class="state-box">불러오는 중이에요…</div></div>
+            <div class="field">
+              <span class="lbl">점검 상태</span>
+              <div class="target-options" role="radiogroup" aria-label="점검 상태">
+                <label class="target-option"><input type="radio" name="mt-active" value="on"><span class="t">점검 시작</span><span class="d">앱 요청을 점검 화면으로 막아요</span></label>
+                <label class="target-option"><input type="radio" name="mt-active" value="off" checked><span class="t">점검 해제</span><span class="d">앱을 다시 쓸 수 있게 해요</span></label>
+              </div>
+            </div>
+            <div class="form" id="mt-on-fields" hidden>
+              <div class="field"><label for="mt-message">점검 안내 문구</label><textarea class="ctl" id="mt-message" maxlength="200" style="min-height:70px" placeholder="비워 두면 &quot;더 나은 서비스를 위해 점검하고 있어요.&quot;가 보여요"></textarea></div>
+              <div class="field">
+                <span class="lbl">끝나는 시각 (한국 시간)</span>
+                <div class="until-row" id="mt-until">
+                  <input class="ctl num" id="mt-year" inputmode="numeric" maxlength="4" placeholder="2026" aria-label="년"><span>년</span>
+                  <input class="ctl num" id="mt-month" inputmode="numeric" maxlength="2" placeholder="10" aria-label="월"><span>월</span>
+                  <input class="ctl num" id="mt-day" inputmode="numeric" maxlength="2" placeholder="21" aria-label="일"><span>일</span>
+                  <input class="ctl num" id="mt-hour" inputmode="numeric" maxlength="2" placeholder="03" aria-label="시"><span>시</span>
+                  <input class="ctl num" id="mt-minute" inputmode="numeric" maxlength="2" placeholder="30" aria-label="분"><span>분</span>
+                </div>
+                <span class="hint num" id="mt-until-preview">모두 비워 두면 끝나는 시각 없이 점검해요</span>
+              </div>
+              <span class="hint">점검을 시작하면 앱의 모든 요청이 점검 화면으로 막히고 실시간 연결도 끊겨요. 끝나는 시각 전에는 앱이 실시간 연결을 다시 붙이지 않아서, 일찍 해제해도 최대 15분 늦게 붙을 수 있어요.</span>
+            </div>
+            <div id="mt-step1"><button class="btn" type="button" id="mt-review">변경 전 확인</button></div>
+            <div id="mt-step2" hidden class="form">
+              <div class="preview"><span id="mt-summary"></span></div>
+              <div class="toolbar"><button class="btn" type="button" id="mt-apply">변경하기</button><button class="btn ghost" type="button" id="mt-back">수정하기</button></div>
+            </div>
+            <p class="saved" id="mt-done" hidden></p>
           </div>
         </article>
       </div>

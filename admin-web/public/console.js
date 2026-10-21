@@ -19,7 +19,6 @@
     feedbackStatus: { RECEIVED: ['접수', 'idle'], IN_REVIEW: ['검토 중', 'warn'], DONE: ['완료', 'ok'] },
     violation: { AI_UTTERANCE: 'AI 발화 문제', USER_VIOLATION: '회원 위반', NONE: '문제 없음' },
     entry: { BOTH: ['둘 다 입장', 'ok'], ONE: ['한 명만 입장', 'warn'], NONE: ['미입장', 'idle'] },
-    sceneType: { ACTION: '행동', DIALOGUE: '대화', MOVE: '이동' },
     caseCategory: { USER_REPORT: '유저 신고', AI_UTTERANCE_REPORT: 'AI 발화 신고', SUGGESTION: '건의' },
     caseRole: { REPORTER: '신고함', REPORTED: '신고당함', AUTHOR: '작성' }
   };
@@ -38,8 +37,44 @@
   };
   const fmtDateTime = iso => { if (!iso) return '—'; const p = kstParts(iso); return `${p.month}-${p.day} ${p.hour}:${p.minute}`; };
   const fmtDate = iso => { if (!iso) return '—'; const p = kstParts(iso); return `${p.year}-${p.month}-${p.day}`; };
+  const fmtFullDateTime = iso => { if (!iso) return '—'; const p = kstParts(iso); return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`; };
   const fmtTime = iso => { if (!iso) return ''; const p = kstParts(iso); return `${p.hour}:${p.minute}`; };
-  const fmtDay = iso => { const p = kstParts(iso); return `${p.month}-${p.day}`; };
+  const WEEKDAYS = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
+  const kstDate = iso => new Date(Date.parse(iso) + 9 * 3600 * 1000);
+  const appDayKey = iso => kstDate(iso).toISOString().slice(0, 10);
+  const appChatDayLabel = iso => { const d = kstDate(iso); return `${d.getUTCFullYear()}년 ${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일 ${WEEKDAYS[d.getUTCDay()]}`; };
+  const appFeedDayLabel = iso => { const d = kstDate(iso); return `${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일`; };
+  const appDesignTime = iso => {
+    if (!iso) return '';
+    const d = kstDate(iso);
+    const hours = d.getUTCHours();
+    const minutes = d.getUTCMinutes();
+    return `${hours < 12 ? '오전' : '오후'} ${hours % 12 || 12}시${minutes ? ` ${minutes}분` : ''}`;
+  };
+  const PLACEHOLDER_COLORS = ['#FFC1DC', '#FFC1DC', '#FFD1A8', '#FF7DBE', '#FFE08A', '#A8C9F0', '#C8B5E0', '#B8DCC0'];
+  const appAvatar = seed => {
+    const value = String(seed ?? 'twinly');
+    let hash = 0;
+    for (let i = 0; i < value.length; i += 1) hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
+    return `<span class="app-avatar" style="background:${PLACEHOLDER_COLORS[hash % PLACEHOLDER_COLORS.length]}" aria-hidden="true"><i></i><b></b></span>`;
+  };
+  const APP_ICON = {
+    pin: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 21s7-5.2 7-11a7 7 0 1 0-14 0c0 5.8 7 11 7 11Z" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="10" r="2.2" fill="currentColor"/></svg>',
+    walk: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="13.5" cy="4.6" r="1.9" stroke="currentColor" stroke-width="2"/><path d="M12.6 8.6 11 14.2M11 14.2 8.4 20.6M11 14.2l3 2.4.6 4.4M12.4 9.6 9.2 12.2M12.7 9.3l2.9 2.7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    transit: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="4.5" y="3.5" width="15" height="14" rx="3" stroke="currentColor" stroke-width="2"/><path d="M4.5 11h15M7.8 20.5v-3M16.2 20.5v-3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="8.3" cy="14.3" r="0.9" fill="currentColor"/><circle cx="15.7" cy="14.3" r="0.9" fill="currentColor"/></svg>'
+  };
+  const directionParticle = word => {
+    const code = word.charCodeAt(word.length - 1);
+    if (code < 0xac00 || code > 0xd7a3) return '로';
+    const final = (code - 0xac00) % 28;
+    return final === 0 || final === 8 ? '로' : '으로';
+  };
+  const moveLabel = (from, to) => {
+    const target = (to || '').trim();
+    if (!target) return '이동';
+    const toward = `${target}${directionParticle(target)} 이동`;
+    return (from || '').trim() ? `${from.trim()}에서 ${toward}` : toward;
+  };
 
   const pill = (label, cls, plain) => `<span class="pill ${cls}${plain ? ' plain' : ''}">${esc(label)}</span>`;
   const statusPill = status => pill(LABEL.memberStatus[status] || '알 수 없음', status === 'ACTIVE' ? 'ok' : status === 'WITHDRAWING' ? 'warn' : 'bad');
@@ -62,6 +97,15 @@
     return `<div><div class="ratio">${total ? `<span class="m" style="width:${malePct}%"></span><span class="f" style="flex:1"></span>` : ''}</div>
       <div class="ratio-legend num"><span>${malePct}%</span><span>${femalePct}%</span></div></div>`;
   };
+  const sexRatio = (male, female) => {
+    if (!male && !female) return '- : -';
+    if (!male) return '여성만';
+    if (!female) return '남성만';
+    const base = Math.min(male, female);
+    const part = n => String(Number((n / base).toFixed(2)));
+    return `${part(male)} : ${part(female)}`;
+  };
+  const genderSummary = count => `<div class="ratio-top">${mfLine(count)}<span class="ratio-badge"><small>남 : 녀</small><b class="num">${sexRatio(count.male, count.female)}</b></span></div>${ratioBlock(count.male, count.female)}`;
   const mfLine = (count, prefix) => `<div class="mf num">${prefix ? `<span>${prefix}</span>` : ''}<span><i class="sw m"></i>남 ${num(count.male)}</span><span><i class="sw f"></i>여 ${num(count.female)}</span></div>`;
   const stateRow = (cols, message, error) => `<tr class="state-row${error ? ' error' : ''}"><td colspan="${cols}">${esc(message)}</td></tr>`;
 
@@ -203,20 +247,26 @@
       const maxCount = schools[0]?.memberCount || 1;
 
       body.innerHTML = `<div class="dashboard-grid">
+        <article class="card revenue-card">
+          <div class="revenue-label">매출</div>
+          <div class="revenue-value num">${num(subs.total * MONTHLY_PRICE)}<small>원</small></div>
+        </article>
+        ${earlyGrantCard(d.earlyGrantSlots)}
         <div class="kpis">
           <article class="card kpi wide">
             <div class="kpi-label">가입자 수</div>
             <div class="kpi-value num">${num(members.total)}<small>명</small></div>
-            ${mfLine(members)}${ratioBlock(members.male, members.female)}
+            ${genderSummary(members)}
             <svg class="flow-arrow" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1l6 5-6 5" fill="none" stroke="currentColor" stroke-width="2"/></svg>
           </article>
           <article class="card kpi wide">
             <div class="kpi-label">구독자 수 <span class="card-sub">현재 시즌 참가자</span></div>
             <div class="kpi-value num">${num(subs.total)}<small>명</small></div>
-            ${mfLine(subs)}${ratioBlock(subs.male, subs.female)}
+            ${genderSummary(subs)}
             <div class="rates num"><span class="rate">가입자 대비 구독률<b>${pct(subs.total, members.total)}%</b></span><span class="rate">유료 구독<b>${num(d.subscribers.paid)}</b></span><span class="rate">무료 체험<b>${num(d.subscribers.trial)}</b></span><span class="rate">선착순 무료<b>${num(d.subscribers.earlyGrant)}</b></span></div>
           </article>
         </div>
+        <article class="card daily-card" id="daily-card"></article>
         ${ageCard(d.birthYears, d.unknownBirthYearMembers)}
         <article class="card school-card">
           <div class="school-head">
@@ -243,27 +293,82 @@
           </div>
         </article>
       </div>`;
+      renderDaily(d.daily, 'total');
       $('go-withdraw').addEventListener('click', () => { reportState.tab = 'withdraw'; reportState.filter = ''; reportState.page = 0; show('reports'); });
     } catch (error) {
       body.innerHTML = `<div class="state-box error">${esc(error.message)}</div>`;
     }
   };
 
-  const AGE_ROW_LIMIT = 9;
+
+  const MONTHLY_PRICE = 5500;
+  function earlyGrantCard(slots) {
+    const ended = Date.now() >= Date.parse(slots.endsAt);
+    const lastDay = fmtDate(new Date(Date.parse(slots.endsAt) - 1).toISOString());
+    const side = (label, cls, remaining) => `<div class="grant-side">
+        <div class="grant-head"><span><i class="sw ${cls}"></i>${label}</span><span class="num"><b>${num(remaining)}</b>자리 남음</span></div>
+        <div class="grant-track"><span class="${cls}" style="width:${pct(remaining, slots.limitPerGender)}%"></span></div>
+        <span class="hint num">${num(slots.limitPerGender - remaining)} / ${num(slots.limitPerGender)}명 배정</span></div>`;
+    return `<article class="card grant-card">
+      <div class="card-head"><h2>선착순 무료 혜택 남은 자리</h2>${ended ? pill('종료', 'idle') : `<span class="card-sub num">${lastDay}까지 가입한 회원에게 배정</span>`}</div>
+      <div class="grant-sides">${side('남성', 'm', slots.maleRemaining)}${side('여성', 'f', slots.femaleRemaining)}</div>
+    </article>`;
+  }
+  const DAILY_SERIES = [
+    ['signups', '가입', 'signup'],
+    ['subscriptions', '구독', 'subscribe'],
+    ['withdrawals', '탈퇴', 'withdrawn'],
+    ['withdrawalRequests', '탈퇴 유예', 'pending']
+  ];
+  const DAILY_GENDER = [['total', '전체'], ['male', '남'], ['female', '여']];
+
+  function renderDaily(daily, gender) {
+    const card = $('daily-card');
+    const value = (day, key) => day[key][gender];
+    const max = Math.max(1, ...daily.map(day => DAILY_SERIES.reduce((sum, [key]) => sum + value(day, key), 0)));
+    const sums = DAILY_SERIES.map(([key]) => daily.reduce((sum, day) => sum + value(day, key), 0));
+    const dayLabel = date => `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`;
+    card.innerHTML = `<div class="card-head"><h2>일별 가입·구독·탈퇴</h2>
+        <div class="chips" id="daily-gender">${DAILY_GENDER.map(([k, l]) => `<button class="chip" type="button" data-g="${k}" aria-pressed="${k === gender}">${l}</button>`).join('')}</div></div>
+      <div class="daily-legend num">${DAILY_SERIES.map(([, label, cls], i) => `<span><i class="daily-sw ${cls}"></i>${label} <b>${num(sums[i])}</b></span>`).join('')}<span class="hint">최근 30일 합계 · 한국 시간 기준</span></div>
+      <div class="daily-chart">
+        <div class="daily-axis num"><span>${num(max)}</span><span>${num(Math.round(max / 2))}</span><span>0</span></div>
+        <div class="daily-bars">${daily.map((day, i) => {
+          const parts = DAILY_SERIES.map(([key, label, cls]) => [value(day, key), label, cls]);
+          const total = parts.reduce((sum, [n]) => sum + n, 0);
+          return `<div class="daily-col" data-i="${i}"><div class="daily-stack" style="height:${total / max * 100}%">${parts.filter(([n]) => n).map(([n, , cls]) => `<span class="${cls}" style="flex:${n}"></span>`).join('')}</div>
+            <span class="daily-x num">${i % 5 === 4 || i === daily.length - 1 ? dayLabel(day.date) : ''}</span></div>`;
+        }).join('')}</div>
+        <div class="daily-tip" id="daily-tip" hidden></div>
+      </div>`;
+    const tip = card.querySelector('#daily-tip');
+    const bars = card.querySelector('.daily-bars');
+    bars.addEventListener('mouseover', event => {
+      const col = event.target.closest('.daily-col');
+      if (!col) return;
+      const day = daily[Number(col.dataset.i)];
+      tip.innerHTML = `<b class="num">${Number(day.date.slice(5, 7))}월 ${Number(day.date.slice(8, 10))}일</b>${DAILY_SERIES.map(([key, label, cls]) => `<span><i class="daily-sw ${cls}"></i>${label}<em class="num">${num(value(day, key))}명</em></span>`).join('')}`;
+      tip.hidden = false;
+      const chart = card.querySelector('.daily-chart').getBoundingClientRect();
+      const rect = col.getBoundingClientRect();
+      const right = rect.right - chart.left + 10;
+      tip.style.left = `${right + tip.offsetWidth <= chart.width ? right : rect.left - chart.left - 10 - tip.offsetWidth}px`;
+    });
+    bars.addEventListener('mouseleave', () => { tip.hidden = true; });
+    card.querySelector('#daily-gender').addEventListener('click', event => {
+      const chip = event.target.closest('.chip');
+      if (chip) renderDaily(daily, chip.dataset.g);
+    });
+  }
 
   function ageCard(birthYears, unknown) {
     const thisYear = Number(kstParts(new Date().toISOString()).year);
-    const shown = birthYears.slice(0, AGE_ROW_LIMIT - 1);
-    const rest = birthYears.slice(AGE_ROW_LIMIT - 1);
-    const rows = shown.map(b => ({ ...b, label: `<b>${String(b.year).slice(2)}년생</b><small>${thisYear - b.year - 1}~${thisYear - b.year}세</small>` }));
-    if (rest.length) {
-      const first = rest[0].year;
-      rows.push({
-        year: first,
-        members: rest.reduce((sum, b) => sum + b.members, 0),
-        subscribers: rest.reduce((sum, b) => sum + b.subscribers, 0),
-        label: `<b>${String(first).slice(2)}년생 이전</b><small>${thisYear - first - 1}세 이상</small>`
-      });
+    const byYear = new Map(birthYears.map(b => [b.year, b]));
+    const years = birthYears.map(b => b.year);
+    const rows = [];
+    for (let year = Math.max(...years); year >= Math.min(...years); year -= 1) {
+      const b = byYear.get(year) || { year, members: 0, subscribers: 0 };
+      rows.push({ ...b, label: `<b>${String(year).slice(2)}년생</b><small>${thisYear - year - 1}~${thisYear - year}세</small>` });
     }
     const total = birthYears.reduce((sum, b) => sum + b.members, 0);
     if (!total) {
@@ -277,15 +382,15 @@
       <div class="rates num"><span class="rate">평균 나이<b>${average.toFixed(1)}세</b></span><span class="rate">가장 많은 출생연도<b>${String(top.year).slice(2)}년생 ${num(top.members)}명</b></span>${unknown ? `<span class="rate">생년월일 확인 불가<b>${num(unknown)}명</b></span>` : ''}</div>
       <div class="table-wrap"><table class="age-table num">
         <thead><tr><th>출생연도</th><th>가입자</th><th>구독자</th><th>구독률</th></tr></thead>
-        <tbody>${rows.map(r => `<tr class="${r.year === top.year && r.members === top.members ? 'top' : ''}">
+        <tbody>${rows.map(r => `<tr class="${r.year === top.year && r.members === top.members ? 'top' : r.members ? '' : 'zero'}">
           <td>${r.label}</td>
           <td><div class="age-bar"><span class="track-wrap"><span class="stackbar" style="width:${r.members / max * 100}%"><span class="all" style="flex:1"></span></span></span><b>${num(r.members)}</b></div></td>
-          <td>${num(r.subscribers)}</td><td>${pct(r.subscribers, r.members)}%</td></tr>`).join('')}</tbody>
+          <td>${num(r.subscribers)}</td><td>${r.members ? `${pct(r.subscribers, r.members)}%` : '—'}</td></tr>`).join('')}</tbody>
       </table></div>
     </article>`;
   }
 
-  const memberState = { key: 'NICKNAME', query: '', status: '', page: 0 };
+  const memberState = { key: 'NICKNAME', query: '', status: '', sort: 'SIGNUP', page: 0 };
   const memberHints = {
     ID: ['회원 ID는 숫자 전체를 입력해야 해요.', '예: 1042'],
     NICKNAME: ['닉네임은 일부만 입력해도 찾을 수 있어요.', '닉네임 일부를 입력하세요'],
@@ -326,6 +431,7 @@
     loaders.members();
   });
   $('m-status').addEventListener('change', () => { memberState.status = $('m-status').value; memberState.page = 0; loaders.members(); });
+  $('m-sort').addEventListener('change', () => { memberState.sort = $('m-sort').value; memberState.page = 0; loaders.members(); });
 
   loaders.members = async () => {
     const rows = $('member-rows');
@@ -335,13 +441,14 @@
         key: memberState.query ? memberState.key : '',
         query: memberState.query,
         status: memberState.status,
+        sort: memberState.sort,
         page: memberState.page,
         size: PAGE_SIZE
       }));
       markRefreshed();
       rows.innerHTML = result.items.length ? result.items.map(m => `<tr tabindex="0" data-member="${esc(m.id)}">
           <td class="num">${esc(m.id)}</td><td><b>${esc(m.nickname || '-')}</b></td><td class="num">${esc(m.maskedEmail || '—')}</td>
-          <td>${esc(m.organization || '—')}</td><td class="num">${fmtDate(m.createdAt)}</td><td>${kindPill(m.subscription)}</td><td>${statusPill(m.status)}</td></tr>`).join('')
+          <td>${esc(m.organization || '—')}</td><td class="num">${fmtFullDateTime(m.createdAt)}</td><td>${kindPill(m.subscription)}</td><td>${statusPill(m.status)}</td></tr>`).join('')
         : stateRow(7, memberState.key === 'EMAIL' && memberState.query ? '이메일 전체가 정확히 일치하는 회원이 없어요. 오타나 대소문자를 확인해 주세요.'
           : memberState.key === 'SCHOOL' && memberState.query ? '이 학교의 회원이 없어요. 이름 일부를 입력한 뒤 목록에서 골라 주세요.' : '조건에 맞는 회원이 없어요.');
       pager($('member-pager'), result, page => { memberState.page = page; loaders.members(); });
@@ -363,7 +470,7 @@
     }
     const sub = m.subscription;
     const verified = (at, label) => at ? `<span class="check">완료</span><span class="d num">${fmtDate(at)}</span>` : `<span class="dash">미완료</span><span class="d">${label}</span>`;
-    openDrawer(`${drawerHead(esc(m.nickname || '(닉네임 없음)'), `ID ${esc(m.id)} · ${esc(LABEL.gender[m.gender] || '-')} · ${esc(m.organization || '학교 없음')} · 가입 ${fmtDate(m.createdAt)}`)}
+    openDrawer(`${drawerHead(esc(m.nickname || '(닉네임 없음)'), `ID ${esc(m.id)} · ${esc(LABEL.gender[m.gender] || '-')} · ${esc(m.organization || '학교 없음')} · 가입 ${fmtFullDateTime(m.createdAt)}`)}
       <div>${statusPill(m.status)}${m.withdrawalRequestedAt ? ` <span class="hint">탈퇴 신청 ${fmtDate(m.withdrawalRequestedAt)}</span>` : ''}</div>
       <div class="status-grid">
         <div class="status-cell"><span class="l">본인 인증</span>${verified(m.identityVerifiedAt, '')}</div>
@@ -391,7 +498,7 @@
       list.innerHTML = '<div class="state-box">불러오는 중이에요…</div>';
       try {
         const scenes = await api(`/admin/members/${encodeURIComponent(m.id)}/scenes` + query({ date }));
-        list.innerHTML = scenes.map(scene => sceneHtml(scene, m.nickname)).join('') || '<div class="state-box">이날 장면이 없어요.</div>';
+        list.innerHTML = scenes.length ? activityFeedHtml(scenes, m.nickname) : '<div class="state-box">이날 장면이 없어요.</div>';
       } catch (error) {
         list.innerHTML = `<div class="state-box error">${esc(error.message)}</div>`;
       }
@@ -400,18 +507,60 @@
     if (m.sceneDates.length) loadScenes(m.sceneDates[0]);
   }
 
-  function sceneHtml(scene, ownerNickname) {
-    const place = scene.type === 'MOVE' ? `${esc(scene.fromPlace || '?')} → ${esc(scene.place || '?')}` : esc(scene.place || '');
-    const partners = scene.partnerNicknames.length ? `<span class="hint">with ${esc(scene.partnerNicknames.join(', '))}</span>` : '';
-    const lines = scene.lines.length ? `<div class="lines">${scene.lines.map(line => line.speaker
-        ? `<div class="line ${line.speaker === ownerNickname ? 'me' : ''}"><span class="who-s">${esc(line.speaker)}${line.action ? ` · ${esc(line.action)}` : ''}</span>${esc(line.text)}</div>`
-        : `<p>${esc(line.text)}</p>`).join('')}</div>` : '';
-    return `<div class="scene"><time>${fmtTime(scene.startsAt)}</time><div>
-      <div class="place">${place} ${pill(LABEL.sceneType[scene.type] || scene.type, 'idle', true)}${partners}</div>
-      ${scene.narration ? `<p>${esc(scene.narration)}</p>` : ''}${scene.mind ? `<p>속마음: ${esc(scene.mind)}</p>` : ''}${lines}</div></div>`;
+  function activityBlocks(scenes, ownerNickname) {
+    const blocks = [];
+    scenes.forEach(scene => {
+      const start = blocks.length;
+      if (scene.place && scene.type !== 'MOVE') blocks.push({ t: 'place', text: scene.place, at: scene.startsAt });
+      if (scene.type === 'MOVE') {
+        const ms = Date.parse(scene.endsAt) - Date.parse(scene.startsAt);
+        blocks.push({
+          t: 'move',
+          text: moveLabel(scene.fromPlace, scene.place),
+          mode: scene.travelMode === 'transit' ? 'transit' : 'walk',
+          minutes: Number.isFinite(ms) && ms >= 0 ? Math.max(1, Math.round(ms / 60000)) : null
+        });
+      }
+      if (scene.type === 'DIALOGUE') {
+        scene.lines.forEach(line => {
+          if (!line.text) return;
+          if (!line.speaker) blocks.push({ t: 'narr', text: line.text });
+          else blocks.push({ t: 'bubble', side: line.speaker === ownerNickname ? 'me' : 'them', speaker: line.speaker, action: (line.action || '').trim(), text: line.text });
+        });
+      } else {
+        if (scene.narration) blocks.push({ t: 'narr', text: scene.narration });
+        if (scene.mind && scene.mind.trim()) blocks.push({ t: 'bubble', side: 'me', muted: true, speaker: ownerNickname, action: '', text: scene.mind.trim() });
+      }
+      if (blocks.length === start) blocks.push({ t: 'narr', text: '활동 기록' });
+    });
+    return blocks;
   }
 
-  const chatState = { query: '', entry: '', page: 0 };
+  function activityFeedHtml(scenes, ownerNickname) {
+    const blocks = activityBlocks(scenes, ownerNickname);
+    const html = blocks.map((block, index) => {
+      const previous = blocks[index - 1];
+      const afterBubble = previous?.t === 'bubble';
+      if (block.t === 'place') {
+        const time = appDesignTime(block.at);
+        return `<div class="feed-place${afterBubble ? ' after-bubble' : ''}"><span class="feed-place-line"></span><span class="feed-place-gap"><span class="feed-place-chip">${APP_ICON.pin}<span class="feed-place-text">${esc(block.text)}</span>${time ? `<span class="feed-place-time">${esc(time)}</span>` : ''}</span></span></div>`;
+      }
+      if (block.t === 'move') {
+        const tail = block.minutes !== null ? ` · ${block.mode === 'transit' ? '대중교통으로' : '걸어서'} ${block.minutes}분` : '';
+        return `<div class="feed-move${afterBubble ? ' after-bubble' : ''}"><span class="feed-dots"></span><div class="feed-move-row"><span class="feed-move-badge">${APP_ICON[block.mode]}</span><span class="feed-move-text">${esc(block.text)}<span class="feed-move-tail">${esc(tail)}</span></span></div><span class="feed-dots"></span></div>`;
+      }
+      if (block.t === 'narr') return `<div class="feed-narr"><div class="feed-narr-card">${esc(block.text)}</div></div>`;
+      const consecutive = previous?.t === 'bubble' && previous.side === block.side && previous.speaker === block.speaker;
+      const action = block.action ? `<span class="feed-bubble-action">${esc(block.action)}</span>` : '';
+      const bubble = `<div class="feed-bubble ${block.side}${block.muted ? ' muted' : ''}">${action}<span class="feed-bubble-text">${esc(block.text)}</span></div>`;
+      if (block.side === 'me') return `<div class="feed-bubble-block${consecutive ? ' tight' : ''}"><div class="feed-me-row">${bubble}</div></div>`;
+      return `<div class="feed-bubble-block${consecutive ? ' tight' : ''}"><div class="feed-them-row"><span class="feed-gutter">${appAvatar(block.speaker)}</span><div class="feed-them-stack"><span class="feed-name">${esc(block.speaker)}</span>${bubble}</div></div></div>`;
+    }).join('');
+    return `<div class="app-feed"><div class="feed-day">${esc(appFeedDayLabel(scenes[0].startsAt))}</div>${html}</div>`;
+  }
+
+  const chatState = { query: '', entry: '', sort: 'LATEST', page: 0 };
+  $('c-sort').addEventListener('change', () => { chatState.sort = $('c-sort').value; chatState.page = 0; loaders.chats(); });
   $('chat-search').addEventListener('submit', event => { event.preventDefault(); chatState.query = $('c-q').value.trim(); chatState.page = 0; loaders.chats(); });
   $('chat-chips').addEventListener('click', event => {
     const chip = event.target.closest('.chip');
@@ -426,7 +575,7 @@
     const rows = $('chat-rows');
     rows.innerHTML = stateRow(7, '불러오는 중이에요…');
     try {
-      const result = await api('/admin/chat-rooms' + query({ query: chatState.query, entryState: chatState.entry, page: chatState.page, size: PAGE_SIZE }));
+      const result = await api('/admin/chat-rooms' + query({ query: chatState.query, entryState: chatState.entry, sort: chatState.sort, page: chatState.page, size: PAGE_SIZE }));
       markRefreshed();
       rows.innerHTML = result.items.length ? result.items.map(room => {
         const [label, cls] = LABEL.entry[room.entryState];
@@ -483,18 +632,28 @@
         ...messages.map(message => ({ at: message.sentAt, message }))
       ].sort((x, y) => new Date(x.at) - new Date(y.at));
 
-      let day = '';
       let html = hasMore ? '<button class="load-more" type="button" id="load-older">이전 메시지 더 보기</button>' : '';
-      items.forEach(item => {
-        const d = fmtDay(item.at);
-        if (d !== day) { day = d; html += `<span class="chat-day num">${d}</span>`; }
-        if (item.sys) { html += `<span class="chat-sys">${esc(item.sys)}</span>`; return; }
+      if (!hasMore && room.commonPoint) {
+        html += `<div class="app-msg them"><span class="app-gutter"><img class="app-ai-avatar" src="/app-icon.jpg" alt="twinly AI"></span><div class="app-wrap"><span class="app-ai-name">twinly <b>AI</b></span><div class="app-bubble">${esc(room.commonPoint)}</div></div></div>`;
+      }
+      items.forEach((item, index) => {
+        const previous = items[index - 1];
+        const next = items[index + 1];
+        const day = appDayKey(item.at);
+        if (!previous || appDayKey(previous.at) !== day) html += `<div class="app-day"><i></i><span>${esc(appChatDayLabel(item.at))}</span><i></i></div>`;
+        if (item.sys) { html += `<div class="app-notice">${esc(item.sys)}</div>`; return; }
         const m = item.message;
-        const side = sideById[m.senderUserId] || 'a';
-        const body = m.type === 'TEXT' ? `<div class="bubble">${esc(m.text)}</div>` : `<div class="bubble media">${m.type === 'PHOTO' ? '사진' : '동영상'}</div>`;
-        html += `<div class="msg ${side}"><span class="who-s">${esc(nicknameById[m.senderUserId] || '(알 수 없음)')}</span>${body}<time>${fmtTime(m.sentAt)}</time></div>`;
+        const mine = sideById[m.senderUserId] === 'b';
+        const sameSender = other => other?.message && other.message.senderUserId === m.senderUserId && appDayKey(other.at) === day;
+        const showTime = !(sameSender(next) && fmtTime(next.at) === fmtTime(item.at));
+        const showAvatar = !mine && !sameSender(previous);
+        const body = m.type === 'TEXT' ? esc(m.text) : `<span class="app-media">${m.type === 'PHOTO' ? '사진' : '동영상'}</span>`;
+        const time = showTime ? `<time>${fmtTime(m.sentAt)}</time>` : '';
+        html += mine
+          ? `<div class="app-msg me"><div class="app-wrap"><div class="app-bubble">${body}</div>${time}</div></div>`
+          : `<div class="app-msg them"><span class="app-gutter">${showAvatar ? appAvatar(m.senderUserId) : ''}</span><div class="app-wrap"><div class="app-bubble">${body}</div>${time}</div></div>`;
       });
-      if (!messages.length) html += '<span class="chat-sys">아직 주고받은 메시지가 없어요</span>';
+      if (!messages.length) html += '<div class="app-empty"><b>아직 메시지가 없어요</b><span>대화가 시작되면 여기에 표시돼요.</span></div>';
       const log = drawer.querySelector('#chat-log');
       log.innerHTML = html;
       log.querySelector('#load-older')?.addEventListener('click', loadOlder);
@@ -516,8 +675,7 @@
 
     openDrawer(`${drawerHead(`채팅방 #${esc(room.id)}`, `${esc(label)} · 메시지 ${num(room.messageCount)}개`)}
       <div class="people-pair">${room.participants.map(personCell).join('')}</div>
-      ${room.commonPoint ? `<div class="field"><span class="lbl">AI가 찾은 공통점</span><div class="common-point">${esc(room.commonPoint)}</div></div>` : ''}
-      <div class="field"><span class="lbl">대화 내용</span><div class="chat-log" id="chat-log"></div></div>`);
+      <div class="field"><span class="lbl">대화 내용</span><span class="hint">왼쪽 ${esc(nicknameById[room.participants[0]?.userId] || '-')} · 오른쪽(초록) ${esc(nicknameById[room.participants[1]?.userId] || '-')}</span><div class="app-chat" id="chat-log"></div></div>`);
     renderLog();
     drawer.querySelectorAll('[data-member]').forEach(button => button.addEventListener('click', () => openMember(button.dataset.member)));
   }
@@ -839,7 +997,7 @@
   document.querySelectorAll('input[name="n-channel"]').forEach(radio => radio.addEventListener('change', () => {
     $('n-push-hint').hidden = !withPush();
   }));
-  loaders.settings = refreshRecipients;
+  loaders.settings = () => { refreshRecipients(); loadBlockPolicy(); };
 
   const noticeMessage = (text, error) => {
     const done = $('n-done');
@@ -883,6 +1041,165 @@
       $('notice-step2').hidden = true;
     } catch (error) {
       noticeMessage(error.message, true);
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  const PLATFORM_LABEL = { IOS: 'iOS', ANDROID: 'Android' };
+  let blockPolicy = null;
+  const formMessage = (id, text, error) => {
+    const el = $(id);
+    el.hidden = false;
+    el.style.color = error ? 'var(--red)' : '';
+    el.textContent = text;
+  };
+  const selectedPlatform = () => document.querySelector('input[name="bp-platform"]:checked').value;
+  const maintenanceOn = () => document.querySelector('input[name="mt-active"]:checked').value === 'on';
+  const UNTIL_PARTS = ['mt-year', 'mt-month', 'mt-day', 'mt-hour', 'mt-minute'];
+  const fillUntil = iso => {
+    const p = iso ? kstParts(iso) : null;
+    const values = p ? [p.year, p.month, p.day, p.hour, p.minute] : ['', '', '', '', ''];
+    UNTIL_PARTS.forEach((id, i) => { $(id).value = values[i]; });
+    showUntilPreview();
+  };
+  const readUntil = () => {
+    const raw = UNTIL_PARTS.map(id => $(id).value.trim());
+    if (raw.every(value => !value)) return { iso: null };
+    if (raw.some(value => !/^\d+$/.test(value))) return { error: '끝나는 시각은 년·월·일·시·분을 모두 숫자로 입력하거나 모두 비워 주세요.' };
+    const [year, month, day, hour, minute] = raw.map(Number);
+    const pad = n => String(n).padStart(2, '0');
+    const label = `${year}-${pad(month)}-${pad(day)} ${pad(hour)}:${pad(minute)}`;
+    const date = new Date(`${year}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}:00+09:00`);
+    const valid = year >= 2000 && month >= 1 && month <= 12 && hour <= 23 && minute <= 59 && !Number.isNaN(date.getTime())
+      && kstParts(date.toISOString()).day === pad(day);
+    if (!valid) return { error: `${label} 은 없는 날짜·시각이에요.` };
+    return { iso: date.toISOString(), label };
+  };
+  const showUntilPreview = () => {
+    const until = readUntil();
+    $('mt-until-preview').style.color = until.error ? 'var(--red)' : '';
+    $('mt-until-preview').textContent = until.error || (until.iso ? `${until.label} (한국 시간)에 끝나요` : '모두 비워 두면 끝나는 시각 없이 점검해요');
+  };
+  UNTIL_PARTS.forEach(id => $(id).addEventListener('input', showUntilPreview));
+
+  const STORE_URL = {
+    IOS: 'https://apps.apple.com/kr/app/twinly/id6774835140',
+    ANDROID: 'https://play.google.com/store/apps/details?id=com.nidus.twinly'
+  };
+  const fillVersionForm = () => {
+    const platform = selectedPlatform();
+    const policy = blockPolicy?.[platform === 'IOS' ? 'ios' : 'android'];
+    $('bp-version').value = policy?.minVersion || '';
+    $('bp-store').value = policy?.storeUrl || STORE_URL[platform];
+  };
+
+  const renderBlockPolicy = () => {
+    const m = blockPolicy.maintenance;
+    const versionCell = (label, policy) => `<div class="status-cell"><span class="l">${label} 최소 버전</span><b class="num">${policy ? esc(policy.minVersion) : '설정 없음'}</b>
+      <span class="d">${policy ? `<a href="${esc(policy.storeUrl)}" target="_blank" rel="noopener noreferrer">${esc(policy.storeUrl)}</a>` : '버전으로 막지 않아요'}</span></div>`;
+    $('bp-current').innerHTML = `${versionCell('iOS', blockPolicy.ios)}${versionCell('Android', blockPolicy.android)}`;
+    $('mt-current').innerHTML = `<div class="status-cell" style="grid-column:1/-1"><span class="l">현재 점검 상태</span><span>${m.active ? pill('점검 중', 'warn') : pill('정상 운영', 'ok')}</span>
+        <span class="d">${m.active ? `${esc(m.message || '더 나은 서비스를 위해 점검하고 있어요.')} · ${m.until ? `${fmtFullDateTime(m.until)} 종료 예정` : '종료 시각 없음'}` : '앱 요청을 막지 않아요'}</span></div>`;
+  };
+
+  async function loadBlockPolicy() {
+    $('bp-current').innerHTML = '<div class="state-box">불러오는 중이에요…</div>';
+    $('mt-current').innerHTML = '<div class="state-box">불러오는 중이에요…</div>';
+    try {
+      blockPolicy = await api('/admin/app/block-policy');
+      renderBlockPolicy();
+      fillVersionForm();
+      const m = blockPolicy.maintenance;
+      document.querySelector(`input[name="mt-active"][value="${m.active ? 'on' : 'off'}"]`).checked = true;
+      $('mt-on-fields').hidden = !m.active;
+      $('mt-message').value = m.message || '';
+      fillUntil(m.until);
+    } catch (error) {
+      $('bp-current').innerHTML = `<div class="state-box error">${esc(error.message)}</div>`;
+      $('mt-current').innerHTML = `<div class="state-box error">${esc(error.message)}</div>`;
+    }
+  }
+
+  $('bp-reload').addEventListener('click', loadBlockPolicy);
+  $('mt-reload').addEventListener('click', loadBlockPolicy);
+  document.querySelectorAll('input[name="bp-platform"]').forEach(radio => radio.addEventListener('change', () => {
+    fillVersionForm();
+    $('bp-step1').hidden = false;
+    $('bp-step2').hidden = true;
+  }));
+
+  $('bp-review').addEventListener('click', () => {
+    const version = $('bp-version').value.trim();
+    const store = $('bp-store').value.trim();
+    if (!/^\d{1,9}\.\d{1,9}\.\d{1,9}$/.test(version)) { formMessage('bp-done', '최소 버전은 1.3.5 처럼 숫자 세 자리로 입력해 주세요.', true); return; }
+    if (!/^https:\/\/\S+$/.test(store)) { formMessage('bp-done', '스토어 주소는 https:// 로 시작해야 해요.', true); return; }
+    const platform = selectedPlatform();
+    const before = blockPolicy?.[platform === 'IOS' ? 'ios' : 'android']?.minVersion;
+    $('bp-done').hidden = true;
+    $('bp-summary').innerHTML = `<b>${PLATFORM_LABEL[platform]}</b> 최소 버전을 <b class="num">${esc(before || '설정 없음')}</b> 에서 <b class="num">${esc(version)}</b> 로 바꿔요.<br><span class="hint">${esc(version)} 보다 낮은 ${PLATFORM_LABEL[platform]} 앱은 바로 업데이트 안내가 떠요.</span>`;
+    $('bp-step1').hidden = true;
+    $('bp-step2').hidden = false;
+  });
+  $('bp-back').addEventListener('click', () => { $('bp-step1').hidden = false; $('bp-step2').hidden = true; });
+
+  $('bp-apply').addEventListener('click', async () => {
+    const button = $('bp-apply');
+    button.disabled = true;
+    const platform = selectedPlatform();
+    try {
+      await api(`/admin/app/version-policies/${platform}`, {
+        method: 'PUT',
+        body: { minVersion: $('bp-version').value.trim(), storeUrl: $('bp-store').value.trim() }
+      });
+      formMessage('bp-done', `${PLATFORM_LABEL[platform]} 최소 버전을 바꿨어요.`);
+      $('bp-step1').hidden = false;
+      $('bp-step2').hidden = true;
+      await loadBlockPolicy();
+    } catch (error) {
+      formMessage('bp-done', error.message, true);
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  document.querySelectorAll('input[name="mt-active"]').forEach(radio => radio.addEventListener('change', () => {
+    $('mt-on-fields').hidden = !maintenanceOn();
+    $('mt-step1').hidden = false;
+    $('mt-step2').hidden = true;
+  }));
+
+  $('mt-review').addEventListener('click', () => {
+    const until = readUntil();
+    if (maintenanceOn() && until.error) { formMessage('mt-done', until.error, true); return; }
+    if (maintenanceOn() && until.iso && new Date(until.iso) <= new Date()) { formMessage('mt-done', '끝나는 시각은 지금보다 뒤로 잡아 주세요.', true); return; }
+    $('mt-done').hidden = true;
+    $('mt-summary').innerHTML = maintenanceOn()
+      ? `<b>점검을 시작해요.</b> 앱의 모든 요청이 점검 화면으로 막히고 실시간 연결이 끊겨요.<br><span class="hint">안내 문구: ${esc($('mt-message').value.trim() || '더 나은 서비스를 위해 점검하고 있어요.')} · 끝나는 시각: ${until.iso ? esc(until.label) : '없음'}</span>`
+      : '<b>점검을 해제해요.</b> 앱을 다시 쓸 수 있어요. 앱 화면은 상태 확인 주기(약 1분)에 따라 풀려요.';
+    $('mt-apply').textContent = maintenanceOn() ? '점검 시작하기' : '점검 해제하기';
+    $('mt-step1').hidden = true;
+    $('mt-step2').hidden = false;
+  });
+  $('mt-back').addEventListener('click', () => { $('mt-step1').hidden = false; $('mt-step2').hidden = true; });
+
+  $('mt-apply').addEventListener('click', async () => {
+    const button = $('mt-apply');
+    button.disabled = true;
+    const on = maintenanceOn();
+    try {
+      await api('/admin/app/maintenance', {
+        method: 'PUT',
+        body: on
+          ? { active: true, message: $('mt-message').value.trim() || null, until: readUntil().iso }
+          : { active: false, message: null, until: null }
+      });
+      formMessage('mt-done', on ? '점검을 시작했어요.' : '점검을 해제했어요.');
+      $('mt-step1').hidden = false;
+      $('mt-step2').hidden = true;
+      await loadBlockPolicy();
+    } catch (error) {
+      formMessage('mt-done', error.message, true);
     } finally {
       button.disabled = false;
     }
