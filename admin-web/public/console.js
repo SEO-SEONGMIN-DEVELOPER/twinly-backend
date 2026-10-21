@@ -931,9 +931,8 @@
         </div>`;
       const card = question => `<article class="card">
           <div class="card-head"><h2>${esc(question.text)}</h2></div>
-          <div class="stat-row two">
+          <div class="stat-row one">
             <div class="stat"><span class="l">응답한 회원</span><span class="v num">${num(question.respondents.total)}명</span><span class="s num">남 ${num(question.respondents.male)} · 여 ${num(question.respondents.female)}</span></div>
-            <div class="stat"><span class="l">응답률</span><span class="v num">${pct(question.respondents.total, s.members.total)}%</span><span class="s num">가입자(탈퇴 포함) ${num(s.members.total)}명 대비</span></div>
           </div>
           <div class="section-label">선택지별 비율 <span class="hint">각 성별 응답자 중 몇 %가 골랐는지</span></div>
           ${question.options.map(o => option(o, question.respondents)).join('')}
