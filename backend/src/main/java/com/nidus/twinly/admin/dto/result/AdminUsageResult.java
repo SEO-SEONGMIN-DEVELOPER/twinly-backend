@@ -11,7 +11,9 @@ public record AdminUsageResult(
         AdminGenderCountResult openedEntries,
         AdminGenderCountResult enteredEntries,
         PartnerGender malePartners,
-        PartnerGender femalePartners
+        PartnerGender femalePartners,
+        AdminGenderCountResult everSeasonParticipants,
+        AdminGenderCountResult peopleFavoriteUsers
 ) {
 
     public record PartnerGender(

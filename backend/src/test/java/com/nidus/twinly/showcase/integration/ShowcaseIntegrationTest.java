@@ -219,7 +219,7 @@ class ShowcaseIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("배정 규칙: 본인·차단 상대·시즌 미참가자·장면 없는 유저는 후보에서 빠져 404가 난다")
+    @DisplayName("배정 규칙: 본인·내가 차단한 상대·나를 차단한 상대·시즌 미참가자·장면 없는 유저는 후보에서 빠져 404가 난다")
     void today_without_candidate_returns_404() throws Exception {
         // given: 관람자 본인은 오늘 장면이 있는 참가자이고, 나머지 후보는 전부 조건에서 탈락한다
         User viewer = saveSeedParticipant();
@@ -228,6 +228,10 @@ class ShowcaseIntegrationTest extends AbstractIntegrationTest {
         User blocked = saveSeedParticipant();
         saveActionScene(blocked, "차단한 상대의 하루다.");
         blockRepository.save(Block.create(viewer.getId(), blocked.getId()));
+
+        User blockedMe = saveSeedParticipant();
+        saveActionScene(blockedMe, "나를 차단한 상대의 하루다.");
+        blockRepository.save(Block.create(blockedMe.getId(), viewer.getId()));
 
         User notParticipant = saveUser();
         saveActionScene(notParticipant, "시즌에 참가하지 않았다.");

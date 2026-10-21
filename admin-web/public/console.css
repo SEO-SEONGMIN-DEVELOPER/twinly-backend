@@ -177,6 +177,9 @@ tbody tr:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px;
 .stack span { display: flex; align-items: center; padding-inline: 12px; white-space: nowrap; }
 .stack .same { background: var(--gray-bubble); color: var(--ink); border-radius: 999px; }
 .stack .opp { background: var(--accent); color: #fff; border-radius: 999px; }
+.survey-option + .survey-option { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line-soft); }
+.survey-option-label { font-size: 14px; font-weight: 650; margin-bottom: 10px; }
+.section-label .hint { font-weight: 500; margin-left: 6px; }
 .section-label { font-size: 13px; font-weight: 650; color: var(--muted); margin: 22px 0 12px; }
 
 /* settings */

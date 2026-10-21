@@ -114,7 +114,7 @@ class AdminConsoleIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("대시보드: 가입자·구독자(현재 시즌 참가자)·구독 종류·탈퇴자·학교를 세고 시드 회원은 모든 집계에서 뺀다")
+    @DisplayName("대시보드: 가입자·시즌 참가자(현재 시즌)·구독 종류·탈퇴자·학교를 세고 시드 회원은 모든 집계에서 뺀다")
     void dashboard_countsMembersSubscribersWithdrawnAndSchools() throws Exception {
         // given: 지금까지의 집계를 기억해 두고, 시즌에 참가한 활성 남2·여1, 이용권만 있고 시즌 미참가 1명, 시드 1, 탈퇴 유예 1, 탈퇴 완료 1 추가
         JsonNode before = body(mockMvc.perform(admin(get("/admin/dashboard"))));
@@ -156,7 +156,7 @@ class AdminConsoleIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("대시보드 나이 통계: 생년월일을 복호화해 출생연도별 가입자·구독자를 세고, 시드와 탈퇴 회원은 뺀다")
+    @DisplayName("대시보드 나이 통계: 생년월일을 복호화해 출생연도별 가입자·시즌 참가자를 세고, 시드와 탈퇴 회원은 뺀다")
     void dashboard_countsBirthYears() throws Exception {
         // given: 1971년생 시즌 참가자 1명, 1972년생 이용권만 있는 미참가자 1명, 1971년생 시드·탈퇴 유예 회원 각 1명
         User subscribed = saveMember("칠일", Gender.MALE, "타파대학교", "s71@tapa.ac.kr", "1971-03-01");
@@ -599,6 +599,70 @@ class AdminConsoleIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("설문 통계: 성향 설문 응답을 문항·선택지·성별로 세고 탈퇴·유예 회원은 포함, 시드와 빠진 옛 문항은 뺀다")
+    void survey_countsTendencyAnswersByGender() throws Exception {
+        // given: 동성 친구 남성, 이성 친구 여성, 동성 친구를 고른 유예 남성·탈퇴 여성·시드 남성, 옛 3번 문항에만 답한 남성
+        JsonNode before = body(mockMvc.perform(admin(get("/admin/survey"))));
+        User same = saveMember("동성남", Gender.MALE, "설대학교", "s1@seol.ac.kr");
+        User opposite = saveMember("이성여", Gender.FEMALE, "설대학교", "s2@seol.ac.kr");
+        User withdrawing = saveMember("유예남", Gender.MALE, "설대학교", "s3@seol.ac.kr");
+        User withdrawn = saveMember("탈퇴여", Gender.FEMALE, "설대학교", "s4@seol.ac.kr");
+        User seed = saveMember("시드남", Gender.MALE, "설대학교", "s5@seol.ac.kr");
+        User legacy = saveMember("옛문항남", Gender.MALE, "설대학교", "s6@seol.ac.kr");
+        withdrawing.requestWithdrawal(Duration.ofDays(30));
+        withdrawn.delete();
+        tendencyAnswer(same, 1L, 1L);
+        tendencyAnswer(same, 2L, 3L);
+        tendencyAnswer(opposite, 1L, 3L);
+        tendencyAnswer(withdrawing, 1L, 1L);
+        tendencyAnswer(withdrawn, 1L, 1L);
+        tendencyAnswer(seed, 1L, 1L);
+        tendencyAnswer(legacy, 3L, 1L);
+        flushAndClear();
+        jdbcTemplate.update("UPDATE users SET is_seed = TRUE WHERE id = ?", seed.getId());
+
+        // when
+        JsonNode after = body(mockMvc.perform(admin(get("/admin/survey"))).andExpect(status().isOk()));
+
+        // then
+        assertThat(after.at("/questions/0/id").asLong()).isEqualTo(1L);
+        assertThat(after.at("/questions/0/options/0/label").asString()).isEqualTo("동성 친구");
+        assertThat(delta(before, after, "/questions/0/respondents/total")).isEqualTo(4);
+        assertThat(delta(before, after, "/questions/0/options/0/respondents/male")).isEqualTo(2);
+        assertThat(delta(before, after, "/questions/0/options/0/respondents/female")).isEqualTo(1);
+        assertThat(delta(before, after, "/questions/0/options/2/respondents/female")).isEqualTo(1);
+        assertThat(delta(before, after, "/questions/1/respondents/total")).isEqualTo(1);
+        assertThat(after.at("/questions").size()).isEqualTo(2);
+        assertThat(delta(before, after, "/members/total")).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("기능 이용 현황: 인연 탭 즐겨찾기는 시즌에 참가한 적 있는 회원을 이용자 수로, 한 번이라도 즐겨찾기한 회원을 사용자로 센다")
+    void usage_countsPeopleFavoriteUsers() throws Exception {
+        // given: 두 명을 즐겨찾기한 남성, 즐겨찾기했다 해제한 여성은 시즌 참가자, 인연만 있고 즐겨찾기하지 않은 여성은 미참가
+        JsonNode before = body(mockMvc.perform(admin(get("/admin/usage"))));
+        User favorer = saveMember("즐찾남", Gender.MALE, "즐찾대학교", "f1@jeulchat.ac.kr");
+        User unfavored = saveMember("해제여", Gender.FEMALE, "즐찾대학교", "f2@jeulchat.ac.kr");
+        User untouched = saveMember("안씀여", Gender.FEMALE, "즐찾대학교", "f3@jeulchat.ac.kr");
+        flushAndClear();
+        participate(favorer);
+        participate(unfavored);
+        favorite(favorer, encounter(favorer, unfavored), true);
+        favorite(favorer, encounter(favorer, untouched), true);
+        favorite(unfavored, encounter(unfavored, untouched), false);
+
+        // when
+        JsonNode after = body(mockMvc.perform(admin(get("/admin/usage"))).andExpect(status().isOk()));
+
+        // then
+        assertThat(delta(before, after, "/peopleFavorite/participants/male")).isEqualTo(1);
+        assertThat(delta(before, after, "/peopleFavorite/participants/female")).isEqualTo(1);
+        assertThat(delta(before, after, "/peopleFavorite/favoritedUsers/total")).isEqualTo(2);
+        assertThat(delta(before, after, "/peopleFavorite/favoritedUsers/male")).isEqualTo(1);
+        assertThat(delta(before, after, "/peopleFavorite/favoritedUsers/female")).isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("공지 수신 대상 수: 지정한 ID 중 활성 가입자만 센다")
     void noticeRecipientCount() throws Exception {
         // given
@@ -656,6 +720,24 @@ class AdminConsoleIntegrationTest extends AbstractIntegrationTest {
                 INSERT INTO questions (user_id, `date`, version, `time`, type, `text`, options, choice, answered_at, is_skipped)
                 VALUES (?, CURRENT_DATE, 'v1', UTC_TIMESTAMP(6), ?, '질문', JSON_ARRAY('A', 'B'), ?, ?, ?)
                 """, user.getId(), type, answered ? "A" : null, answered ? Timestamp.from(Instant.now()) : null, skipped);
+    }
+
+    private void tendencyAnswer(User user, Long questionId, Long optionId) {
+        jdbcTemplate.update("INSERT INTO user_tendency_answers (user_id, question_id, option_id) VALUES (?, ?, ?)",
+                user.getId(), questionId, optionId);
+    }
+
+    private Long encounter(User first, User second) {
+        long low = Math.min(first.getId(), second.getId());
+        long high = Math.max(first.getId(), second.getId());
+        jdbcTemplate.update("INSERT INTO encounters (user_a_id, user_b_id) VALUES (?, ?)", low, high);
+        return jdbcTemplate.queryForObject(
+                "SELECT id FROM encounters WHERE user_a_id = ? AND user_b_id = ?", Long.class, low, high);
+    }
+
+    private void favorite(User user, Long encounterId, boolean isFavorited) {
+        jdbcTemplate.update("INSERT INTO encounter_preferences (encounter_id, user_id, is_favorited) VALUES (?, ?, ?)",
+                encounterId, user.getId(), isFavorited);
     }
 
     private void participate(User user) {
