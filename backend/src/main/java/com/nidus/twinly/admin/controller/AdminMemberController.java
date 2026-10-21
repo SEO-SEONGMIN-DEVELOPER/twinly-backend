@@ -1,6 +1,7 @@
 package com.nidus.twinly.admin.controller;
 
 import com.nidus.twinly.admin.domain.MemberSearchKey;
+import com.nidus.twinly.admin.domain.MemberSort;
 import com.nidus.twinly.admin.domain.MemberStatus;
 import com.nidus.twinly.admin.dto.command.AdminMemberSearchCommand;
 import com.nidus.twinly.admin.dto.response.AdminMemberDetailResponse;
@@ -33,16 +34,17 @@ public class AdminMemberController {
 
     private final AdminMemberService adminMemberService;
 
-    @Operation(summary = "회원 검색", description = "시드 회원은 빠진다. 이메일과 학교는 암호화되어 있어 값 전체가 일치해야 찾는다.")
+    @Operation(summary = "회원 검색", description = "시드 회원은 빠진다. 이메일과 학교는 암호화되어 있어 값 전체가 일치해야 찾는다. sort 는 SIGNUP(최근 가입 순, 기본값) 또는 ID(ID 내림차순)다.")
     @ApiResponse(responseCode = "400", description = "INVALID_REQUEST")
     @GetMapping("/admin/members")
     public AdminPageResponse<AdminMemberListItemResponse> search(@RequestParam(required = false) MemberSearchKey key,
                                                                  @RequestParam(required = false) String query,
                                                                  @RequestParam(required = false) MemberStatus status,
+                                                                 @RequestParam(defaultValue = "SIGNUP") MemberSort sort,
                                                                  @RequestParam(defaultValue = "0") @Min(0) Integer page,
                                                                  @RequestParam(defaultValue = "20") @Min(1) @Max(100) Integer size) {
         return AdminPageResponse.from(
-                adminMemberService.search(new AdminMemberSearchCommand(key, query, status, page, size)),
+                adminMemberService.search(new AdminMemberSearchCommand(key, query, status, sort, page, size)),
                 AdminMemberListItemResponse::from);
     }
 

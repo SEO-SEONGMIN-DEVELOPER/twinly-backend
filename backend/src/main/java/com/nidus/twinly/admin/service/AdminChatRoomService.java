@@ -1,6 +1,7 @@
 package com.nidus.twinly.admin.service;
 
 import com.nidus.twinly.admin.domain.ChatEntryState;
+import com.nidus.twinly.admin.domain.ChatRoomSort;
 import com.nidus.twinly.admin.dto.result.AdminChatMessagePageResult;
 import com.nidus.twinly.admin.dto.result.AdminChatRoomResult;
 import com.nidus.twinly.admin.dto.result.AdminPageResult;
@@ -18,8 +19,8 @@ public class AdminChatRoomService {
     private final AdminChatRoomReader adminChatRoomReader;
 
     @Transactional(readOnly = true)
-    public AdminPageResult<AdminChatRoomResult> search(String query, ChatEntryState entryState, int page, int size) {
-        return adminChatRoomReader.search(query, entryState, page, size);
+    public AdminPageResult<AdminChatRoomResult> search(String query, ChatEntryState entryState, ChatRoomSort sort, int page, int size) {
+        return adminChatRoomReader.search(query, entryState, sort, page, size);
     }
 
     @Transactional(readOnly = true)
