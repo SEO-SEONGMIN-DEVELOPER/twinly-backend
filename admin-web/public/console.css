@@ -421,11 +421,10 @@ tbody tr:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px;
 .daily-sw.withdrawn, .daily-stack .withdrawn { background: var(--red); }
 .daily-sw.pending, .daily-stack .pending { background: #f2b544; }
 .age-table tr.zero td { color: var(--muted); }
-.revenue-card { display: grid; justify-items: center; gap: 10px; text-align: center; padding-top: 28px; padding-bottom: 28px; background: linear-gradient(135deg, #3c2f4a 0%, #5a4570 100%); color: #fff; }
-.revenue-label { font-size: 15px; font-weight: 650; color: #e6dcef; letter-spacing: 0.02em; }
-.revenue-value { font-size: 60px; font-weight: 750; letter-spacing: -0.06em; line-height: 1; color: #fff; }
-.revenue-value small { font-size: 22px; font-weight: 650; color: #e6dcef; margin-left: 6px; letter-spacing: -0.02em; }
-@media (max-width: 760px) { .revenue-value { font-size: 42px; } }
+.revenue-card { display: grid; justify-items: center; gap: 14px; text-align: center; border: 2px solid #8a63b0; }
+.revenue-label { font-size: 14px; font-weight: 650; color: var(--muted); }
+.revenue-value { font-size: 42px; font-weight: 700; letter-spacing: -0.06em; line-height: 1; color: var(--ink); }
+.revenue-value small { font-size: 16px; font-weight: 600; color: var(--muted); margin-left: 4px; letter-spacing: -0.02em; }
 .daily-col:hover .daily-stack { filter: brightness(1.1); box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--ink); }
 .daily-tip { position: absolute; top: 0; z-index: 2; display: grid; gap: 6px; min-width: 150px; padding: 12px 14px; border-radius: 16px; background: #fff; border: 1px solid var(--line); box-shadow: var(--shadow); font-size: 13px; color: var(--muted); pointer-events: none; }
 .daily-tip b { color: var(--ink); font-size: 14px; }
