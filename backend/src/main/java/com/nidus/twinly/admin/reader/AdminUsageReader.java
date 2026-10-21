@@ -58,18 +58,18 @@ public class AdminUsageReader {
     private static final String EVER_SEASON_PARTICIPANTS = """
             SELECT u.gender, COUNT(*) AS cnt
             FROM users u
-            WHERE %s
+            WHERE u.is_seed = FALSE
               AND EXISTS (SELECT 1 FROM season_participations sp WHERE sp.user_id = u.id)
             GROUP BY u.gender
-            """.formatted(AdminSql.ACTIVE_USER);
+            """;
 
     private static final String PEOPLE_FAVORITE_USERS = """
             SELECT u.gender, COUNT(DISTINCT p.user_id) AS cnt
             FROM encounter_preferences p
             JOIN users u ON u.id = p.user_id
-            WHERE %s
+            WHERE u.is_seed = FALSE
             GROUP BY u.gender
-            """.formatted(AdminSql.ACTIVE_USER);
+            """;
 
     private static final String PARALLEL_RELATION_USERS = """
             SELECT u.gender, COUNT(*) AS cnt

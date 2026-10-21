@@ -70,9 +70,9 @@ public record AdminUsageResponse(
     }
 
     public record PeopleFavorite(
-            @Schema(description = "이용자 수. 한 번이라도 시즌에 참가한 가입자 수이고 사용 비율의 분모가 된다")
+            @Schema(description = "이용자 수. 한 번이라도 시즌에 참가한 회원 수이고 사용 비율의 분모가 된다. 탈퇴·탈퇴 유예 회원 포함, 시드 제외")
             AdminGenderCountResponse participants,
-            @Schema(description = "인연 탭에서 한 번이라도 즐겨찾기한 가입자 수. 지금은 해제한 회원도 센다")
+            @Schema(description = "인연 탭에서 한 번이라도 즐겨찾기한 회원 수. 지금은 해제한 회원도 센다. 탈퇴·탈퇴 유예 회원 포함, 시드 제외")
             AdminGenderCountResponse favoritedUsers
     ) {
     }
