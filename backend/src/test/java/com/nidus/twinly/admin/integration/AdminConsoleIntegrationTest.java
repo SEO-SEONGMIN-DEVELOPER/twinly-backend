@@ -599,6 +599,44 @@ class AdminConsoleIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("설문 통계: 성향 설문 응답을 문항·선택지·성별로 세고 탈퇴·유예 회원은 포함, 시드와 빠진 옛 문항은 뺀다")
+    void survey_countsTendencyAnswersByGender() throws Exception {
+        // given: 동성 친구 남성, 이성 친구 여성, 동성 친구를 고른 유예 남성·탈퇴 여성·시드 남성, 옛 3번 문항에만 답한 남성
+        JsonNode before = body(mockMvc.perform(admin(get("/admin/survey"))));
+        User same = saveMember("동성남", Gender.MALE, "설대학교", "s1@seol.ac.kr");
+        User opposite = saveMember("이성여", Gender.FEMALE, "설대학교", "s2@seol.ac.kr");
+        User withdrawing = saveMember("유예남", Gender.MALE, "설대학교", "s3@seol.ac.kr");
+        User withdrawn = saveMember("탈퇴여", Gender.FEMALE, "설대학교", "s4@seol.ac.kr");
+        User seed = saveMember("시드남", Gender.MALE, "설대학교", "s5@seol.ac.kr");
+        User legacy = saveMember("옛문항남", Gender.MALE, "설대학교", "s6@seol.ac.kr");
+        withdrawing.requestWithdrawal(Duration.ofDays(30));
+        withdrawn.delete();
+        tendencyAnswer(same, 1L, 1L);
+        tendencyAnswer(same, 2L, 3L);
+        tendencyAnswer(opposite, 1L, 3L);
+        tendencyAnswer(withdrawing, 1L, 1L);
+        tendencyAnswer(withdrawn, 1L, 1L);
+        tendencyAnswer(seed, 1L, 1L);
+        tendencyAnswer(legacy, 3L, 1L);
+        flushAndClear();
+        jdbcTemplate.update("UPDATE users SET is_seed = TRUE WHERE id = ?", seed.getId());
+
+        // when
+        JsonNode after = body(mockMvc.perform(admin(get("/admin/survey"))).andExpect(status().isOk()));
+
+        // then
+        assertThat(after.at("/questions/0/id").asLong()).isEqualTo(1L);
+        assertThat(after.at("/questions/0/options/0/label").asString()).isEqualTo("동성 친구");
+        assertThat(delta(before, after, "/questions/0/respondents/total")).isEqualTo(4);
+        assertThat(delta(before, after, "/questions/0/options/0/respondents/male")).isEqualTo(2);
+        assertThat(delta(before, after, "/questions/0/options/0/respondents/female")).isEqualTo(1);
+        assertThat(delta(before, after, "/questions/0/options/2/respondents/female")).isEqualTo(1);
+        assertThat(delta(before, after, "/questions/1/respondents/total")).isEqualTo(1);
+        assertThat(after.at("/questions").size()).isEqualTo(2);
+        assertThat(delta(before, after, "/members/total")).isEqualTo(5);
+    }
+
+    @Test
     @DisplayName("공지 수신 대상 수: 지정한 ID 중 활성 가입자만 센다")
     void noticeRecipientCount() throws Exception {
         // given
@@ -656,6 +694,11 @@ class AdminConsoleIntegrationTest extends AbstractIntegrationTest {
                 INSERT INTO questions (user_id, `date`, version, `time`, type, `text`, options, choice, answered_at, is_skipped)
                 VALUES (?, CURRENT_DATE, 'v1', UTC_TIMESTAMP(6), ?, '질문', JSON_ARRAY('A', 'B'), ?, ?, ?)
                 """, user.getId(), type, answered ? "A" : null, answered ? Timestamp.from(Instant.now()) : null, skipped);
+    }
+
+    private void tendencyAnswer(User user, Long questionId, Long optionId) {
+        jdbcTemplate.update("INSERT INTO user_tendency_answers (user_id, question_id, option_id) VALUES (?, ?, ?)",
+                user.getId(), questionId, optionId);
     }
 
     private void participate(User user) {
