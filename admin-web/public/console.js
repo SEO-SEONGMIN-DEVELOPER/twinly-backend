@@ -954,6 +954,7 @@
       markRefreshed();
       const subs = u.subscribers;
       const chat = u.chatRoom;
+      const fav = u.peopleFavorite;
       const bar = (label, cls, part, whole, unit) => `<div class="bar-row"><span>${label}</span><div class="track"><div class="fill ${cls}" style="width:${pct(part, whole)}%"></div></div><span class="val"><b>${pct(part, whole)}%</b> ${num(part)}${unit}</span></div>`;
       const stack = (label, partners) => {
         const total = partners.sameGender + partners.oppositeGender;
@@ -983,6 +984,15 @@
           <div class="bars num">${bar('전체', '', chat.enteredEntries.total, chat.openedEntries.total, '건')}${bar('남성', 'm', chat.enteredEntries.male, chat.openedEntries.male, '건')}${bar('여성', 'f', chat.enteredEntries.female, chat.openedEntries.female, '건')}</div>
           <div class="section-label">입장한 채팅방의 상대 성별</div>
           <div class="bars num">${stack('남성 회원', chat.malePartners)}${stack('여성 회원', chat.femalePartners)}</div>
+        </article>
+        <article class="card">
+          <div class="card-head"><h2>인연 탭 즐겨찾기</h2></div>
+          <div class="stat-row two">
+            <div class="stat"><span class="l">이용자 수</span><span class="v num">${num(fav.participants.total)}명</span><span class="s num">역대 시즌 참가자 · 남 ${num(fav.participants.male)} · 여 ${num(fav.participants.female)}</span></div>
+            <div class="stat"><span class="l">사용 비율</span><span class="v num">${pct(fav.favoritedUsers.total, fav.participants.total)}%</span><span class="s num">즐겨찾기한 회원 ${num(fav.favoritedUsers.total)}명</span></div>
+          </div>
+          <div class="section-label">성별 사용 비율</div>
+          <div class="bars num">${bar('전체', '', fav.favoritedUsers.total, fav.participants.total, '명')}${bar('남성', 'm', fav.favoritedUsers.male, fav.participants.male, '명')}${bar('여성', 'f', fav.favoritedUsers.female, fav.participants.female, '명')}</div>
         </article>
       </div>`;
     } catch (error) {

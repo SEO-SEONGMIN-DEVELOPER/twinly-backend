@@ -637,6 +637,32 @@ class AdminConsoleIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("기능 이용 현황: 인연 탭 즐겨찾기는 시즌에 참가한 적 있는 회원을 이용자 수로, 한 번이라도 즐겨찾기한 회원을 사용자로 센다")
+    void usage_countsPeopleFavoriteUsers() throws Exception {
+        // given: 두 명을 즐겨찾기한 남성, 즐겨찾기했다 해제한 여성은 시즌 참가자, 인연만 있고 즐겨찾기하지 않은 여성은 미참가
+        JsonNode before = body(mockMvc.perform(admin(get("/admin/usage"))));
+        User favorer = saveMember("즐찾남", Gender.MALE, "즐찾대학교", "f1@jeulchat.ac.kr");
+        User unfavored = saveMember("해제여", Gender.FEMALE, "즐찾대학교", "f2@jeulchat.ac.kr");
+        User untouched = saveMember("안씀여", Gender.FEMALE, "즐찾대학교", "f3@jeulchat.ac.kr");
+        flushAndClear();
+        participate(favorer);
+        participate(unfavored);
+        favorite(favorer, encounter(favorer, unfavored), true);
+        favorite(favorer, encounter(favorer, untouched), true);
+        favorite(unfavored, encounter(unfavored, untouched), false);
+
+        // when
+        JsonNode after = body(mockMvc.perform(admin(get("/admin/usage"))).andExpect(status().isOk()));
+
+        // then
+        assertThat(delta(before, after, "/peopleFavorite/participants/male")).isEqualTo(1);
+        assertThat(delta(before, after, "/peopleFavorite/participants/female")).isEqualTo(1);
+        assertThat(delta(before, after, "/peopleFavorite/favoritedUsers/total")).isEqualTo(2);
+        assertThat(delta(before, after, "/peopleFavorite/favoritedUsers/male")).isEqualTo(1);
+        assertThat(delta(before, after, "/peopleFavorite/favoritedUsers/female")).isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("공지 수신 대상 수: 지정한 ID 중 활성 가입자만 센다")
     void noticeRecipientCount() throws Exception {
         // given
@@ -699,6 +725,19 @@ class AdminConsoleIntegrationTest extends AbstractIntegrationTest {
     private void tendencyAnswer(User user, Long questionId, Long optionId) {
         jdbcTemplate.update("INSERT INTO user_tendency_answers (user_id, question_id, option_id) VALUES (?, ?, ?)",
                 user.getId(), questionId, optionId);
+    }
+
+    private Long encounter(User first, User second) {
+        long low = Math.min(first.getId(), second.getId());
+        long high = Math.max(first.getId(), second.getId());
+        jdbcTemplate.update("INSERT INTO encounters (user_a_id, user_b_id) VALUES (?, ?)", low, high);
+        return jdbcTemplate.queryForObject(
+                "SELECT id FROM encounters WHERE user_a_id = ? AND user_b_id = ?", Long.class, low, high);
+    }
+
+    private void favorite(User user, Long encounterId, boolean isFavorited) {
+        jdbcTemplate.update("INSERT INTO encounter_preferences (encounter_id, user_id, is_favorited) VALUES (?, ?, ?)",
+                encounterId, user.getId(), isFavorited);
     }
 
     private void participate(User user) {

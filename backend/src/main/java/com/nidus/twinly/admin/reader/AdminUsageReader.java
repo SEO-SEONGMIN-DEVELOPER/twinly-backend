@@ -55,6 +55,22 @@ public class AdminUsageReader {
             GROUP BY u.gender
             """.formatted(AdminSql.ACTIVE_USER);
 
+    private static final String EVER_SEASON_PARTICIPANTS = """
+            SELECT u.gender, COUNT(*) AS cnt
+            FROM users u
+            WHERE %s
+              AND EXISTS (SELECT 1 FROM season_participations sp WHERE sp.user_id = u.id)
+            GROUP BY u.gender
+            """.formatted(AdminSql.ACTIVE_USER);
+
+    private static final String PEOPLE_FAVORITE_USERS = """
+            SELECT u.gender, COUNT(DISTINCT p.user_id) AS cnt
+            FROM encounter_preferences p
+            JOIN users u ON u.id = p.user_id
+            WHERE %s
+            GROUP BY u.gender
+            """.formatted(AdminSql.ACTIVE_USER);
+
     private static final String PARALLEL_RELATION_USERS = """
             SELECT u.gender, COUNT(*) AS cnt
             FROM users u
@@ -127,7 +143,9 @@ public class AdminUsageReader {
                 AdminGenderCountResult.from(opened),
                 AdminGenderCountResult.from(entered),
                 new AdminUsageResult.PartnerGender(sameAndOppositeOfMale[0], sameAndOppositeOfMale[1]),
-                new AdminUsageResult.PartnerGender(sameAndOppositeOfFemale[0], sameAndOppositeOfFemale[1])
+                new AdminUsageResult.PartnerGender(sameAndOppositeOfFemale[0], sameAndOppositeOfFemale[1]),
+                AdminGenderCountResult.from(countByGender(EVER_SEASON_PARTICIPANTS)),
+                AdminGenderCountResult.from(countByGender(PEOPLE_FAVORITE_USERS))
         );
     }
 

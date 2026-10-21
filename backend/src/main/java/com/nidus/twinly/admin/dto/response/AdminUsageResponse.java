@@ -11,7 +11,8 @@ public record AdminUsageResponse(
         BalanceGame balanceGame,
         Hesitation hesitation,
         ParallelRelation parallelRelation,
-        ChatRoom chatRoom
+        ChatRoom chatRoom,
+        PeopleFavorite peopleFavorite
 ) {
 
     public static AdminUsageResponse from(AdminUsageResult result) {
@@ -27,7 +28,10 @@ public record AdminUsageResponse(
                         AdminGenderCountResponse.from(result.openedEntries()),
                         AdminGenderCountResponse.from(result.enteredEntries()),
                         PartnerGender.from(result.malePartners()),
-                        PartnerGender.from(result.femalePartners()))
+                        PartnerGender.from(result.femalePartners())),
+                new PeopleFavorite(
+                        AdminGenderCountResponse.from(result.everSeasonParticipants()),
+                        AdminGenderCountResponse.from(result.peopleFavoriteUsers()))
         );
     }
 
@@ -62,6 +66,14 @@ public record AdminUsageResponse(
             PartnerGender malePartners,
             @Schema(description = "여성 회원이 입장한 방의 상대 성별")
             PartnerGender femalePartners
+    ) {
+    }
+
+    public record PeopleFavorite(
+            @Schema(description = "이용자 수. 한 번이라도 시즌에 참가한 가입자 수이고 사용 비율의 분모가 된다")
+            AdminGenderCountResponse participants,
+            @Schema(description = "인연 탭에서 한 번이라도 즐겨찾기한 가입자 수. 지금은 해제한 회원도 센다")
+            AdminGenderCountResponse favoritedUsers
     ) {
     }
 
