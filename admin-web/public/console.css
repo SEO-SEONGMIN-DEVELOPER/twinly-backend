@@ -461,7 +461,6 @@ tbody tr:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px;
 .sim-kpis .kpi { grid-column: auto; }
 .sim-kpis .kpi-value small { font-size: 15px; }
 .sim-sub { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.sim-delta { color: var(--green); font-size: 12px; font-weight: 700; margin-left: 6px; }
 .sim-progress { height: 8px; border-radius: 999px; background: #f2f0f4; overflow: hidden; }
 .sim-progress span { display: block; height: 100%; border-radius: 999px; background: var(--accent); transition: width .4s; }
 .sim-table th.r, .sim-table td.r { text-align: right; }
