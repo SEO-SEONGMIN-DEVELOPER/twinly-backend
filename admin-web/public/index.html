@@ -29,6 +29,8 @@
       <button data-view="survey">설문 통계</button>
       <button data-view="usage">기능 이용 현황</button>
       <button data-view="settings">운영자 API</button>
+      <span class="nav-sep" aria-hidden="true"></span>
+      <button data-view="simulation">시뮬레이션 모니터링</button>
     </nav>
   </header>
 
@@ -246,6 +248,15 @@
           </div>
         </article>
       </div>
+    </section>
+
+    <section class="view" id="v-simulation" data-title="시뮬레이션 모니터링" data-desc="지금 돌고 있는 하루 배치의 그룹별 세계 시간과 AI 비용을 15초마다 새로 봅니다." hidden>
+      <div class="basis sim-basis">
+        <span><b>금액</b> 미국 달러(USD), AI 서버 집계 그대로</span>
+        <span><b>전체 합계</b> 오늘 배치를 시작한 그룹만 더한 값</span>
+        <span class="sim-live" id="sim-live"></span>
+      </div>
+      <div class="sim-body" id="sim-body"></div>
     </section>
   </main>
   <footer class="site-footer"><div class="footer-row"><strong>Twinly</strong><span>운영자 전용 페이지</span></div></footer>
