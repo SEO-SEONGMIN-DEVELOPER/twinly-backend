@@ -1001,16 +1001,11 @@
 
   const SIM_POLL_MS = 15000;
   const SIM_RETRY_MS = 60000;
-  const simState = { timer: null, inFlight: false, last: null, prev: null, lastAt: null, error: null };
+  const simState = { timer: null, inFlight: false, last: null, lastAt: null, error: null };
   const usd = (value, digits) => value === null || value === undefined
     ? '—'
     : '$' + Number(value).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
   const clockText = date => date.toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
-  const costDelta = (now, before) => {
-    if (now === null || now === undefined || before === null || before === undefined) return '';
-    const diff = Number(now) - Number(before);
-    return diff > 0 ? `<span class="sim-delta num">+${usd(diff, 4)}</span>` : '';
-  };
 
   function renderSimLive() {
     const failed = simState.error !== null;
@@ -1034,8 +1029,6 @@
       return;
     }
 
-    const prev = simState.prev && simState.prev.simulationDate === d.simulationDate ? simState.prev : null;
-    const prevGroups = new Map((prev?.groups || []).map(g => [g.groupNumber, g]));
     const current = g => g.simulationDate !== null && g.simulationDate === d.simulationDate;
     const maxCost = Math.max(0, ...d.groups.filter(current).map(g => Number(g.totalCostUsd ?? 0)));
     const started = d.startedGroupCount ?? 0;
@@ -1060,20 +1053,16 @@
       if (count === null || count === undefined) return '<span class="dash">—</span>';
       return count > 0 ? pill(`${num(count)}건`, 'warn') : '<span class="dash num">0</span>';
     };
-    const row = g => {
-      const before = prevGroups.get(g.groupNumber);
-      const sameBatch = before && before.simulationDate === g.simulationDate;
-      return `<tr class="${current(g) ? '' : 'sim-stale'}">
+    const row = g => `<tr class="${current(g) ? '' : 'sim-stale'}">
         <td><b class="num">${esc(g.groupNumber)}번</b></td>
         <td>${worldCell(g)}</td>
         <td>${dateCell(g)}</td>
         <td class="r num">${g.participantCount === null ? '<span class="dash">—</span>' : `${num(g.participantCount)}명`}</td>
-        <td class="r num"><b>${usd(g.totalCostUsd, 4)}</b>${sameBatch ? costDelta(g.totalCostUsd, before.totalCostUsd) : ''}</td>
+        <td class="r num"><b>${usd(g.totalCostUsd, 4)}</b></td>
         <td class="sim-share-cell">${shareCell(g)}</td>
         <td class="r num">${usd(g.averageCostUsd, 4)}</td>
         <td class="r">${unpricedCell(g.unpricedResponseCount)}</td>
       </tr>`;
-    };
 
     body.innerHTML = `${simState.error ? `<div class="sim-banner bad">${esc(simState.error.message)} 아래는 ${clockText(simState.lastAt)}에 받은 값이에요.</div>` : ''}
       ${d.unpricedResponseCount > 0 ? `<div class="sim-banner warn">금액을 모르는 응답이 <b class="num">${num(d.unpricedResponseCount)}건</b> 있어요. 실제 비용은 아래 표시값보다 커요.</div>` : ''}
@@ -1081,7 +1070,7 @@
         <article class="card kpi">
           <div class="kpi-label">총비용 <span class="card-sub num">${esc(d.simulationDate ?? '—')} 배치</span></div>
           <div class="kpi-value num">${usd(d.totalCostUsd, 2)}</div>
-          <div class="sim-sub num">${usd(d.totalCostUsd, 6)}${prev ? costDelta(d.totalCostUsd, prev.totalCostUsd) : ''}</div>
+          <div class="sim-sub num">${usd(d.totalCostUsd, 6)}</div>
         </article>
         <article class="card kpi">
           <div class="kpi-label">인당 비용 <span class="card-sub">전체 비용 ÷ 전체 참가자</span></div>
@@ -1112,7 +1101,6 @@
     simState.inFlight = true;
     try {
       const data = await api('/admin/simulation/batch-costs');
-      simState.prev = simState.last;
       simState.last = data;
       simState.lastAt = new Date();
       simState.error = null;
