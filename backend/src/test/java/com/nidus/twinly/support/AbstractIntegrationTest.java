@@ -12,6 +12,7 @@ import com.nidus.twinly.legal.domain.PolicyKind;
 import com.nidus.twinly.legal.entity.Agreement;
 import com.nidus.twinly.legal.repository.AgreementRepository;
 import com.nidus.twinly.legal.service.PolicyCatalog;
+import com.nidus.twinly.simulation.client.SimulationBatchCostClient;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.UserRepository;
 import org.junit.jupiter.api.Tag;
@@ -75,13 +76,14 @@ public abstract class AbstractIntegrationTest {
     @Autowired
     protected AgreementRepository agreementRepository;
 
-    // 실제 외부 호출 차단 (메시지 발송·S3·Bedrock·Slack)
+    // 실제 외부 호출 차단 (메시지 발송·S3·Bedrock·Slack·AI 비용 조회)
     @MockitoBean protected SesService sesService;
     @MockitoBean protected SolapiService solapiService;
     @MockitoBean protected S3Service s3Service;
     @MockitoBean protected BedrockService bedrockService;
     @MockitoBean protected FirebaseMessaging firebaseMessaging;
     @MockitoBean protected SlackClient slackClient;
+    @MockitoBean protected SimulationBatchCostClient simulationBatchCostClient;
 
     private final AtomicInteger seq = new AtomicInteger();
 

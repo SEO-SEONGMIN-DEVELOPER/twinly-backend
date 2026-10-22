@@ -999,6 +999,140 @@
     }
   };
 
+  const SIM_POLL_MS = 15000;
+  const SIM_RETRY_MS = 60000;
+  const simState = { timer: null, inFlight: false, last: null, prev: null, lastAt: null, error: null };
+  const usd = (value, digits) => value === null || value === undefined
+    ? '—'
+    : '$' + Number(value).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  const clockText = date => date.toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
+  const costDelta = (now, before) => {
+    if (now === null || now === undefined || before === null || before === undefined) return '';
+    const diff = Number(now) - Number(before);
+    return diff > 0 ? `<span class="sim-delta num">+${usd(diff, 4)}</span>` : '';
+  };
+
+  function renderSimLive() {
+    const failed = simState.error !== null;
+    const status = failed
+      ? `<i class="sim-dot bad"></i>AI 비용 조회 실패 · 1분 뒤 다시 시도`
+      : simState.lastAt ? `<i class="sim-dot"></i>15초마다 갱신 · ${clockText(simState.lastAt)} 기준` : '불러오는 중이에요';
+    $('sim-live').innerHTML = `<span class="num">${status}</span><button class="sim-refresh" type="button" id="sim-refresh">지금 새로고침</button>`;
+    $('sim-refresh').addEventListener('click', refreshSim);
+  }
+
+  function renderSim() {
+    renderSimLive();
+    const body = $('sim-body');
+    const d = simState.last;
+    if (!d) {
+      body.innerHTML = `<div class="state-box${simState.error ? ' error' : ''}">${esc(simState.error ? simState.error.message : '불러오는 중이에요…')}</div>`;
+      return;
+    }
+    if (!d.simulationDate && !d.groups.length) {
+      body.innerHTML = '<div class="state-box">아직 하루 배치 기록이 없어요.</div>';
+      return;
+    }
+
+    const prev = simState.prev && simState.prev.simulationDate === d.simulationDate ? simState.prev : null;
+    const prevGroups = new Map((prev?.groups || []).map(g => [g.groupNumber, g]));
+    const current = g => g.simulationDate !== null && g.simulationDate === d.simulationDate;
+    const maxCost = Math.max(0, ...d.groups.filter(current).map(g => Number(g.totalCostUsd ?? 0)));
+    const started = d.startedGroupCount ?? 0;
+    const total = d.groupCount ?? 0;
+
+    const dateCell = g => {
+      if (!g.simulationDate) return pill('기록 없음', 'idle', true);
+      return current(g)
+        ? `<span class="num">${esc(g.simulationDate)}</span>`
+        : `<span class="num">${esc(g.simulationDate)}</span> ${pill('지난 배치', 'idle', true)}`;
+    };
+    const worldCell = g => {
+      if (!g.worldTime) return '<span class="dash">—</span>';
+      const [date, time] = g.worldTime.split('T');
+      return `<div class="sim-clock num"><b>${esc(time.slice(0, 5))}</b><small>${esc(date.slice(5))}</small></div>`;
+    };
+    const shareCell = g => {
+      if (!current(g) || !maxCost) return '<div class="sim-share"></div>';
+      return `<div class="sim-share" title="오늘 그룹 중 가장 많이 쓴 그룹 대비"><span style="width:${Number(g.totalCostUsd ?? 0) / maxCost * 100}%"></span></div>`;
+    };
+    const unpricedCell = count => {
+      if (count === null || count === undefined) return '<span class="dash">—</span>';
+      return count > 0 ? pill(`${num(count)}건`, 'warn') : '<span class="dash num">0</span>';
+    };
+    const row = g => {
+      const before = prevGroups.get(g.groupNumber);
+      const sameBatch = before && before.simulationDate === g.simulationDate;
+      return `<tr class="${current(g) ? '' : 'sim-stale'}">
+        <td><b class="num">${esc(g.groupNumber)}번</b></td>
+        <td>${worldCell(g)}</td>
+        <td>${dateCell(g)}</td>
+        <td class="r num">${g.participantCount === null ? '<span class="dash">—</span>' : `${num(g.participantCount)}명`}</td>
+        <td class="r num"><b>${usd(g.totalCostUsd, 4)}</b>${sameBatch ? costDelta(g.totalCostUsd, before.totalCostUsd) : ''}</td>
+        <td class="sim-share-cell">${shareCell(g)}</td>
+        <td class="r num">${usd(g.averageCostUsd, 4)}</td>
+        <td class="r">${unpricedCell(g.unpricedResponseCount)}</td>
+      </tr>`;
+    };
+
+    body.innerHTML = `${simState.error ? `<div class="sim-banner bad">${esc(simState.error.message)} 아래는 ${clockText(simState.lastAt)}에 받은 값이에요.</div>` : ''}
+      ${d.unpricedResponseCount > 0 ? `<div class="sim-banner warn">금액을 모르는 응답이 <b class="num">${num(d.unpricedResponseCount)}건</b> 있어요. 실제 비용은 아래 표시값보다 커요.</div>` : ''}
+      <div class="sim-kpis">
+        <article class="card kpi">
+          <div class="kpi-label">총비용 <span class="card-sub num">${esc(d.simulationDate ?? '—')} 배치</span></div>
+          <div class="kpi-value num">${usd(d.totalCostUsd, 2)}</div>
+          <div class="sim-sub num">${usd(d.totalCostUsd, 6)}${prev ? costDelta(d.totalCostUsd, prev.totalCostUsd) : ''}</div>
+        </article>
+        <article class="card kpi">
+          <div class="kpi-label">인당 비용 <span class="card-sub">전체 비용 ÷ 전체 참가자</span></div>
+          <div class="kpi-value num">${usd(d.averageCostUsd, 4)}</div>
+          <div class="sim-sub num">참가자 ${num(d.participantCount)}명 기준</div>
+        </article>
+        <article class="card kpi">
+          <div class="kpi-label">진행 중 그룹</div>
+          <div class="kpi-value num">${num(started)}<small>/ ${num(total)} 그룹</small></div>
+          <div class="sim-progress" role="progressbar" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${started}"><span style="width:${pct(started, total)}%"></span></div>
+          <div class="sim-sub num">${started >= total ? '모든 그룹이 오늘 배치를 시작했어요' : `${num(total - started)}개 그룹은 아직 지난 배치 값이에요`}</div>
+        </article>
+      </div>
+      <article class="card">
+        <div class="card-head"><h2>그룹별 현황</h2><span class="card-sub">흐린 줄은 오늘 배치를 아직 시작하지 않은 그룹이에요. 전체 합계에 들어가지 않아요</span></div>
+        <div class="table-wrap">
+          <table class="sim-table">
+            <thead><tr><th>그룹</th><th>세계 시간</th><th>배치 날짜</th><th class="r">참가자</th><th class="r">총비용</th><th>비용 비중</th><th class="r">인당 비용</th><th class="r">금액 미확인</th></tr></thead>
+            <tbody>${d.groups.map(row).join('') || stateRow(8, '그룹이 없어요.')}</tbody>
+          </table>
+        </div>
+      </article>`;
+  }
+
+  async function refreshSim() {
+    clearTimeout(simState.timer);
+    if (currentView !== 'simulation' || document.hidden || simState.inFlight) return;
+    simState.inFlight = true;
+    try {
+      const data = await api('/admin/simulation/batch-costs');
+      simState.prev = simState.last;
+      simState.last = data;
+      simState.lastAt = new Date();
+      simState.error = null;
+      markRefreshed();
+    } catch (error) {
+      simState.error = error;
+    } finally {
+      simState.inFlight = false;
+    }
+    if (currentView !== 'simulation') return;
+    renderSim();
+    simState.timer = setTimeout(refreshSim, simState.error ? SIM_RETRY_MS : SIM_POLL_MS);
+  }
+
+  loaders.simulation = () => {
+    renderSim();
+    refreshSim();
+  };
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshSim(); });
+
   const noticeIds = $('n-ids');
   const parseIds = () => [...new Set(noticeIds.value.split(/[\s,]+/).filter(value => /^\d+$/.test(value)))];
   const isAllTarget = () => document.querySelector('input[name="n-target"]:checked').value === 'all';

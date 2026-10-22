@@ -17,6 +17,8 @@ import com.nidus.twinly.common.domain.VerificationType;
 import com.nidus.twinly.common.feedback.FeedbackStatus;
 import com.nidus.twinly.common.feedback.FeedbackType;
 import com.nidus.twinly.common.time.KstTimes;
+import com.nidus.twinly.common.web.BusinessException;
+import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.purchase.entity.EarlySignupGrantCounter;
 import com.nidus.twinly.purchase.entity.UserEntitlement;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
@@ -28,6 +30,7 @@ import com.nidus.twinly.report.entity.AiUtteranceReport;
 import com.nidus.twinly.report.entity.Report;
 import com.nidus.twinly.report.repository.AiUtteranceReportRepository;
 import com.nidus.twinly.report.repository.ReportRepository;
+import com.nidus.twinly.simulation.client.SimulationBatchCostBody;
 import com.nidus.twinly.support.AbstractIntegrationTest;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.entity.UserFeedback;
@@ -49,14 +52,20 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.nullValue;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.never;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -684,6 +693,59 @@ class AdminConsoleIntegrationTest extends AbstractIntegrationTest {
                         .param("userIds", String.valueOf(active.getId()), String.valueOf(withdrawing.getId()))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.recipientCount").value(1));
+    }
+
+    @Test
+    @DisplayName("배치 비용: AI 서버 값을 다시 계산하지 않고 그대로 넘기고, 배치를 안 돌린 그룹은 null 로 둔다")
+    void batchCosts_passThroughAiValues() throws Exception {
+        // given: 1번 그룹은 오늘 배치 중, 2번 그룹은 어제 배치 값만 있음, 3번 그룹은 배치 기록 없음
+        given(simulationBatchCostClient.fetch()).willReturn(new SimulationBatchCostBody(
+                LocalDate.of(2026, 10, 22), 3, 1, 32,
+                new BigDecimal("1.402331"), new BigDecimal("0.043823"), 2,
+                List.of(
+                        new SimulationBatchCostBody.Group(1, LocalDateTime.of(2026, 10, 22, 14, 35), LocalDate.of(2026, 10, 22), 32,
+                                new BigDecimal("1.402331"), new BigDecimal("0.043823"), 2),
+                        new SimulationBatchCostBody.Group(2, LocalDateTime.of(2026, 10, 21, 23, 50), LocalDate.of(2026, 10, 21), 28,
+                                new BigDecimal("1.1"), new BigDecimal("0.039285"), 0),
+                        new SimulationBatchCostBody.Group(3, LocalDateTime.of(2026, 10, 22, 9, 0), null, null, null, null, null))));
+
+        // when & then
+        mockMvc.perform(admin(get("/admin/simulation/batch-costs")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.simulationDate").value("2026-10-22"))
+                .andExpect(jsonPath("$.groupCount").value(3))
+                .andExpect(jsonPath("$.startedGroupCount").value(1))
+                .andExpect(jsonPath("$.participantCount").value(32))
+                .andExpect(jsonPath("$.totalCostUsd").value(1.402331))
+                .andExpect(jsonPath("$.averageCostUsd").value(0.043823))
+                .andExpect(jsonPath("$.unpricedResponseCount").value(2))
+                .andExpect(jsonPath("$.groups.length()").value(3))
+                .andExpect(jsonPath("$.groups[0].worldTime").value("2026-10-22T14:35:00"))
+                .andExpect(jsonPath("$.groups[1].simulationDate").value("2026-10-21"))
+                .andExpect(jsonPath("$.groups[2].simulationDate").value(nullValue()))
+                .andExpect(jsonPath("$.groups[2].participantCount").value(nullValue()))
+                .andExpect(jsonPath("$.groups[2].totalCostUsd").value(nullValue()));
+    }
+
+    @Test
+    @DisplayName("배치 비용: AI 서버 조회가 실패하면 502 를 주고, 다른 어드민 API 는 영향을 받지 않는다")
+    void batchCosts_aiFailure() throws Exception {
+        // given: AI 서버가 503 을 준 상황
+        given(simulationBatchCostClient.fetch()).willThrow(new BusinessException(ErrorCode.SIMULATION_BATCH_COST_FETCH_FAILED));
+
+        // when & then
+        mockMvc.perform(admin(get("/admin/simulation/batch-costs")))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.code").value("SIMULATION_BATCH_COST_FETCH_FAILED"));
+        mockMvc.perform(admin(get("/admin/dashboard"))).andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("배치 비용: 관리자 토큰이 없으면 AI 서버를 부르지 않고 401 을 준다")
+    void batchCosts_requireAdminToken() throws Exception {
+        // when & then
+        mockMvc.perform(get("/admin/simulation/batch-costs")).andExpect(status().isUnauthorized());
+        then(simulationBatchCostClient).should(never()).fetch();
     }
 
     private MockHttpServletRequestBuilder admin(MockHttpServletRequestBuilder builder) {
