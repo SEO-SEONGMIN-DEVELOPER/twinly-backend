@@ -19,8 +19,8 @@ public class SeasonController {
 
     private final SeasonService seasonService;
 
-    @Operation(summary = "시즌 참여", description = "구매 상태를 동기화한 뒤 결제와 필수 약관 동의를 만족하면 현재 시즌에 참여시킨다. 이미 참여했으면 최초 참여 시각을 유지한다.")
-    @ApiResponse(responseCode = "403", description = "SIMULATION_ACCESS_REQUIRED, SIMULATION_CONSENT_REQUIRED")
+    @Operation(summary = "시즌 참여", description = "학교 인증이 승인된 회원만 참여할 수 있다. 구매 상태를 동기화한 뒤 결제와 필수 약관 동의를 만족하면 현재 시즌에 참여시킨다. 이미 참여했으면 최초 참여 시각을 유지한다.")
+    @ApiResponse(responseCode = "403", description = "SCHOOL_VERIFICATION_NOT_APPROVED, SIMULATION_ACCESS_REQUIRED, SIMULATION_CONSENT_REQUIRED")
     @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND")
     @PutMapping("/api/v1/season/participation")
     public void participateIn(@AuthenticationPrincipal UserInfo userInfo) {
