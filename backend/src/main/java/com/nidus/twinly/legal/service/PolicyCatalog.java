@@ -21,7 +21,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class PolicyCatalog {
 
-    private static final Comparator<PolicySummary> BY_EFFECTIVE_AT_THEN_ID =
+    public static final Comparator<PolicySummary> BY_EFFECTIVE_AT_THEN_ID =
             Comparator.comparing(PolicySummary::getEffectiveAt).thenComparing(PolicySummary::getId);
 
     private final PolicyRepository policyRepository;

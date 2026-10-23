@@ -86,10 +86,19 @@ public interface SeasonParticipationRepository extends JpaRepository<SeasonParti
                   WHERE b.userId = p.userId
                     AND b.blockedUserId = :userId
               )
+              AND EXISTS (
+                  SELECT 1 FROM Agreement a
+                  JOIN Policy po ON po.id = a.policyId
+                  JOIN PolicyName pn ON pn.id = po.policyNameId
+                  WHERE a.userId = p.userId
+                    AND a.revokedAt IS NULL
+                    AND pn.identifier = :disclosurePolicyIdentifier
+              )
             """)
     List<PreviewCandidateProjection> findAllPreviewCandidates(@Param("userId") Long userId,
                                                               @Param("seasonId") Long seasonId,
-                                                              @Param("participatedBefore") Instant participatedBefore);
+                                                              @Param("participatedBefore") Instant participatedBefore,
+                                                              @Param("disclosurePolicyIdentifier") String disclosurePolicyIdentifier);
 
     interface PreviewCandidateProjection {
         Long getUserId();

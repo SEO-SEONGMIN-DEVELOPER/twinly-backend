@@ -21,7 +21,10 @@ import com.nidus.twinly.people.dto.result.PeopleItemResult;
 import com.nidus.twinly.people.dto.result.PeopleLearnedFactsResult;
 import com.nidus.twinly.people.dto.result.PeoplePageResult;
 import com.nidus.twinly.people.dto.result.PeoplePreviewResult;
+import com.nidus.twinly.people.dto.result.PeoplePreviewV2PhotoResult;
+import com.nidus.twinly.people.dto.result.PeoplePreviewV2Result;
 import com.nidus.twinly.people.dto.result.PeoplePreviewsResult;
+import com.nidus.twinly.people.dto.result.PeoplePreviewsV2Result;
 import com.nidus.twinly.people.dto.result.PeopleProfileDisclosedFieldsResult;
 import com.nidus.twinly.people.dto.result.PeopleProfileResult;
 import com.nidus.twinly.people.dto.result.PeopleProfileV2Result;
@@ -718,6 +721,57 @@ class PeopleControllerUnitTest {
     void previews_without_auth_returns_401() throws Exception {
         // when: Authorization 헤더 없이 호출
         var result = mockMvc.perform(get("/api/v1/people/previews"));
+
+        // then: 401, 서비스 미호출
+        result.andExpect(status().isUnauthorized());
+        then(peoplePreviewService).shouldHaveNoInteractions();
+    }
+
+    // ---------------------------------------------------------------- GET /api/v2/people/previews
+
+    @Test
+    @DisplayName("트윈 미리보기 v2 조회 시 원본 사진은 key 없이 photoUrl·position 객체로, 가린 사진은 maskedPhotoUrl 로 내려주고 null 필드도 키를 남긴다")
+    void previewsV2_success() throws Exception {
+        // given: 서비스가 원본 사진·닉네임 있는 사람, 가린 사진만 있는 사람을 반환
+        given(peoplePreviewService.previewsV2(1L))
+                .willReturn(new PeoplePreviewsV2Result(List.of(
+                        new PeoplePreviewV2Result("b71e09a1c2d3", Gender.FEMALE, "성신여대", "02", "길동",
+                                new PeoplePreviewV2PhotoResult("https://cdn.example.com/profile/x?sig",
+                                        new PhotoPosInfo(new PhotoPosInfo.StartPos(1, 2), 30, 40)),
+                                null),
+                        new PeoplePreviewV2Result("4c2a8f000000", Gender.MALE, "성균관대", "01", null,
+                                null, "https://cdn.example.com/preview/y?sig"))));
+
+        // when: 인증 상태로 v2 미리보기 조회
+        var result = mockMvc.perform(get("/api/v2/people/previews")
+                .header("Authorization", "Bearer access-token"));
+
+        // then: 200 + 첫 사람은 사진 객체·닉네임, 둘째는 가린 사진만. key·userId 는 없다
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.previews.length()").value(2))
+                .andExpect(jsonPath("$.previews[0].ref").value("b71e09a1c2d3"))
+                .andExpect(jsonPath("$.previews[0].gender").value("female"))
+                .andExpect(jsonPath("$.previews[0].nickname").value("길동"))
+                .andExpect(jsonPath("$.previews[0].profilePhoto.photoUrl").value("https://cdn.example.com/profile/x?sig"))
+                .andExpect(jsonPath("$.previews[0].profilePhoto.position.startPos.x").value(1))
+                .andExpect(jsonPath("$.previews[0].profilePhoto.position.width").value(30))
+                .andExpect(jsonPath("$.previews[0].profilePhoto.key").doesNotExist())
+                .andExpect(jsonPath("$.previews[0].maskedPhotoUrl").isEmpty())
+                .andExpect(jsonPath("$.previews[0].maskedPhotoUrl").hasJsonPath())
+                .andExpect(jsonPath("$.previews[0].userId").doesNotExist())
+                .andExpect(jsonPath("$.previews[1].nickname").isEmpty())
+                .andExpect(jsonPath("$.previews[1].nickname").hasJsonPath())
+                .andExpect(jsonPath("$.previews[1].profilePhoto").isEmpty())
+                .andExpect(jsonPath("$.previews[1].profilePhoto").hasJsonPath())
+                .andExpect(jsonPath("$.previews[1].maskedPhotoUrl").value("https://cdn.example.com/preview/y?sig"));
+        then(peoplePreviewService).should().previewsV2(1L);
+    }
+
+    @Test
+    @DisplayName("인증 없이 미리보기 v2 를 조회하면 401을 반환하고 서비스를 호출하지 않는다")
+    void previewsV2_without_auth_returns_401() throws Exception {
+        // when: Authorization 헤더 없이 호출
+        var result = mockMvc.perform(get("/api/v2/people/previews"));
 
         // then: 401, 서비스 미호출
         result.andExpect(status().isUnauthorized());

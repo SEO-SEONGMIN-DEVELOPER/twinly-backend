@@ -9,7 +9,9 @@ import com.nidus.twinly.common.photo.ProfileThumbnailService;
 import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
+import com.nidus.twinly.legal.reader.ConsentReader;
 import com.nidus.twinly.people.dto.result.PeoplePreviewResult;
+import com.nidus.twinly.people.dto.result.PeoplePreviewV2Result;
 import com.nidus.twinly.people.dto.result.PeoplePreviewsResult;
 import com.nidus.twinly.season.entity.Season;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
@@ -37,6 +39,7 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.LongStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -49,6 +52,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -56,6 +60,7 @@ class PeoplePreviewServiceUnitTest {
 
     private static final Long ME = 1L;
     private static final Long SEASON_ID = 3L;
+    private static final String DISCLOSURE = "thirdPartyRealIdentityDisclosure";
 
     @Mock
     CurrentSeasonReader currentSeasonReader;
@@ -74,6 +79,9 @@ class PeoplePreviewServiceUnitTest {
 
     @Mock
     CloudFrontService cloudFrontService;
+
+    @Mock
+    ConsentReader consentReader;
 
     @Spy
     BlindIndexHasher blindIndexHasher = new BlindIndexHasher(new CryptoProperties(
@@ -119,10 +127,10 @@ class PeoplePreviewServiceUnitTest {
     }
 
     @Test
-    @DisplayName("후보는 현재 시즌과 오늘 KST 0시 이전 참여 조건으로 조회한다")
+    @DisplayName("후보는 현재 시즌·오늘 KST 0시 이전 참여·실신원 제3자 제공 동의 조건으로 조회한다")
     void previews_queries_candidates_with_today_start() {
         // given: 후보 없음
-        given(seasonParticipationRepository.findAllPreviewCandidates(anyLong(), anyLong(), any())).willReturn(List.of());
+        given(seasonParticipationRepository.findAllPreviewCandidates(anyLong(), anyLong(), any(), anyString())).willReturn(List.of());
 
         // when: 미리보기 조회
         PeoplePreviewsResult result = peoplePreviewService.previews(ME);
@@ -130,7 +138,7 @@ class PeoplePreviewServiceUnitTest {
         // then: 오늘 KST 0시를 Instant 로 넘기고, 후보가 없으면 빈 목록
         assertThat(result.previews()).isEmpty();
         then(seasonParticipationRepository).should().findAllPreviewCandidates(
-                ME, SEASON_ID, KstTimes.toInstant(KstTimes.today().atStartOfDay()));
+                ME, SEASON_ID, KstTimes.toInstant(KstTimes.today().atStartOfDay()), DISCLOSURE);
     }
 
     @Test
@@ -225,7 +233,7 @@ class PeoplePreviewServiceUnitTest {
     @DisplayName("후보 조회 뒤 사용자 행이 사라진 후보는 건너뛰고 나머지만 돌려준다")
     void previews_skips_candidate_whose_user_row_disappeared() {
         // given: 후보 2명 중 102 의 사용자 행이 사용자 조회 시점에 없다
-        given(seasonParticipationRepository.findAllPreviewCandidates(eq(ME), eq(SEASON_ID), any()))
+        given(seasonParticipationRepository.findAllPreviewCandidates(eq(ME), eq(SEASON_ID), any(), eq(DISCLOSURE)))
                 .willReturn(List.of(candidate(101L, Gender.FEMALE), candidate(102L, Gender.FEMALE)));
         given(userRepository.findAllById(anyList())).willReturn(List.of(user(101L, Gender.FEMALE)));
 
@@ -261,7 +269,7 @@ class PeoplePreviewServiceUnitTest {
         Long other = 2L;
         given(seasonParticipationRepository.existsByUserIdAndSeasonId(other, SEASON_ID)).willReturn(true);
         given(userRepository.findById(other)).willReturn(Optional.of(user(other, Gender.MALE)));
-        given(seasonParticipationRepository.findAllPreviewCandidates(anyLong(), eq(SEASON_ID), any()))
+        given(seasonParticipationRepository.findAllPreviewCandidates(anyLong(), eq(SEASON_ID), any(), eq(DISCLOSURE)))
                 .willReturn(List.of(candidate(101L, Gender.FEMALE)));
         given(userRepository.findAllById(List.of(101L))).willReturn(List.of(user(101L, Gender.FEMALE)));
 
@@ -368,8 +376,128 @@ class PeoplePreviewServiceUnitTest {
         then(photoRepository).should(never()).assignPreviewKey(anyLong(), anyString(), anyString());
     }
 
+    @Test
+    @DisplayName("v2: 참여자가 부르면 1.2 이상 동의자는 원본 사진·닉네임을, 그 밖의 사람은 가린 사진만 준다")
+    void previewsV2_participant_unmasks_only_agreed_people() {
+        // given: 참여자 호출자, 후보 101(1.2 이상 동의)·102(1.1까지만 동의) 모두 사진이 있다
+        given(seasonParticipationRepository.existsByUserIdAndSeasonId(ME, SEASON_ID)).willReturn(true);
+        givenCandidates(List.of(candidate(101L, Gender.FEMALE), candidate(102L, Gender.FEMALE)));
+        given(consentReader.filterAgreedAtLeast(anyList(), eq(DISCLOSURE), eq("1.2"))).willReturn(Set.of(101L));
+        Photo agreedPhoto = photo(11L, 101L, "profile/101/original");
+        Photo maskedPhoto = photo(12L, 102L, "profile/102/original");
+        ReflectionTestUtils.setField(maskedPhoto, "previewKey", "preview/102");
+        given(photoRepository.findAllByUserIdInAndType(anyList(), eq(PhotoType.PROFILE))).willReturn(List.of(agreedPhoto, maskedPhoto));
+        given(cloudFrontService.getSignedUrl("profile/101/original")).willReturn("https://cdn.example.com/profile/101/original?sig");
+        given(cloudFrontService.getSignedUrl("preview/102")).willReturn("https://cdn.example.com/preview/102?sig");
+
+        // when: v2 미리보기 조회
+        List<PeoplePreviewV2Result> previews = peoplePreviewService.previewsV2(ME).previews();
+
+        // then: 101 은 원본 서명 URL·position·닉네임, 102 는 가린 사진만
+        assertThat(previews).hasSize(2);
+        PeoplePreviewV2Result agreed = previews.stream().filter(preview -> "nick101".equals(preview.nickname())).findFirst().orElseThrow();
+        assertThat(agreed.profilePhoto().photoUrl()).isEqualTo("https://cdn.example.com/profile/101/original?sig");
+        assertThat(agreed.profilePhoto().position()).isEqualTo(agreedPhoto.position());
+        assertThat(agreed.maskedPhotoUrl()).isNull();
+        PeoplePreviewV2Result masked = previews.stream().filter(preview -> preview != agreed).findFirst().orElseThrow();
+        assertThat(masked.nickname()).isNull();
+        assertThat(masked.profilePhoto()).isNull();
+        assertThat(masked.maskedPhotoUrl()).isEqualTo("https://cdn.example.com/preview/102?sig");
+    }
+
+    @Test
+    @DisplayName("v2: 원본 사진을 주는 사람의 가린 사진은 만들지 않는다")
+    void previewsV2_does_not_create_masked_photo_for_unmasked_person() {
+        // given: 참여자 호출자, 1.2 이상 동의한 후보의 사진에 미리보기 key 가 아직 없다
+        given(seasonParticipationRepository.existsByUserIdAndSeasonId(ME, SEASON_ID)).willReturn(true);
+        givenCandidates(List.of(candidate(101L, Gender.FEMALE)));
+        given(consentReader.filterAgreedAtLeast(anyList(), eq(DISCLOSURE), eq("1.2"))).willReturn(Set.of(101L));
+        given(photoRepository.findAllByUserIdInAndType(anyList(), eq(PhotoType.PROFILE))).willReturn(List.of(photo(11L, 101L, "profile/101/original")));
+
+        // when: v2 미리보기 조회
+        peoplePreviewService.previewsV2(ME);
+
+        // then: 8px 미리보기 생성·저장을 하지 않는다
+        then(profileThumbnailService).should(never()).generatePreview(anyString(), any());
+        then(photoRepository).should(never()).assignPreviewKey(anyLong(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("v2: 미참여자가 부르면 동의 버전을 보지 않고 모두 가린 사진만 주고 닉네임은 주지 않는다")
+    void previewsV2_non_participant_gets_masked_only() {
+        // given: 미참여자 호출자, 사진 있는 후보 1명
+        given(seasonParticipationRepository.existsByUserIdAndSeasonId(ME, SEASON_ID)).willReturn(false);
+        givenCandidates(List.of(candidate(101L, Gender.FEMALE)));
+        Photo photo = photo(11L, 101L, "profile/101/original");
+        ReflectionTestUtils.setField(photo, "previewKey", "preview/101");
+        given(photoRepository.findAllByUserIdInAndType(anyList(), eq(PhotoType.PROFILE))).willReturn(List.of(photo));
+        given(cloudFrontService.getSignedUrl("preview/101")).willReturn("https://cdn.example.com/preview/101?sig");
+
+        // when: v2 미리보기 조회
+        PeoplePreviewV2Result preview = peoplePreviewService.previewsV2(ME).previews().get(0);
+
+        // then: 가린 사진만, 동의 조회도 원본 서명도 하지 않는다
+        assertThat(preview.nickname()).isNull();
+        assertThat(preview.profilePhoto()).isNull();
+        assertThat(preview.maskedPhotoUrl()).isEqualTo("https://cdn.example.com/preview/101?sig");
+        then(consentReader).shouldHaveNoInteractions();
+        then(cloudFrontService).should(never()).getSignedUrl("profile/101/original");
+    }
+
+    @Test
+    @DisplayName("v2: 사진이 없는 1.2 이상 동의자는 사진 둘 다 null 이고 닉네임은 준다")
+    void previewsV2_unmasked_person_without_photo() {
+        // given: 참여자 호출자, 사진 없는 1.2 이상 동의 후보
+        given(seasonParticipationRepository.existsByUserIdAndSeasonId(ME, SEASON_ID)).willReturn(true);
+        givenCandidates(List.of(candidate(101L, Gender.FEMALE)));
+        given(consentReader.filterAgreedAtLeast(anyList(), eq(DISCLOSURE), eq("1.2"))).willReturn(Set.of(101L));
+
+        // when: v2 미리보기 조회
+        PeoplePreviewV2Result preview = peoplePreviewService.previewsV2(ME).previews().get(0);
+
+        // then: 닉네임만 있고 사진은 둘 다 null
+        assertThat(preview.nickname()).isEqualTo("nick101");
+        assertThat(preview.profilePhoto()).isNull();
+        assertThat(preview.maskedPhotoUrl()).isNull();
+    }
+
+    @Test
+    @DisplayName("v2: v1 과 같은 후보 조회를 쓰고 같은 사람·순서·ref 를 준다")
+    void previewsV2_uses_same_candidates_as_v1() {
+        // given: 미참여자 호출자, 후보 20명
+        given(seasonParticipationRepository.existsByUserIdAndSeasonId(ME, SEASON_ID)).willReturn(false);
+        List<PreviewCandidateProjection> candidates = new ArrayList<>();
+        LongStream.rangeClosed(101, 110).forEach(id -> candidates.add(candidate(id, Gender.FEMALE)));
+        LongStream.rangeClosed(201, 210).forEach(id -> candidates.add(candidate(id, Gender.MALE)));
+        givenCandidates(candidates);
+
+        // when: v1·v2 를 차례로 조회
+        List<String> v1Refs = peoplePreviewService.previews(ME).previews().stream().map(PeoplePreviewResult::ref).toList();
+        List<String> v2Refs = peoplePreviewService.previewsV2(ME).previews().stream().map(PeoplePreviewV2Result::ref).toList();
+
+        // then: ref 목록이 순서까지 같고, 두 번 모두 같은 조건으로 후보를 조회했다
+        assertThat(v2Refs).isEqualTo(v1Refs);
+        then(seasonParticipationRepository).should(times(2)).findAllPreviewCandidates(
+                ME, SEASON_ID, KstTimes.toInstant(KstTimes.today().atStartOfDay()), DISCLOSURE);
+    }
+
+    @Test
+    @DisplayName("v2: 보여 줄 사람이 없으면 참여 여부·동의 조회 없이 빈 목록을 준다")
+    void previewsV2_empty_candidates() {
+        // given: 후보 없음
+        givenCandidates(List.of());
+
+        // when: v2 미리보기 조회
+        List<PeoplePreviewV2Result> previews = peoplePreviewService.previewsV2(ME).previews();
+
+        // then: 빈 목록, 이후 조회 없음
+        assertThat(previews).isEmpty();
+        then(seasonParticipationRepository).should(never()).existsByUserIdAndSeasonId(any(), any());
+        then(consentReader).shouldHaveNoInteractions();
+    }
+
     private void givenCandidates(List<PreviewCandidateProjection> candidates) {
-        given(seasonParticipationRepository.findAllPreviewCandidates(eq(ME), eq(SEASON_ID), any())).willReturn(candidates);
+        given(seasonParticipationRepository.findAllPreviewCandidates(eq(ME), eq(SEASON_ID), any(), eq(DISCLOSURE))).willReturn(candidates);
         given(userRepository.findAllById(anyList())).willAnswer(invocation -> {
             List<Long> ids = invocation.getArgument(0);
             return ids.stream()
