@@ -5,7 +5,10 @@ import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.notification.domain.AppNotificationFeedType;
 import com.nidus.twinly.notification.entity.AppNotificationFeed;
 import com.nidus.twinly.notification.event.AppNotificationFeedCreatedEvent;
+import com.nidus.twinly.notification.event.SchoolVerificationFeedCreatedEvent;
 import com.nidus.twinly.notification.repository.AppNotificationFeedRepository;
+import com.nidus.twinly.schoolverification.domain.SchoolVerificationStatus;
+import com.nidus.twinly.schoolverification.domain.StudentIdRejectReason;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +25,9 @@ public class AppNotificationFeedWriter {
     private static final String MATCH_BODY = "채팅 탭에서 입장하기를 누르면, 상대가 동의한 뒤 대화가 시작돼요.";
     private static final String BALANCE_GAME_RESULT_BODY = "서로 같은 답을 골랐는지 확인해 보세요.";
     private static final String BALANCE_GAME_WAITING_BODY = "나도 답하고 서로 같은 답을 골랐는지 확인해 보세요.";
+    private static final String SCHOOL_VERIFICATION_APPROVED_TITLE = "학교 인증이 끝났어요";
+    private static final String SCHOOL_VERIFICATION_APPROVED_BODY = "이제 평행우주에 참여할 수 있어요.";
+    private static final String SCHOOL_VERIFICATION_REJECTED_TITLE = "학생증을 다시 확인해 주세요";
 
     private final AppNotificationFeedRepository appNotificationFeedRepository;
     private final UserRepository userRepository;
@@ -58,6 +64,28 @@ public class AppNotificationFeedWriter {
                 userAnswered ? BALANCE_GAME_RESULT_BODY : BALANCE_GAME_WAITING_BODY,
                 answeredUserId
         ))));
+    }
+
+    public void writeSchoolVerificationApproved(Long userId) {
+        AppNotificationFeed feed = appNotificationFeedRepository.save(AppNotificationFeed.createUntargeted(
+                userId,
+                AppNotificationFeedType.SCHOOL_VERIFICATION,
+                SCHOOL_VERIFICATION_APPROVED_TITLE,
+                SCHOOL_VERIFICATION_APPROVED_BODY
+        ));
+
+        eventPublisher.publishEvent(new SchoolVerificationFeedCreatedEvent(feed, SchoolVerificationStatus.APPROVED));
+    }
+
+    public void writeSchoolVerificationRejected(Long userId, StudentIdRejectReason rejectReason) {
+        AppNotificationFeed feed = appNotificationFeedRepository.save(AppNotificationFeed.createUntargeted(
+                userId,
+                AppNotificationFeedType.SCHOOL_VERIFICATION,
+                SCHOOL_VERIFICATION_REJECTED_TITLE,
+                rejectReason.message()
+        ));
+
+        eventPublisher.publishEvent(new SchoolVerificationFeedCreatedEvent(feed, SchoolVerificationStatus.REJECTED));
     }
 
     private AppNotificationFeed matchFeed(Long userId, Long partnerUserId, Long roomId) {

@@ -66,6 +66,18 @@ public class PushMessageBuilder {
                 .toList();
     }
 
+    public List<PushMessage> schoolVerification(List<Device> devices, SchoolVerificationPushContent content) {
+        Map<String, String> data = schoolVerificationData(content);
+
+        return devices.stream()
+                .map(device -> new PushMessage(
+                        device.getUserId(),
+                        PushType.SCHOOL_VERIFICATION,
+                        device.getPushToken(),
+                        notificationMessage(device, content.title(), content.body(), data)))
+                .toList();
+    }
+
     public List<PushMessage> chatMessage(List<Device> devices, ChatMessagePushContent content) {
         Map<String, String> data = chatData(content);
 
@@ -110,6 +122,15 @@ public class PushMessageBuilder {
                 "version", VERSION,
                 "type", EnumJsonNames.of(PushType.BALANCE_GAME_OPENED),
                 "targetKind", EnumJsonNames.of(AppNotificationFeedTargetType.PEOPLE),
+                "createdAt", content.createdAt().toString());
+    }
+
+    private Map<String, String> schoolVerificationData(SchoolVerificationPushContent content) {
+        return Map.of(
+                "version", VERSION,
+                "type", EnumJsonNames.of(PushType.SCHOOL_VERIFICATION),
+                "appNotificationId", String.valueOf(content.appNotificationId()),
+                "status", EnumJsonNames.of(content.status()),
                 "createdAt", content.createdAt().toString());
     }
 

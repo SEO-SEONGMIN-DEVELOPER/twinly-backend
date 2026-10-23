@@ -8,5 +8,6 @@ public enum AppNotificationFeedType {
     @JsonProperty("twinView")            TWIN_VIEW,
     @JsonProperty("oneTime")             ONE_TIME,
     @JsonProperty("notice")              NOTICE,
-    @JsonProperty("balanceGameAnswered") BALANCE_GAME_ANSWERED
+    @JsonProperty("balanceGameAnswered") BALANCE_GAME_ANSWERED,
+    @JsonProperty("schoolVerification")  SCHOOL_VERIFICATION
 }
