@@ -26,6 +26,7 @@
       <button data-view="chats">채팅방 관리</button>
       <button data-view="subs">구독 관리</button>
       <button data-view="reports">신고·문의 관리 <span class="count num" id="pending-count" hidden></span></button>
+      <button data-view="schools">학교 인증 관리 <span class="count num" id="school-pending-count" hidden></span></button>
       <button data-view="survey">설문 통계</button>
       <button data-view="usage">기능 이용 현황</button>
       <button data-view="settings">운영자 API</button>
@@ -139,6 +140,19 @@
         </div>
         <div style="height:16px"></div>
         <div id="report-body"></div>
+      </div>
+    </section>
+
+    <section class="view" id="v-schools" data-title="학교 인증 관리" data-desc="학생증으로 가입한 회원의 사진을 보고 승인하거나 반려합니다. 제출 후 24시간 안에 처리해 주세요. 판정한 사진은 1시간 안에 지워져요." hidden>
+      <div class="card">
+        <div class="card-head"><h2>검수 대기</h2><span class="card-sub">오래 기다린 순 · 탈퇴 신청한 회원은 빠져요</span></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>회원</th><th>고른 학교</th><th>제출 시각</th><th>기다린 시간</th></tr></thead>
+            <tbody id="school-rows"></tbody>
+          </table>
+        </div>
+        <div class="pager" id="school-pager"></div>
       </div>
     </section>
 
