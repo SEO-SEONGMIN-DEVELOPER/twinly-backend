@@ -35,3 +35,6 @@ docs/guide
 demo
 # python
 __pycache__
+
+# data exports (personal data, never commit)
+anon-session

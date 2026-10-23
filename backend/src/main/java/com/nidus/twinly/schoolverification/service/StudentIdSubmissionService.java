@@ -12,6 +12,7 @@ import com.nidus.twinly.organization.service.OrganizationCatalog;
 import com.nidus.twinly.schoolverification.domain.SchoolVerificationStatus;
 import com.nidus.twinly.schoolverification.entity.AnonSessionStudentIdSubmission;
 import com.nidus.twinly.schoolverification.entity.StudentIdSubmission;
+import com.nidus.twinly.schoolverification.event.StudentIdReviewRequestedEvent;
 import com.nidus.twinly.schoolverification.repository.AnonSessionStudentIdSubmissionRepository;
 import com.nidus.twinly.schoolverification.repository.StudentIdSubmissionRepository;
 import com.nidus.twinly.schoolverification.storage.StudentIdPhotoOwner;
@@ -19,6 +20,7 @@ import com.nidus.twinly.schoolverification.storage.StudentIdPhotoStorage;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +35,7 @@ public class StudentIdSubmissionService {
 
     private final OrganizationCatalog organizationCatalog;
     private final StudentIdPhotoStorage studentIdPhotoStorage;
+    private final ApplicationEventPublisher eventPublisher;
 
     private final AnonSessionRepository anonSessionRepository;
     private final AnonSessionVerificationSessionRepository anonSessionVerificationSessionRepository;
@@ -97,6 +100,12 @@ public class StudentIdSubmissionService {
                 studentIdSubmissionRepository.save(StudentIdSubmission.transfer(anonSubmission, userId)));
 
         anonSessionStudentIdSubmissionRepository.deleteAll(anonSubmissions);
+
+        anonSubmissions.stream()
+                .filter(AnonSessionStudentIdSubmission::isCurrent)
+                .findFirst()
+                .ifPresent(current -> eventPublisher.publishEvent(new StudentIdReviewRequestedEvent(
+                        userId, current.getSubmissionId(), current.getOrganization(), false)));
     }
 
     public PhotoPresignResult presignForUser(Long userId, String contentType) {
@@ -130,6 +139,8 @@ public class StudentIdSubmissionService {
                 submissionId, userId, user.getOrganization(), key, reviewKey));
 
         user.startStudentIdVerification();
+
+        eventPublisher.publishEvent(new StudentIdReviewRequestedEvent(userId, submissionId, user.getOrganization(), true));
     }
 
     private void requireUnusedKey(boolean used, String key) {
