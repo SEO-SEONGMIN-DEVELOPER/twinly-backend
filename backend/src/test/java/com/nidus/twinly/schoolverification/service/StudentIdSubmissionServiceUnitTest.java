@@ -13,6 +13,7 @@ import com.nidus.twinly.schoolverification.domain.SchoolVerificationStatus;
 import com.nidus.twinly.schoolverification.domain.StudentIdSubmissionStatus;
 import com.nidus.twinly.schoolverification.entity.AnonSessionStudentIdSubmission;
 import com.nidus.twinly.schoolverification.entity.StudentIdSubmission;
+import com.nidus.twinly.schoolverification.event.StudentIdReviewRequestedEvent;
 import com.nidus.twinly.schoolverification.repository.AnonSessionStudentIdSubmissionRepository;
 import com.nidus.twinly.schoolverification.repository.StudentIdSubmissionRepository;
 import com.nidus.twinly.schoolverification.storage.StudentIdPhotoOwner;
@@ -27,6 +28,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.BeanUtils;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Duration;
@@ -60,6 +62,9 @@ class StudentIdSubmissionServiceUnitTest {
 
     @Mock
     StudentIdPhotoStorage studentIdPhotoStorage;
+
+    @Mock
+    ApplicationEventPublisher eventPublisher;
 
     @Mock
     AnonSessionRepository anonSessionRepository;
@@ -201,6 +206,24 @@ class StudentIdSubmissionServiceUnitTest {
                 .containsExactly(replaced.getSubmissionId(), current.getSubmissionId());
         assertThat(captor.getAllValues()).extracting(StudentIdSubmission::getUserId).containsOnly(USER_ID);
         then(anonSessionStudentIdSubmissionRepository).should().deleteAll(rows);
+
+        // then: 검수 대기열에 들어온 현재 제출 하나에 대해서만 검수 요청 알림 이벤트를 낸다
+        then(eventPublisher).should().publishEvent(new StudentIdReviewRequestedEvent(USER_ID, current.getSubmissionId(), ORGANIZATION, false));
+    }
+
+    @Test
+    @DisplayName("가입 이관: 교체된 제출만 남아 있으면(이메일 인증으로 가입) 검수 요청 알림을 내지 않는다")
+    void transferToUser_without_current_does_not_publish() {
+        // given: 학생증을 냈다가 이메일 인증으로 바꿔 교체된 제출만 있는 세션
+        AnonSessionStudentIdSubmission replaced = AnonSessionStudentIdSubmission.create(UUID.randomUUID(), ANON_SESSION_ID, ORGANIZATION, "k1", "r1");
+        replaced.replace();
+        given(anonSessionStudentIdSubmissionRepository.findAllByAnonSessionIdOrderByIdAsc(ANON_SESSION_ID)).willReturn(List.of(replaced));
+
+        // when: 회원으로 이관
+        studentIdSubmissionService.transferToUser(ANON_SESSION_ID, USER_ID);
+
+        // then: 파기 대상으로만 옮기고 알림은 없음
+        then(eventPublisher).should(never()).publishEvent(any());
     }
 
     @Test
@@ -224,6 +247,7 @@ class StudentIdSubmissionServiceUnitTest {
         assertThat(captor.getValue().getStatus()).isEqualTo(StudentIdSubmissionStatus.PENDING);
         assertThat(captor.getValue().getOrganization()).isEqualTo(ORGANIZATION);
         assertThat(user.getSchoolVerificationStatus()).isEqualTo(SchoolVerificationStatus.PENDING);
+        then(eventPublisher).should().publishEvent(new StudentIdReviewRequestedEvent(USER_ID, captor.getValue().getSubmissionId(), ORGANIZATION, true));
     }
 
     @Test
@@ -238,8 +262,9 @@ class StudentIdSubmissionServiceUnitTest {
         // when: 같은 key 로 재시도
         studentIdSubmissionService.resubmit(USER_ID, USER_KEY);
 
-        // then: 저장 없음, 승인 상태 유지
+        // then: 저장·알림 없음, 승인 상태 유지
         then(studentIdSubmissionRepository).should(never()).save(any());
+        then(eventPublisher).should(never()).publishEvent(any());
         assertThat(user.getSchoolVerificationStatus()).isEqualTo(SchoolVerificationStatus.APPROVED);
     }
 

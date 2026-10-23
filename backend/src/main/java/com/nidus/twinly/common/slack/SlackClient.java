@@ -18,6 +18,7 @@ public class SlackClient {
     private final RestClient restClient;
     private final URI reportWebhookUri;
     private final URI feedbackWebhookUri;
+    private final URI studentIdWebhookUri;
 
     public SlackClient(JsonMapper jsonMapper, SlackProperties slackProperties) {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
@@ -29,6 +30,7 @@ public class SlackClient {
                 .build();
         this.reportWebhookUri = URI.create(slackProperties.reportWebhookUrl());
         this.feedbackWebhookUri = URI.create(slackProperties.feedbackWebhookUrl());
+        this.studentIdWebhookUri = URI.create(slackProperties.studentIdWebhookUrl());
     }
 
     public void sendReportAlert(String text) {
@@ -37,6 +39,10 @@ public class SlackClient {
 
     public void sendFeedbackAlert(String text) {
         send(feedbackWebhookUri, text);
+    }
+
+    public void sendStudentIdAlert(String text) {
+        send(studentIdWebhookUri, text);
     }
 
     private void send(URI webhookUri, String text) {
