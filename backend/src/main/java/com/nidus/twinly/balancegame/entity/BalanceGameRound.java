@@ -26,8 +26,6 @@ public class BalanceGameRound {
 
     private Long seasonId;
 
-    private Instant summarySentAt;
-
     private Instant createdAt;
 
     public Instant endsAt() {

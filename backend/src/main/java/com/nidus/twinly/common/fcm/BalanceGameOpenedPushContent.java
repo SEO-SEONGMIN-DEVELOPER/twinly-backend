@@ -2,9 +2,7 @@ package com.nidus.twinly.common.fcm;
 
 import java.time.Instant;
 
-public record BalanceGameSummaryPushContent(
-        Long roundId,
-        Long matchedCount,
+public record BalanceGameOpenedPushContent(
         String title,
         String body,
         Instant createdAt

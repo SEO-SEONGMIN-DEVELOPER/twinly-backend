@@ -128,6 +128,48 @@ class AppNotificationFeedWriterUnitTest {
     }
 
     @Test
+    @DisplayName("밸런스 게임 응답 피드는 답한 사람과의 밸런스 게임을 가리키고, 받는 사람이 아직 안 답했으면 답하라고 권한다")
+    void writeBalanceGameAnswered_before_my_answer_asks_to_answer() {
+        // given: 답한 상대 닉네임 조회 가능
+        given(userRepository.findById(PARTNER)).willReturn(Optional.of(user(PARTNER, "상대")));
+        given(appNotificationFeedRepository.save(any())).willAnswer(invocation -> invocation.getArgument(0));
+
+        // when: 상대가 나에게 답했고 나는 아직 안 답함
+        appNotificationFeedWriter.writeBalanceGameAnswered(ME, PARTNER, false);
+
+        // then: 나에게 1건, BALANCE_GAME 타깃(답한 상대 userId), simulationDate 없음
+        ArgumentCaptor<AppNotificationFeed> captor = ArgumentCaptor.forClass(AppNotificationFeed.class);
+        then(appNotificationFeedRepository).should().save(captor.capture());
+
+        AppNotificationFeed feed = captor.getValue();
+        assertThat(feed.getUserId()).isEqualTo(ME);
+        assertThat(feed.getType()).isEqualTo(AppNotificationFeedType.BALANCE_GAME_ANSWERED);
+        assertThat(feed.getTargetKind()).isEqualTo(AppNotificationFeedTargetType.BALANCE_GAME);
+        assertThat(feed.getTargetUserId()).isEqualTo(PARTNER);
+        assertThat(feed.getTargetChatRoomId()).isNull();
+        assertThat(feed.getSimulationDate()).isNull();
+        assertThat(feed.getTitle()).isEqualTo("상대님이 밸런스 게임에 답했어요.");
+        assertThat(feed.getBody()).isEqualTo("나도 답하고 서로 같은 답을 골랐는지 확인해 보세요.");
+        then(eventPublisher).should().publishEvent(any(Object.class));
+    }
+
+    @Test
+    @DisplayName("받는 사람이 이미 답했으면 밸런스 게임 피드는 결과를 확인하라고 권한다")
+    void writeBalanceGameAnswered_after_my_answer_asks_to_check_result() {
+        // given
+        given(userRepository.findById(PARTNER)).willReturn(Optional.of(user(PARTNER, "상대")));
+        given(appNotificationFeedRepository.save(any())).willAnswer(invocation -> invocation.getArgument(0));
+
+        // when: 내가 먼저 답했고 상대가 이어서 답함
+        appNotificationFeedWriter.writeBalanceGameAnswered(ME, PARTNER, true);
+
+        // then
+        ArgumentCaptor<AppNotificationFeed> captor = ArgumentCaptor.forClass(AppNotificationFeed.class);
+        then(appNotificationFeedRepository).should().save(captor.capture());
+        assertThat(captor.getValue().getBody()).isEqualTo("서로 같은 답을 골랐는지 확인해 보세요.");
+    }
+
+    @Test
     @DisplayName("닉네임을 채울 상대가 없으면 USER_NOT_FOUND 예외가 발생하고 피드를 저장하지 않는다")
     void writeMatch_partner_not_found_throws() {
         // given: 상대 유저 행이 없음

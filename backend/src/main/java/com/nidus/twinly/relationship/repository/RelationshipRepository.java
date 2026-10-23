@@ -82,6 +82,34 @@ public interface RelationshipRepository extends JpaRepository<Relationship, Long
                                           @Param("limit") Integer limit,
                                           @Param("now") LocalDateTime now);
 
+    @Query(value = """
+            SELECT u.id
+            FROM users u
+            WHERE u.deleted_at IS NULL
+              AND u.withdrawal_requested_at IS NULL
+              AND u.is_seed = FALSE
+              AND EXISTS (
+                  SELECT 1
+                  FROM relationships r
+                  JOIN users p ON p.id = r.partner_user_id AND p.withdrawal_requested_at IS NULL AND p.deleted_at IS NULL
+                  WHERE r.user_id = u.id
+                    AND r.update_time <= :now
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM blocks b
+                        WHERE b.user_id = u.id
+                          AND b.blocked_user_id = r.partner_user_id
+                    )
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM blocks b
+                        WHERE b.user_id = r.partner_user_id
+                          AND b.blocked_user_id = u.id
+                    )
+              )
+            """, nativeQuery = true)
+    List<Long> findUserIdsWithVisiblePartner(@Param("now") LocalDateTime now);
+
     List<Relationship> findAllByUserIdAndPartnerUserIdAndUpdateTimeLessThanEqualOrderByDateAscUpdateTimeAsc(Long userId, Long partnerUserId, LocalDateTime now);
 
     @Modifying

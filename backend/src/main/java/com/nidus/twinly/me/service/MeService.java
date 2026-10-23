@@ -56,8 +56,10 @@ import com.nidus.twinly.me.dto.command.MeRevokeConsentsCommand;
 import com.nidus.twinly.me.dto.command.MeSendFeedbackCommand;
 import com.nidus.twinly.me.dto.command.MeSubmitTendencyAnswerCommand;
 import com.nidus.twinly.me.dto.command.MeSurveyAnswerCommand;
+import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsBalanceGameTargetResult;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsChatTargetResult;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsItemResult;
+import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsPeopleTargetResult;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsProfileTargetResult;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsResult;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsTargetResult;
@@ -513,6 +515,8 @@ public class MeService {
         return switch (feed.getTargetKind()) {
             case PROFILE -> new MeAppNotificationsFeedsProfileTargetResult("profile", feed.getTargetUserId());
             case CHAT -> new MeAppNotificationsFeedsChatTargetResult("chat", feed.getTargetChatRoomId());
+            case PEOPLE -> new MeAppNotificationsFeedsPeopleTargetResult("people");
+            case BALANCE_GAME -> new MeAppNotificationsFeedsBalanceGameTargetResult("balanceGame", feed.getTargetUserId());
         };
     }
 

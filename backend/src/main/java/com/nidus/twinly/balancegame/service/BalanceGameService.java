@@ -20,6 +20,7 @@ import com.nidus.twinly.common.logging.InfoLog;
 import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
+import com.nidus.twinly.notification.writer.AppNotificationFeedWriter;
 import com.nidus.twinly.relationship.domain.RelationshipType;
 import com.nidus.twinly.relationship.entity.IntimacyBonus;
 import com.nidus.twinly.relationship.reader.IntimacyReader;
@@ -61,6 +62,7 @@ public class BalanceGameService {
     private final IntimacyReader intimacyReader;
     private final ChatRoomOpener chatRoomOpener;
     private final CurrentSeasonReader currentSeasonReader;
+    private final AppNotificationFeedWriter appNotificationFeedWriter;
 
     public BalanceGameResult current(Long userId, Long partnerUserId) {
         LocalDateTime now = KstTimes.now();
@@ -108,10 +110,12 @@ public class BalanceGameService {
 
         balanceGameAnswerRepository.save(BalanceGameAnswer.create(roundId, userId, partnerUserId, command.optionId()));
 
-        if (optionIdOf(round, partnerUserId, userId).filter(command.optionId()::equals).isPresent()) {
+        Optional<Long> partnerOptionId = optionIdOf(round, partnerUserId, userId);
+        if (partnerOptionId.filter(command.optionId()::equals).isPresent()) {
             intimacyBonusRepository.save(IntimacyBonus.create(userId, partnerUserId, MATCH_BONUS));
             openChatRoomIfBestFriend(userId, partnerUserId);
         }
+        appNotificationFeedWriter.writeBalanceGameAnswered(partnerUserId, userId, partnerOptionId.isPresent());
 
         return toResult(round, userId, partnerUserId);
     }
