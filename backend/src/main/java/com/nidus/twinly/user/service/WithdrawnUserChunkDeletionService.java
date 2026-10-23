@@ -1,5 +1,6 @@
 package com.nidus.twinly.user.service;
 
+import com.nidus.twinly.schoolverification.repository.StudentIdSubmissionRepository;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +16,7 @@ import java.util.List;
 public class WithdrawnUserChunkDeletionService {
 
     private final UserRepository userRepository;
+    private final StudentIdSubmissionRepository studentIdSubmissionRepository;
 
     @Transactional
     public int deleteChunk(Instant now, int chunkSize) {
@@ -22,6 +24,10 @@ public class WithdrawnUserChunkDeletionService {
                 .findAllByDeletedAtIsNullAndWithdrawalScheduledAtLessThanEqual(now, PageRequest.of(0, chunkSize));
 
         users.forEach(User::delete);
+
+        if (!users.isEmpty()) {
+            studentIdSubmissionRepository.cancelPendingByUserIdIn(users.stream().map(User::getId).toList(), Instant.now());
+        }
 
         return users.size();
     }
