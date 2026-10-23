@@ -270,7 +270,7 @@ class MeIntegrationTest extends AbstractIntegrationTest {
                         .header("Authorization", bearer(me.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"grants":[{"policyId":"thirdPartyRealIdentityDisclosure","version":"1.1"}]}
+                                {"grants":[{"policyId":"thirdPartyRealIdentityDisclosure","version":"1.2"}]}
                                 """))
                 .andExpect(status().isOk());
 
@@ -293,7 +293,7 @@ class MeIntegrationTest extends AbstractIntegrationTest {
                         .header("Authorization", bearer(me.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"grants":[{"policyId":"thirdPartyRealIdentityDisclosure","version":"1.1"}]}
+                                {"grants":[{"policyId":"thirdPartyRealIdentityDisclosure","version":"1.2"}]}
                                 """))
                 .andExpect(status().isOk());
 
@@ -327,7 +327,7 @@ class MeIntegrationTest extends AbstractIntegrationTest {
                             .header("Authorization", bearer(me.getId()))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
-                                    {"grants":[{"policyId":"thirdPartyRealIdentityDisclosure","version":"1.1"}]}
+                                    {"grants":[{"policyId":"thirdPartyRealIdentityDisclosure","version":"1.2"}]}
                                     """))
                     .andExpect(status().isOk());
 
