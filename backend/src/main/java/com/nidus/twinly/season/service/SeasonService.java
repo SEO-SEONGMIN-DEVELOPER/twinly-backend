@@ -63,6 +63,10 @@ public class SeasonService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
+        if (!user.isSchoolVerificationApproved()) {
+            throw new BusinessException(ErrorCode.SCHOOL_VERIFICATION_NOT_APPROVED);
+        }
+
         purchaseService.syncQuietly(user);
 
         if (!entitlementReader.hasSimulationAccess(userId)) {

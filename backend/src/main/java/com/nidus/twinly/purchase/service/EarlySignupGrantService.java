@@ -9,6 +9,7 @@ import com.nidus.twinly.purchase.entity.EarlySignupGrant;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.purchase.repository.EarlySignupGrantRepository;
 import com.nidus.twinly.purchase.writer.EarlySignupGrantWriter;
+import com.nidus.twinly.schoolverification.event.SchoolVerificationApprovedEvent;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,12 @@ public class EarlySignupGrantService {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onUserSignedUp(UserSignedUpEvent event) {
+        earlySignupGrantRepository.findByUserIdAndGrantedAtIsNull(event.userId())
+                .ifPresent(this::grantQuietly);
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onSchoolVerificationApproved(SchoolVerificationApprovedEvent event) {
         earlySignupGrantRepository.findByUserIdAndGrantedAtIsNull(event.userId())
                 .ifPresent(this::grantQuietly);
     }

@@ -20,7 +20,15 @@
     violation: { AI_UTTERANCE: 'AI 발화 문제', USER_VIOLATION: '회원 위반', NONE: '문제 없음' },
     entry: { BOTH: ['둘 다 입장', 'ok'], ONE: ['한 명만 입장', 'warn'], NONE: ['미입장', 'idle'] },
     caseCategory: { USER_REPORT: '유저 신고', AI_UTTERANCE_REPORT: 'AI 발화 신고', SUGGESTION: '건의' },
-    caseRole: { REPORTER: '신고함', REPORTED: '신고당함', AUTHOR: '작성' }
+    caseRole: { REPORTER: '신고함', REPORTED: '신고당함', AUTHOR: '작성' },
+    studentIdStatus: { PENDING: ['검수 대기', 'warn'], APPROVED: ['승인', 'ok'], REJECTED: ['반려', 'bad'], REPLACED: ['다시 제출해 교체됨', 'idle'], CANCELED: ['탈퇴로 취소', 'idle'] },
+    rejectReason: {
+      BLURRY: '사진이 흐리거나 잘림',
+      NAME_MISMATCH: '본인인증 이름과 다름',
+      SCHOOL_MISMATCH: '고른 학교의 학생증이 아님',
+      INVALID_DOCUMENT: '학생증·재학증명서가 아님',
+      RRN_VISIBLE: '주민등록번호 뒷자리가 보임'
+    }
   };
 
   const $ = id => document.getElementById(id);
@@ -149,6 +157,7 @@
     return text ? `?${text}` : '';
   };
 
+  let operatorEmail = '';
   const views = [...document.querySelectorAll('.view')];
   const navButtons = [...document.querySelectorAll('.nav button')];
   const loaders = {};
@@ -918,6 +927,120 @@
     });
   }
 
+  const schoolState = { page: 0 };
+  const studentIdPill = status => { const [l, c] = LABEL.studentIdStatus[status] || [status, 'idle']; return pill(l, c); };
+  const elapsedLabel = minutes => minutes < 60 ? `${num(minutes)}분` : `${num(Math.floor(minutes / 60))}시간 ${minutes % 60}분`;
+
+  loaders.schools = async () => {
+    const rows = $('school-rows');
+    rows.innerHTML = stateRow(4, '불러오는 중이에요…');
+    try {
+      const result = await api('/admin/school-verifications/student-ids' + query({ page: schoolState.page, size: PAGE_SIZE }));
+      markRefreshed();
+      updateSchoolPendingCount(result.totalCount);
+      rows.innerHTML = result.items.length ? result.items.map(item => `<tr tabindex="0" data-submission="${esc(item.submissionId)}">
+          <td><div class="who"><span>${esc(item.nickname || '(알 수 없음)')}</span><small class="num">ID ${esc(item.userId)}</small></div></td>
+          <td>${esc(item.organization)}</td><td class="num">${fmtDateTime(item.submittedAt)}</td>
+          <td>${item.elapsedMinutes >= 24 * 60 ? pill(elapsedLabel(item.elapsedMinutes), 'bad') : `<span class="num">${elapsedLabel(item.elapsedMinutes)}</span>`}</td></tr>`).join('')
+        : stateRow(4, '검수할 학생증이 없어요.');
+      pager($('school-pager'), result, page => { schoolState.page = page; loaders.schools(); });
+    } catch (error) {
+      rows.innerHTML = stateRow(4, error.message, true);
+      $('school-pager').innerHTML = '';
+    }
+  };
+  bindRowOpen($('school-rows'), 'data-submission', id => openStudentId(id));
+
+  function updateSchoolPendingCount(count) {
+    $('school-pending-count').hidden = !count;
+    $('school-pending-count').textContent = count;
+  }
+
+  async function refreshSchoolPendingCount() {
+    try {
+      const result = await api('/admin/school-verifications/student-ids' + query({ page: 0, size: 1 }));
+      updateSchoolPendingCount(result.totalCount);
+    } catch (e) {
+      updateSchoolPendingCount(0);
+    }
+  }
+
+  async function openStudentId(submissionId) {
+    drawerLoading('학생증 검수');
+    let s;
+    try {
+      s = await api(`/admin/school-verifications/student-ids/${encodeURIComponent(submissionId)}`);
+    } catch (error) {
+      drawerError('학생증 검수', error);
+      return;
+    }
+
+    const pending = s.status === 'PENDING';
+    const photo = s.photoUrl
+      ? `<a href="${esc(s.photoUrl)}" target="_blank" rel="noopener noreferrer"><img class="student-id-photo" src="${esc(s.photoUrl)}" alt="학생증 사진"></a><span class="hint">주소는 5분 동안만 열려요. 사진이 안 보이면 다시 열어 주세요.</span>`
+      : '<div class="state-box">판정한 제출이라 사진을 보여주지 않아요.</div>';
+    const history = s.history.length
+      ? `<div><div class="section-label">이전 제출</div><div class="table-wrap"><table><thead><tr><th>제출 시각</th><th>결과</th><th>반려 사유</th><th>검수자</th></tr></thead><tbody>
+          ${s.history.map(h => `<tr style="cursor:default"><td class="num">${fmtDateTime(h.submittedAt)}</td><td>${studentIdPill(h.status)}</td><td>${esc(LABEL.rejectReason[h.rejectReason] || '—')}</td><td class="hint">${esc(h.reviewer || '—')}</td></tr>`).join('')}</tbody></table></div></div>`
+      : '';
+    const decided = pending ? '' : `<dl class="dl"><dt>결과</dt><dd>${studentIdPill(s.status)}${s.rejectReason ? ' ' + esc(LABEL.rejectReason[s.rejectReason]) : ''}</dd>
+        <dt>검수자</dt><dd>${esc(s.reviewer || '—')}</dd><dt>판정 시각</dt><dd class="num">${fmtFullDateTime(s.decidedAt)}</dd></dl>`;
+    const form = pending ? `<div class="field"><span class="lbl">판정</span><div class="radio-row">
+          <label><input type="radio" name="sv-decision" value="APPROVED" checked> 승인</label>
+          <label><input type="radio" name="sv-decision" value="REJECTED"> 반려</label></div>
+          <span class="hint">이름이 본인인증 성명과 같은지, 학교가 고른 학교와 같은지, 학생증이나 재학증명서인지 확인해 주세요. 재학 여부와 학번은 보지 않아요.</span></div>
+        <div class="field" id="sv-reason-field" hidden><label for="sv-reason">반려 사유</label>
+          <select class="ctl" id="sv-reason">${Object.entries(LABEL.rejectReason).map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('')}</select>
+          <span class="hint">회원에게 앱 알림으로 사유가 함께 가요.</span></div>
+        <div class="field"><label for="sv-reviewer">검수자</label><input class="ctl" id="sv-reviewer" maxlength="100" value="${esc(operatorEmail)}" placeholder="이름이나 이메일"></div>
+        <div class="toolbar"><button class="btn" type="button" id="sv-save">판정 저장</button><span class="saved" id="sv-saved" hidden>저장했어요</span><span class="save-error" id="sv-error" hidden></span></div>` : '';
+
+    openDrawer(`${drawerHead('학생증 검수', `${esc(s.nickname || '(알 수 없음)')} · ${fmtDateTime(s.submittedAt)} 제출`)}
+      <dl class="dl"><dt>본인인증 성명</dt><dd><b>${esc(s.identityName)}</b></dd>
+        <dt>고른 학교</dt><dd><b>${esc(s.organization)}</b></dd>
+        <dt>회원</dt><dd>${esc(s.nickname || '(알 수 없음)')} (ID ${esc(s.userId)}) <button class="chip" type="button" data-member="${esc(s.userId)}" style="padding:2px 10px;font-size:12px">회원 상세</button></dd>
+        <dt>상태</dt><dd>${studentIdPill(s.status)}</dd></dl>
+      <div class="field"><span class="lbl">학생증 사진</span>${photo}</div>
+      ${decided}${form}${history}`);
+
+    drawer.querySelectorAll('[data-member]').forEach(button => button.addEventListener('click', () => openMember(button.dataset.member)));
+    if (!pending) return;
+
+    drawer.querySelectorAll('input[name="sv-decision"]').forEach(input => input.addEventListener('change', () => {
+      drawer.querySelector('#sv-reason-field').hidden = drawer.querySelector('input[name="sv-decision"]:checked').value !== 'REJECTED';
+    }));
+    const button = drawer.querySelector('#sv-save');
+    button.addEventListener('click', async () => {
+      const decision = drawer.querySelector('input[name="sv-decision"]:checked').value;
+      const reviewer = drawer.querySelector('#sv-reviewer').value.trim();
+      const error = drawer.querySelector('#sv-error');
+      error.hidden = true;
+      if (!reviewer) {
+        error.hidden = false;
+        error.textContent = '검수자를 적어 주세요.';
+        return;
+      }
+      const label = decision === 'APPROVED' ? '승인' : '반려';
+      if (!confirm(`${label}할까요? 회원에게 바로 알림이 가고 되돌릴 수 없어요.`)) return;
+      button.disabled = true;
+      try {
+        await api(`/admin/school-verifications/student-ids/${encodeURIComponent(s.submissionId)}/decision`, {
+          method: 'POST',
+          body: { decision, rejectReason: decision === 'REJECTED' ? drawer.querySelector('#sv-reason').value : null, reviewer }
+        });
+        loaders.schools();
+        openStudentId(s.submissionId);
+      } catch (e) {
+        error.hidden = false;
+        error.textContent = e.code === 'STUDENT_ID_REVIEW_CONFLICT'
+          ? '이미 처리됐거나 회원이 탈퇴 신청한 제출이에요. 목록을 새로 불러왔어요.'
+          : e.message;
+        if (e.code === 'STUDENT_ID_REVIEW_CONFLICT') loaders.schools();
+        button.disabled = false;
+      }
+    });
+  }
+
   loaders.survey = async () => {
     const body = $('survey-body');
     body.innerHTML = '<div class="state-box">불러오는 중이에요…</div>';
@@ -1367,7 +1490,8 @@
   async function showOperator() {
     try {
       const me = await fetch('/me').then(response => response.json());
-      $('operator').textContent = me.email || '';
+      operatorEmail = me.email || '';
+      $('operator').textContent = operatorEmail;
     } catch (e) {
       $('operator').textContent = '';
     }
@@ -1379,5 +1503,6 @@
 
   showOperator();
   refreshPendingCount();
+  refreshSchoolPendingCount();
   show(location.hash.slice(1) || currentView);
 })();

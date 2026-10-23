@@ -21,6 +21,8 @@ import com.nidus.twinly.me.dto.command.MeProfileCommand;
 import com.nidus.twinly.me.dto.command.MeProfilePhotoCommitCommand;
 import com.nidus.twinly.me.dto.command.MeProfilePhotoPresignCommand;
 import com.nidus.twinly.me.dto.command.MeRevokeConsentsCommand;
+import com.nidus.twinly.me.dto.command.MeSchoolVerificationStudentIdPresignCommand;
+import com.nidus.twinly.me.dto.command.MeSchoolVerificationStudentIdSubmitCommand;
 import com.nidus.twinly.me.dto.command.MeSendFeedbackCommand;
 import com.nidus.twinly.me.dto.command.MeSubmitTendencyAnswerCommand;
 import com.nidus.twinly.me.dto.command.MeSurveyAnswerCommand;
@@ -37,6 +39,8 @@ import com.nidus.twinly.me.dto.request.MeProfileRequest;
 import com.nidus.twinly.me.dto.request.MeProfilePhotoCommitRequest;
 import com.nidus.twinly.me.dto.request.MeProfilePhotoPresignRequest;
 import com.nidus.twinly.me.dto.request.MeRevokeConsentsRequest;
+import com.nidus.twinly.me.dto.request.MeSchoolVerificationStudentIdPresignRequest;
+import com.nidus.twinly.me.dto.request.MeSchoolVerificationStudentIdSubmitRequest;
 import com.nidus.twinly.me.dto.request.MeSendFeedbackRequest;
 import com.nidus.twinly.me.dto.request.MeSubmitTendencyAnswerRequest;
 import com.nidus.twinly.me.dto.request.MeSurveyAnswerRequest;
@@ -58,6 +62,7 @@ import com.nidus.twinly.me.dto.response.MeInfoResponse;
 import com.nidus.twinly.me.dto.response.MeProfilePhotoCommitResponse;
 import com.nidus.twinly.me.dto.response.MeProfilePhotoPresignResponse;
 import com.nidus.twinly.me.dto.response.MeProfileVisibilitySettingsResponse;
+import com.nidus.twinly.me.dto.response.MeSchoolVerificationStudentIdPresignResponse;
 import com.nidus.twinly.me.dto.response.MeStatusResponse;
 import com.nidus.twinly.me.dto.response.MeSurveyQuestionResponse;
 import com.nidus.twinly.me.dto.response.MeTendencyQuestionsResponse;
@@ -395,5 +400,25 @@ public class MeController {
     @GetMapping("/api/v2/me/profile")
     public MeProfileV2Response profileV2(@AuthenticationPrincipal UserInfo userInfo) {
         return MeProfileV2Response.from(meService.profileV2(userInfo.id()));
+    }
+
+    @Operation(summary = "반려 뒤 학생증 다시 제출용 업로드 URL 발급")
+    @ApiResponse(responseCode = "415", description = "UNSUPPORTED_IMAGE_TYPE")
+    @PostMapping("/api/v1/me/school-verification/student-id/presign")
+    public MeSchoolVerificationStudentIdPresignResponse schoolVerificationStudentIdPresign(@AuthenticationPrincipal UserInfo userInfo,
+                                                                                           @Valid @RequestBody MeSchoolVerificationStudentIdPresignRequest request) {
+        return MeSchoolVerificationStudentIdPresignResponse.from(meService.schoolVerificationStudentIdPresign(userInfo.id(), MeSchoolVerificationStudentIdPresignCommand.from(request)));
+    }
+
+    @Operation(summary = "반려 뒤 학생증 다시 제출", description = "학교는 가입 때 고른 학교로 고정한다. 가장 최근 제출과 key 가 같으면 상태와 관계없이 200 을 준다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND"),
+            @ApiResponse(responseCode = "409", description = "SCHOOL_VERIFICATION_NOT_REJECTED"),
+            @ApiResponse(responseCode = "422", description = "STUDENT_ID_PHOTO_NOT_FOUND, STUDENT_ID_PHOTO_TOO_LARGE")
+    })
+    @PostMapping("/api/v1/me/school-verification/student-id")
+    public void schoolVerificationStudentIdSubmit(@AuthenticationPrincipal UserInfo userInfo,
+                                                  @Valid @RequestBody MeSchoolVerificationStudentIdSubmitRequest request) {
+        meService.schoolVerificationStudentIdSubmit(userInfo.id(), MeSchoolVerificationStudentIdSubmitCommand.from(request));
     }
 }

@@ -4,6 +4,7 @@ import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.organization.entity.Organization;
 import com.nidus.twinly.organization.repository.OrganizationDomainRepository;
+import com.nidus.twinly.organization.repository.OrganizationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -14,12 +15,18 @@ import java.util.Locale;
 public class OrganizationCatalog {
 
     private final OrganizationDomainRepository organizationDomainRepository;
+    private final OrganizationRepository organizationRepository;
 
     public Organization findByEmail(String email) {
         String domain = extractDomain(email);
 
         return organizationDomainRepository.findOrganizationByDomain(domain)
                 .orElseThrow(() -> new BusinessException(ErrorCode.EMAIL_DOMAIN_NOT_SUPPORTED, "가입할 수 없는 이메일 도메인입니다: " + domain));
+    }
+
+    public Organization findByName(String name) {
+        return organizationRepository.findByName(name)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ORGANIZATION_NOT_FOUND, "학교 목록에 없는 학교입니다: " + name));
     }
 
     public void requireSupportedDomain(String email) {

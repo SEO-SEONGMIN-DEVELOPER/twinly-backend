@@ -1,8 +1,11 @@
 package com.nidus.twinly.user.repository;
 
+import com.nidus.twinly.schoolverification.domain.SchoolVerificationStatus;
 import com.nidus.twinly.user.entity.User;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -33,6 +36,13 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByEmailHash(String emailHash);
 
     Optional<User> findByRevenueCatUserId(UUID revenueCatUserId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<User> findWithLockById(Long id);
+
+    @Query("SELECT u.id FROM User u WHERE u.id IN :ids AND u.schoolVerificationStatus = :status")
+    List<Long> findIdsByIdInAndSchoolVerificationStatus(@Param("ids") Collection<Long> ids,
+                                                        @Param("status") SchoolVerificationStatus status);
 
     @Modifying
     @Query("UPDATE User u SET u.phoneNumber = NULL, u.phoneNumberHash = NULL, u.mobileCarrier = NULL WHERE u.phoneNumberHash = :phoneNumberHash")

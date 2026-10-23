@@ -59,6 +59,7 @@ import com.nidus.twinly.me.dto.result.MePushNotificationsSettingsResult;
 import com.nidus.twinly.me.dto.result.MeStatusPersonaResult;
 import com.nidus.twinly.me.dto.result.MeStatusReportResult;
 import com.nidus.twinly.me.dto.result.MeStatusResult;
+import com.nidus.twinly.me.dto.result.MeStatusSchoolVerificationResult;
 import com.nidus.twinly.me.dto.result.MeInfoResult;
 import com.nidus.twinly.me.dto.result.MeStatusWithdrawalResult;
 import com.nidus.twinly.me.dto.result.MeTendencyQuestionsItemResult;
@@ -89,7 +90,13 @@ import java.util.UUID;
 import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.common.survey.SurveyOption;
 import com.nidus.twinly.common.survey.SurveyQuestion;
+import com.nidus.twinly.schoolverification.domain.SchoolVerificationMethod;
+import com.nidus.twinly.schoolverification.domain.SchoolVerificationStatus;
+import com.nidus.twinly.schoolverification.domain.StudentIdRejectReason;
 import java.util.Map;
+import com.nidus.twinly.me.dto.command.MeSchoolVerificationStudentIdPresignCommand;
+import com.nidus.twinly.me.dto.command.MeSchoolVerificationStudentIdSubmitCommand;
+import com.nidus.twinly.me.dto.result.MeSchoolVerificationStudentIdPresignResult;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
@@ -675,14 +682,16 @@ class MeControllerUnitTest {
     // ---------------------------------------------------------------- 상태
 
     @Test
-    @DisplayName("내 상태 조회 시 탈퇴·신고·페르소나 입력 상태를 담은 JSON을 반환한다")
+    @DisplayName("내 상태 조회 시 탈퇴·신고·페르소나 입력·학교 인증 상태를 담은 JSON을 반환한다")
     void status_success() throws Exception {
-        // given: 서비스가 탈퇴 신청·신고 처리·페르소나 입력 상태를 반환
+        // given: 서비스가 탈퇴 신청·신고 처리·페르소나 입력·학생증 반려 상태를 반환
         given(meService.status(ME))
                 .willReturn(new MeStatusResult(
                         new MeStatusWithdrawalResult(true, Instant.parse("2026-08-10T00:00:00Z")),
                         new MeStatusReportResult(true, List.of("SPAM", "HARASSMENT")),
-                        new MeStatusPersonaResult(true, true, false)));
+                        new MeStatusPersonaResult(true, true, false),
+                        new MeStatusSchoolVerificationResult(
+                                SchoolVerificationStatus.REJECTED, SchoolVerificationMethod.STUDENT_ID, StudentIdRejectReason.BLURRY)));
 
         // when: 내 상태 조회 API 호출
         var result = mockMvc.perform(get("/api/v1/me/status")
@@ -697,7 +706,10 @@ class MeControllerUnitTest {
                 .andExpect(jsonPath("$.report.reasons[1]").value("HARASSMENT"))
                 .andExpect(jsonPath("$.persona.isSurveyCompleted").value(true))
                 .andExpect(jsonPath("$.persona.isInterestsCompleted").value(true))
-                .andExpect(jsonPath("$.persona.isAiChatCompleted").value(false));
+                .andExpect(jsonPath("$.persona.isAiChatCompleted").value(false))
+                .andExpect(jsonPath("$.schoolVerification.status").value("rejected"))
+                .andExpect(jsonPath("$.schoolVerification.method").value("studentId"))
+                .andExpect(jsonPath("$.schoolVerification.rejectReason").value("BLURRY"));
     }
 
     // ---------------------------------------------------------------- 내 정보
@@ -1816,5 +1828,97 @@ class MeControllerUnitTest {
         // then: 401 반환 + 서비스는 호출되지 않음
         result.andExpect(status().isUnauthorized());
         then(meService).should(never()).checkProfileNickname(anyLong(), any());
+    }
+
+    // ---------------------------------------------------------------- 학교 인증
+
+    @Test
+    @DisplayName("학생증 재제출용 업로드 URL 발급 성공 시 200과 업로드 정보를 반환하고 인증 유저 id·커맨드로 서비스를 호출한다")
+    void schoolVerificationStudentIdPresign_success() throws Exception {
+        // given: 서비스가 학생증 업로드 URL 을 반환
+        given(meService.schoolVerificationStudentIdPresign(eq(ME), any())).willReturn(new MeSchoolVerificationStudentIdPresignResult(
+                "https://s3/upload", "student-id/upload/user-1/abc", "PUT", new RequiredHeaders("image/jpeg"), 10485760, Instant.parse("2030-01-01T00:00:00Z")));
+
+        // when: 재제출용 업로드 URL 발급 API 호출
+        var result = mockMvc.perform(post("/api/v1/me/school-verification/student-id/presign")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"contentType":"image/jpeg"}
+                        """));
+
+        // then: 200 + 업로드 정보 + 인증 유저 id·커맨드로 위임
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.key").value("student-id/upload/user-1/abc"))
+                .andExpect(jsonPath("$.requiredHeaders.contentType").value("image/jpeg"));
+        then(meService).should().schoolVerificationStudentIdPresign(ME, new MeSchoolVerificationStudentIdPresignCommand("image/jpeg"));
+    }
+
+    @Test
+    @DisplayName("학생증 재제출 성공 시 body 없는 200을 반환하고 인증 유저 id·key 로 서비스를 호출한다")
+    void schoolVerificationStudentIdSubmit_success() throws Exception {
+        // when: 학생증 재제출 API 호출
+        var result = mockMvc.perform(post("/api/v1/me/school-verification/student-id")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"key":"student-id/upload/user-1/abc"}
+                        """));
+
+        // then: 200 + 본문 없음 + 위임
+        result.andExpect(status().isOk())
+                .andExpect(content().string(""));
+        then(meService).should().schoolVerificationStudentIdSubmit(ME, new MeSchoolVerificationStudentIdSubmitCommand("student-id/upload/user-1/abc"));
+    }
+
+    @Test
+    @DisplayName("학생증 재제출 시 반려 상태가 아니라 서비스가 거절하면 409 SCHOOL_VERIFICATION_NOT_REJECTED 를 반환한다")
+    void schoolVerificationStudentIdSubmit_not_rejected_returns_409() throws Exception {
+        // given: 검수 대기 중이라 서비스가 거절
+        willThrow(new BusinessException(ErrorCode.SCHOOL_VERIFICATION_NOT_REJECTED))
+                .given(meService).schoolVerificationStudentIdSubmit(eq(ME), any());
+
+        // when: 학생증 재제출 API 호출
+        var result = mockMvc.perform(post("/api/v1/me/school-verification/student-id")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"key":"student-id/upload/user-1/abc"}
+                        """));
+
+        // then: 409 + 에러 코드
+        result.andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("SCHOOL_VERIFICATION_NOT_REJECTED"));
+    }
+
+    @Test
+    @DisplayName("학생증 재제출 시 key 가 비어 있으면 400을 반환하고 서비스를 호출하지 않는다")
+    void schoolVerificationStudentIdSubmit_blank_key_returns_400() throws Exception {
+        // when: key 가 빈 문자열인 요청
+        var result = mockMvc.perform(post("/api/v1/me/school-verification/student-id")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"key":""}
+                        """));
+
+        // then: 400 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest());
+        then(meService).should(never()).schoolVerificationStudentIdSubmit(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("학생증 재제출 시 인증 헤더가 없으면 401을 반환하고 서비스를 호출하지 않는다")
+    void schoolVerificationStudentIdSubmit_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 학생증 재제출 API 호출
+        var result = mockMvc.perform(post("/api/v1/me/school-verification/student-id")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"key":"student-id/upload/user-1/abc"}
+                        """));
+
+        // then: 401 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isUnauthorized());
+        then(meService).should(never()).schoolVerificationStudentIdSubmit(anyLong(), any());
     }
 }

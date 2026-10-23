@@ -11,6 +11,15 @@
         },
         {
             "Effect": "Allow",
+            "Action": "s3:DeleteObject",
+            "Resource": [
+                "arn:aws:s3:::twinly-media-stage/student-id/*",
+                "arn:aws:s3:::twinly-media-stage/profile/*",
+                "arn:aws:s3:::twinly-media-stage/background/*"
+            ]
+        },
+        {
+            "Effect": "Allow",
             "Action": "s3:ListBucket",
             "Resource": "arn:aws:s3:::twinly-media-stage"
         }

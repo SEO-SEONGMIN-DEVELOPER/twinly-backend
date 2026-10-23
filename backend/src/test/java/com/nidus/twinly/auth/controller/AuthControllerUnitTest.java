@@ -35,6 +35,10 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
 import java.util.UUID;
+import com.nidus.twinly.auth.dto.command.AuthOnboardingStudentIdPresignCommand;
+import com.nidus.twinly.auth.dto.command.AuthOnboardingStudentIdSubmitCommand;
+import com.nidus.twinly.auth.dto.result.AuthOnboardingStudentIdPresignResult;
+import com.nidus.twinly.common.presign.RequiredHeaders;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -511,5 +515,118 @@ class AuthControllerUnitTest {
         // then: 400 반환 + 서비스는 호출되지 않음
         result.andExpect(status().isBadRequest());
         verifyNoInteractions(authService);
+    }
+
+    // ---------------------------------------------------------------- 학생증
+
+    @Test
+    @DisplayName("가입용 학생증 업로드 URL 발급 성공 시 200과 업로드 정보를 반환하고 익명 세션·커맨드로 서비스를 호출한다")
+    void onboardingStudentIdPresign_success() throws Exception {
+        // given: 서비스가 학생증 업로드 URL 을 반환
+        given(authService.onboardingStudentIdPresign(any(), any())).willReturn(new AuthOnboardingStudentIdPresignResult(
+                "https://s3/upload", "student-id/upload/anon-7/abc", "PUT", new RequiredHeaders("image/jpeg"), 10485760, EXPIRES_AT));
+
+        // when: 익명 세션 토큰으로 학생증 업로드 URL 발급 API 호출
+        var result = mockMvc.perform(post("/api/v1/auth/onboarding/student-id/presign")
+                .header("Authorization", "Bearer " + ANON_TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"contentType":"image/jpeg"}
+                        """));
+
+        // then: 200 + 프로필 사진 presign 과 같은 모양의 응답 + 익명 세션·커맨드로 위임
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.uploadUrl").value("https://s3/upload"))
+                .andExpect(jsonPath("$.key").value("student-id/upload/anon-7/abc"))
+                .andExpect(jsonPath("$.method").value("PUT"))
+                .andExpect(jsonPath("$.requiredHeaders.contentType").value("image/jpeg"))
+                .andExpect(jsonPath("$.maxBytes").value(10485760))
+                .andExpect(jsonPath("$.expiresAt").exists());
+        then(authService).should().onboardingStudentIdPresign(ANON_SESSION, new AuthOnboardingStudentIdPresignCommand("image/jpeg"));
+    }
+
+    @Test
+    @DisplayName("가입용 학생증 업로드 URL 발급 시 contentType 이 비어 있으면 400을 반환하고 서비스를 호출하지 않는다")
+    void onboardingStudentIdPresign_blank_contentType_returns_400() throws Exception {
+        // when: contentType 이 빈 문자열인 요청
+        var result = mockMvc.perform(post("/api/v1/auth/onboarding/student-id/presign")
+                .header("Authorization", "Bearer " + ANON_TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"contentType":""}
+                        """));
+
+        // then: 400 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest());
+        verifyNoInteractions(authService);
+    }
+
+    @Test
+    @DisplayName("가입용 학생증 제출 성공 시 body 없는 200을 반환하고 학교 이름 앞뒤 공백을 지운 커맨드로 서비스를 호출한다")
+    void onboardingStudentIdSubmit_success() throws Exception {
+        // when: 익명 세션 토큰으로 학생증 제출 API 호출 (학교 이름에 공백이 섞임)
+        var result = mockMvc.perform(post("/api/v1/auth/onboarding/student-id")
+                .header("Authorization", "Bearer " + ANON_TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"organizationName":" 트윈리대학교 ","key":"student-id/upload/anon-7/abc"}
+                        """));
+
+        // then: 200 + 본문 없음 + 다듬은 학교 이름과 key 로 위임
+        result.andExpect(status().isOk())
+                .andExpect(content().string(""));
+        then(authService).should().onboardingStudentIdSubmit(ANON_SESSION,
+                new AuthOnboardingStudentIdSubmitCommand("트윈리대학교", "student-id/upload/anon-7/abc"));
+    }
+
+    @Test
+    @DisplayName("가입용 학생증 제출 시 key 가 없으면 400을 반환하고 서비스를 호출하지 않는다")
+    void onboardingStudentIdSubmit_without_key_returns_400() throws Exception {
+        // when: key 를 뺀 요청
+        var result = mockMvc.perform(post("/api/v1/auth/onboarding/student-id")
+                .header("Authorization", "Bearer " + ANON_TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"organizationName":"트윈리대학교"}
+                        """));
+
+        // then: 400 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest());
+        verifyNoInteractions(authService);
+    }
+
+    @Test
+    @DisplayName("가입용 학생증 제출 시 인증 헤더가 없으면 401을 반환하고 서비스를 호출하지 않는다")
+    void onboardingStudentIdSubmit_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 학생증 제출 API 호출
+        var result = mockMvc.perform(post("/api/v1/auth/onboarding/student-id")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"organizationName":"트윈리대학교","key":"student-id/upload/anon-7/abc"}
+                        """));
+
+        // then: 401 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isUnauthorized());
+        verifyNoInteractions(authService);
+    }
+
+    @Test
+    @DisplayName("가입용 학생증 제출에서 서비스가 ORGANIZATION_NOT_FOUND 를 던지면 422를 반환한다")
+    void onboardingStudentIdSubmit_unknown_organization_returns_422() throws Exception {
+        // given: 학교 목록에 없는 이름이라 서비스가 거절
+        willThrow(new BusinessException(ErrorCode.ORGANIZATION_NOT_FOUND))
+                .given(authService).onboardingStudentIdSubmit(any(), any());
+
+        // when: 학생증 제출 API 호출
+        var result = mockMvc.perform(post("/api/v1/auth/onboarding/student-id")
+                .header("Authorization", "Bearer " + ANON_TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"organizationName":"없는대학교","key":"student-id/upload/anon-7/abc"}
+                        """));
+
+        // then: 422 + 에러 코드
+        result.andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("ORGANIZATION_NOT_FOUND"));
     }
 }

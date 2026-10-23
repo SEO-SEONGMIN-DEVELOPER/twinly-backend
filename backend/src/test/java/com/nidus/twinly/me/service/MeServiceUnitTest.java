@@ -103,6 +103,7 @@ import com.nidus.twinly.report.entity.Report;
 import com.nidus.twinly.people.repository.EncounterRepository;
 import com.nidus.twinly.relationship.domain.Intimacy;
 import com.nidus.twinly.relationship.reader.IntimacyReader;
+import com.nidus.twinly.schoolverification.service.SchoolVerificationReader;
 import com.nidus.twinly.report.repository.ReportRepository;
 import com.nidus.twinly.season.writer.SeasonParticipationWriter;
 import com.nidus.twinly.user.domain.DisclosureField;
@@ -144,6 +145,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Stream;
+import com.nidus.twinly.me.dto.result.MeSchoolVerificationStudentIdPresignResult;
+import com.nidus.twinly.me.dto.command.MeSchoolVerificationStudentIdSubmitCommand;
+import com.nidus.twinly.me.dto.command.MeSchoolVerificationStudentIdPresignCommand;
+import com.nidus.twinly.schoolverification.service.StudentIdSubmissionService;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
@@ -228,6 +233,12 @@ class MeServiceUnitTest {
 
     @Mock
     IntimacyReader intimacyReader;
+
+    @Mock
+    SchoolVerificationReader schoolVerificationReader;
+
+    @Mock
+    StudentIdSubmissionService studentIdSubmissionService;
 
     @Mock
     UserSurveyAnswerRepository userSurveyAnswerRepository;
@@ -2119,5 +2130,30 @@ class MeServiceUnitTest {
 
         then(userRepository).should(never()).existsByNicknameAndIdNot(any(), anyLong());
         then(anonSessionRepository).should(never()).existsByNickname(any());
+    }
+
+    @Test
+    @DisplayName("학생증 재제출용 업로드 URL 발급: 회원 id 와 contentType 으로 발급을 위임하고 결과를 그대로 옮긴다")
+    void schoolVerificationStudentIdPresign_delegates() {
+        // given: 업로드 URL 발급 결과
+        given(studentIdSubmissionService.presignForUser(1L, "image/jpeg")).willReturn(new PhotoPresignResult(
+                "https://s3/upload", "student-id/upload/user-1/a", "PUT", new RequiredHeaders("image/jpeg"), 10485760, Instant.parse("2030-01-01T00:00:00Z")));
+
+        // when: 발급 요청
+        MeSchoolVerificationStudentIdPresignResult result = meService.schoolVerificationStudentIdPresign(1L, new MeSchoolVerificationStudentIdPresignCommand("image/jpeg"));
+
+        // then: 같은 값으로 변환
+        assertThat(result.key()).isEqualTo("student-id/upload/user-1/a");
+        assertThat(result.maxBytes()).isEqualTo(10485760);
+    }
+
+    @Test
+    @DisplayName("학생증 재제출: 회원 id 와 key 로 재제출을 위임한다")
+    void schoolVerificationStudentIdSubmit_delegates() {
+        // when: 재제출
+        meService.schoolVerificationStudentIdSubmit(1L, new MeSchoolVerificationStudentIdSubmitCommand("student-id/upload/user-1/a"));
+
+        // then: 위임
+        then(studentIdSubmissionService).should().resubmit(1L, "student-id/upload/user-1/a");
     }
 }

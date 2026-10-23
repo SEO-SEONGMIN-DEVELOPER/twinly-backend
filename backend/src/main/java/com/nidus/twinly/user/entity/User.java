@@ -5,6 +5,8 @@ import com.nidus.twinly.common.crypto.EncryptedStringConverter;
 import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.domain.MobileCarrier;
 import com.nidus.twinly.common.domain.NationalInfo;
+import com.nidus.twinly.schoolverification.domain.SchoolVerificationMethod;
+import com.nidus.twinly.schoolverification.domain.SchoolVerificationStatus;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -126,6 +128,12 @@ public class User {
 
     private boolean isSeed;
 
+    @Enumerated(EnumType.STRING)
+    private SchoolVerificationStatus schoolVerificationStatus = SchoolVerificationStatus.APPROVED;
+
+    @Enumerated(EnumType.STRING)
+    private SchoolVerificationMethod schoolVerificationMethod = SchoolVerificationMethod.EMAIL;
+
     private Instant withdrawalRequestedAt;
 
     private Instant withdrawalScheduledAt;
@@ -215,6 +223,23 @@ public class User {
         }
 
         return organization.substring(0, organization.length() - SCHOOL_SUFFIX.length());
+    }
+
+    public boolean isSchoolVerificationApproved() {
+        return schoolVerificationStatus == SchoolVerificationStatus.APPROVED;
+    }
+
+    public void startStudentIdVerification() {
+        this.schoolVerificationStatus = SchoolVerificationStatus.PENDING;
+        this.schoolVerificationMethod = SchoolVerificationMethod.STUDENT_ID;
+    }
+
+    public void approveSchoolVerification() {
+        this.schoolVerificationStatus = SchoolVerificationStatus.APPROVED;
+    }
+
+    public void rejectSchoolVerification() {
+        this.schoolVerificationStatus = SchoolVerificationStatus.REJECTED;
     }
 
     public void changeAffiliation(String affiliation, String affiliationHash) {

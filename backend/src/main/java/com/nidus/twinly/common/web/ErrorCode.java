@@ -104,6 +104,15 @@ public enum ErrorCode {
 
     // 시즌
     INVALID_SEASON_PERIOD(HttpStatus.UNPROCESSABLE_CONTENT, "시즌 시작 시각은 종료 시각보다 앞서야 합니다."),
+    SCHOOL_VERIFICATION_NOT_APPROVED(HttpStatus.FORBIDDEN, "학교 인증이 승인되지 않았습니다."),
+
+    // 학교 인증(학생증)
+    ORGANIZATION_NOT_FOUND(HttpStatus.UNPROCESSABLE_CONTENT, "학교 목록에 없는 학교입니다."),
+    STUDENT_ID_PHOTO_NOT_FOUND(HttpStatus.UNPROCESSABLE_CONTENT, "업로드되지 않았거나 제출할 수 없는 학생증 사진입니다."),
+    STUDENT_ID_PHOTO_TOO_LARGE(HttpStatus.UNPROCESSABLE_CONTENT, "학생증 사진이 허용 크기를 넘었습니다."),
+    SCHOOL_VERIFICATION_NOT_REJECTED(HttpStatus.CONFLICT, "반려된 학교 인증만 다시 제출할 수 있습니다."),
+    STUDENT_ID_SUBMISSION_NOT_FOUND(HttpStatus.NOT_FOUND, "학생증 제출을 찾을 수 없습니다."),
+    STUDENT_ID_REVIEW_CONFLICT(HttpStatus.CONFLICT, "이미 처리되었거나 판정할 수 없는 학생증 제출입니다."),
 
     // 사진/업로드
     NOT_KEY_OWNER(HttpStatus.FORBIDDEN, "본인 소유의 key가 아닙니다."),
@@ -137,6 +146,8 @@ public enum ErrorCode {
     REVENUE_CAT_SYNC_FAILED(HttpStatus.BAD_GATEWAY, "구매 상태 동기화에 실패했습니다."),
     REVENUE_CAT_SYNC_CONFLICT(HttpStatus.CONFLICT, "같은 유저의 구매 상태를 다른 요청이 동기화하고 있습니다."),
     REVENUE_CAT_GRANT_FAILED(HttpStatus.BAD_GATEWAY, "권한 부여에 실패했습니다."),
+    STUDENT_ID_PHOTO_DELETE_FAILED(HttpStatus.BAD_GATEWAY, "학생증 사진 삭제에 실패했습니다."),
+    ANON_SESSION_CLEANUP_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "만료된 익명 세션 정리에 실패했습니다."),
     IDENTITY_VERIFICATION_FAILED(HttpStatus.BAD_GATEWAY, "본인인증 조회에 실패했습니다."),
     SIMULATION_PRELOAD_FAILED(HttpStatus.BAD_GATEWAY, "시뮬레이션 선생성 요청에 실패했습니다."),
     SIMULATION_BATCH_COST_FETCH_FAILED(HttpStatus.BAD_GATEWAY, "AI 비용 조회에 실패했습니다."),

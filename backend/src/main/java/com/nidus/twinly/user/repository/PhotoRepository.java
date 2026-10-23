@@ -17,6 +17,14 @@ public interface PhotoRepository extends JpaRepository<Photo, Long> {
 
     List<Photo> findAllByUserIdInAndType(List<Long> userIds, PhotoType type);
 
+    @Query(value = """
+            SELECT COUNT(*) FROM photos
+            WHERE `key` = :key
+               OR thumbnail_key = :key
+               OR preview_key = :key
+            """, nativeQuery = true)
+    long countReferencesByKey(@Param("key") String key);
+
     @Transactional
     @Modifying
     @Query(value = """

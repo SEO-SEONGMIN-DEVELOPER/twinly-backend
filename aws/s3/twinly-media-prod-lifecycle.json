@@ -1,0 +1,45 @@
+{
+    "Rules": [
+        {
+            "Expiration": {
+                "Days": 1
+            },
+            "ID": "external-test-cleanup",
+            "Filter": {
+                "Prefix": "external-test/"
+            },
+            "Status": "Enabled"
+        },
+        {
+            "ID": "noncurrent-version-cleanup",
+            "Filter": {},
+            "Status": "Enabled",
+            "NoncurrentVersionExpiration": {
+                "NoncurrentDays": 30
+            }
+        },
+        {
+            "ID": "student-id-upload-expiration",
+            "Filter": {
+                "Prefix": "student-id/upload/"
+            },
+            "Status": "Enabled",
+            "Expiration": {
+                "Days": 1
+            }
+        },
+        {
+            "ID": "student-id-version-cleanup",
+            "Filter": {
+                "Prefix": "student-id/"
+            },
+            "Status": "Enabled",
+            "NoncurrentVersionExpiration": {
+                "NoncurrentDays": 1
+            },
+            "Expiration": {
+                "ExpiredObjectDeleteMarker": true
+            }
+        }
+    ]
+}

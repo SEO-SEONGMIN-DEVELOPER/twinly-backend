@@ -5,11 +5,14 @@ import org.springframework.stereotype.Service;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.core.sync.ResponseTransformer;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
 import java.io.IOException;
@@ -76,5 +79,33 @@ public class S3Service {
                 .build();
 
         return s3Presigner.presignPutObject(presignRequest).url().toString();
+    }
+
+    public void copy(String sourceKey, String destinationKey) {
+        s3Client.copyObject(CopyObjectRequest.builder()
+                .sourceBucket(s3Properties.bucket())
+                .sourceKey(sourceKey)
+                .destinationBucket(s3Properties.bucket())
+                .destinationKey(destinationKey)
+                .build());
+    }
+
+    public void delete(String key) {
+        s3Client.deleteObject(DeleteObjectRequest.builder()
+                .bucket(s3Properties.bucket())
+                .key(key)
+                .build());
+    }
+
+    public String presignGet(String key, Duration expiresIn) {
+        GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
+                .signatureDuration(expiresIn)
+                .getObjectRequest(GetObjectRequest.builder()
+                        .bucket(s3Properties.bucket())
+                        .key(key)
+                        .build())
+                .build();
+
+        return s3Presigner.presignGetObject(presignRequest).url().toString();
     }
 }

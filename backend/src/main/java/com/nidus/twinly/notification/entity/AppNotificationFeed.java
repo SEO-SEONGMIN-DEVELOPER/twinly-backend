@@ -77,6 +77,10 @@ public class AppNotificationFeed {
         return feed;
     }
 
+    public static AppNotificationFeed createUntargeted(Long userId, AppNotificationFeedType type, String title, String body) {
+        return create(userId, type, title, body);
+    }
+
     private static AppNotificationFeed create(Long userId, AppNotificationFeedType type, String title, String body) {
         AppNotificationFeed feed = new AppNotificationFeed();
 
