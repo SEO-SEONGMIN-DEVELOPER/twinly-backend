@@ -53,6 +53,8 @@ import com.nidus.twinly.me.dto.command.MeProfileCommand;
 import com.nidus.twinly.me.dto.command.MeProfilePhotoCommitCommand;
 import com.nidus.twinly.me.dto.command.MeProfilePhotoPresignCommand;
 import com.nidus.twinly.me.dto.command.MeRevokeConsentsCommand;
+import com.nidus.twinly.me.dto.command.MeSchoolVerificationStudentIdPresignCommand;
+import com.nidus.twinly.me.dto.command.MeSchoolVerificationStudentIdSubmitCommand;
 import com.nidus.twinly.me.dto.command.MeSendFeedbackCommand;
 import com.nidus.twinly.me.dto.command.MeSubmitTendencyAnswerCommand;
 import com.nidus.twinly.me.dto.command.MeSurveyAnswerCommand;
@@ -81,9 +83,11 @@ import com.nidus.twinly.me.dto.result.MeProfilePhotoCommitResult;
 import com.nidus.twinly.me.dto.result.MeProfilePhotoPresignResult;
 import com.nidus.twinly.me.dto.result.MeProfileVisibilitySettingsResult;
 import com.nidus.twinly.me.dto.result.MePurchasesResult;
+import com.nidus.twinly.me.dto.result.MeSchoolVerificationStudentIdPresignResult;
 import com.nidus.twinly.me.dto.result.MeStatusPersonaResult;
 import com.nidus.twinly.me.dto.result.MeStatusReportResult;
 import com.nidus.twinly.me.dto.result.MeStatusResult;
+import com.nidus.twinly.me.dto.result.MeStatusSchoolVerificationResult;
 import com.nidus.twinly.me.dto.result.MeStatusWithdrawalResult;
 import com.nidus.twinly.me.dto.result.MeInfoResult;
 import com.nidus.twinly.me.dto.result.MeTendencyQuestionsItemResult;
@@ -104,6 +108,8 @@ import com.nidus.twinly.relationship.reader.IntimacyReader;
 import com.nidus.twinly.report.domain.ReportStatus;
 import com.nidus.twinly.report.entity.Report;
 import com.nidus.twinly.report.repository.ReportRepository;
+import com.nidus.twinly.schoolverification.service.SchoolVerificationReader;
+import com.nidus.twinly.schoolverification.service.StudentIdSubmissionService;
 import com.nidus.twinly.season.writer.SeasonParticipationWriter;
 import com.nidus.twinly.user.domain.DisclosureField;
 import com.nidus.twinly.user.domain.NicknamePolicy;
@@ -193,6 +199,8 @@ public class MeService {
     private final TendencyLoader tendencyLoader;
     private final FeedbackOptionLoader feedbackOptionLoader;
     private final IntimacyReader intimacyReader;
+    private final SchoolVerificationReader schoolVerificationReader;
+    private final StudentIdSubmissionService studentIdSubmissionService;
     private final ApplicationEventPublisher eventPublisher;
 
     public MeProfilePhotoPresignResult profilePhotoPresign(Long userId, MeProfilePhotoPresignCommand command) {
@@ -555,7 +563,11 @@ public class MeService {
         return new MeStatusResult(
                 withdrawal,
                 new MeStatusReportResult(!reports.isEmpty(), reasons),
-                personaStatus(userId, user)
+                personaStatus(userId, user),
+                new MeStatusSchoolVerificationResult(
+                        user.getSchoolVerificationStatus(),
+                        user.getSchoolVerificationMethod(),
+                        schoolVerificationReader.rejectReason(user))
         );
     }
 
@@ -834,5 +846,16 @@ public class MeService {
                 profile.encounteredPeopleCount(),
                 profile.encounteredFriendCount()
         );
+    }
+
+    public MeSchoolVerificationStudentIdPresignResult schoolVerificationStudentIdPresign(Long userId, MeSchoolVerificationStudentIdPresignCommand command) {
+        PhotoPresignResult presign = studentIdSubmissionService.presignForUser(userId, command.contentType());
+
+        return new MeSchoolVerificationStudentIdPresignResult(presign.uploadUrl(), presign.key(), presign.method(), presign.requiredHeaders(), presign.maxBytes(), presign.expiresAt());
+    }
+
+    @Transactional
+    public void schoolVerificationStudentIdSubmit(Long userId, MeSchoolVerificationStudentIdSubmitCommand command) {
+        studentIdSubmissionService.resubmit(userId, command.key());
     }
 }

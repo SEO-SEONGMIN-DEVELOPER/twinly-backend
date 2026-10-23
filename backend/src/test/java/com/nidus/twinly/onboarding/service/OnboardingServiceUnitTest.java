@@ -63,6 +63,7 @@ import com.nidus.twinly.organization.repository.OrganizationAffiliationRepositor
 import com.nidus.twinly.organization.repository.OrganizationDomainRepository;
 import com.nidus.twinly.organization.repository.OrganizationRepository;
 import com.nidus.twinly.organization.service.OrganizationCatalog;
+import com.nidus.twinly.schoolverification.repository.AnonSessionStudentIdSubmissionRepository;
 import com.nidus.twinly.user.repository.UserRepository;
 import org.springframework.beans.BeanUtils;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -136,6 +137,9 @@ class OnboardingServiceUnitTest {
 
     @Mock
     AnonSessionAgreementRepository anonSessionAgreementRepository;
+
+    @Mock
+    AnonSessionStudentIdSubmissionRepository anonSessionStudentIdSubmissionRepository;
 
     @Mock
     PolicyCatalog policyCatalog;

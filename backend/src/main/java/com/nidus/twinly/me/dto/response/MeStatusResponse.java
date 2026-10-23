@@ -5,14 +5,16 @@ import com.nidus.twinly.me.dto.result.MeStatusResult;
 public record MeStatusResponse(
         MeStatusWithdrawalResponse withdrawal,
         MeStatusReportResponse report,
-        MeStatusPersonaResponse persona
+        MeStatusPersonaResponse persona,
+        MeStatusSchoolVerificationResponse schoolVerification
 ) {
 
     public static MeStatusResponse from(MeStatusResult result) {
         return new MeStatusResponse(
                 MeStatusWithdrawalResponse.from(result.withdrawal()),
                 MeStatusReportResponse.from(result.report()),
-                MeStatusPersonaResponse.from(result.persona())
+                MeStatusPersonaResponse.from(result.persona()),
+                MeStatusSchoolVerificationResponse.from(result.schoolVerification())
         );
     }
 }

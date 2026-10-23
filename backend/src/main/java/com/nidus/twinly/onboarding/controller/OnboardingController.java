@@ -151,15 +151,15 @@ public class OnboardingController {
         onboardingService.revokeConsents(anonSessionSnapshot, OnboardingRevokeConsentsCommand.from(request));
     }
 
-    @Operation(summary = "기관 목록 조회")
+    @Operation(summary = "기관 목록 조회", description = "studentIdOrganizations 는 이메일 도메인이 없어 학생증으로만 인증하는 학교다. 지금은 항상 빈 배열이다.")
     @GetMapping("/api/v1/onboarding/organizations")
     public OnboardingOrganizationsResponse organizations() {
         return OnboardingOrganizationsResponse.from(onboardingService.organizations());
     }
 
-    @Operation(summary = "부서 목록 조회")
+    @Operation(summary = "부서 목록 조회", description = "학교 이메일을 인증했거나 학생증을 제출한 학교의 학과를 준다.")
     @ApiResponses({
-            @ApiResponse(responseCode = "422", description = "EMAIL_VERIFICATION_NOT_COMPLETED, EMAIL_DOMAIN_NOT_SUPPORTED")
+            @ApiResponse(responseCode = "422", description = "EMAIL_VERIFICATION_NOT_COMPLETED, EMAIL_DOMAIN_NOT_SUPPORTED, ORGANIZATION_NOT_FOUND")
     })
     @GetMapping("/api/v1/onboarding/affiliations")
     public OnboardingAffiliationsResponse affiliations(@AuthenticationPrincipal AnonSessionSnapshot anonSessionSnapshot) {

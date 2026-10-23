@@ -112,7 +112,7 @@ public class AuthController {
         return AuthSmsVerifyResponse.from(authService.smsVerify(AuthSmsVerifyCommand.from(request)));
     }
 
-    @Operation(summary = "회원가입")
+    @Operation(summary = "회원가입", description = "학교 이메일 인증이나 학생증 제출 중 하나가 필요하다. 둘 다 없으면 EMAIL_VERIFICATION_NOT_COMPLETED 다. 학생증으로 가입하면 학교 인증은 pending 으로 시작하고, 선착순 혜택은 승인할 때 판단한다.")
     @ApiResponses({
             @ApiResponse(responseCode = "404", description = "SIGNUP_SESSION_NOT_FOUND"),
             @ApiResponse(responseCode = "409", description = "IDENTITY_ALREADY_REGISTERED, NICKNAME_ALREADY_USED"),
@@ -145,5 +145,21 @@ public class AuthController {
     @PostMapping("/api/v1/auth/logout")
     public void logout(@Valid @RequestBody AuthLogoutRequest request) {
         authService.logout(AuthLogoutCommand.from(request));
+    }
+
+    @Operation(summary = "가입용 학생증 업로드 URL 발급")
+    @ApiResponse(responseCode = "415", description = "UNSUPPORTED_IMAGE_TYPE")
+    @PostMapping("/api/v1/auth/onboarding/student-id/presign")
+    public AuthOnboardingStudentIdPresignResponse onboardingStudentIdPresign(@AuthenticationPrincipal AnonSessionSnapshot anonSessionSnapshot,
+                                                                             @Valid @RequestBody AuthOnboardingStudentIdPresignRequest request) {
+        return AuthOnboardingStudentIdPresignResponse.from(authService.onboardingStudentIdPresign(anonSessionSnapshot, AuthOnboardingStudentIdPresignCommand.from(request)));
+    }
+
+    @Operation(summary = "가입용 학생증 제출", description = "같은 세션의 현재 제출과 key 가 같으면 사진을 바꾸지 않고 200 을 준다. 다른 key 면 새 제출로 바꾸고 이전 사진은 파기 대상이 된다. 제출하면 이 세션의 이메일 인증은 지워진다.")
+    @ApiResponse(responseCode = "422", description = "ORGANIZATION_NOT_FOUND, STUDENT_ID_PHOTO_NOT_FOUND, STUDENT_ID_PHOTO_TOO_LARGE")
+    @PostMapping("/api/v1/auth/onboarding/student-id")
+    public void onboardingStudentIdSubmit(@AuthenticationPrincipal AnonSessionSnapshot anonSessionSnapshot,
+                                          @Valid @RequestBody AuthOnboardingStudentIdSubmitRequest request) {
+        authService.onboardingStudentIdSubmit(anonSessionSnapshot, AuthOnboardingStudentIdSubmitCommand.from(request));
     }
 }

@@ -36,6 +36,7 @@ import com.nidus.twinly.common.crypto.BlindIndexHasher;
 import com.nidus.twinly.common.domain.VerificationType;
 import com.nidus.twinly.common.jwt.JwtService;
 import com.nidus.twinly.common.photo.ProfileThumbnailService;
+import com.nidus.twinly.common.presign.PhotoPresignResult;
 import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
@@ -43,6 +44,7 @@ import com.nidus.twinly.onboarding.repository.SurveyAnswerRepository;
 import com.nidus.twinly.organization.entity.Organization;
 import com.nidus.twinly.organization.service.OrganizationCatalog;
 import com.nidus.twinly.purchase.writer.EarlySignupGrantWriter;
+import com.nidus.twinly.schoolverification.service.StudentIdSubmissionService;
 import com.nidus.twinly.user.entity.PersonaElement;
 import com.nidus.twinly.user.entity.Photo;
 import com.nidus.twinly.user.entity.User;
@@ -66,6 +68,7 @@ import java.time.LocalDate;
 import java.time.Period;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -109,6 +112,7 @@ public class AuthService {
     private final VerificationRepository verificationRepository;
 
     private final EarlySignupGrantWriter earlySignupGrantWriter;
+    private final StudentIdSubmissionService studentIdSubmissionService;
 
     private final BlindIndexHasher blindIndexHasher;
     private final ProfileThumbnailService profileThumbnailService;
@@ -140,6 +144,7 @@ public class AuthService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_ANON_SESSION));
 
         anonSession.changeOrganization(organization.getName());
+        studentIdSubmissionService.discardAnonSubmission(anonSessionId);
     }
 
     @Transactional
@@ -336,7 +341,10 @@ public class AuthService {
     public AuthTokenResult signup(AnonSessionSnapshot anonSessionSnapshot) {
         Long anonSessionId = anonSessionSnapshot.id();
         AnonSessionIdentityVerification identityVerification = requireIdentityVerified(anonSessionId);
-        AnonSessionVerificationSession emailSession = requireEmailVerified(anonSessionId);
+        AnonSessionVerificationSession emailSession = verifiedEmailSession(anonSessionId).orElse(null);
+        if (emailSession == null) {
+            requireStudentIdSubmitted(anonSessionId);
+        }
 
         AnonSession anonSession = anonSessionRepository.findById(anonSessionId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SIGNUP_SESSION_NOT_FOUND));
@@ -349,8 +357,8 @@ public class AuthService {
 
         String phoneNumber = identityVerification.getPhoneNumber();
         String phoneNumberHash = blindIndexHasher.hash(phoneNumber);
-        String email = emailSession.getContact();
-        String emailHash = blindIndexHasher.hash(email);
+        String email = emailSession != null ? emailSession.getContact() : null;
+        String emailHash = email != null ? blindIndexHasher.hash(email) : null;
         String diHash = identityVerification.getDiHash();
 
         if (userRepository.existsByDiHash(diHash)) {
@@ -362,7 +370,7 @@ public class AuthService {
             InfoLog.log(log, "다른 본인이 가입하며 기존 계정의 전화번호를 해제했습니다.", field("anonSessionId", anonSessionId));
         }
 
-        if (userRepository.existsByEmailHash(emailHash)) {
+        if (emailHash != null && userRepository.existsByEmailHash(emailHash)) {
             userRepository.releaseEmail(emailHash);
             InfoLog.log(log, "다른 본인이 가입하며 기존 계정의 이메일을 해제했습니다.", field("anonSessionId", anonSessionId));
         }
@@ -391,8 +399,13 @@ public class AuthService {
                 )
         );
 
+        if (emailSession == null) {
+            user.startStudentIdVerification();
+        }
+
         anonSessionVerificationSessionRepository.deleteByAnonSessionId(anonSessionId);
         anonSessionIdentityVerificationRepository.deleteByAnonSessionId(anonSessionId);
+        studentIdSubmissionService.transferToUser(anonSessionId, user.getId());
 
         List<AnonSessionPhoto> anonSessionPhotos = anonSessionPhotoRepository.findAllByAnonSessionId(anonSessionId);
 
@@ -459,9 +472,10 @@ public class AuthService {
         anonSessionRepository.delete(anonSession);
 
         verificationRepository.save(Verification.create(user.getId(), VerificationType.IDENTITY, identityVerification.getVerifiedAt()));
-        verificationRepository.save(Verification.create(user.getId(), VerificationType.EMAIL, emailSession.getVerifiedAt()));
-
-        earlySignupGrantWriter.assign(user.getId(), identityVerification.getGender(), diHash, Instant.now());
+        if (emailSession != null) {
+            verificationRepository.save(Verification.create(user.getId(), VerificationType.EMAIL, emailSession.getVerifiedAt()));
+            earlySignupGrantWriter.assign(user.getId(), identityVerification.getGender(), diHash, Instant.now());
+        }
 
         eventPublisher.publishEvent(new UserSignedUpEvent(user.getId()));
 
@@ -516,10 +530,15 @@ public class AuthService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.IDENTITY_VERIFICATION_NOT_COMPLETED));
     }
 
-    private AnonSessionVerificationSession requireEmailVerified(Long anonSessionId) {
+    private Optional<AnonSessionVerificationSession> verifiedEmailSession(Long anonSessionId) {
         return anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(anonSessionId, VerificationType.EMAIL)
-                .filter(session -> session.getVerifiedAt() != null)
-                .orElseThrow(() -> new BusinessException(ErrorCode.EMAIL_VERIFICATION_NOT_COMPLETED));
+                .filter(session -> session.getVerifiedAt() != null);
+    }
+
+    private void requireStudentIdSubmitted(Long anonSessionId) {
+        if (studentIdSubmissionService.currentAnonSubmission(anonSessionId).isEmpty()) {
+            throw new BusinessException(ErrorCode.EMAIL_VERIFICATION_NOT_COMPLETED);
+        }
     }
 
     private void requireRequiredPoliciesAgreed(List<AnonSessionAgreement> anonSessionAgreements) {
@@ -592,5 +611,16 @@ public class AuthService {
         refreshTokenRepository.save(RefreshToken.create(userId, blindIndexHasher.hash(tokens.refreshToken()), tokens.refreshExpiresAt()));
 
         return tokens;
+    }
+
+    public AuthOnboardingStudentIdPresignResult onboardingStudentIdPresign(AnonSessionSnapshot anonSessionSnapshot, AuthOnboardingStudentIdPresignCommand command) {
+        PhotoPresignResult presign = studentIdSubmissionService.presignForAnonSession(anonSessionSnapshot.id(), command.contentType());
+
+        return new AuthOnboardingStudentIdPresignResult(presign.uploadUrl(), presign.key(), presign.method(), presign.requiredHeaders(), presign.maxBytes(), presign.expiresAt());
+    }
+
+    @Transactional
+    public void onboardingStudentIdSubmit(AnonSessionSnapshot anonSessionSnapshot, AuthOnboardingStudentIdSubmitCommand command) {
+        studentIdSubmissionService.submitForAnonSession(anonSessionSnapshot.id(), command.organizationName(), command.key());
     }
 }

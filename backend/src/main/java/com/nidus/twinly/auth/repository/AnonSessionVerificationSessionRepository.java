@@ -11,4 +11,6 @@ public interface AnonSessionVerificationSessionRepository extends JpaRepository<
     Optional<AnonSessionVerificationSession> findByAnonSessionIdAndType(Long anonSessionId, VerificationType type);
 
     void deleteByAnonSessionId(Long anonSessionId);
+
+    void deleteByAnonSessionIdAndType(Long anonSessionId, VerificationType type);
 }

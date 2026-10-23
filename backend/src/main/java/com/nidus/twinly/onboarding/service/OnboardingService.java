@@ -45,6 +45,7 @@ import com.nidus.twinly.organization.repository.OrganizationAffiliationRepositor
 import com.nidus.twinly.organization.repository.OrganizationDomainRepository;
 import com.nidus.twinly.organization.repository.OrganizationRepository;
 import com.nidus.twinly.organization.service.OrganizationCatalog;
+import com.nidus.twinly.schoolverification.repository.AnonSessionStudentIdSubmissionRepository;
 import com.nidus.twinly.user.domain.NicknamePolicy;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -55,6 +56,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -81,6 +83,7 @@ public class OnboardingService {
     private final AnonSessionPhotoRepository anonSessionPhotoRepository;
     private final AnonSessionPersonaElementRepository anonSessionPersonaElementRepository;
     private final AnonSessionAgreementRepository anonSessionAgreementRepository;
+    private final AnonSessionStudentIdSubmissionRepository anonSessionStudentIdSubmissionRepository;
     private final PolicyCatalog policyCatalog;
     private final SurveyAnswerRepository surveyAnswerRepository;
     private final UserRepository userRepository;
@@ -319,11 +322,11 @@ public class OnboardingService {
                 ))
                 .toList();
 
-        return new OnboardingOrganizationsResult(organizations);
+        return new OnboardingOrganizationsResult(organizations, List.of());
     }
 
     public OnboardingAffiliationsResult affiliations(AnonSessionSnapshot anonSessionSnapshot) {
-        Organization organization = organizationCatalog.findByEmail(verifiedEmail(anonSessionSnapshot.id()));
+        Organization organization = verifiedOrganization(anonSessionSnapshot.id());
 
         List<String> affiliations = organizationAffiliationRepository.findAllByOrganizationIdOrderByNameAsc(organization.getId()).stream()
                 .map(OrganizationAffiliation::getName)
@@ -346,10 +349,17 @@ public class OnboardingService {
         anonSession.changeAffiliation(command.affiliation().trim());
     }
 
-    private String verifiedEmail(Long anonSessionId) {
-        return anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(anonSessionId, VerificationType.EMAIL)
+    private Organization verifiedOrganization(Long anonSessionId) {
+        Optional<String> verifiedEmail = anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(anonSessionId, VerificationType.EMAIL)
                 .filter(session -> session.getVerifiedAt() != null)
-                .map(AnonSessionVerificationSession::getContact)
+                .map(AnonSessionVerificationSession::getContact);
+
+        if (verifiedEmail.isPresent()) {
+            return organizationCatalog.findByEmail(verifiedEmail.get());
+        }
+
+        return anonSessionStudentIdSubmissionRepository.findByAnonSessionIdAndReplacedAtIsNull(anonSessionId)
+                .map(submission -> organizationCatalog.findByName(submission.getOrganization()))
                 .orElseThrow(() -> new BusinessException(ErrorCode.EMAIL_VERIFICATION_NOT_COMPLETED));
     }
 }

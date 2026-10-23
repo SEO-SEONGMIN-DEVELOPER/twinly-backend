@@ -12,6 +12,8 @@ import com.nidus.twinly.anon.repository.AnonSessionRepository;
 import com.nidus.twinly.auth.dto.command.AuthEmailSendCommand;
 import com.nidus.twinly.auth.dto.command.AuthEmailVerifyCommand;
 import com.nidus.twinly.auth.dto.command.AuthLoginCommand;
+import com.nidus.twinly.auth.dto.command.AuthOnboardingStudentIdPresignCommand;
+import com.nidus.twinly.auth.dto.command.AuthOnboardingStudentIdSubmitCommand;
 import com.nidus.twinly.auth.dto.command.AuthLogoutCommand;
 import com.nidus.twinly.auth.dto.command.AuthRefreshCommand;
 import com.nidus.twinly.auth.dto.command.AuthSmsSendCommand;
@@ -19,6 +21,7 @@ import com.nidus.twinly.auth.dto.command.AuthSmsVerifyCommand;
 import com.nidus.twinly.auth.dto.result.AuthEmailSendResult;
 import com.nidus.twinly.auth.dto.result.AuthIdentityPrepareResult;
 import com.nidus.twinly.auth.dto.result.AuthEmailVerifyResult;
+import com.nidus.twinly.auth.dto.result.AuthOnboardingStudentIdPresignResult;
 import com.nidus.twinly.auth.dto.result.AuthSmsSendResult;
 import com.nidus.twinly.auth.dto.result.AuthSmsVerifyResult;
 import com.nidus.twinly.auth.dto.result.AuthTokenResult;
@@ -45,6 +48,7 @@ import com.nidus.twinly.legal.repository.AgreementRepository;
 import com.nidus.twinly.organization.entity.Organization;
 import com.nidus.twinly.onboarding.repository.SurveyAnswerRepository;
 import com.nidus.twinly.purchase.writer.EarlySignupGrantWriter;
+import com.nidus.twinly.schoolverification.service.StudentIdSubmissionService;
 import com.nidus.twinly.organization.service.OrganizationCatalog;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.PersonaElementRepository;
@@ -84,6 +88,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import com.nidus.twinly.common.presign.RequiredHeaders;
+import com.nidus.twinly.common.presign.PhotoPresignResult;
+import com.nidus.twinly.schoolverification.domain.SchoolVerificationStatus;
+import com.nidus.twinly.schoolverification.domain.SchoolVerificationMethod;
+import com.nidus.twinly.schoolverification.entity.AnonSessionStudentIdSubmission;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -203,6 +212,9 @@ class AuthServiceUnitTest {
 
     @Mock
     EarlySignupGrantWriter earlySignupGrantWriter;
+
+    @Mock
+    StudentIdSubmissionService studentIdSubmissionService;
 
     @Mock
     BlindIndexHasher blindIndexHasher;
@@ -1231,6 +1243,74 @@ class AuthServiceUnitTest {
                 .isInstanceOf(BusinessException.class);
         then(earlySignupGrantWriter).shouldHaveNoInteractions();
         then(eventPublisher).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("회원가입: 이메일 인증 없이 학생증을 냈으면 이메일 없이 가입시키고 학교 인증을 pending 으로 시작하며, 제출을 회원으로 이관하고 선착순 자리는 배정하지 않는다")
+    void signup_with_student_id_starts_pending() {
+        // given: 본인인증은 끝났고 이메일 인증 대신 학생증을 낸 익명 세션
+        given(anonSessionIdentityVerificationRepository.findByAnonSessionId(ANON_SESSION_ID))
+                .willReturn(Optional.of(verifiedIdentity()));
+        given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.EMAIL))
+                .willReturn(Optional.empty());
+        given(studentIdSubmissionService.currentAnonSubmission(ANON_SESSION_ID)).willReturn(Optional.of(
+                AnonSessionStudentIdSubmission.create(UUID.randomUUID(), ANON_SESSION_ID, "트윈리대학교", "k", "r")));
+        given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(onboardedAnonSession()));
+        given(policyCatalog.loadRequiredPolicyIds(PolicyKind.ONBOARDING)).willReturn(Set.of(REQUIRED_POLICY_ID));
+        given(anonSessionAgreementRepository.findAllByAnonSessionId(ANON_SESSION_ID))
+                .willReturn(List.of(agreement(REQUIRED_POLICY_ID)));
+        given(blindIndexHasher.hash(anyString())).willAnswer(invocation -> "hash:" + invocation.getArgument(0));
+        given(userRepository.save(any(User.class))).willAnswer(invocation -> {
+            User user = invocation.getArgument(0);
+            ReflectionTestUtils.setField(user, "id", USER_ID);
+            return user;
+        });
+        given(jwtService.generateAuthTokenResult(USER_ID)).willReturn(new AuthTokenResult(
+                "access-token", Instant.parse("2030-01-01T00:00:00Z"),
+                "refresh-token", Instant.parse("2030-01-15T00:00:00Z")));
+
+        // when: 회원가입
+        authService.signup(SNAPSHOT);
+
+        // then: 이메일 없이 학생증 방식 pending 으로 시작
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        then(userRepository).should().save(userCaptor.capture());
+        User created = userCaptor.getValue();
+        assertThat(created.getEmail()).isNull();
+        assertThat(created.getEmailHash()).isNull();
+        assertThat(created.getSchoolVerificationStatus()).isEqualTo(SchoolVerificationStatus.PENDING);
+        assertThat(created.getSchoolVerificationMethod()).isEqualTo(SchoolVerificationMethod.STUDENT_ID);
+
+        // then: 제출 이관, 이메일 해제·이메일 인증 이력 없음, 선착순은 승인 때 판단
+        then(studentIdSubmissionService).should().transferToUser(ANON_SESSION_ID, USER_ID);
+        then(userRepository).should(never()).existsByEmailHash(any());
+        then(verificationRepository).should(times(1)).save(any());
+        then(earlySignupGrantWriter).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("가입용 학생증 업로드 URL 발급: 익명 세션 id 와 contentType 으로 발급을 위임하고 결과를 그대로 옮긴다")
+    void onboardingStudentIdPresign_delegates() {
+        // given: 업로드 URL 발급 결과
+        given(studentIdSubmissionService.presignForAnonSession(ANON_SESSION_ID, "image/jpeg")).willReturn(new PhotoPresignResult(
+                "https://s3/upload", "student-id/upload/anon-7/a", "PUT", new RequiredHeaders("image/jpeg"), 10485760, Instant.parse("2030-01-01T00:00:00Z")));
+
+        // when: 발급 요청
+        AuthOnboardingStudentIdPresignResult result = authService.onboardingStudentIdPresign(SNAPSHOT, new AuthOnboardingStudentIdPresignCommand("image/jpeg"));
+
+        // then: 같은 값으로 변환
+        assertThat(result.key()).isEqualTo("student-id/upload/anon-7/a");
+        assertThat(result.requiredHeaders().contentType()).isEqualTo("image/jpeg");
+    }
+
+    @Test
+    @DisplayName("가입용 학생증 제출: 익명 세션 id·학교 이름·key 로 제출을 위임한다")
+    void onboardingStudentIdSubmit_delegates() {
+        // when: 학생증 제출
+        authService.onboardingStudentIdSubmit(SNAPSHOT, new AuthOnboardingStudentIdSubmitCommand("트윈리대학교", "student-id/upload/anon-7/a"));
+
+        // then: 위임
+        then(studentIdSubmissionService).should().submitForAnonSession(ANON_SESSION_ID, "트윈리대학교", "student-id/upload/anon-7/a");
     }
 
     // ---------- 로그인 ----------
