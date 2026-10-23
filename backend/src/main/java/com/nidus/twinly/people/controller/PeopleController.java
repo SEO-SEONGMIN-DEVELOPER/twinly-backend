@@ -8,6 +8,7 @@ import com.nidus.twinly.people.dto.response.PeopleIntimacyQuizMatchRateResponse;
 import com.nidus.twinly.people.dto.response.PeopleIntimacySeriesResponse;
 import com.nidus.twinly.people.dto.response.PeopleLearnedFactsResponse;
 import com.nidus.twinly.people.dto.response.PeoplePreviewsResponse;
+import com.nidus.twinly.people.dto.response.PeoplePreviewsV2Response;
 import com.nidus.twinly.people.dto.response.PeopleProfileResponse;
 import com.nidus.twinly.people.dto.response.PeopleProfileV2Response;
 import com.nidus.twinly.people.dto.response.PeopleResponse;
@@ -50,6 +51,12 @@ public class PeopleController {
     @GetMapping("/api/v1/people/previews")
     public PeoplePreviewsResponse previews(@AuthenticationPrincipal UserInfo userInfo) {
         return PeoplePreviewsResponse.from(peoplePreviewService.previews(userInfo.id()));
+    }
+
+    @Operation(summary = "트윈 미리보기 조회 v2")
+    @GetMapping("/api/v2/people/previews")
+    public PeoplePreviewsV2Response previewsV2(@AuthenticationPrincipal UserInfo userInfo) {
+        return PeoplePreviewsV2Response.from(peoplePreviewService.previewsV2(userInfo.id()));
     }
 
     @Operation(summary = "트윈 프로필 조회")

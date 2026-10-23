@@ -8,8 +8,12 @@ import com.nidus.twinly.common.photo.ProfileThumbnailService;
 import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
+import com.nidus.twinly.legal.reader.ConsentReader;
 import com.nidus.twinly.people.dto.result.PeoplePreviewResult;
+import com.nidus.twinly.people.dto.result.PeoplePreviewV2PhotoResult;
+import com.nidus.twinly.people.dto.result.PeoplePreviewV2Result;
 import com.nidus.twinly.people.dto.result.PeoplePreviewsResult;
+import com.nidus.twinly.people.dto.result.PeoplePreviewsV2Result;
 import com.nidus.twinly.season.repository.SeasonParticipationRepository;
 import com.nidus.twinly.season.repository.SeasonParticipationRepository.PreviewCandidateProjection;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
@@ -22,11 +26,13 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.util.Base64;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -39,6 +45,8 @@ public class PeoplePreviewService {
     private static final int MAX_OPPOSITE_GENDER_PREVIEWS = 7;
     private static final int REF_LENGTH = 12;
     private static final String REF_DOMAIN = "people-preview";
+    private static final String DISCLOSURE_POLICY_IDENTIFIER = "thirdPartyRealIdentityDisclosure";
+    private static final String UNMASKED_PREVIEW_MINIMUM_VERSION = "1.2";
 
     private final CurrentSeasonReader currentSeasonReader;
     private final SeasonParticipationRepository seasonParticipationRepository;
@@ -47,16 +55,77 @@ public class PeoplePreviewService {
     private final ProfileThumbnailService profileThumbnailService;
     private final CloudFrontService cloudFrontService;
     private final BlindIndexHasher blindIndexHasher;
+    private final ConsentReader consentReader;
 
     public PeoplePreviewsResult previews(Long userId) {
+        List<PreviewTarget> targets = targets(userId, currentSeasonReader.read().getId());
+        if (targets.isEmpty()) {
+            return new PeoplePreviewsResult(List.of());
+        }
+
+        Map<Long, String> maskedPhotoUrlByUserId = maskedPhotoUrlByUserId(profilePhotoByUserId(userIdsOf(targets)).values());
+
+        List<PeoplePreviewResult> previews = targets.stream()
+                .map(target -> new PeoplePreviewResult(
+                        target.ref(),
+                        target.user().getGender(),
+                        target.user().shortOrganization(),
+                        target.user().shortBirthYear(),
+                        maskedPhotoUrlByUserId.get(target.user().getId())
+                ))
+                .toList();
+
+        return new PeoplePreviewsResult(previews);
+    }
+
+    public PeoplePreviewsV2Result previewsV2(Long userId) {
         Long seasonId = currentSeasonReader.read().getId();
 
+        List<PreviewTarget> targets = targets(userId, seasonId);
+        if (targets.isEmpty()) {
+            return new PeoplePreviewsV2Result(List.of());
+        }
+
+        List<Long> targetUserIds = userIdsOf(targets);
+        Set<Long> unmaskedUserIds = seasonParticipationRepository.existsByUserIdAndSeasonId(userId, seasonId)
+                ? consentReader.filterAgreedAtLeast(targetUserIds, DISCLOSURE_POLICY_IDENTIFIER, UNMASKED_PREVIEW_MINIMUM_VERSION)
+                : Set.of();
+
+        Map<Long, Photo> photoByUserId = profilePhotoByUserId(targetUserIds);
+        Map<Long, String> maskedPhotoUrlByUserId = maskedPhotoUrlByUserId(photoByUserId.values().stream()
+                .filter(photo -> !unmaskedUserIds.contains(photo.getUserId()))
+                .toList());
+
+        List<PeoplePreviewV2Result> previews = targets.stream()
+                .map(target -> {
+                    User user = target.user();
+                    boolean unmasked = unmaskedUserIds.contains(user.getId());
+                    Photo photo = photoByUserId.get(user.getId());
+
+                    return new PeoplePreviewV2Result(
+                            target.ref(),
+                            user.getGender(),
+                            user.shortOrganization(),
+                            user.shortBirthYear(),
+                            unmasked ? user.getNickname() : null,
+                            unmasked && photo != null
+                                    ? new PeoplePreviewV2PhotoResult(cloudFrontService.getSignedUrl(photo.getKey()), photo.position())
+                                    : null,
+                            unmasked ? null : maskedPhotoUrlByUserId.get(user.getId())
+                    );
+                })
+                .toList();
+
+        return new PeoplePreviewsV2Result(previews);
+    }
+
+    private List<PreviewTarget> targets(Long userId, Long seasonId) {
         User me = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
         LocalDate today = KstTimes.today();
         List<PreviewCandidateProjection> candidates = seasonParticipationRepository.findAllPreviewCandidates(
-                userId, seasonId, KstTimes.toInstant(today.atStartOfDay()));
+                userId, seasonId, KstTimes.toInstant(today.atStartOfDay()), DISCLOSURE_POLICY_IDENTIFIER);
 
         Map<Long, String> refByUserId = candidates.stream()
                 .collect(Collectors.toMap(PreviewCandidateProjection::getUserId, candidate -> ref(userId, today, candidate.getUserId())));
@@ -65,29 +134,16 @@ public class PeoplePreviewService {
 
         List<Long> pickedUserIds = pick(candidates, me.getGender(), dailyOrder);
         if (pickedUserIds.isEmpty()) {
-            return new PeoplePreviewsResult(List.of());
+            return List.of();
         }
 
         Map<Long, User> userById = userRepository.findAllById(pickedUserIds).stream()
                 .collect(Collectors.toMap(User::getId, Function.identity()));
-        Map<Long, String> photoUrlByUserId = photoUrlByUserId(pickedUserIds);
 
-        List<PeoplePreviewResult> previews = pickedUserIds.stream()
+        return pickedUserIds.stream()
                 .filter(userById::containsKey)
-                .map(pickedUserId -> {
-                    User user = userById.get(pickedUserId);
-
-                    return new PeoplePreviewResult(
-                            refByUserId.get(pickedUserId),
-                            user.getGender(),
-                            user.shortOrganization(),
-                            user.shortBirthYear(),
-                            photoUrlByUserId.get(pickedUserId)
-                    );
-                })
+                .map(pickedUserId -> new PreviewTarget(refByUserId.get(pickedUserId), userById.get(pickedUserId)))
                 .toList();
-
-        return new PeoplePreviewsResult(previews);
     }
 
     private List<Long> pick(List<PreviewCandidateProjection> candidates, Gender myGender, Comparator<Long> dailyOrder) {
@@ -122,10 +178,19 @@ public class PeoplePreviewService {
         return HexFormat.of().formatHex(hash).substring(0, REF_LENGTH);
     }
 
-    private Map<Long, String> photoUrlByUserId(List<Long> userIds) {
+    private List<Long> userIdsOf(List<PreviewTarget> targets) {
+        return targets.stream().map(target -> target.user().getId()).toList();
+    }
+
+    private Map<Long, Photo> profilePhotoByUserId(List<Long> userIds) {
+        return photoRepository.findAllByUserIdInAndType(userIds, PhotoType.PROFILE).stream()
+                .collect(Collectors.toMap(Photo::getUserId, Function.identity()));
+    }
+
+    private Map<Long, String> maskedPhotoUrlByUserId(Collection<Photo> photos) {
         Map<Long, String> photoUrlByUserId = new HashMap<>();
 
-        for (Photo photo : photoRepository.findAllByUserIdInAndType(userIds, PhotoType.PROFILE)) {
+        for (Photo photo : photos) {
             String previewKey = photo.getPreviewKey() != null ? photo.getPreviewKey() : createPreview(photo);
             if (previewKey != null) {
                 photoUrlByUserId.put(photo.getUserId(), cloudFrontService.getSignedUrl(previewKey));
@@ -142,5 +207,8 @@ public class PeoplePreviewService {
         }
 
         return photoRepository.assignPreviewKey(photo.getId(), photo.getKey(), previewKey) == 1 ? previewKey : null;
+    }
+
+    private record PreviewTarget(String ref, User user) {
     }
 }

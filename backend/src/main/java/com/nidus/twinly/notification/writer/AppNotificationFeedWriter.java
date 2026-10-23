@@ -20,6 +20,8 @@ import java.util.List;
 public class AppNotificationFeedWriter {
 
     private static final String MATCH_BODY = "채팅 탭에서 입장하기를 누르면, 상대가 동의한 뒤 대화가 시작돼요.";
+    private static final String BALANCE_GAME_RESULT_BODY = "서로 같은 답을 골랐는지 확인해 보세요.";
+    private static final String BALANCE_GAME_WAITING_BODY = "나도 답하고 서로 같은 답을 골랐는지 확인해 보세요.";
 
     private final AppNotificationFeedRepository appNotificationFeedRepository;
     private final UserRepository userRepository;
@@ -45,6 +47,16 @@ public class AppNotificationFeedWriter {
                 "평행세계에서 " + partnerName + "님과 친구가 되었어요.",
                 partnerUserId,
                 simulationDate
+        ))));
+    }
+
+    public void writeBalanceGameAnswered(Long userId, Long answeredUserId, boolean userAnswered) {
+        publish(List.of(appNotificationFeedRepository.save(AppNotificationFeed.createBalanceGameTarget(
+                userId,
+                AppNotificationFeedType.BALANCE_GAME_ANSWERED,
+                name(answeredUserId) + "님이 밸런스 게임에 답했어요.",
+                userAnswered ? BALANCE_GAME_RESULT_BODY : BALANCE_GAME_WAITING_BODY,
+                answeredUserId
         ))));
     }
 

@@ -67,6 +67,16 @@ public class AppNotificationFeed {
         return feed;
     }
 
+    public static AppNotificationFeed createBalanceGameTarget(Long userId, AppNotificationFeedType type, String title,
+                                                              String body, Long targetUserId) {
+        AppNotificationFeed feed = create(userId, type, title, body);
+
+        feed.targetKind = AppNotificationFeedTargetType.BALANCE_GAME;
+        feed.targetUserId = targetUserId;
+
+        return feed;
+    }
+
     private static AppNotificationFeed create(Long userId, AppNotificationFeedType type, String title, String body) {
         AppNotificationFeed feed = new AppNotificationFeed();
 

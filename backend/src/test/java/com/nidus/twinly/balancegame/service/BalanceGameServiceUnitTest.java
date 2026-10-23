@@ -18,6 +18,7 @@ import com.nidus.twinly.common.balancegame.BalanceGameQuestionLoader;
 import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
+import com.nidus.twinly.notification.writer.AppNotificationFeedWriter;
 import com.nidus.twinly.relationship.domain.Intimacy;
 import com.nidus.twinly.relationship.entity.IntimacyBonus;
 import com.nidus.twinly.relationship.entity.Relationship;
@@ -47,6 +48,7 @@ import java.util.stream.LongStream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -93,6 +95,9 @@ class BalanceGameServiceUnitTest {
 
     @Mock
     CurrentSeasonReader currentSeasonReader;
+
+    @Mock
+    AppNotificationFeedWriter appNotificationFeedWriter;
 
     @InjectMocks
     BalanceGameService balanceGameService;
@@ -253,6 +258,9 @@ class BalanceGameServiceUnitTest {
         assertThat(answer.getValue().getOptionId()).isEqualTo(1L);
         then(intimacyBonusRepository).should(never()).save(any());
         assertThat(result.partnerId()).isEqualTo(PARTNER);
+
+        // then: 트윈에게 내가 답했다고 알리고, 트윈은 아직 안 답했으니 답하라고 권한다
+        then(appNotificationFeedWriter).should().writeBalanceGameAnswered(PARTNER, ME, false);
     }
 
     @Test
@@ -285,8 +293,9 @@ class BalanceGameServiceUnitTest {
         // when: 나는 트윈에게 1번
         balanceGameService.answer(ME, ROUND_ID, new BalanceGameAnswerCommand(PARTNER, 1L));
 
-        // then
+        // then: 점수는 없지만, 먼저 답한 트윈에게 결과를 확인하라고 알린다
         then(intimacyBonusRepository).should(never()).save(any());
+        then(appNotificationFeedWriter).should().writeBalanceGameAnswered(PARTNER, ME, true);
     }
 
     @Test
@@ -333,6 +342,7 @@ class BalanceGameServiceUnitTest {
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.RELATIONSHIP_NOT_FOUND);
         then(balanceGameAnswerRepository).should(never()).save(any());
+        then(appNotificationFeedWriter).should(never()).writeBalanceGameAnswered(any(), any(), anyBoolean());
     }
 
     @Test
@@ -380,6 +390,7 @@ class BalanceGameServiceUnitTest {
                 .isEqualTo(ErrorCode.INTIMACY_QUIZ_ALREADY_ANSWERED);
         then(balanceGameAnswerRepository).should(never()).save(any());
         then(intimacyBonusRepository).should(never()).save(any());
+        then(appNotificationFeedWriter).should(never()).writeBalanceGameAnswered(any(), any(), anyBoolean());
     }
 
     // ---------------------------------------------------------------- 기록 조회

@@ -54,13 +54,13 @@ public class PushMessageBuilder {
                 .toList();
     }
 
-    public List<PushMessage> balanceGameSummary(List<Device> devices, BalanceGameSummaryPushContent content) {
-        Map<String, String> data = balanceGameSummaryData(content);
+    public List<PushMessage> balanceGameOpened(List<Device> devices, BalanceGameOpenedPushContent content) {
+        Map<String, String> data = balanceGameOpenedData(content);
 
         return devices.stream()
                 .map(device -> new PushMessage(
                         device.getUserId(),
-                        PushType.INTIMACY_QUIZ,
+                        PushType.BALANCE_GAME_OPENED,
                         device.getPushToken(),
                         notificationMessage(device, content.title(), content.body(), data)))
                 .toList();
@@ -90,6 +90,8 @@ public class PushMessageBuilder {
 
         if (content.targetKind() != null) {
             data.put("targetKind", EnumJsonNames.of(content.targetKind()));
+        }
+        if (content.targetId() != null) {
             data.put("targetId", String.valueOf(content.targetId()));
         }
 
@@ -103,12 +105,11 @@ public class PushMessageBuilder {
                 "createdAt", content.createdAt().toString());
     }
 
-    private Map<String, String> balanceGameSummaryData(BalanceGameSummaryPushContent content) {
+    private Map<String, String> balanceGameOpenedData(BalanceGameOpenedPushContent content) {
         return Map.of(
                 "version", VERSION,
-                "type", EnumJsonNames.of(PushType.INTIMACY_QUIZ),
-                "roundId", String.valueOf(content.roundId()),
-                "matchedCount", String.valueOf(content.matchedCount()),
+                "type", EnumJsonNames.of(PushType.BALANCE_GAME_OPENED),
+                "targetKind", EnumJsonNames.of(AppNotificationFeedTargetType.PEOPLE),
                 "createdAt", content.createdAt().toString());
     }
 

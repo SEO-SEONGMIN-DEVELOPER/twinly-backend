@@ -4,13 +4,12 @@ import com.jayway.jsonpath.JsonPath;
 import com.nidus.twinly.balancegame.domain.BalanceGameSchedule;
 import com.nidus.twinly.balancegame.entity.BalanceGameAnswer;
 import com.nidus.twinly.balancegame.entity.BalanceGameRound;
-import com.nidus.twinly.balancegame.event.BalanceGameSummaryEvent;
 import com.nidus.twinly.balancegame.repository.BalanceGameAnswerRepository;
 import com.nidus.twinly.balancegame.repository.BalanceGameRoundRepository;
-import com.nidus.twinly.balancegame.service.BalanceGameSummaryService;
 import com.nidus.twinly.block.entity.Block;
 import com.nidus.twinly.block.repository.BlockRepository;
 import com.nidus.twinly.common.time.KstTimes;
+import com.nidus.twinly.notification.event.AppNotificationFeedCreatedEvent;
 import com.nidus.twinly.relationship.entity.IntimacyBonus;
 import com.nidus.twinly.relationship.entity.Relationship;
 import com.nidus.twinly.relationship.repository.IntimacyBonusRepository;
@@ -33,7 +32,6 @@ import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -56,9 +54,6 @@ class BalanceGameIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     BalanceGameAnswerRepository balanceGameAnswerRepository;
-
-    @Autowired
-    BalanceGameSummaryService balanceGameSummaryService;
 
     @Autowired
     BlockRepository blockRepository;
@@ -131,6 +126,37 @@ class BalanceGameIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("트윈에게 답하면 트윈의 알림함에 나와의 밸런스 게임을 가리키는 응답 피드가 쌓이고, 푸시 이벤트가 발행된다")
+    void answer_writes_feed_to_partner() throws Exception {
+        // given: 이번 회차
+        String round = body(current(me, partner));
+        String roundId = JsonPath.read(round, "$.roundId");
+        String first = JsonPath.read(round, "$.question.options[0].id");
+
+        // when: 내가 먼저 답하고, 트윈이 이어서 답함
+        answer(me, roundId, partner, first).andExpect(status().isOk());
+        answer(partner, roundId, me, first).andExpect(status().isOk());
+
+        // then: 트윈은 아직 안 답했을 때 받은 알림 1건
+        feeds(partner)
+                .andExpect(jsonPath("$.appNotificationFeeds.length()").value(1))
+                .andExpect(jsonPath("$.appNotificationFeeds[0].type").value("balanceGameAnswered"))
+                .andExpect(jsonPath("$.appNotificationFeeds[0].title").value(me.displayNickname() + "님이 밸런스 게임에 답했어요."))
+                .andExpect(jsonPath("$.appNotificationFeeds[0].body").value("나도 답하고 서로 같은 답을 골랐는지 확인해 보세요."))
+                .andExpect(jsonPath("$.appNotificationFeeds[0].target.kind").value("balanceGame"))
+                .andExpect(jsonPath("$.appNotificationFeeds[0].target.userId").value(me.getId().toString()));
+
+        // then: 나는 이미 답한 뒤 받은 결과 확인 알림 1건
+        feeds(me)
+                .andExpect(jsonPath("$.appNotificationFeeds.length()").value(1))
+                .andExpect(jsonPath("$.appNotificationFeeds[0].body").value("서로 같은 답을 골랐는지 확인해 보세요."))
+                .andExpect(jsonPath("$.appNotificationFeeds[0].target.kind").value("balanceGame"))
+                .andExpect(jsonPath("$.appNotificationFeeds[0].target.userId").value(partner.getId().toString()));
+
+        assertThat(applicationEvents.stream(AppNotificationFeedCreatedEvent.class)).hasSize(2);
+    }
+
+    @Test
     @DisplayName("한 트윈에게 한 답은 다른 트윈과의 비교에 쓰이지 않는다")
     void answer_to_one_partner_is_not_used_for_another() throws Exception {
         // given: 나는 트윈에게만 1번을 답했다
@@ -191,33 +217,6 @@ class BalanceGameIntegrationTest extends AbstractIntegrationTest {
         current(partner, other)
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("RELATIONSHIP_NOT_FOUND"));
-    }
-
-    @Test
-    @DisplayName("지난 회차가 끝나면 서로에게 같은 답을 한 트윈 수를 유저별로 한 번만 요약한다")
-    void summarizes_ended_round_once() {
-        // given: 지난 회차에 나와 트윈은 서로 1번(일치), 나는 다른 트윈에게 1번·다른 트윈은 나에게 2번(불일치)
-        Instant lastRound = BalanceGameSchedule.previousRoundStartOf(KstTimes.now());
-        balanceGameRoundRepository.upsert(lastRound, 1L, season.getId());
-        BalanceGameRound round = balanceGameRoundRepository.findByStartsAt(lastRound).orElseThrow();
-        balanceGameAnswerRepository.saveAll(List.of(
-                BalanceGameAnswer.create(round.getId(), me.getId(), partner.getId(), 1L),
-                BalanceGameAnswer.create(round.getId(), partner.getId(), me.getId(), 1L),
-                BalanceGameAnswer.create(round.getId(), me.getId(), other.getId(), 1L),
-                BalanceGameAnswer.create(round.getId(), other.getId(), me.getId(), 2L)));
-
-        // when: 이번 회차 시작 10초에 도는 요약을 (서버 재시도처럼) 두 번 실행
-        balanceGameSummaryService.sendEndedRound(thisRound().plusSeconds(10));
-        balanceGameSummaryService.sendEndedRound(thisRound().plusSeconds(10));
-
-        // then: 나와 트윈만 1명씩, 다른 트윈은 일치한 상대가 없어 빠지고, 요약은 한 번만 나간다
-        assertThat(applicationEvents.stream(BalanceGameSummaryEvent.class).toList())
-                .singleElement()
-                .satisfies(event -> {
-                    assertThat(event.roundId()).isEqualTo(round.getId());
-                    assertThat(event.matchedCountByUserId()).containsExactlyInAnyOrderEntriesOf(Map.of(
-                            me.getId(), 1L, partner.getId(), 1L));
-                });
     }
 
     @Test
@@ -438,6 +437,12 @@ class BalanceGameIntegrationTest extends AbstractIntegrationTest {
                 .header("Authorization", bearer(user.getId()))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"partnerId\": \"" + partner.getId() + "\", \"optionId\": \"" + optionId + "\"}"));
+    }
+
+    private ResultActions feeds(User user) throws Exception {
+        return mockMvc.perform(get("/api/v1/me/app-notifications/feeds")
+                .param("type", "balanceGameAnswered")
+                .header("Authorization", bearer(user.getId())));
     }
 
     private ResultActions profile(User user, User partner) throws Exception {

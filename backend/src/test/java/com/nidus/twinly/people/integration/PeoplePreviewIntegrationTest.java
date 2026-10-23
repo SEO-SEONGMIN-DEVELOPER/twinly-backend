@@ -5,6 +5,9 @@ import com.nidus.twinly.block.entity.Block;
 import com.nidus.twinly.block.repository.BlockRepository;
 import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.photo.PhotoType;
+import com.nidus.twinly.legal.entity.Agreement;
+import com.nidus.twinly.legal.repository.PolicyRepository.PolicySummary;
+import com.nidus.twinly.legal.service.PolicyCatalog.PolicyKey;
 import com.nidus.twinly.relationship.entity.Relationship;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
 import com.nidus.twinly.season.entity.Season;
@@ -33,6 +36,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -53,6 +57,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class PeoplePreviewIntegrationTest extends AbstractIntegrationTest {
 
     private static final int POOL = 12;
+    private static final String DISCLOSURE = "thirdPartyRealIdentityDisclosure";
     private static final Instant YESTERDAY = Instant.now().minus(Duration.ofDays(1)).minus(Duration.ofHours(1));
 
     @Autowired
@@ -81,7 +86,7 @@ class PeoplePreviewIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("미리보기 조회: 어제까지 참여한 사람만 고르고 본인·인연·양방향 차단·탈퇴·시드·오늘 참여·비참여자는 뺀다")
+    @DisplayName("미리보기 조회: 어제까지 참여한 사람만 고르고 본인·인연·양방향 차단·탈퇴·시드·오늘 참여·비참여자·실신원 동의 철회자·미동의자는 뺀다")
     void previews_excludes_ineligible_people() throws Exception {
         // given: 나와 조건을 통과할 후보 1명, 그리고 각 제외 조건에 하나씩 걸리는 사람들
         User me = participant(Gender.MALE, POOL, YESTERDAY);
@@ -105,6 +110,10 @@ class PeoplePreviewIntegrationTest extends AbstractIntegrationTest {
         User partner = participant(Gender.FEMALE, POOL, YESTERDAY);
         relationshipRepository.save(Relationship.create(me.getId(), LocalDate.now(), "v1", partner.getId(), 0, "{}",
                 LocalDateTime.now().plusDays(1), Instant.now()));
+
+        User revoked = participant(Gender.FEMALE, POOL, YESTERDAY);
+        revokeDisclosure(revoked.getId());
+        participate(poolUser(Gender.FEMALE, POOL), YESTERDAY);
 
         // when: 나의 실제 액세스 토큰으로 미리보기 조회
         var result = mockMvc.perform(get("/api/v1/people/previews")
@@ -249,12 +258,133 @@ class PeoplePreviewIntegrationTest extends AbstractIntegrationTest {
         result.andExpect(status().isUnauthorized());
     }
 
+    @Test
+    @DisplayName("미리보기 v2 조회: 참여자에게 1.2 이상 동의자는 key 없는 원본 사진·닉네임을, 1.1 까지만 동의한 사람은 가린 사진만 준다")
+    void previewsV2_participant_sees_unmasked_only_for_agreed_people() throws Exception {
+        // given: 참여자인 나, 1.2 에도 동의한 후보와 1.1 까지만 동의한 후보, 둘 다 사진이 있다
+        User me = participant(Gender.MALE, POOL, YESTERDAY);
+        User agreed = participant(Gender.FEMALE, POOL, YESTERDAY);
+        User onlyOld = participant(Gender.FEMALE, POOL, YESTERDAY);
+        enableDisclosureVersion("1.2");
+        agreeDisclosure(agreed.getId(), "1.2");
+
+        String agreedKey = "profile/" + agreed.getId() + "/original";
+        photoRepository.saveAndFlush(Photo.create(agreed.getId(), PhotoType.PROFILE, agreedKey, 1, 2, 30, 40, Instant.now()));
+        Photo onlyOldPhoto = Photo.create(onlyOld.getId(), PhotoType.PROFILE, "profile/" + onlyOld.getId() + "/original", 0, 0, 100, 100, Instant.now());
+        ReflectionTestUtils.setField(onlyOldPhoto, "previewKey", "preview/old-" + onlyOld.getId());
+        photoRepository.saveAndFlush(onlyOldPhoto);
+
+        // when: v2 미리보기 조회
+        var result = mockMvc.perform(get("/api/v2/people/previews")
+                .header("Authorization", bearer(me.getId())));
+
+        // then: 1.2 동의자는 원본 서명 URL·position·닉네임, 1.1 동의자는 가린 사진만
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.previews.length()").value(2));
+        List<Map<String, Object>> previews = JsonPath.read(result.andReturn().getResponse().getContentAsString(), "$.previews");
+
+        Map<String, Object> agreedCard = previews.stream()
+                .filter(preview -> agreed.getNickname().equals(preview.get("nickname"))).findFirst().orElseThrow();
+        Map<String, Object> agreedPhoto = (Map<String, Object>) agreedCard.get("profilePhoto");
+        assertThat((String) agreedPhoto.get("photoUrl")).startsWith("https://test.cloudfront.net/" + agreedKey);
+        assertThat(agreedPhoto).containsOnlyKeys("photoUrl", "position");
+        assertThat(JsonPath.<Integer>read(agreedPhoto, "$.position.startPos.x")).isEqualTo(1);
+        assertThat(JsonPath.<Integer>read(agreedPhoto, "$.position.width")).isEqualTo(30);
+        assertThat(agreedCard).containsEntry("maskedPhotoUrl", null);
+
+        Map<String, Object> maskedCard = previews.stream().filter(preview -> preview != agreedCard).findFirst().orElseThrow();
+        assertThat(maskedCard).containsEntry("nickname", null).containsEntry("profilePhoto", null);
+        assertThat((String) maskedCard.get("maskedPhotoUrl")).startsWith("https://test.cloudfront.net/preview/old-" + onlyOld.getId());
+    }
+
+    @Test
+    @DisplayName("미리보기 v2 조회: 미참여자에게는 1.2 이상 동의자도 가린 사진만 주고 닉네임은 주지 않는다")
+    void previewsV2_non_participant_sees_masked_only() throws Exception {
+        // given: 미참여자인 나, 1.2 에도 동의하고 사진이 있는 후보
+        User me = poolUser(Gender.MALE, POOL);
+        User agreed = participant(Gender.FEMALE, POOL, YESTERDAY);
+        enableDisclosureVersion("1.2");
+        agreeDisclosure(agreed.getId(), "1.2");
+        Photo photo = Photo.create(agreed.getId(), PhotoType.PROFILE, "profile/" + agreed.getId() + "/original", 0, 0, 100, 100, Instant.now());
+        ReflectionTestUtils.setField(photo, "previewKey", "preview/agreed-" + agreed.getId());
+        photoRepository.saveAndFlush(photo);
+
+        // when: v2 미리보기 조회
+        var result = mockMvc.perform(get("/api/v2/people/previews")
+                .header("Authorization", bearer(me.getId())));
+
+        // then: 가린 사진만, 닉네임·원본 사진은 null
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.previews.length()").value(1))
+                .andExpect(jsonPath("$.previews[0].nickname").isEmpty())
+                .andExpect(jsonPath("$.previews[0].profilePhoto").isEmpty())
+                .andExpect(jsonPath("$.previews[0].maskedPhotoUrl").value(startsWith("https://test.cloudfront.net/preview/agreed-")));
+    }
+
+    @Test
+    @DisplayName("미리보기 v1·v2 조회: 같은 날 이미 받은 사람이 실신원 동의를 철회하면 다음 호출부터 카드가 빠진다")
+    void previews_drop_person_who_revoked_on_same_day() throws Exception {
+        // given: 참여자인 나와 후보 1명, 같은 날 v1·v2 로 한 번씩 받았다
+        User me = participant(Gender.MALE, POOL, YESTERDAY);
+        User candidate = participant(Gender.FEMALE, POOL, YESTERDAY);
+        mockMvc.perform(get("/api/v1/people/previews").header("Authorization", bearer(me.getId())))
+                .andExpect(jsonPath("$.previews.length()").value(1));
+        mockMvc.perform(get("/api/v2/people/previews").header("Authorization", bearer(me.getId())))
+                .andExpect(jsonPath("$.previews.length()").value(1));
+
+        // when: 후보가 동의를 철회한 뒤 같은 날 다시 조회
+        revokeDisclosure(candidate.getId());
+        var v1 = mockMvc.perform(get("/api/v1/people/previews").header("Authorization", bearer(me.getId())));
+        var v2 = mockMvc.perform(get("/api/v2/people/previews").header("Authorization", bearer(me.getId())));
+
+        // then: v1·v2 모두 200 + 빈 목록
+        v1.andExpect(status().isOk()).andExpect(jsonPath("$.previews.length()").value(0));
+        v2.andExpect(status().isOk()).andExpect(jsonPath("$.previews.length()").value(0));
+    }
+
+    @Test
+    @DisplayName("미리보기 v2 조회: 인증 없이 호출하면 401 을 반환한다")
+    void previewsV2_without_auth_returns_401() throws Exception {
+        // when: Authorization 헤더 없이 v2 미리보기 조회
+        var result = mockMvc.perform(get("/api/v2/people/previews"));
+
+        // then: 실제 시큐리티 필터가 막아 401
+        result.andExpect(status().isUnauthorized());
+    }
+
     private User participant(Gender gender, Integer poolNumber, Instant participatedInAt) {
         User user = poolUser(gender, poolNumber);
+        participate(user, participatedInAt);
+        agreeDisclosure(user.getId(), "1.1");
+        return user;
+    }
+
+    private void participate(User user, Instant participatedInAt) {
         SeasonParticipation participation = SeasonParticipation.create(user.getId(), season.getId());
         ReflectionTestUtils.setField(participation, "participatedInAt", participatedInAt);
         seasonParticipationRepository.saveAndFlush(participation);
-        return user;
+    }
+
+    private void enableDisclosureVersion(String version) {
+        entityManager.createNativeQuery("""
+                        INSERT INTO policies (policy_name_id, version, is_required, effective_at)
+                        SELECT id, :version, TRUE, :effectiveAt FROM policy_names WHERE identifier = :identifier
+                        ON DUPLICATE KEY UPDATE effective_at = :effectiveAt
+                        """)
+                .setParameter("version", version)
+                .setParameter("effectiveAt", Instant.now().minus(Duration.ofDays(1)))
+                .setParameter("identifier", DISCLOSURE)
+                .executeUpdate();
+    }
+
+    private void agreeDisclosure(Long userId, String version) {
+        PolicySummary policy = policyCatalog.loadByKey(List.of(DISCLOSURE)).get(new PolicyKey(DISCLOSURE, version));
+        agreementRepository.saveAndFlush(Agreement.create(userId, policy.getId(), Instant.now()));
+    }
+
+    private void revokeDisclosure(Long userId) {
+        PolicySummary policy = policyCatalog.loadByKey(List.of(DISCLOSURE)).get(new PolicyKey(DISCLOSURE, "1.1"));
+        agreementRepository.revokeWithPreviousVersionsByUserIdAndPolicyIdIn(userId, List.of(policy.getId()));
     }
 
     private User poolUser(Gender gender, Integer poolNumber) {

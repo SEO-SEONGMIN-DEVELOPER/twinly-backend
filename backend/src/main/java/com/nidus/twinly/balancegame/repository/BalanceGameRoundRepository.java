@@ -26,8 +26,4 @@ public interface BalanceGameRoundRepository extends JpaRepository<BalanceGameRou
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT r FROM BalanceGameRound r WHERE r.id = :id")
     Optional<BalanceGameRound> findByIdForUpdate(@Param("id") Long id);
-
-    @Modifying
-    @Query("UPDATE BalanceGameRound r SET r.summarySentAt = :now WHERE r.id = :id AND r.summarySentAt IS NULL")
-    int markSummarySent(@Param("id") Long id, @Param("now") Instant now);
 }

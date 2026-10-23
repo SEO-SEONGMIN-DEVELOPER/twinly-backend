@@ -197,6 +197,27 @@ class PushMessageBuilderUnitTest {
     }
 
     @Test
+    @DisplayName("알림 피드: 밸런스 게임 응답 피드는 balanceGameAnswered 타입으로 답한 사람과의 밸런스 게임을 가리킨다")
+    void feed_balance_game_answered() throws IOException {
+        // given: 답한 트윈(77)과의 밸런스 게임을 가리키는 응답 피드
+        FeedPushContent content = new FeedPushContent(
+                1005L, AppNotificationFeedType.BALANCE_GAME_ANSWERED, "제목", "본문",
+                AppNotificationFeedTargetType.BALANCE_GAME, 77L, CREATED_AT);
+
+        // when: 피드 푸시 생성
+        List<PushMessage> messages = pushMessageBuilder.feed(
+                List.of(device(DevicePlatform.IOS, "token-ios")), content);
+
+        // then
+        String json = toJson(messages.get(0));
+        assertThat(json).contains("\"type\":\"balanceGameAnswered\"");
+        assertThat(json).contains("\"appNotificationId\":\"1005\"");
+        assertThat(json).contains("\"targetKind\":\"balanceGame\"");
+        assertThat(json).contains("\"targetId\":\"77\"");
+        assertThat(messages).extracting(PushMessage::type).containsExactly(PushType.BALANCE_GAME_ANSWERED);
+    }
+
+    @Test
     @DisplayName("알림 피드: 공지는 notice 타입으로 나가고 target 키 없이 appNotificationId 만 싣는다")
     void feed_notice_has_no_target() throws IOException {
         // given: target 이 없는 공지 피드
@@ -276,23 +297,25 @@ class PushMessageBuilderUnitTest {
     }
 
     @Test
-    @DisplayName("친밀도 퀴즈 요약: 회차 id 와 같은 답을 고른 인원 수를 담아 notification 블록으로 나간다")
-    void balanceGameSummary_carries_round_and_matched_count() throws IOException {
-        // given: 이번 질문에서 3명과 같은 답을 고른 유저
-        BalanceGameSummaryPushContent content = new BalanceGameSummaryPushContent(
-                100L, 3L, "밸런스 게임 결과가 나왔어요", "이번 질문에서 3명과 같은 답을 골랐어요! 친밀도가 올랐어요", CREATED_AT);
+    @DisplayName("밸런스 게임 출제: balanceGameOpened 타입으로 피드 없이 사람 목록 탭을 가리킨다")
+    void balance_game_opened() throws IOException {
+        // given: 출제 알림 문구
+        BalanceGameOpenedPushContent content = new BalanceGameOpenedPushContent("새 밸런스 게임이 열렸어요", "본문", CREATED_AT);
 
-        // when
-        List<PushMessage> messages = pushMessageBuilder.balanceGameSummary(List.of(device(DevicePlatform.ANDROID, "token-android")), content);
+        // when: 플랫폼이 다른 두 기기로 생성
+        List<PushMessage> messages = pushMessageBuilder.balanceGameOpened(
+                List.of(device(DevicePlatform.IOS, "token-ios"), device(DevicePlatform.ANDROID, "token-android")), content);
 
-        // then: 플랫폼과 무관하게 notification 블록으로 나간다
+        // then: 피드에 남지 않으므로 appNotificationId 가 없고, 사람 목록 탭은 가리킬 id 가 없다
         String json = toJson(messages.get(0));
-        assertThat(json).contains("\"type\":\"intimacyQuiz\"");
-        assertThat(json).contains("\"roundId\":\"100\"");
-        assertThat(json).contains("\"matchedCount\":\"3\"");
+        assertThat(json).contains("\"type\":\"balanceGameOpened\"");
+        assertThat(json).contains("\"title\":\"새 밸런스 게임이 열렸어요\"");
         assertThat(json).contains("\"notification\"");
-        assertThat(json).contains("\"title\":\"밸런스 게임 결과가 나왔어요\"");
-        assertThat(messages).extracting(PushMessage::type).containsExactly(PushType.INTIMACY_QUIZ);
+        assertThat(json).contains("\"targetKind\":\"people\"");
+        assertThat(json).doesNotContain("appNotificationId");
+        assertThat(json).doesNotContain("targetId");
+        assertThat(messages).extracting(PushMessage::type).containsOnly(PushType.BALANCE_GAME_OPENED);
+        assertThat(messages).extracting(PushMessage::token).containsExactly("token-ios", "token-android");
     }
 
     private Device device(DevicePlatform platform, String token) {
