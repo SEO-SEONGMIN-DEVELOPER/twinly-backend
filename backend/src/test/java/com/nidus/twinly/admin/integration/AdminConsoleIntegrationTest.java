@@ -680,6 +680,41 @@ class AdminConsoleIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("기능 이용 현황 일별 통계: 최근 30일 날짜별로 기능을 쓴 회원을 하루 한 번씩 세고, 채팅방은 열린 회원과 입장한 회원을 나눠 센다")
+    void usage_dailyUsers() throws Exception {
+        // given: 오늘 망설임 질문 두 번 + 3일 전 한 번 답한 남성, 오늘 남-여 방이 열려 남성만 입장, 오늘 평행우주 관계·즐겨찾기한 여성
+        JsonNode before = body(mockMvc.perform(admin(get("/admin/usage"))));
+        User man = saveMember("일별남", Gender.MALE, "일용대학교", "u1@ilyong.ac.kr");
+        User woman = saveMember("일별여", Gender.FEMALE, "일용대학교", "u2@ilyong.ac.kr");
+        question(man, "PERSONA", true, false);
+        question(man, "PERSONA", true, false);
+        question(man, "PERSONA", true, false);
+        room(man, woman, true, false);
+        parallelRelation(woman, man);
+        favorite(woman, encounter(woman, man), true);
+        flushAndClear();
+        jdbcTemplate.update("""
+                UPDATE questions SET answered_at = UTC_TIMESTAMP(6) - INTERVAL 3 DAY
+                WHERE user_id = ? ORDER BY id DESC LIMIT 1
+                """, man.getId());
+
+        // when
+        JsonNode after = body(mockMvc.perform(admin(get("/admin/usage"))).andExpect(status().isOk()));
+
+        // then: 30일치, 마지막이 오늘(KST)
+        assertThat(after.at("/daily").size()).isEqualTo(30);
+        assertThat(after.at("/daily/29/date").asString()).isEqualTo(KstTimes.today().toString());
+        assertThat(delta(before, after, "/daily/29/hesitationAnswerUsers/male")).isEqualTo(1);
+        assertThat(delta(before, after, "/daily/26/hesitationAnswerUsers/male")).isEqualTo(1);
+        assertThat(delta(before, after, "/daily/29/chatRoomOpenedUsers/total")).isEqualTo(2);
+        assertThat(delta(before, after, "/daily/29/chatRoomEnteredUsers/male")).isEqualTo(1);
+        assertThat(delta(before, after, "/daily/29/chatRoomEnteredUsers/female")).isZero();
+        assertThat(delta(before, after, "/daily/29/parallelRelationUsers/total")).isEqualTo(2);
+        assertThat(delta(before, after, "/daily/29/peopleFavoriteUsers/female")).isEqualTo(1);
+        assertThat(delta(before, after, "/daily/29/peopleFavoriteUsers/male")).isZero();
+    }
+
+    @Test
     @DisplayName("공지 수신 대상 수: 지정한 ID 중 활성 가입자만 센다")
     void noticeRecipientCount() throws Exception {
         // given

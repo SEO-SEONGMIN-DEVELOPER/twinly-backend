@@ -1068,6 +1068,59 @@
     }
   };
 
+  const USAGE_DAILY = {
+    balanceGame: [['balanceGameUsers', '답한 회원']],
+    hesitation: [['hesitationAnswerUsers', '답한 회원']],
+    parallelRelation: [['parallelRelationUsers', '결과를 받은 회원']],
+    chatRoom: [['chatRoomOpenedUsers', '열린 채팅방'], ['chatRoomEnteredUsers', '입장한 채팅방']],
+    peopleFavorite: [['peopleFavoriteUsers', '즐겨찾기한 회원']]
+  };
+  const USAGE_DAILY_UNIT = { chatRoomOpenedUsers: '채팅방이 열린 회원', chatRoomEnteredUsers: '입장한 회원' };
+
+  function renderUsageDaily(el, daily, series, state) {
+    const [key] = series[state.series];
+    const unit = USAGE_DAILY_UNIT[key] || series[state.series][1];
+    const value = day => day[key][state.gender];
+    const max = Math.max(1, ...daily.map(value));
+    const cls = { total: '', male: 'm', female: 'f' }[state.gender];
+    const dayLabel = date => `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`;
+    el.innerHTML = `<div class="usage-daily-head">
+        <div class="section-label">일별 사용 현황 <span class="hint">최근 30일 · 한국 시간 기준</span></div>
+        <div class="usage-daily-ctl">
+          ${series.length > 1 ? `<div class="chips" data-ctl="series">${series.map(([, label], i) => `<button class="chip" type="button" data-v="${i}" aria-pressed="${i === state.series}">${label}</button>`).join('')}</div>` : ''}
+          <div class="chips" data-ctl="gender">${DAILY_GENDER.map(([k, l]) => `<button class="chip" type="button" data-v="${k}" aria-pressed="${k === state.gender}">${l}</button>`).join('')}</div>
+        </div>
+      </div>
+      <div class="daily-legend num"><span><i class="daily-sw usage ${cls}"></i>${unit} 하루 평균 <b>${num(Math.round(daily.reduce((sum, day) => sum + value(day), 0) / Math.max(1, daily.length)))}명</b></span><span>하루 최대 <b>${num(Math.max(0, ...daily.map(value)))}명</b></span></div>
+      <div class="daily-chart usage-chart">
+        <div class="daily-axis num"><span>${num(max)}</span><span>${num(Math.round(max / 2))}</span><span>0</span></div>
+        <div class="daily-bars">${daily.map((day, i) => `<div class="daily-col" data-i="${i}"><div class="daily-stack" style="height:${value(day) / max * 100}%">${value(day) ? `<span class="usage ${cls}" style="flex:1"></span>` : ''}</div>
+            <span class="daily-x num">${i % 5 === 4 || i === daily.length - 1 ? dayLabel(day.date) : ''}</span></div>`).join('')}</div>
+        <div class="daily-tip" hidden></div>
+      </div>`;
+    const tip = el.querySelector('.daily-tip');
+    const bars = el.querySelector('.daily-bars');
+    bars.addEventListener('mouseover', event => {
+      const col = event.target.closest('.daily-col');
+      if (!col) return;
+      const day = daily[Number(col.dataset.i)];
+      tip.innerHTML = `<b class="num">${Number(day.date.slice(5, 7))}월 ${Number(day.date.slice(8, 10))}일</b><span><i class="daily-sw usage ${cls}"></i>${unit}<em class="num">${num(value(day))}명</em></span>`;
+      tip.hidden = false;
+      const chart = el.querySelector('.daily-chart').getBoundingClientRect();
+      const rect = col.getBoundingClientRect();
+      const right = rect.right - chart.left + 10;
+      tip.style.left = `${right + tip.offsetWidth <= chart.width ? right : rect.left - chart.left - 10 - tip.offsetWidth}px`;
+    });
+    bars.addEventListener('mouseleave', () => { tip.hidden = true; });
+    el.querySelector('.usage-daily-ctl').addEventListener('click', event => {
+      const chip = event.target.closest('.chip');
+      if (!chip) return;
+      const ctl = chip.closest('.chips').dataset.ctl;
+      const next = { ...state, [ctl]: ctl === 'series' ? Number(chip.dataset.v) : chip.dataset.v };
+      renderUsageDaily(el, daily, series, next);
+    });
+  }
+
   loaders.usage = async () => {
     const body = $('usage-body');
     body.innerHTML = '<div class="state-box">불러오는 중이에요…</div>';
@@ -1083,7 +1136,8 @@
         const same = Math.round(Number(pct(partners.sameGender, total)));
         return `<div class="bar-row"><span>${label}</span><div class="stack">${total ? `<span class="same" style="width:${same}%">동성 ${same}%</span><span class="opp" style="flex:1">이성 ${100 - same}%</span>` : '<span class="same" style="flex:1">기록 없음</span>'}</div><span class="val">방 ${num(total)}개</span></div>`;
       };
-      const userCard = (title, usersLabel, users, base, baseLabel) => `<article class="card">
+      const dailySlot = key => `<div class="usage-daily" data-daily="${key}"></div>`;
+      const userCard = (key, title, usersLabel, users, base, baseLabel) => `<article class="card">
           <div class="card-head"><h2>${title}</h2></div>
           <div class="stat-row two">
             <div class="stat"><span class="l">${usersLabel}</span><span class="v num">${num(users.total)}명</span><span class="s num">남 ${num(users.male)} · 여 ${num(users.female)}</span></div>
@@ -1091,11 +1145,12 @@
           </div>
           <div class="section-label">성별 사용 비율</div>
           <div class="bars num">${bar('전체', '', users.total, base.total, '명')}${bar('남성', 'm', users.male, base.male, '명')}${bar('여성', 'f', users.female, base.female, '명')}</div>
+          ${dailySlot(key)}
         </article>`;
       body.innerHTML = `<div class="usage-grid">
-        ${userCard('밸런스 게임', '이용자 수', u.balanceGame.users, subs, '시즌 참가자')}
-        ${userCard('망설임 질문', '답변한 회원', u.hesitation.users, subs, '시즌 참가자')}
-        ${userCard('평행우주 관계', '이용자 수', u.parallelRelation.users, u.members, '가입자')}
+        ${userCard('balanceGame', '밸런스 게임', '이용자 수', u.balanceGame.users, subs, '시즌 참가자')}
+        ${userCard('hesitation', '망설임 질문', '답변한 회원', u.hesitation.users, subs, '시즌 참가자')}
+        ${userCard('parallelRelation', '평행우주 관계', '이용자 수', u.parallelRelation.users, u.members, '가입자')}
         <article class="card">
           <div class="card-head"><h2>채팅방</h2></div>
           <div class="stat-row two">
@@ -1106,6 +1161,7 @@
           <div class="bars num">${bar('전체', '', chat.enteredEntries.total, chat.openedEntries.total, '건')}${bar('남성', 'm', chat.enteredEntries.male, chat.openedEntries.male, '건')}${bar('여성', 'f', chat.enteredEntries.female, chat.openedEntries.female, '건')}</div>
           <div class="section-label">입장한 채팅방의 상대 성별</div>
           <div class="bars num">${stack('남성 회원', chat.malePartners)}${stack('여성 회원', chat.femalePartners)}</div>
+          ${dailySlot('chatRoom')}
         </article>
         <article class="card">
           <div class="card-head"><h2>인연 탭 즐겨찾기</h2></div>
@@ -1115,8 +1171,10 @@
           </div>
           <div class="section-label">성별 사용 비율</div>
           <div class="bars num">${bar('전체', '', fav.favoritedUsers.total, fav.participants.total, '명')}${bar('남성', 'm', fav.favoritedUsers.male, fav.participants.male, '명')}${bar('여성', 'f', fav.favoritedUsers.female, fav.participants.female, '명')}</div>
+          ${dailySlot('peopleFavorite')}
         </article>
       </div>`;
+      body.querySelectorAll('[data-daily]').forEach(el => renderUsageDaily(el, u.daily, USAGE_DAILY[el.dataset.daily], { series: 0, gender: 'total' }));
     } catch (error) {
       body.innerHTML = `<div class="state-box error">${esc(error.message)}</div>`;
     }

@@ -3,13 +3,20 @@ package com.nidus.twinly.admin.reader;
 import com.nidus.twinly.admin.dto.result.AdminGenderCountResult;
 import com.nidus.twinly.admin.dto.result.AdminUsageResult;
 import com.nidus.twinly.common.domain.Gender;
+import com.nidus.twinly.common.time.KstTimes;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
+import java.util.function.Function;
 
 @Component
 @RequiredArgsConstructor
@@ -105,6 +112,44 @@ public class AdminUsageReader {
             GROUP BY me.gender, same_gender
             """.formatted(ROOMS_WITHOUT_SEED);
 
+    private static final String DAILY_USERS = """
+            SELECT e.kind, e.day, e.gender, COUNT(*) AS cnt
+            FROM (SELECT DISTINCT 'BALANCE_GAME' AS kind, DATE(a.created_at + INTERVAL 9 HOUR) AS day, u.id AS user_id, u.gender
+                  FROM balance_game_partner_answers a
+                  JOIN users u ON u.id = a.user_id
+                  WHERE %1$s AND a.created_at >= :from
+                  UNION ALL
+                  SELECT DISTINCT 'HESITATION', DATE(q.answered_at + INTERVAL 9 HOUR), u.id, u.gender
+                  FROM questions q
+                  JOIN users u ON u.id = q.user_id
+                  WHERE %1$s AND q.type = 'PERSONA' AND q.answered_at >= :from
+                  UNION ALL
+                  SELECT DISTINCT 'PARALLEL_RELATION', DATE(pr.created_at + INTERVAL 9 HOUR), u.id, u.gender
+                  FROM parallel_relations pr
+                  JOIN users u ON u.id IN (pr.user_a_id, pr.user_b_id)
+                  WHERE %1$s AND pr.created_at >= :from
+                  UNION ALL
+                  SELECT DISTINCT 'CHAT_OPENED', DATE(p.created_at + INTERVAL 9 HOUR), u.id, u.gender
+                  FROM chat_room_participations p
+                  JOIN users u ON u.id = p.user_id
+                  JOIN (%2$s) r ON r.room_id = p.room_id
+                  WHERE p.created_at >= :from
+                  UNION ALL
+                  SELECT DISTINCT 'CHAT_ENTERED', DATE(p.entry_agreed_at + INTERVAL 9 HOUR), u.id, u.gender
+                  FROM chat_room_participations p
+                  JOIN users u ON u.id = p.user_id
+                  JOIN (%2$s) r ON r.room_id = p.room_id
+                  WHERE p.entry_agreed_at >= :from
+                  UNION ALL
+                  SELECT DISTINCT 'PEOPLE_FAVORITE', DATE(p.created_at + INTERVAL 9 HOUR), u.id, u.gender
+                  FROM encounter_preferences p
+                  JOIN users u ON u.id = p.user_id
+                  WHERE u.is_seed = FALSE AND p.created_at >= :from) e
+            GROUP BY e.kind, e.day, e.gender
+            """.formatted(AdminSql.ACTIVE_USER, ROOMS_WITHOUT_SEED);
+
+    private static final int DAILY_DAYS = 30;
+
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
     @Transactional(readOnly = true)
@@ -145,8 +190,36 @@ public class AdminUsageReader {
                 new AdminUsageResult.PartnerGender(sameAndOppositeOfMale[0], sameAndOppositeOfMale[1]),
                 new AdminUsageResult.PartnerGender(sameAndOppositeOfFemale[0], sameAndOppositeOfFemale[1]),
                 AdminGenderCountResult.from(countByGender(EVER_SEASON_PARTICIPANTS)),
-                AdminGenderCountResult.from(countByGender(PEOPLE_FAVORITE_USERS))
+                AdminGenderCountResult.from(countByGender(PEOPLE_FAVORITE_USERS)),
+                daily()
         );
+    }
+
+    private List<AdminUsageResult.Daily> daily() {
+        LocalDate today = KstTimes.today();
+        LocalDate first = today.minusDays(DAILY_DAYS - 1);
+        LocalDateTime from = LocalDateTime.ofInstant(first.atStartOfDay(KstTimes.ZONE).toInstant(), ZoneOffset.UTC);
+        Map<LocalDate, Map<String, Map<Gender, Long>>> countsByDay = new TreeMap<>();
+
+        jdbcTemplate.query(DAILY_USERS, Map.of("from", from), rs -> {
+            Gender gender = gender(rs.getString("gender"));
+            if (gender == null) {
+                return;
+            }
+            countsByDay.computeIfAbsent(rs.getObject("day", LocalDate.class), day -> new TreeMap<>())
+                    .computeIfAbsent(rs.getString("kind"), kind -> new EnumMap<>(Gender.class))
+                    .merge(gender, rs.getLong("cnt"), Long::sum);
+        });
+
+        return first.datesUntil(today.plusDays(1))
+                .map(day -> {
+                    Map<String, Map<Gender, Long>> counts = countsByDay.getOrDefault(day, Map.of());
+                    Function<String, AdminGenderCountResult> count = kind -> AdminGenderCountResult.from(counts.getOrDefault(kind, Map.of()));
+                    return new AdminUsageResult.Daily(day, count.apply("BALANCE_GAME"), count.apply("HESITATION"),
+                            count.apply("PARALLEL_RELATION"), count.apply("CHAT_OPENED"), count.apply("CHAT_ENTERED"),
+                            count.apply("PEOPLE_FAVORITE"));
+                })
+                .toList();
     }
 
     private Map<Gender, Long> countByGender(String sql) {

@@ -16,6 +16,7 @@
   --accent-soft: #e7f4ef;
   --male: #3c2f4a;
   --female: #5cc4a4;
+  --all: #8a63b0;
   --shadow: 0 20px 38px -18px #7e5a9657, 0 6px 14px -8px #7e5a9633;
   --shadow-bubble: 0 5px 22px -6px #53356533;
   --font: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
@@ -171,7 +172,7 @@ tbody tr:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px;
 .bars { display: grid; gap: 12px; margin-top: 4px; }
 .bar-row { display: grid; grid-template-columns: 64px minmax(0, 1fr) 100px; gap: 12px; align-items: center; font-size: 13px; }
 .bar-row .track { height: 10px; background: #f2f0f4; border-radius: 999px; overflow: hidden; }
-.bar-row .fill { height: 100%; border-radius: 999px; background: #b9adc1; }
+.bar-row .fill { height: 100%; border-radius: 999px; background: var(--all); }
 .bar-row .fill.m { background: var(--male); } .bar-row .fill.f { background: var(--female); }
 .bar-row .val { text-align: right; color: var(--muted); }
 .bar-row .val b { color: var(--ink); }
@@ -425,6 +426,16 @@ tbody tr:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px;
 .daily-sw.subscribe, .daily-stack .subscribe { background: var(--green); }
 .daily-sw.withdrawn, .daily-stack .withdrawn { background: var(--red); }
 .daily-sw.pending, .daily-stack .pending { background: #f2b544; }
+.usage-daily { margin-top: 26px; padding-top: 4px; border-top: 1px solid var(--line-soft); display: grid; gap: 12px; }
+.usage-daily-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 14px; margin-top: 18px; }
+.usage-daily-head .section-label { margin: 0; }
+.usage-daily-ctl { display: flex; flex-wrap: wrap; gap: 8px 14px; }
+.usage-daily-ctl .chip { padding-block: 5px; font-size: 12px; }
+.usage-daily-ctl .chips + .chips { padding-left: 14px; border-left: 1px solid var(--line); }
+.usage-chart { height: 170px; }
+.daily-sw.usage, .daily-stack .usage { background: var(--all); }
+.daily-sw.usage.m, .daily-stack .usage.m { background: var(--male); }
+.daily-sw.usage.f, .daily-stack .usage.f { background: var(--female); }
 .age-table tr.zero td { color: var(--muted); }
 .revenue-card { display: grid; justify-items: center; gap: 14px; text-align: center; border: 2px solid #8a63b0; }
 .revenue-label { font-size: 14px; font-weight: 650; color: var(--muted); }
