@@ -19,6 +19,10 @@ import com.nidus.twinly.common.feedback.FeedbackType;
 import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
+import com.nidus.twinly.legal.domain.PolicyKind;
+import com.nidus.twinly.legal.entity.Agreement;
+import com.nidus.twinly.legal.repository.AgreementRepository;
+import com.nidus.twinly.legal.service.PolicyCatalog;
 import com.nidus.twinly.purchase.entity.EarlySignupGrantCounter;
 import com.nidus.twinly.purchase.entity.UserEntitlement;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
@@ -92,6 +96,8 @@ class AdminConsoleIntegrationTest extends AbstractIntegrationTest {
     @Autowired AiUtteranceReportRepository aiUtteranceReportRepository;
     @Autowired UserFeedbackRepository userFeedbackRepository;
     @Autowired UserFeedbackOptionRepository userFeedbackOptionRepository;
+    @Autowired AgreementRepository agreementRepository;
+    @Autowired PolicyCatalog policyCatalog;
 
     private final AtomicInteger memberSeq = new AtomicInteger();
     private long activeSeasonId;
@@ -763,6 +769,49 @@ class AdminConsoleIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("배치 비용: 그룹별 남녀 수는 AI 참가자 조회와 같은 조건(탈퇴 아님·이용권 유효·필수 동의)으로 지금 기준을 센다")
+    void batchCosts_countsGroupMembersByGender() throws Exception {
+        // given: 9001번 그룹에 대상 남2·여1, 동의 없음·이용권 만료·탈퇴 유예·이용권 없음 각 1명, 다른 그룹 대상 1명, 회원이 없는 9002번 그룹
+        int group = 9001;
+        int emptyGroup = 9002;
+        simulationTarget(saveMember("대상남1", Gender.MALE, "가나대학교", "g1@ganada.ac.kr"), group);
+        simulationTarget(saveMember("대상남2", Gender.MALE, "가나대학교", "g2@ganada.ac.kr"), group);
+        simulationTarget(saveMember("대상여", Gender.FEMALE, "가나대학교", "g3@ganada.ac.kr"), group);
+        User noConsent = saveMember("미동의", Gender.FEMALE, "가나대학교", "g4@ganada.ac.kr");
+        entitle(noConsent, "app_store", "normal", true);
+        pool(noConsent, group);
+        User expired = saveMember("만료", Gender.MALE, "가나대학교", "g5@ganada.ac.kr");
+        entitle(expired, "app_store", "normal", false);
+        agreeParallelEntry(expired);
+        pool(expired, group);
+        User withdrawing = saveMember("유예", Gender.FEMALE, "가나대학교", "g6@ganada.ac.kr");
+        withdrawing.requestWithdrawal(Duration.ofDays(30));
+        simulationTarget(withdrawing, group);
+        User noEntitlement = saveMember("이용권없음", Gender.MALE, "가나대학교", "g7@ganada.ac.kr");
+        agreeParallelEntry(noEntitlement);
+        pool(noEntitlement, group);
+        simulationTarget(saveMember("다른그룹", Gender.MALE, "가나대학교", "g8@ganada.ac.kr"), group + 10);
+        flushAndClear();
+        given(simulationBatchCostClient.fetch()).willReturn(new SimulationBatchCostBody(
+                LocalDate.of(2026, 10, 22), 2, 1, 3,
+                new BigDecimal("0.3"), new BigDecimal("0.1"), 0,
+                List.of(
+                        new SimulationBatchCostBody.Group(group, LocalDateTime.of(2026, 10, 22, 14, 35), LocalDate.of(2026, 10, 22), 3,
+                                new BigDecimal("0.3"), new BigDecimal("0.1"), 0),
+                        new SimulationBatchCostBody.Group(emptyGroup, LocalDateTime.of(2026, 10, 22, 9, 0), null, null, null, null, null))));
+
+        // when & then: 대상 3명만 남녀로 나뉘고, 회원이 없는 그룹은 0 이다
+        mockMvc.perform(admin(get("/admin/simulation/batch-costs")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.groups[0].members.total").value(3))
+                .andExpect(jsonPath("$.groups[0].members.male").value(2))
+                .andExpect(jsonPath("$.groups[0].members.female").value(1))
+                .andExpect(jsonPath("$.groups[1].members.total").value(0))
+                .andExpect(jsonPath("$.groups[1].members.male").value(0))
+                .andExpect(jsonPath("$.groups[1].members.female").value(0));
+    }
+
+    @Test
     @DisplayName("배치 비용: AI 서버 조회가 실패하면 502 를 주고, 다른 어드민 API 는 영향을 받지 않는다")
     void batchCosts_aiFailure() throws Exception {
         // given: AI 서버가 503 을 준 상황
@@ -856,6 +905,22 @@ class AdminConsoleIntegrationTest extends AbstractIntegrationTest {
         Instant expiresAt = active ? Instant.now().plus(Duration.ofDays(30)) : Instant.now().minus(Duration.ofDays(1));
         userEntitlementRepository.save(UserEntitlement.create(user.getId(), EntitlementReader.SIMULATION_ACCESS,
                 expiresAt, store, periodType, Instant.now()));
+    }
+
+    private void simulationTarget(User user, int poolNumber) {
+        entitle(user, "app_store", "normal", true);
+        agreeParallelEntry(user);
+        pool(user, poolNumber);
+    }
+
+    private void agreeParallelEntry(User user) {
+        policyCatalog.loadRequiredPolicyIds(PolicyKind.PARALLEL_ENTRY)
+                .forEach(policyId -> agreementRepository.save(Agreement.create(user.getId(), policyId, Instant.now())));
+    }
+
+    private void pool(User user, int poolNumber) {
+        userRepository.flush();
+        jdbcTemplate.update("UPDATE users SET pool_number = ? WHERE id = ?", poolNumber, user.getId());
     }
 
     private Long room(User first, User second, boolean firstEntered, boolean secondEntered) {

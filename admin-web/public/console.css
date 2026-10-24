@@ -483,6 +483,10 @@ tbody tr:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px;
 .sim-clock { display: flex; align-items: baseline; gap: 6px; }
 .sim-clock b { font-size: 16px; font-weight: 700; letter-spacing: -0.03em; }
 .sim-clock small { font-size: 11px; color: var(--muted); }
+.sim-members { min-width: 130px; }
+.sim-members .mf { gap: 10px; font-size: 12px; white-space: nowrap; }
+.sim-members .ratio { height: 5px; margin-top: 6px; gap: 2px; }
+.sim-table th small { font-size: 11px; font-weight: 500; color: var(--muted); }
 .sim-share-cell { width: 22%; min-width: 120px; }
 .sim-share { height: 8px; border-radius: 999px; background: #f2f0f4; overflow: hidden; }
 .sim-share span { display: block; height: 100%; border-radius: 999px; background: var(--accent); transition: width .4s; }

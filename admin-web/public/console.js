@@ -1234,11 +1234,16 @@
       if (count === null || count === undefined) return '<span class="dash">—</span>';
       return count > 0 ? pill(`${num(count)}건`, 'warn') : '<span class="dash num">0</span>';
     };
+    const membersCell = m => {
+      if (!m || !m.total) return '<span class="dash">—</span>';
+      return `${mfLine(m)}<div class="ratio"><span class="m" style="width:${pct(m.male, m.male + m.female)}%"></span><span class="f" style="flex:1"></span></div>`;
+    };
     const row = g => `<tr class="${current(g) ? '' : 'sim-stale'}">
         <td><b class="num">${esc(g.groupNumber)}번</b></td>
         <td>${worldCell(g)}</td>
         <td>${dateCell(g)}</td>
         <td class="r num">${g.participantCount === null ? '<span class="dash">—</span>' : `${num(g.participantCount)}명`}</td>
+        <td class="sim-members">${membersCell(g.members)}</td>
         <td class="r num"><b>${usd(g.totalCostUsd, 4)}</b></td>
         <td class="sim-share-cell">${shareCell(g)}</td>
         <td class="r num">${usd(g.averageCostUsd, 4)}</td>
@@ -1269,8 +1274,8 @@
         <div class="card-head"><h2>그룹별 현황</h2><span class="card-sub">흐린 줄은 오늘 배치를 아직 시작하지 않은 그룹이에요. 전체 합계에 들어가지 않아요</span></div>
         <div class="table-wrap">
           <table class="sim-table">
-            <thead><tr><th>그룹</th><th>세계 시간</th><th>배치 날짜</th><th class="r">참가자</th><th class="r">총비용</th><th>비용 비중</th><th class="r">인당 비용</th><th class="r">금액 미확인</th></tr></thead>
-            <tbody>${d.groups.map(row).join('') || stateRow(8, '그룹이 없어요.')}</tbody>
+            <thead><tr><th>그룹</th><th>세계 시간</th><th>배치 날짜</th><th class="r">참가자</th><th title="지금 시뮬레이션 대상인 회원 기준이라 배치 날짜의 참가자 수와 다를 수 있어요">남 · 여 <small>현재</small></th><th class="r">총비용</th><th>비용 비중</th><th class="r">인당 비용</th><th class="r">금액 미확인</th></tr></thead>
+            <tbody>${d.groups.map(row).join('') || stateRow(9, '그룹이 없어요.')}</tbody>
           </table>
         </div>
       </article>`;
