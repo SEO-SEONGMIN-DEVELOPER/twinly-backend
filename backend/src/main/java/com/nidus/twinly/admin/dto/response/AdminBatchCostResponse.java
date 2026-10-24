@@ -53,7 +53,9 @@ public record AdminBatchCostResponse(
             @Schema(description = "그 그룹 인당 비용 (USD). 배치를 안 돌린 그룹은 null")
             BigDecimal averageCostUsd,
             @Schema(description = "그 그룹 금액 미확인 응답 수. 배치를 안 돌린 그룹은 null")
-            Integer unpricedResponseCount
+            Integer unpricedResponseCount,
+            @Schema(description = "지금 그 그룹에서 시뮬레이션 대상인 회원의 성별 수(탈퇴 아님·이용권 유효·필수 동의 완료, 시드 포함). participantCount 는 배치 날짜 기준이라 다를 수 있다")
+            AdminGenderCountResponse members
     ) {
 
         static Group from(AdminBatchCostResult.Group group) {
@@ -64,7 +66,8 @@ public record AdminBatchCostResponse(
                     group.participantCount(),
                     group.totalCostUsd(),
                     group.averageCostUsd(),
-                    group.unpricedResponseCount()
+                    group.unpricedResponseCount(),
+                    AdminGenderCountResponse.from(group.members())
             );
         }
     }
