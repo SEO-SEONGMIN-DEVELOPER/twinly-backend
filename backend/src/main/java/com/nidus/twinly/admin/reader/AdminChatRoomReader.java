@@ -6,6 +6,8 @@ import com.nidus.twinly.admin.domain.MemberStatus;
 import com.nidus.twinly.admin.dto.result.AdminChatMessagePageResult;
 import com.nidus.twinly.admin.dto.result.AdminChatRoomResult;
 import com.nidus.twinly.admin.dto.result.AdminPageResult;
+import com.nidus.twinly.common.crypto.BlindIndexHasher;
+import com.nidus.twinly.common.security.AdminProperties;
 import com.nidus.twinly.user.entity.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -65,8 +67,18 @@ public class AdminChatRoomReader {
             LIMIT :limit
             """;
 
+    private static final String HIDDEN_PARTICIPANT_COUNT = """
+            SELECT COUNT(*)
+            FROM chat_room_participations p
+            JOIN users u ON u.id = p.user_id
+            WHERE p.room_id = :roomId
+              AND u.phone_number_hash IN (:hiddenPhoneHashes)
+            """;
+
     private final NamedParameterJdbcTemplate jdbcTemplate;
     private final AdminMemberReader adminMemberReader;
+    private final AdminProperties adminProperties;
+    private final BlindIndexHasher blindIndexHasher;
 
     public AdminPageResult<AdminChatRoomResult> search(String query, ChatEntryState entryState, ChatRoomSort sort, int page, int size) {
         MapSqlParameterSource params = new MapSqlParameterSource()
@@ -88,6 +100,10 @@ public class AdminChatRoomReader {
     }
 
     public Optional<AdminChatRoomResult> room(Long roomId) {
+        if (hasHiddenParticipant(roomId)) {
+            return Optional.empty();
+        }
+
         return rooms(List.of(roomId)).stream()
                 .filter(room -> room.participants().stream().noneMatch(participant -> participant.status() == null))
                 .findFirst();
@@ -118,6 +134,13 @@ public class AdminChatRoomReader {
         List<String> conditions = new ArrayList<>();
         conditions.add("SUM(u.is_seed) = 0");
 
+        List<String> hiddenPhoneHashes = hiddenPhoneHashes();
+
+        if (!hiddenPhoneHashes.isEmpty()) {
+            params.addValue("hiddenPhoneHashes", hiddenPhoneHashes);
+            conditions.add("COALESCE(SUM(u.phone_number_hash IN (:hiddenPhoneHashes)), 0) = 0");
+        }
+
         if (entryState != null) {
             conditions.add(switch (entryState) {
                 case BOTH -> "SUM(p.entry_agreed_at IS NOT NULL) >= 2";
@@ -141,6 +164,33 @@ public class AdminChatRoomReader {
         }
 
         return String.join(" AND ", conditions);
+    }
+
+    private boolean hasHiddenParticipant(Long roomId) {
+        List<String> hiddenPhoneHashes = hiddenPhoneHashes();
+
+        if (hiddenPhoneHashes.isEmpty()) {
+            return false;
+        }
+
+        Long count = jdbcTemplate.queryForObject(HIDDEN_PARTICIPANT_COUNT,
+                Map.of("roomId", roomId, "hiddenPhoneHashes", hiddenPhoneHashes), Long.class);
+
+        return count != null && count > 0;
+    }
+
+    private List<String> hiddenPhoneHashes() {
+        List<String> phoneNumbers = adminProperties.hiddenPhoneNumbers();
+
+        if (phoneNumbers == null) {
+            return List.of();
+        }
+
+        return phoneNumbers.stream()
+                .map(phoneNumber -> phoneNumber.replaceAll("[^0-9]", ""))
+                .filter(StringUtils::hasText)
+                .map(blindIndexHasher::hash)
+                .toList();
     }
 
     private List<AdminChatRoomResult> rooms(List<Long> roomIds) {

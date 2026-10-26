@@ -1,5 +1,6 @@
 admin:
   api-token: ${ADMIN_API_TOKEN:}
+  hidden-phone-numbers: ${ADMIN_HIDDEN_PHONE_NUMBERS:}
 
 spring:
   application:

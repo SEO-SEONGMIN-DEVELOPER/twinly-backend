@@ -12,6 +12,7 @@ spring:
 
 admin:
   api-token: test-admin-token
+  hidden-phone-numbers: 010-0000-0000
 
 crypto:
   aes-keys:
