@@ -27,7 +27,7 @@ public class AdminChatRoomController {
 
     private final AdminChatRoomService adminChatRoomService;
 
-    @Operation(summary = "채팅방 목록", description = "시드 회원이 있는 방은 빠진다. query가 숫자면 채팅방 번호나 회원 ID, 아니면 닉네임 일부로 찾는다. sort 는 LATEST(최근에 열린 순, 기본값) 또는 MESSAGES(메시지 많은 순)다.")
+    @Operation(summary = "채팅방 목록", description = "시드 회원이나 숨김 대상 전화번호 회원이 있는 방은 빠진다. query가 숫자면 채팅방 번호나 회원 ID, 아니면 닉네임 일부로 찾는다. sort 는 LATEST(최근에 열린 순, 기본값) 또는 MESSAGES(메시지 많은 순)다.")
     @ApiResponse(responseCode = "400", description = "INVALID_REQUEST")
     @GetMapping("/admin/chat-rooms")
     public AdminPageResponse<AdminChatRoomResponse> search(@RequestParam(required = false) String query,

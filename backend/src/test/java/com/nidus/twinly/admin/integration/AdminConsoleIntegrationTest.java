@@ -321,6 +321,27 @@ class AdminConsoleIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("채팅방: 숨김 대상 전화번호 회원이 있는 방은 목록·상세·메시지 모두에서 숨긴다")
+    void chatRooms_hideRoomsOfHiddenPhoneNumber() throws Exception {
+        // given: 설정의 숨김 번호(010-0000-0000)를 가진 회원과의 방 / 일반 회원끼리의 방
+        User me = saveMember("나", Gender.MALE, "자차대학교", "me@jacha.ac.kr");
+        User hidden = saveMember("숨김", Gender.FEMALE, "자차대학교", "hidden@jacha.ac.kr");
+        User other = saveMember("일반", Gender.FEMALE, "자차대학교", "other@jacha.ac.kr");
+        jdbcTemplate.update("UPDATE users SET phone_number_hash = ? WHERE id = ?", blindIndexHasher.hash("01000000000"), hidden.getId());
+        Long hiddenRoom = room(me, hidden, true, true);
+        Long visibleRoom = room(me, other, true, true);
+        flushAndClear();
+
+        // when & then: 목록에는 일반 방만, 숨김 방의 상세·메시지는 404
+        mockMvc.perform(admin(get("/admin/chat-rooms").param("query", String.valueOf(me.getId()))))
+                .andExpect(jsonPath("$.totalCount").value(1))
+                .andExpect(jsonPath("$.items[0].id").value(String.valueOf(visibleRoom)));
+        mockMvc.perform(admin(get("/admin/chat-rooms/{id}", hiddenRoom))).andExpect(status().isNotFound());
+        mockMvc.perform(admin(get("/admin/chat-rooms/{id}/messages", hiddenRoom))).andExpect(status().isNotFound());
+        mockMvc.perform(admin(get("/admin/chat-rooms/{id}", visibleRoom))).andExpect(status().isOk());
+    }
+
+    @Test
     @DisplayName("구독 목록: 종류로 거르고 종류별 활성 수를 함께 주며, 첫 결제 할인가(intro)는 유료로 센다")
     void subscriptions_filterByKind() throws Exception {
         // given
