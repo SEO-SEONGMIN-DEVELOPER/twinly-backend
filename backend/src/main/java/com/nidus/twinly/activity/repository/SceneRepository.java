@@ -68,6 +68,19 @@ public interface SceneRepository extends JpaRepository<Scene, Long> {
                                                                     @Param("toDate") LocalDate toDate,
                                                                     @Param("endsAfter") LocalDateTime endsAfter);
 
+    @Query("""
+            SELECT s.id AS id, s.type AS type, s.startsAt AS startsAt, s.endsAt AS endsAt,
+                   s.place AS place, s.placeCode AS placeCode, s.lines AS lines
+            FROM Scene s
+            WHERE s.userId = :userId
+              AND s.endsAt > :from
+              AND s.startsAt < :to
+            ORDER BY s.startsAt ASC, s.id ASC
+            """)
+    List<SceneRecapProjection> findAllRecapByUserIdAndOverlapping(@Param("userId") Long userId,
+                                                                  @Param("from") LocalDateTime from,
+                                                                  @Param("to") LocalDateTime to);
+
     @Modifying
     @Query("DELETE FROM Scene s WHERE s.userId IN :userIds")
     void deleteAllByUserIdIn(@Param("userIds") List<Long> userIds);
@@ -75,6 +88,16 @@ public interface SceneRepository extends JpaRepository<Scene, Long> {
     interface SceneDayProjection {
         Long getUserId();
         LocalDate getDate();
+    }
+
+    interface SceneRecapProjection {
+        Long getId();
+        SceneType getType();
+        LocalDateTime getStartsAt();
+        LocalDateTime getEndsAt();
+        String getPlace();
+        String getPlaceCode();
+        String getLines();
     }
 
     interface SceneRouteProjection {

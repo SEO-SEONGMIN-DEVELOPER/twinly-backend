@@ -6,5 +6,6 @@ public enum AppNotificationFeedTargetType {
     @JsonProperty("profile")     PROFILE,
     @JsonProperty("chat")        CHAT,
     @JsonProperty("people")      PEOPLE,
-    @JsonProperty("balanceGame") BALANCE_GAME
+    @JsonProperty("balanceGame") BALANCE_GAME,
+    @JsonProperty("seasonRecap") SEASON_RECAP
 }

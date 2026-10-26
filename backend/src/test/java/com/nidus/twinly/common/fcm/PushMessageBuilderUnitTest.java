@@ -218,6 +218,28 @@ class PushMessageBuilderUnitTest {
     }
 
     @Test
+    @DisplayName("알림 피드: 시즌 리캡 피드는 seasonRecap 타입으로 나가고 리캡의 시즌 id를 seasonId 로 싣는다")
+    void feed_season_recap_carries_season_id() throws IOException {
+        // given: 7번 시즌 리캡을 가리키는 피드
+        FeedPushContent content = new FeedPushContent(
+                1006L, AppNotificationFeedType.SEASON_RECAP, "10월 평행우주 리캡이 도착했어요", "내 트윈이 한 달 동안 한 일을 확인해 보세요.",
+                AppNotificationFeedTargetType.SEASON_RECAP, 7L, CREATED_AT);
+
+        // when: 피드 푸시 생성
+        List<PushMessage> messages = pushMessageBuilder.feed(
+                List.of(device(DevicePlatform.ANDROID, "token-android")), content);
+
+        // then: version·type·appNotificationId·seasonId·createdAt 이 모두 문자열로 실림
+        String json = toJson(messages.get(0));
+        assertThat(json).contains("\"version\":\"1\"");
+        assertThat(json).contains("\"type\":\"seasonRecap\"");
+        assertThat(json).contains("\"appNotificationId\":\"1006\"");
+        assertThat(json).contains("\"seasonId\":\"7\"");
+        assertThat(json).contains("\"createdAt\"");
+        assertThat(messages).extracting(PushMessage::type).containsExactly(PushType.SEASON_RECAP);
+    }
+
+    @Test
     @DisplayName("알림 피드: 공지는 notice 타입으로 나가고 target 키 없이 appNotificationId 만 싣는다")
     void feed_notice_has_no_target() throws IOException {
         // given: target 이 없는 공지 피드

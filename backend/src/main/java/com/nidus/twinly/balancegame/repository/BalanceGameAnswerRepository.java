@@ -60,6 +60,39 @@ public interface BalanceGameAnswerRepository extends JpaRepository<BalanceGameAn
                                         @Param("cursorStartsAt") Instant cursorStartsAt,
                                         @Param("limit") int limit);
 
+    @Query(value = """
+            SELECT mine.user_id AS userId,
+                   mine.partner_user_id AS partnerUserId,
+                   COUNT(*) AS comparedCount,
+                   CAST(COALESCE(SUM(mine.option_id = theirs.option_id), 0) AS SIGNED) AS matchedCount
+            FROM balance_game_partner_answers mine
+            JOIN balance_game_partner_answers theirs
+              ON theirs.round_id = mine.round_id
+             AND theirs.user_id = mine.partner_user_id
+             AND theirs.partner_user_id = mine.user_id
+            JOIN balance_game_rounds r
+              ON r.id = mine.round_id
+             AND r.season_id = :seasonId
+             AND r.starts_at >= :from
+             AND r.starts_at < :to
+            WHERE mine.created_at < :to
+              AND theirs.created_at < :to
+            GROUP BY mine.user_id, mine.partner_user_id
+            """, nativeQuery = true)
+    List<PairMatchRateProjection> countMatchRatesBySeasonIdAndRoundStartsAtRange(@Param("seasonId") Long seasonId,
+                                                                                 @Param("from") Instant from,
+                                                                                 @Param("to") Instant to);
+
+    interface PairMatchRateProjection {
+        Long getUserId();
+
+        Long getPartnerUserId();
+
+        Long getComparedCount();
+
+        Long getMatchedCount();
+    }
+
     interface HistoryProjection {
         Long getRoundId();
 

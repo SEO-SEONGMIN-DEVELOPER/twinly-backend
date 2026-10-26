@@ -28,6 +28,8 @@ public class AppNotificationFeedWriter {
     private static final String SCHOOL_VERIFICATION_APPROVED_TITLE = "학교 인증이 끝났어요";
     private static final String SCHOOL_VERIFICATION_APPROVED_BODY = "이제 평행우주에 참여할 수 있어요.";
     private static final String SCHOOL_VERIFICATION_REJECTED_TITLE = "학생증을 다시 확인해 주세요";
+    private static final String SEASON_RECAP_TITLE_FORMAT = "%d월 평행우주 리캡이 도착했어요";
+    private static final String SEASON_RECAP_BODY = "내 트윈이 한 달 동안 한 일을 확인해 보세요.";
 
     private final AppNotificationFeedRepository appNotificationFeedRepository;
     private final UserRepository userRepository;
@@ -86,6 +88,23 @@ public class AppNotificationFeedWriter {
         ));
 
         eventPublisher.publishEvent(new SchoolVerificationFeedCreatedEvent(feed, SchoolVerificationStatus.REJECTED));
+    }
+
+    public void writeSeasonRecap(List<Long> userIds, Long seasonId, int month) {
+        if (userIds.isEmpty()) {
+            return;
+        }
+
+        String title = SEASON_RECAP_TITLE_FORMAT.formatted(month);
+
+        publish(appNotificationFeedRepository.saveAll(userIds.stream()
+                .map(userId -> AppNotificationFeed.createSeasonRecapTarget(
+                        userId,
+                        AppNotificationFeedType.SEASON_RECAP,
+                        title,
+                        SEASON_RECAP_BODY,
+                        seasonId))
+                .toList()));
     }
 
     private AppNotificationFeed matchFeed(Long userId, Long partnerUserId, Long roomId) {

@@ -106,6 +106,9 @@ public class PushMessageBuilder {
         if (content.targetId() != null) {
             data.put("targetId", String.valueOf(content.targetId()));
         }
+        if (content.targetKind() == AppNotificationFeedTargetType.SEASON_RECAP && content.targetId() != null) {
+            data.put("seasonId", String.valueOf(content.targetId()));
+        }
 
         return data;
     }

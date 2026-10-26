@@ -1,5 +1,6 @@
 package com.nidus.twinly.relationship.reader;
 
+import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.relationship.domain.Intimacy;
 import com.nidus.twinly.relationship.domain.IntimacyBonuses;
 import com.nidus.twinly.relationship.entity.Relationship;
@@ -36,6 +37,15 @@ public class IntimacyReader {
         }
 
         return withBonus(relationshipRepository.findLatestUntilByUserIdAndPartnerUserIdIn(userId, partnerUserIds, now), Instant.now());
+    }
+
+    public Map<Long, Intimacy> readAllAsOf(Long userId, List<Long> partnerUserIds, Instant asOf) {
+        if (partnerUserIds.isEmpty()) {
+            return Map.of();
+        }
+
+        return withBonus(relationshipRepository.findLatestUntilByUserIdAndPartnerUserIdIn(
+                userId, partnerUserIds, KstTimes.toLocalDateTime(asOf)), asOf);
     }
 
     public Map<Long, Integer> readForSimulation(Long userId, LocalDate date, Instant asOf) {

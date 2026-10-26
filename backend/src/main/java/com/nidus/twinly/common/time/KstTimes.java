@@ -28,4 +28,8 @@ public final class KstTimes {
     public static Instant toInstant(LocalDateTime kstLocalDateTime) {
         return kstLocalDateTime.atZone(ZONE).toInstant();
     }
+
+    public static LocalDateTime toLocalDateTime(Instant instant) {
+        return LocalDateTime.ofInstant(instant, ZONE);
+    }
 }

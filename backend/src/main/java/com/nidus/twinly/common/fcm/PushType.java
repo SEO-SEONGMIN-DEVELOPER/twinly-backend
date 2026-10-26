@@ -13,7 +13,8 @@ public enum PushType {
     @JsonProperty("notice")              NOTICE,
     @JsonProperty("balanceGameAnswered") BALANCE_GAME_ANSWERED,
     @JsonProperty("balanceGameOpened")   BALANCE_GAME_OPENED,
-    @JsonProperty("schoolVerification")  SCHOOL_VERIFICATION;
+    @JsonProperty("schoolVerification")  SCHOOL_VERIFICATION,
+    @JsonProperty("seasonRecap")         SEASON_RECAP;
 
     public static PushType from(AppNotificationFeedType feedType) {
         return switch (feedType) {
@@ -24,6 +25,7 @@ public enum PushType {
             case NOTICE -> NOTICE;
             case BALANCE_GAME_ANSWERED -> BALANCE_GAME_ANSWERED;
             case SCHOOL_VERIFICATION -> SCHOOL_VERIFICATION;
+            case SEASON_RECAP -> SEASON_RECAP;
         };
     }
 }

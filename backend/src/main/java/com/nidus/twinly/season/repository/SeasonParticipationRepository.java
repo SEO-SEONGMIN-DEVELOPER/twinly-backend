@@ -100,6 +100,32 @@ public interface SeasonParticipationRepository extends JpaRepository<SeasonParti
                                                               @Param("participatedBefore") Instant participatedBefore,
                                                               @Param("disclosurePolicyIdentifier") String disclosurePolicyIdentifier);
 
+    @Query("""
+            SELECT p.userId AS userId, p.participatedInAt AS participatedInAt
+            FROM SeasonParticipation p
+            JOIN User u ON u.id = p.userId
+            WHERE p.seasonId = :seasonId
+              AND u.isSeed = FALSE
+              AND u.deletedAt IS NULL
+              AND (u.withdrawalRequestedAt IS NULL OR u.withdrawalRequestedAt > :endedAt)
+              AND EXISTS (
+                  SELECT 1 FROM Scene s
+                  WHERE s.userId = p.userId
+                    AND s.endsAt > :kstStartedAt
+                    AND s.startsAt < :kstEndedAt
+              )
+            ORDER BY p.userId
+            """)
+    List<RecapReceiverProjection> findAllRecapReceivers(@Param("seasonId") Long seasonId,
+                                                        @Param("endedAt") Instant endedAt,
+                                                        @Param("kstStartedAt") LocalDateTime kstStartedAt,
+                                                        @Param("kstEndedAt") LocalDateTime kstEndedAt);
+
+    interface RecapReceiverProjection {
+        Long getUserId();
+        Instant getParticipatedInAt();
+    }
+
     interface PreviewCandidateProjection {
         Long getUserId();
         Gender getGender();

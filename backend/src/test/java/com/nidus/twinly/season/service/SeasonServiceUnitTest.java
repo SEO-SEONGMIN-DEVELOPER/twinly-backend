@@ -1,6 +1,17 @@
 package com.nidus.twinly.season.service;
 
+import com.nidus.twinly.block.entity.Block;
+import com.nidus.twinly.block.repository.BlockRepository;
+import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
+import com.nidus.twinly.common.photo.PhotoType;
 import com.nidus.twinly.common.web.BusinessException;
+import com.nidus.twinly.season.domain.SeasonRecapData;
+import com.nidus.twinly.season.domain.SeasonRecapTimeSlot;
+import com.nidus.twinly.season.dto.result.SeasonLatestRecapResult;
+import com.nidus.twinly.season.entity.SeasonRecap;
+import com.nidus.twinly.season.repository.SeasonRecapRepository;
+import com.nidus.twinly.user.entity.Photo;
+import com.nidus.twinly.user.repository.PhotoRepository;
 import com.nidus.twinly.legal.domain.PolicyKind;
 import com.nidus.twinly.legal.reader.ConsentReader;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
@@ -30,6 +41,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.BeanUtils;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -76,6 +88,21 @@ class SeasonServiceUnitTest {
 
     @Mock
     UserRepository userRepository;
+
+    @Mock
+    SeasonRecapRepository seasonRecapRepository;
+
+    @Mock
+    PhotoRepository photoRepository;
+
+    @Mock
+    CloudFrontService cloudFrontService;
+
+    @Mock
+    BlockRepository blockRepository;
+
+    @Mock
+    ObjectMapper objectMapper;
 
     @InjectMocks
     SeasonService seasonService;
@@ -299,6 +326,80 @@ class SeasonServiceUnitTest {
         return season(now.minus(Duration.ofDays(1)), now.plus(Duration.ofDays(1)));
     }
 
+    @Test
+    @DisplayName("제공 중인 리캡이 없으면 SEASON_RECAP_NOT_FOUND 예외가 발생한다")
+    void latestRecap_without_serving_recap_throws() {
+        // given: 현재 시즌 기준으로 제공 중인 리캡 없음
+        given(currentSeasonReader.read()).willReturn(season(Instant.now(), Instant.now().plus(Duration.ofDays(30))));
+        given(seasonRecapRepository.findServingByUserId(USER_ID, CURRENT_SEASON_ID)).willReturn(Optional.empty());
+
+        // when & then: SEASON_RECAP_NOT_FOUND
+        assertThatThrownBy(() -> seasonService.latestRecap(USER_ID))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.SEASON_RECAP_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("리캡의 숫자는 저장된 값 그대로 주고, 상대는 현재 이름·사진을 붙이되 탈퇴·차단(양방향) 상대는 빼고 다음 순위로 채우지 않는다")
+    void latestRecap_maps_saved_numbers_and_hides_withdrawn_or_blocked_partners() {
+        // given: 7번 시즌 리캡 — mostMet에 21(정상)·22(탈퇴)·23(내가 차단), closest에 24(나를 차단)·21, bestMatches에 21
+        Instant startedAt = Instant.parse("2026-09-30T15:00:00Z");
+        Instant endedAt = Instant.parse("2026-10-31T14:59:59Z");
+        SeasonRecapData data = new SeasonRecapData(
+                startedAt, endedAt, 812, 24,
+                new SeasonRecapData.Ranked(2460, 12), new SeasonRecapData.Ranked(9120, 40), new SeasonRecapData.Ranked(0, null),
+                new SeasonRecapData.Ranked(1284, 8),
+                List.of(new SeasonRecapData.Place("P0123", "학생 거리 카페", 18, 1260)),
+                new SeasonRecapData.Ranked(27, 30), new SeasonRecapData.Ranked(6, 21),
+                List.of(new SeasonRecapData.MostMet(21L, 12, 40), new SeasonRecapData.MostMet(22L, 10, 30), new SeasonRecapData.MostMet(23L, 9, 20)),
+                List.of(new SeasonRecapData.Closest(24L, 80), new SeasonRecapData.Closest(21L, 74)),
+                List.of(new SeasonRecapData.BestMatch(21L, 90.0, 10, 9)),
+                new SeasonRecapData.Ranked(19, 15),
+                new SeasonRecapData.ActivityType(SeasonRecapTimeSlot.EVENING, 14, 23, 54, 26));
+        Instant createdAt = Instant.parse("2026-10-31T15:03:12Z");
+
+        given(currentSeasonReader.read()).willReturn(season(Instant.now(), Instant.now().plus(Duration.ofDays(30))));
+        given(seasonRecapRepository.findServingByUserId(USER_ID, CURRENT_SEASON_ID))
+                .willReturn(Optional.of(SeasonRecap.create(USER_ID, 7L, "recap-json", createdAt)));
+        given(objectMapper.readValue("recap-json", SeasonRecapData.class)).willReturn(data);
+
+        User withdrawn = partner(22L);
+        withdrawn.requestWithdrawal(Duration.ofDays(15));
+        given(userRepository.findAllById(List.of(21L, 22L, 23L, 24L)))
+                .willReturn(List.of(partner(21L), withdrawn, partner(23L), partner(24L)));
+        given(blockRepository.findAllByUserId(USER_ID)).willReturn(List.of(Block.create(USER_ID, 23L)));
+        given(blockRepository.findAllByUserIdInAndBlockedUserId(List.of(21L, 22L, 23L, 24L), USER_ID))
+                .willReturn(List.of(Block.create(24L, USER_ID)));
+        given(photoRepository.findAllByUserIdInAndType(List.of(21L), PhotoType.PROFILE))
+                .willReturn(List.of(Photo.create(21L, PhotoType.PROFILE, "photo-21", 0, 0, 100, 100, Instant.now())));
+        given(cloudFrontService.getSignedUrl("photo-21")).willReturn("https://cdn/photo-21");
+
+        // when: 최근 리캡 조회
+        SeasonLatestRecapResult result = seasonService.latestRecap(USER_ID);
+
+        // then: 숫자는 저장값 그대로
+        assertThat(result.seasonId()).isEqualTo(7L);
+        assertThat(result.startedAt()).isEqualTo(startedAt);
+        assertThat(result.endedAt()).isEqualTo(endedAt);
+        assertThat(result.population()).isEqualTo(812);
+        assertThat(result.together().days()).isEqualTo(24);
+        assertThat(result.activity().move().minutes()).isZero();
+        assertThat(result.activity().move().topPercent()).isNull();
+        assertThat(result.bubbles().count()).isEqualTo(1284);
+        assertThat(result.places()).hasSize(1);
+        assertThat(result.activityType().type()).isEqualTo(SeasonRecapTimeSlot.EVENING);
+        assertThat(result.activityType().counts().evening()).isEqualTo(54);
+
+        // then: 탈퇴(22)·내가 차단(23)·나를 차단(24)은 빠지고 남은 21만, 현재 닉네임과 서명 URL 사진으로
+        assertThat(result.mostMet()).extracting("userId").containsExactly(21L);
+        assertThat(result.mostMet().getFirst().userName()).isEqualTo("nick21");
+        assertThat(result.mostMet().getFirst().profilePhoto().photoUrl()).isEqualTo("https://cdn/photo-21");
+        assertThat(result.closest()).extracting("userId").containsExactly(21L);
+        assertThat(result.bestMatches()).extracting("userId").containsExactly(21L);
+        assertThat(result.bestMatches().getFirst().matchRate()).isEqualTo(90.0);
+    }
+
     /** Season은 생성 팩토리·세터가 없으므로 protected 기본 생성자 + 리플렉션으로 만든다. */
     private Season season(Instant startedAt, Instant endedAt) {
         Season season = BeanUtils.instantiateClass(Season.class);
@@ -314,6 +415,15 @@ class SeasonServiceUnitTest {
                 Gender.MALE, "organization", "organizationHash", "니두스", "affHash", "2020123", "affNoHash",
                 "2000-01-01", "birthHash", "01000000000", "phoneHash", "me@test.com", "emailHash", null, null, null, null);
         ReflectionTestUtils.setField(user, "id", USER_ID);
+        return user;
+    }
+
+    private User partner(Long id) {
+        User user = User.create(
+                "nick" + id, "홍", "familyHash", "길동", "givenHash",
+                Gender.MALE, "organization", "organizationHash", "니두스", "affHash", "2020123", "affNoHash",
+                "2000-01-01", "birthHash", "0100000" + id, "phoneHash", id + "@test.com", "emailHash", null, null, null, null);
+        ReflectionTestUtils.setField(user, "id", id);
         return user;
     }
 }

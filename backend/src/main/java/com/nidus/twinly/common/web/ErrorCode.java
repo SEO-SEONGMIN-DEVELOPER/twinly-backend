@@ -104,6 +104,7 @@ public enum ErrorCode {
 
     // 시즌
     INVALID_SEASON_PERIOD(HttpStatus.UNPROCESSABLE_CONTENT, "시즌 시작 시각은 종료 시각보다 앞서야 합니다."),
+    SEASON_RECAP_NOT_FOUND(HttpStatus.NOT_FOUND, "제공 중인 시즌 리캡이 없습니다."),
     SCHOOL_VERIFICATION_NOT_APPROVED(HttpStatus.FORBIDDEN, "학교 인증이 승인되지 않았습니다."),
 
     // 학교 인증(학생증)

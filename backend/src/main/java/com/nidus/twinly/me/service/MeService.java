@@ -63,6 +63,7 @@ import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsChatTargetResult;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsItemResult;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsPeopleTargetResult;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsProfileTargetResult;
+import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsSeasonRecapTargetResult;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsResult;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsTargetResult;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsUnreadCountResult;
@@ -525,6 +526,7 @@ public class MeService {
             case CHAT -> new MeAppNotificationsFeedsChatTargetResult("chat", feed.getTargetChatRoomId());
             case PEOPLE -> new MeAppNotificationsFeedsPeopleTargetResult("people");
             case BALANCE_GAME -> new MeAppNotificationsFeedsBalanceGameTargetResult("balanceGame", feed.getTargetUserId());
+            case SEASON_RECAP -> new MeAppNotificationsFeedsSeasonRecapTargetResult("seasonRecap", feed.getTargetSeasonId());
         };
     }
 
