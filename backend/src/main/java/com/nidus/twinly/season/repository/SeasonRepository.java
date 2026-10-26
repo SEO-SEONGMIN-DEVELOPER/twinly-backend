@@ -11,4 +11,6 @@ public interface SeasonRepository extends JpaRepository<Season, Long> {
     Optional<Season> findFirstByIsActiveTrueOrderByIdDesc();
 
     List<Season> findAllByIsActiveTrue();
+
+    Optional<Season> findFirstByIdLessThanOrderByIdDesc(Long id);
 }

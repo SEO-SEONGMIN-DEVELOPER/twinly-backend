@@ -93,6 +93,14 @@ public enum ErrorCode {
     // AI 채팅
     AI_QUESTION_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 턴의 AI 질문이 존재하지 않습니다."),
 
+    // 트윈 업데이트
+    TWIN_UPDATE_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 트윈 업데이트입니다."),
+    TWIN_NOT_COMPLETED(HttpStatus.CONFLICT, "트윈이 아직 완성되지 않았습니다."),
+    TWIN_UPDATE_NOT_AVAILABLE(HttpStatus.CONFLICT, "아직 트윈을 업데이트할 수 없습니다."),
+    TWIN_UPDATE_STALE(HttpStatus.CONFLICT, "다시 시작되어 더 이상 쓸 수 없는 트윈 업데이트입니다."),
+    TWIN_UPDATE_ALREADY_COMPLETED(HttpStatus.CONFLICT, "이미 완료한 트윈 업데이트입니다."),
+    INTERESTS_NOT_SAVED(HttpStatus.UNPROCESSABLE_CONTENT, "관심사를 저장하지 않았습니다."),
+
     // 신고
     CANNOT_REPORT_SELF(HttpStatus.UNPROCESSABLE_CONTENT, "자기 자신을 신고할 수 없습니다."),
     SCENE_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 씬입니다."),
@@ -104,6 +112,7 @@ public enum ErrorCode {
 
     // 시즌
     INVALID_SEASON_PERIOD(HttpStatus.UNPROCESSABLE_CONTENT, "시즌 시작 시각은 종료 시각보다 앞서야 합니다."),
+    SEASON_RECAP_NOT_FOUND(HttpStatus.NOT_FOUND, "제공 중인 시즌 리캡이 없습니다."),
     SCHOOL_VERIFICATION_NOT_APPROVED(HttpStatus.FORBIDDEN, "학교 인증이 승인되지 않았습니다."),
 
     // 학교 인증(학생증)

@@ -285,6 +285,13 @@ class StudentIdIntegrationTest extends AbstractIntegrationTest {
         assertThat(feed.get("body")).isEqualTo(StudentIdRejectReason.NAME_MISMATCH.message());
         assertThat(feed.get("target_kind")).isNull();
 
+        // then: 목록에서 대기 상태로는 빠지고 반려 상태로는 검수자와 함께 보인다
+        mockMvc.perform(get("/admin/school-verifications/student-ids").header(ADMIN_TOKEN_HEADER, ADMIN_TOKEN).param("status", "PENDING"))
+                .andExpect(jsonPath("$.items[?(@.submissionId == '%s')]".formatted(submission.getSubmissionId())).doesNotExist());
+        mockMvc.perform(get("/admin/school-verifications/student-ids").header(ADMIN_TOKEN_HEADER, ADMIN_TOKEN).param("status", "REJECTED"))
+                .andExpect(jsonPath("$.items[?(@.submissionId == '%s')].status".formatted(submission.getSubmissionId())).value("REJECTED"))
+                .andExpect(jsonPath("$.items[?(@.submissionId == '%s')].reviewer".formatted(submission.getSubmissionId())).value(REVIEWER));
+
         // then: 내 상태에 반려 사유가 나간다
         mockMvc.perform(get("/api/v1/me/status").header("Authorization", bearer(user.getId())))
                 .andExpect(jsonPath("$.schoolVerification.status").value("rejected"))
@@ -412,6 +419,32 @@ class StudentIdIntegrationTest extends AbstractIntegrationTest {
         assertThat(anonSessionStudentIdSubmissionRepository.findAllByAnonSessionIdOrderByIdAsc(expired.getId())).isEmpty();
         assertThat(anonSessionAgreementRepository.findAllByAnonSessionId(expired.getId())).isEmpty();
         assertThat(anonSessionRepository.findById(alive.getId())).isPresent();
+    }
+
+    @Test
+    @DisplayName("어드민 목록: 가입 중 교체된 제출은 상태 필터와 상관없이 빠지고, 최신 제출 상세의 이전 제출에만 나온다")
+    void admin_list_excludes_replaced_but_detail_history_keeps_it() throws Exception {
+        // given: 가입 중 교체된 제출과 지금 대기 중인 제출이 있는 회원
+        User user = pendingStudentIdUser();
+        StudentIdSubmission replaced = StudentIdSubmission.create(
+                UUID.randomUUID(), user.getId(), ORGANIZATION, "student-id/upload/u/r1", "student-id/review/r1");
+        ReflectionTestUtils.setField(replaced, "status", StudentIdSubmissionStatus.REPLACED);
+        studentIdSubmissionRepository.save(replaced);
+        StudentIdSubmission current = studentIdSubmissionRepository.save(StudentIdSubmission.create(
+                UUID.randomUUID(), user.getId(), ORGANIZATION, "student-id/upload/u/r2", "student-id/review/r2"));
+
+        // when & then: 전체 목록에는 대기 건만 보이고 교체 건은 없다
+        mockMvc.perform(get("/admin/school-verifications/student-ids").header(ADMIN_TOKEN_HEADER, ADMIN_TOKEN))
+                .andExpect(jsonPath("$.items[?(@.submissionId == '%s')]".formatted(current.getSubmissionId())).exists())
+                .andExpect(jsonPath("$.items[?(@.submissionId == '%s')]".formatted(replaced.getSubmissionId())).doesNotExist());
+
+        // when & then: REPLACED 로 직접 걸러도 나오지 않는다
+        mockMvc.perform(get("/admin/school-verifications/student-ids").header(ADMIN_TOKEN_HEADER, ADMIN_TOKEN).param("status", "REPLACED"))
+                .andExpect(jsonPath("$.items[?(@.submissionId == '%s')]".formatted(replaced.getSubmissionId())).doesNotExist());
+
+        // when & then: 대기 건 상세의 이전 제출에는 교체 건이 남아 있다
+        mockMvc.perform(get("/admin/school-verifications/student-ids/{id}", current.getSubmissionId()).header(ADMIN_TOKEN_HEADER, ADMIN_TOKEN))
+                .andExpect(jsonPath("$.history[?(@.submissionId == '%s')].status".formatted(replaced.getSubmissionId())).value("REPLACED"));
     }
 
     @Test

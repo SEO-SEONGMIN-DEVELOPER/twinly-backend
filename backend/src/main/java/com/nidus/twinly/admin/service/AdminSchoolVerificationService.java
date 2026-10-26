@@ -10,6 +10,7 @@ import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.notification.writer.AppNotificationFeedWriter;
 import com.nidus.twinly.purchase.writer.EarlySignupGrantWriter;
 import com.nidus.twinly.schoolverification.domain.StudentIdDecision;
+import com.nidus.twinly.schoolverification.domain.StudentIdSubmissionStatus;
 import com.nidus.twinly.schoolverification.entity.StudentIdSubmission;
 import com.nidus.twinly.schoolverification.event.SchoolVerificationApprovedEvent;
 import com.nidus.twinly.schoolverification.repository.StudentIdSubmissionRepository;
@@ -44,9 +45,9 @@ public class AdminSchoolVerificationService {
     private final StudentIdSubmissionRepository studentIdSubmissionRepository;
     private final UserRepository userRepository;
 
-    public AdminPageResult<AdminSchoolVerificationStudentIdsItemResult> studentIds(Integer page, Integer size) {
+    public AdminPageResult<AdminSchoolVerificationStudentIdsItemResult> studentIds(StudentIdSubmissionStatus status, Integer page, Integer size) {
         Instant now = Instant.now();
-        Page<StudentIdSubmission> submissions = studentIdSubmissionRepository.findReviewQueue(PageRequest.of(page, size));
+        Page<StudentIdSubmission> submissions = studentIdSubmissionRepository.findForAdmin(status, PageRequest.of(page, size));
         Map<Long, User> usersById = userRepository.findAllById(submissions.getContent().stream().map(StudentIdSubmission::getUserId).toList()).stream()
                 .collect(Collectors.toMap(User::getId, Function.identity()));
 
@@ -56,11 +57,19 @@ public class AdminSchoolVerificationService {
                         submission.getUserId(),
                         usersById.get(submission.getUserId()).displayNickname(),
                         submission.getOrganization(),
+                        submission.getStatus(),
+                        submission.getReviewer(),
                         submission.getSubmittedAt(),
-                        Duration.between(submission.getSubmittedAt(), now).toMinutes()))
+                        submission.getDecidedAt(),
+                        elapsedMinutes(submission, now)))
                 .toList();
 
         return new AdminPageResult<>(items, page, size, submissions.getTotalElements());
+    }
+
+    private Long elapsedMinutes(StudentIdSubmission submission, Instant now) {
+        Instant waitedUntil = submission.isPending() ? now : submission.getDecidedAt();
+        return waitedUntil == null ? null : Duration.between(submission.getSubmittedAt(), waitedUntil).toMinutes();
     }
 
     public AdminSchoolVerificationStudentIdDetailResult studentIdDetail(UUID submissionId) {

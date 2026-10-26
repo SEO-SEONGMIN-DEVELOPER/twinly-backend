@@ -4,7 +4,9 @@ import com.nidus.twinly.chat.repository.ChatRepository;
 import com.nidus.twinly.main.dto.result.MainTabResult;
 import com.nidus.twinly.notification.repository.AppNotificationFeedRepository;
 import com.nidus.twinly.season.entity.Season;
+import com.nidus.twinly.season.entity.SeasonRecap;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
+import com.nidus.twinly.season.repository.SeasonRecapRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,6 +18,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -36,6 +39,9 @@ class MainServiceUnitTest {
 
     @Mock
     AppNotificationFeedRepository appNotificationFeedRepository;
+
+    @Mock
+    SeasonRecapRepository seasonRecapRepository;
 
     @InjectMocks
     MainService mainService;
@@ -112,6 +118,41 @@ class MainServiceUnitTest {
     }
 
     /** Season은 팩토리·세터가 없으므로 protected 기본 생성자로 만든 뒤 필드를 직접 채운다. */
+    @Test
+    @DisplayName("제공 중인 리캡이 없으면 latestRecap은 null이다")
+    void mainTab_without_serving_recap_returns_null_recap() {
+        // given: 진행 중인 시즌 + 현재 시즌 기준으로 제공 중인 리캡 없음
+        Instant now = Instant.now();
+        given(currentSeasonReader.read()).willReturn(
+                season(CURRENT_SEASON_ID, now.minus(Duration.ofDays(1)), now.plus(Duration.ofDays(29))));
+        given(seasonRecapRepository.findServingByUserId(USER_ID, CURRENT_SEASON_ID)).willReturn(Optional.empty());
+
+        // when: 메인 탭 조회
+        MainTabResult result = mainService.mainTab(USER_ID);
+
+        // then: latestRecap은 null
+        assertThat(result.latestRecap()).isNull();
+    }
+
+    @Test
+    @DisplayName("제공 중인 리캡이 있으면 그 리캡의 시즌 id와 처음 준비된 시각을 latestRecap에 담는다")
+    void mainTab_with_serving_recap_returns_latest_recap() {
+        // given: 진행 중인 시즌 + 지난 시즌(0번) 리캡이 제공 중
+        Instant now = Instant.now();
+        Instant createdAt = now.minus(Duration.ofHours(10));
+        given(currentSeasonReader.read()).willReturn(
+                season(CURRENT_SEASON_ID, now.minus(Duration.ofDays(1)), now.plus(Duration.ofDays(29))));
+        given(seasonRecapRepository.findServingByUserId(USER_ID, CURRENT_SEASON_ID))
+                .willReturn(Optional.of(SeasonRecap.create(USER_ID, 0L, "{}", createdAt)));
+
+        // when: 메인 탭 조회
+        MainTabResult result = mainService.mainTab(USER_ID);
+
+        // then: 리캡의 시즌 id와 준비 시각이 그대로 담김
+        assertThat(result.latestRecap().seasonId()).isEqualTo(0L);
+        assertThat(result.latestRecap().createdAt()).isEqualTo(createdAt);
+    }
+
     private Season season(Long id, Instant startedAt, Instant endedAt) {
         Season season = BeanUtils.instantiateClass(Season.class);
         ReflectionTestUtils.setField(season, "id", id);

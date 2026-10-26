@@ -21,7 +21,7 @@
     entry: { BOTH: ['둘 다 입장', 'ok'], ONE: ['한 명만 입장', 'warn'], NONE: ['미입장', 'idle'] },
     caseCategory: { USER_REPORT: '유저 신고', AI_UTTERANCE_REPORT: 'AI 발화 신고', SUGGESTION: '건의' },
     caseRole: { REPORTER: '신고함', REPORTED: '신고당함', AUTHOR: '작성' },
-    studentIdStatus: { PENDING: ['검수 대기', 'warn'], APPROVED: ['승인', 'ok'], REJECTED: ['반려', 'bad'], REPLACED: ['다시 제출해 교체됨', 'idle'], CANCELED: ['탈퇴로 취소', 'idle'] },
+    studentIdStatus: { PENDING: ['검수 대기', 'warn'], APPROVED: ['승인', 'ok'], REJECTED: ['반려', 'bad'], REPLACED: ['재제출로 인한 교체', 'idle'], CANCELED: ['탈퇴로 인한 취소', 'idle'] },
     rejectReason: {
       BLURRY: '사진이 흐리거나 잘림',
       NAME_MISMATCH: '본인인증 이름과 다름',
@@ -30,6 +30,7 @@
       RRN_VISIBLE: '주민등록번호 뒷자리가 보임'
     }
   };
+  const REVIEWERS = ['이강식', '황석진', '서성민'];
 
   const $ = id => document.getElementById(id);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -927,25 +928,42 @@
     });
   }
 
-  const schoolState = { page: 0 };
+  const schoolState = { status: '', page: 0 };
   const studentIdPill = status => { const [l, c] = LABEL.studentIdStatus[status] || [status, 'idle']; return pill(l, c); };
   const elapsedLabel = minutes => minutes < 60 ? `${num(minutes)}분` : `${num(Math.floor(minutes / 60))}시간 ${minutes % 60}분`;
+  const elapsedCell = item => {
+    if (item.elapsedMinutes == null) return '<span class="hint">—</span>';
+    if (item.status === 'PENDING' && item.elapsedMinutes >= 24 * 60) return pill(elapsedLabel(item.elapsedMinutes), 'bad');
+    return `<span class="num">${elapsedLabel(item.elapsedMinutes)}</span>`;
+  };
+  const emptySchoolMessage = status => status === 'PENDING' ? '검수할 학생증이 없어요.'
+    : status ? `${LABEL.studentIdStatus[status][0]} 상태인 제출이 없어요.` : '학생증 제출이 없어요.';
+
+  $('school-chips').addEventListener('click', event => {
+    const chip = event.target.closest('.chip');
+    if (!chip) return;
+    schoolState.status = chip.dataset.f;
+    schoolState.page = 0;
+    $('school-chips').querySelectorAll('.chip').forEach(c => c.setAttribute('aria-pressed', c === chip));
+    loaders.schools();
+  });
 
   loaders.schools = async () => {
     const rows = $('school-rows');
-    rows.innerHTML = stateRow(4, '불러오는 중이에요…');
+    rows.innerHTML = stateRow(6, '불러오는 중이에요…');
     try {
-      const result = await api('/admin/school-verifications/student-ids' + query({ page: schoolState.page, size: PAGE_SIZE }));
+      const result = await api('/admin/school-verifications/student-ids' + query({ status: schoolState.status, page: schoolState.page, size: PAGE_SIZE }));
       markRefreshed();
-      updateSchoolPendingCount(result.totalCount);
+      if (schoolState.status === 'PENDING') updateSchoolPendingCount(result.totalCount);
+      else refreshSchoolPendingCount();
       rows.innerHTML = result.items.length ? result.items.map(item => `<tr tabindex="0" data-submission="${esc(item.submissionId)}">
           <td><div class="who"><span>${esc(item.nickname || '(알 수 없음)')}</span><small class="num">ID ${esc(item.userId)}</small></div></td>
-          <td>${esc(item.organization)}</td><td class="num">${fmtDateTime(item.submittedAt)}</td>
-          <td>${item.elapsedMinutes >= 24 * 60 ? pill(elapsedLabel(item.elapsedMinutes), 'bad') : `<span class="num">${elapsedLabel(item.elapsedMinutes)}</span>`}</td></tr>`).join('')
-        : stateRow(4, '검수할 학생증이 없어요.');
+          <td>${esc(item.organization)}</td><td>${studentIdPill(item.status)}</td><td class="num">${fmtDateTime(item.submittedAt)}</td>
+          <td>${elapsedCell(item)}</td><td class="hint">${esc(item.reviewer || '—')}</td></tr>`).join('')
+        : stateRow(6, emptySchoolMessage(schoolState.status));
       pager($('school-pager'), result, page => { schoolState.page = page; loaders.schools(); });
     } catch (error) {
-      rows.innerHTML = stateRow(4, error.message, true);
+      rows.innerHTML = stateRow(6, error.message, true);
       $('school-pager').innerHTML = '';
     }
   };
@@ -958,7 +976,7 @@
 
   async function refreshSchoolPendingCount() {
     try {
-      const result = await api('/admin/school-verifications/student-ids' + query({ page: 0, size: 1 }));
+      const result = await api('/admin/school-verifications/student-ids' + query({ status: 'PENDING', page: 0, size: 1 }));
       updateSchoolPendingCount(result.totalCount);
     } catch (e) {
       updateSchoolPendingCount(0);
@@ -992,7 +1010,8 @@
         <div class="field" id="sv-reason-field" hidden><label for="sv-reason">반려 사유</label>
           <select class="ctl" id="sv-reason">${Object.entries(LABEL.rejectReason).map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('')}</select>
           <span class="hint">회원에게 앱 알림으로 사유가 함께 가요.</span></div>
-        <div class="field"><label for="sv-reviewer">검수자</label><input class="ctl" id="sv-reviewer" maxlength="100" value="${esc(operatorEmail)}" placeholder="이름이나 이메일"></div>
+        <div class="field"><span class="lbl">검수자</span><div class="radio-row">
+          ${REVIEWERS.map(name => `<label><input type="radio" name="sv-reviewer" value="${esc(name)}"> ${esc(name)}</label>`).join('')}</div></div>
         <div class="toolbar"><button class="btn" type="button" id="sv-save">판정 저장</button><span class="saved" id="sv-saved" hidden>저장했어요</span><span class="save-error" id="sv-error" hidden></span></div>` : '';
 
     openDrawer(`${drawerHead('학생증 검수', `${esc(s.nickname || '(알 수 없음)')} · ${fmtDateTime(s.submittedAt)} 제출`)}
@@ -1012,12 +1031,12 @@
     const button = drawer.querySelector('#sv-save');
     button.addEventListener('click', async () => {
       const decision = drawer.querySelector('input[name="sv-decision"]:checked').value;
-      const reviewer = drawer.querySelector('#sv-reviewer').value.trim();
+      const reviewer = drawer.querySelector('input[name="sv-reviewer"]:checked')?.value;
       const error = drawer.querySelector('#sv-error');
       error.hidden = true;
       if (!reviewer) {
         error.hidden = false;
-        error.textContent = '검수자를 적어 주세요.';
+        error.textContent = '검수자를 골라 주세요.';
         return;
       }
       const label = decision === 'APPROVED' ? '승인' : '반려';

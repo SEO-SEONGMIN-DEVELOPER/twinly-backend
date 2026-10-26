@@ -87,6 +87,7 @@
       "id": 2,
       "type": "timeseries",
       "title": "응답시간 p99",
+      "description": "응답 시간 상위 1% 경계값. Prometheus 가 1분마다 미리 합쳐 둔 기록(recording rule)으로 계산하므로, 기록을 시작한 배포 이전 기간은 비어 있다.",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
@@ -118,7 +119,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "histogram_quantile(0.99, sum by (node, le) (rate(http_server_requests_seconds_bucket{node=~\"$node\", caller=~\"$caller\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by (node, le) (avg_over_time(node_caller_le:http_server_requests_seconds_bucket:rate1m{node=~\"$node\", caller=~\"$caller\"}[$__rate_interval])))",
           "legendFormat": "{{node}}"
         }
       ]

@@ -26,6 +26,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
@@ -151,6 +152,44 @@ class AppNotificationFeedWriterUnitTest {
         assertThat(feed.getTitle()).isEqualTo("상대님이 밸런스 게임에 답했어요.");
         assertThat(feed.getBody()).isEqualTo("나도 답하고 서로 같은 답을 골랐는지 확인해 보세요.");
         then(eventPublisher).should().publishEvent(any(Object.class));
+    }
+
+    @Test
+    @DisplayName("시즌 리캡 피드는 받는 사람마다 리캡의 시즌을 가리키고 {M}월 제목으로 한 번에 저장한 뒤 이벤트를 발행한다")
+    void writeSeasonRecap_saves_feed_per_user() {
+        // given: 저장 결과를 그대로 돌려줌
+        given(appNotificationFeedRepository.saveAll(anyList())).willAnswer(invocation -> invocation.getArgument(0));
+
+        // when: 10월 리캡(시즌 7) 알림을 두 사람에게
+        appNotificationFeedWriter.writeSeasonRecap(List.of(ME, PARTNER), 7L, 10);
+
+        // then: 2건 모두 SEASON_RECAP 타깃(시즌 7), 사람·채팅방 타깃은 비어 있음
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<AppNotificationFeed>> captor = ArgumentCaptor.forClass(List.class);
+        then(appNotificationFeedRepository).should().saveAll(captor.capture());
+
+        assertThat(captor.getValue()).extracting(AppNotificationFeed::getUserId).containsExactly(ME, PARTNER);
+        assertThat(captor.getValue()).allSatisfy(feed -> {
+            assertThat(feed.getType()).isEqualTo(AppNotificationFeedType.SEASON_RECAP);
+            assertThat(feed.getTargetKind()).isEqualTo(AppNotificationFeedTargetType.SEASON_RECAP);
+            assertThat(feed.getTargetSeasonId()).isEqualTo(7L);
+            assertThat(feed.getTargetUserId()).isNull();
+            assertThat(feed.getTargetChatRoomId()).isNull();
+            assertThat(feed.getTitle()).isEqualTo("10월 평행우주 리캡이 도착했어요");
+            assertThat(feed.getBody()).isEqualTo("내 트윈이 한 달 동안 한 일을 확인해 보세요.");
+        });
+        then(eventPublisher).should().publishEvent(any(Object.class));
+    }
+
+    @Test
+    @DisplayName("받는 사람이 없으면 시즌 리캡 피드를 저장하지 않는다")
+    void writeSeasonRecap_without_users_does_nothing() {
+        // when: 빈 목록으로 호출
+        appNotificationFeedWriter.writeSeasonRecap(List.of(), 7L, 10);
+
+        // then: 저장·이벤트 없음
+        then(appNotificationFeedRepository).should(never()).saveAll(anyList());
+        then(eventPublisher).should(never()).publishEvent(any(Object.class));
     }
 
     @Test

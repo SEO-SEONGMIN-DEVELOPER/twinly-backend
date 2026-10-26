@@ -16,6 +16,15 @@ import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.me.domain.HesitationDuration;
 import com.nidus.twinly.me.domain.HesitationStatus;
 import com.nidus.twinly.me.dto.command.MeAiChatMessageCommand;
+import com.nidus.twinly.me.dto.command.MeCompleteTwinUpdateCommand;
+import com.nidus.twinly.me.dto.command.MeSaveTwinUpdateInterestsCommand;
+import com.nidus.twinly.me.dto.command.MeSendTwinUpdateAiChatMessageCommand;
+import com.nidus.twinly.me.dto.command.MeStartTwinUpdateAiChatCommand;
+import com.nidus.twinly.me.dto.command.MeStartTwinUpdateCommand;
+import com.nidus.twinly.me.dto.command.MeSubmitTwinUpdateSurveyAnswerCommand;
+import com.nidus.twinly.me.dto.result.MeCompleteTwinUpdateResult;
+import com.nidus.twinly.me.dto.result.MeTwinUpdateResult;
+import com.nidus.twinly.twinupdate.domain.TwinUpdateStatus;
 import com.nidus.twinly.me.dto.command.MeAppNotificationsReadAllCommand;
 import com.nidus.twinly.me.dto.command.MeChangeProfileNicknameCommand;
 import com.nidus.twinly.me.dto.command.MeCheckProfileNicknameCommand;
@@ -123,6 +132,7 @@ class MeControllerUnitTest {
 
     private static final String BEARER = "Bearer access-token";
     private static final Long ME = 1L;
+    private static final UUID UPDATE_ID = UUID.fromString("0b9f8a52-6c1e-4d7a-9a3f-2f4b5c6d7e8f");
 
     @Autowired
     MockMvc mockMvc;
@@ -689,7 +699,7 @@ class MeControllerUnitTest {
                 .willReturn(new MeStatusResult(
                         new MeStatusWithdrawalResult(true, Instant.parse("2026-08-10T00:00:00Z")),
                         new MeStatusReportResult(true, List.of("SPAM", "HARASSMENT")),
-                        new MeStatusPersonaResult(true, true, false),
+                        new MeStatusPersonaResult(true, true, false, Instant.parse("2026-11-07T01:00:00Z")),
                         new MeStatusSchoolVerificationResult(
                                 SchoolVerificationStatus.REJECTED, SchoolVerificationMethod.STUDENT_ID, StudentIdRejectReason.BLURRY)));
 
@@ -707,6 +717,7 @@ class MeControllerUnitTest {
                 .andExpect(jsonPath("$.persona.isSurveyCompleted").value(true))
                 .andExpect(jsonPath("$.persona.isInterestsCompleted").value(true))
                 .andExpect(jsonPath("$.persona.isAiChatCompleted").value(false))
+                .andExpect(jsonPath("$.persona.nextUpdatableAt").value("2026-11-07T01:00:00Z"))
                 .andExpect(jsonPath("$.schoolVerification.status").value("rejected"))
                 .andExpect(jsonPath("$.schoolVerification.method").value("studentId"))
                 .andExpect(jsonPath("$.schoolVerification.rejectReason").value("BLURRY"));
@@ -1920,5 +1931,314 @@ class MeControllerUnitTest {
         // then: 401 반환 + 서비스는 호출되지 않음
         result.andExpect(status().isUnauthorized());
         then(meService).should(never()).schoolVerificationStudentIdSubmit(anyLong(), any());
+    }
+
+    // ---------------------------------------------------------------- 트윈 업데이트
+
+    @Test
+    @DisplayName("트윈 업데이트 시작 성공 시 200과 진행 중 회차 상태를 반환하고 restart 값을 커맨드로 넘긴다")
+    void startTwinUpdate_success() throws Exception {
+        // given: 서비스가 새 진행 회차를 반환
+        given(meService.startTwinUpdate(ME, new MeStartTwinUpdateCommand(true)))
+                .willReturn(new MeTwinUpdateResult(UPDATE_ID, TwinUpdateStatus.IN_PROGRESS, false, false, null, null));
+
+        // when: 인증 상태로 restart:true 시작 요청
+        var result = mockMvc.perform(post("/api/v1/me/twin-update/start")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"restart":true}
+                        """));
+
+        // then: 200 + updateId 문자열·inProgress 표기·완료 시각 null
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.updateId").value(UPDATE_ID.toString()))
+                .andExpect(jsonPath("$.status").value("inProgress"))
+                .andExpect(jsonPath("$.isSurveyCompleted").value(false))
+                .andExpect(jsonPath("$.isInterestsCompleted").value(false))
+                .andExpect(jsonPath("$.completedAt").isEmpty())
+                .andExpect(jsonPath("$.nextUpdatableAt").isEmpty());
+    }
+
+    @Test
+    @DisplayName("트윈 업데이트 시작 요청에 restart 가 없으면 400을 반환하고 서비스를 호출하지 않는다")
+    void startTwinUpdate_without_restart_returns_400() throws Exception {
+        // when: restart 없이 시작 요청
+        var result = mockMvc.perform(post("/api/v1/me/twin-update/start")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"));
+
+        // then: 400 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest());
+        then(meService).should(never()).startTwinUpdate(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("트윈 업데이트 시작 시 2주가 안 됐다는 서비스 예외는 409 TWIN_UPDATE_NOT_AVAILABLE 로 내려간다")
+    void startTwinUpdate_not_available_returns_409() throws Exception {
+        // given: 서비스가 2주 제한 예외를 던진다
+        given(meService.startTwinUpdate(ME, new MeStartTwinUpdateCommand(false)))
+                .willThrow(new BusinessException(ErrorCode.TWIN_UPDATE_NOT_AVAILABLE));
+
+        // when: restart:false 시작 요청
+        var result = mockMvc.perform(post("/api/v1/me/twin-update/start")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"restart":false}
+                        """));
+
+        // then: 409 + 오류 코드
+        result.andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("TWIN_UPDATE_NOT_AVAILABLE"));
+    }
+
+    @Test
+    @DisplayName("트윈 업데이트 시작 요청에 인증 헤더가 없으면 401을 반환하고 서비스를 호출하지 않는다")
+    void startTwinUpdate_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 시작 요청
+        var result = mockMvc.perform(post("/api/v1/me/twin-update/start")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"restart":false}
+                        """));
+
+        // then: 401 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isUnauthorized());
+        then(meService).should(never()).startTwinUpdate(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("트윈 업데이트 회차 조회 성공 시 완료 회차의 completed 표기·완료 시각·다음 가능 시각을 반환한다")
+    void twinUpdate_success() throws Exception {
+        // given: 서비스가 완료 회차를 반환
+        given(meService.twinUpdate(ME, UPDATE_ID)).willReturn(new MeTwinUpdateResult(
+                UPDATE_ID, TwinUpdateStatus.COMPLETED, true, true,
+                Instant.parse("2026-10-24T01:00:00Z"), Instant.parse("2026-11-07T01:00:00Z")));
+
+        // when: 경로의 updateId 로 회차 조회
+        var result = mockMvc.perform(get("/api/v1/me/twin-update/{updateId}", UPDATE_ID)
+                .header("Authorization", BEARER));
+
+        // then: 200 + completed 상태와 두 시각
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("completed"))
+                .andExpect(jsonPath("$.completedAt").value("2026-10-24T01:00:00Z"))
+                .andExpect(jsonPath("$.nextUpdatableAt").value("2026-11-07T01:00:00Z"));
+    }
+
+    @Test
+    @DisplayName("트윈 업데이트 회차 조회 시 경로의 updateId 가 UUID 가 아니면 400을 반환하고 서비스를 호출하지 않는다")
+    void twinUpdate_with_invalid_updateId_returns_400() throws Exception {
+        // when: UUID 가 아닌 경로 변수로 조회
+        var result = mockMvc.perform(get("/api/v1/me/twin-update/{updateId}", "abc")
+                .header("Authorization", BEARER));
+
+        // then: 400 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest());
+        then(meService).should(never()).twinUpdate(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("트윈 업데이트 회차 조회 시 다른 회원의 회차라는 서비스 예외는 404 TWIN_UPDATE_NOT_FOUND 로 내려간다")
+    void twinUpdate_not_found_returns_404() throws Exception {
+        // given: 서비스가 회차 없음 예외를 던진다
+        given(meService.twinUpdate(ME, UPDATE_ID)).willThrow(new BusinessException(ErrorCode.TWIN_UPDATE_NOT_FOUND));
+
+        // when: 회차 조회
+        var result = mockMvc.perform(get("/api/v1/me/twin-update/{updateId}", UPDATE_ID)
+                .header("Authorization", BEARER));
+
+        // then: 404 + 오류 코드
+        result.andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("TWIN_UPDATE_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("트윈 업데이트 설문 응답 제출 성공 시 200을 반환하고 updateId·답을 커맨드로 넘긴다")
+    void submitTwinUpdateSurveyAnswer_success() throws Exception {
+        // when: 인증 상태로 설문 응답 제출
+        var result = mockMvc.perform(post("/api/v1/me/twin-update/survey-answers")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"updateId":"%s","answer":{"qId":3,"optionName":"B"}}
+                        """.formatted(UPDATE_ID)));
+
+        // then: 200 + 커맨드로 위임
+        result.andExpect(status().isOk());
+        then(meService).should().submitTwinUpdateSurveyAnswer(ME,
+                new MeSubmitTwinUpdateSurveyAnswerCommand(UPDATE_ID, new SurveyAnswerInput(3, SurveyOptionName.B)));
+    }
+
+    @Test
+    @DisplayName("트윈 업데이트 설문 응답 제출 요청에 updateId 가 없으면 400을 반환하고 서비스를 호출하지 않는다")
+    void submitTwinUpdateSurveyAnswer_without_updateId_returns_400() throws Exception {
+        // when: updateId 없이 설문 응답 제출
+        var result = mockMvc.perform(post("/api/v1/me/twin-update/survey-answers")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"answer":{"qId":3,"optionName":"B"}}
+                        """));
+
+        // then: 400 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest());
+        then(meService).should(never()).submitTwinUpdateSurveyAnswer(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("트윈 업데이트 설문 응답 제출 시 폐기된 회차라는 서비스 예외는 409 TWIN_UPDATE_STALE 로 내려간다")
+    void submitTwinUpdateSurveyAnswer_stale_returns_409() throws Exception {
+        // given: 서비스가 폐기 회차 예외를 던진다
+        willThrow(new BusinessException(ErrorCode.TWIN_UPDATE_STALE))
+                .given(meService).submitTwinUpdateSurveyAnswer(eq(ME), any());
+
+        // when: 설문 응답 제출
+        var result = mockMvc.perform(post("/api/v1/me/twin-update/survey-answers")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"updateId":"%s","answer":{"qId":3,"optionName":"B"}}
+                        """.formatted(UPDATE_ID)));
+
+        // then: 409 + 오류 코드
+        result.andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("TWIN_UPDATE_STALE"));
+    }
+
+    @Test
+    @DisplayName("트윈 업데이트 관심사 저장 성공 시 200을 반환하고 updateId·관심사 목록을 커맨드로 넘긴다")
+    void saveTwinUpdateInterests_success() throws Exception {
+        // when: 인증 상태로 관심사 저장
+        var result = mockMvc.perform(post("/api/v1/me/twin-update/interests")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"updateId":"%s","interests":["등산","요리"]}
+                        """.formatted(UPDATE_ID)));
+
+        // then: 200 + 커맨드로 위임
+        result.andExpect(status().isOk());
+        then(meService).should().saveTwinUpdateInterests(ME, new MeSaveTwinUpdateInterestsCommand(UPDATE_ID, List.of("등산", "요리")));
+    }
+
+    @Test
+    @DisplayName("트윈 업데이트 관심사 저장 요청의 목록이 비어 있으면 400을 반환하고 서비스를 호출하지 않는다")
+    void saveTwinUpdateInterests_with_empty_list_returns_400() throws Exception {
+        // when: 빈 관심사 목록으로 저장
+        var result = mockMvc.perform(post("/api/v1/me/twin-update/interests")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"updateId":"%s","interests":[]}
+                        """.formatted(UPDATE_ID)));
+
+        // then: 400 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest());
+        then(meService).should(never()).saveTwinUpdateInterests(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("트윈 업데이트 AI 대화 시작 성공 시 200과 첫 질문을 반환하고 updateId 를 커맨드로 넘긴다")
+    void startTwinUpdateAiChat_success() throws Exception {
+        // given: 서비스가 0번 턴 첫 질문을 반환
+        given(meService.startTwinUpdateAiChat(ME, new MeStartTwinUpdateAiChatCommand(UPDATE_ID)))
+                .willReturn(new MeAiChatStartResult("요리는 주로 뭘 해?", 0, false));
+
+        // when: 인증 상태로 AI 대화 시작
+        var result = mockMvc.perform(post("/api/v1/me/twin-update/ai-chat/start")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"updateId":"%s"}
+                        """.formatted(UPDATE_ID)));
+
+        // then: 200 + 첫 질문·턴·종료 여부
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("요리는 주로 뭘 해?"))
+                .andExpect(jsonPath("$.turnIndex").value(0))
+                .andExpect(jsonPath("$.isEnd").value(false));
+    }
+
+    @Test
+    @DisplayName("트윈 업데이트 AI 대화 메시지 전송 성공 시 200과 다음 질문을 반환하고 updateId·메시지·턴을 커맨드로 넘긴다")
+    void sendTwinUpdateAiChatMessage_success() throws Exception {
+        // given: 서비스가 1번 턴 다음 질문을 반환
+        given(meService.sendTwinUpdateAiChatMessage(ME, new MeSendTwinUpdateAiChatMessageCommand(UPDATE_ID, "파스타", 0)))
+                .willReturn(new MeAiChatMessageResult("제일 자신 있는 메뉴는?", 1, false));
+
+        // when: 0번 턴 답변 전송
+        var result = mockMvc.perform(post("/api/v1/me/twin-update/ai-chat/messages")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"updateId":"%s","message":"파스타","turnIndex":0}
+                        """.formatted(UPDATE_ID)));
+
+        // then: 200 + 다음 질문·턴·종료 여부
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("제일 자신 있는 메뉴는?"))
+                .andExpect(jsonPath("$.turnIndex").value(1))
+                .andExpect(jsonPath("$.isEnd").value(false));
+    }
+
+    @Test
+    @DisplayName("트윈 업데이트 AI 대화 메시지가 공백이면 400을 반환하고 서비스를 호출하지 않는다")
+    void sendTwinUpdateAiChatMessage_with_blank_message_returns_400() throws Exception {
+        // when: 공백 메시지로 전송
+        var result = mockMvc.perform(post("/api/v1/me/twin-update/ai-chat/messages")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"updateId":"%s","message":" ","turnIndex":0}
+                        """.formatted(UPDATE_ID)));
+
+        // then: 400 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest());
+        then(meService).should(never()).sendTwinUpdateAiChatMessage(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("트윈 업데이트 완료 성공 시 200과 updateId·완료 시각·다음 가능 시각을 반환한다")
+    void completeTwinUpdate_success() throws Exception {
+        // given: 서비스가 완료 결과를 반환
+        given(meService.completeTwinUpdate(ME, new MeCompleteTwinUpdateCommand(UPDATE_ID))).willReturn(new MeCompleteTwinUpdateResult(
+                UPDATE_ID, Instant.parse("2026-10-24T01:00:00Z"), Instant.parse("2026-11-07T01:00:00Z")));
+
+        // when: 완료 요청
+        var result = mockMvc.perform(post("/api/v1/me/twin-update/complete")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"updateId":"%s"}
+                        """.formatted(UPDATE_ID)));
+
+        // then: 200 + 완료 결과 JSON
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.updateId").value(UPDATE_ID.toString()))
+                .andExpect(jsonPath("$.completedAt").value("2026-10-24T01:00:00Z"))
+                .andExpect(jsonPath("$.nextUpdatableAt").value("2026-11-07T01:00:00Z"));
+    }
+
+    @Test
+    @DisplayName("트윈 업데이트 완료 시 관심사를 저장하지 않았다는 서비스 예외는 422 INTERESTS_NOT_SAVED 로 내려간다")
+    void completeTwinUpdate_interests_not_saved_returns_422() throws Exception {
+        // given: 서비스가 관심사 미저장 예외를 던진다
+        given(meService.completeTwinUpdate(ME, new MeCompleteTwinUpdateCommand(UPDATE_ID)))
+                .willThrow(new BusinessException(ErrorCode.INTERESTS_NOT_SAVED));
+
+        // when: 완료 요청
+        var result = mockMvc.perform(post("/api/v1/me/twin-update/complete")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"updateId":"%s"}
+                        """.formatted(UPDATE_ID)));
+
+        // then: 422 + 오류 코드
+        result.andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("INTERESTS_NOT_SAVED"));
     }
 }

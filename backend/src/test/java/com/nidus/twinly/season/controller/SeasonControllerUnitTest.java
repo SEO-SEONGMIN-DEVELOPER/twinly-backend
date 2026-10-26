@@ -3,6 +3,17 @@ package com.nidus.twinly.season.controller;
 import com.nidus.twinly.anon.service.AnonService;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
+import com.nidus.twinly.season.domain.SeasonRecapTimeSlot;
+import com.nidus.twinly.season.dto.result.SeasonLatestRecapActivityResult;
+import com.nidus.twinly.season.dto.result.SeasonLatestRecapActivityTypeCountsResult;
+import com.nidus.twinly.season.dto.result.SeasonLatestRecapActivityTypeResult;
+import com.nidus.twinly.season.dto.result.SeasonLatestRecapBestMatchResult;
+import com.nidus.twinly.season.dto.result.SeasonLatestRecapCountResult;
+import com.nidus.twinly.season.dto.result.SeasonLatestRecapMinutesResult;
+import com.nidus.twinly.season.dto.result.SeasonLatestRecapMostMetResult;
+import com.nidus.twinly.season.dto.result.SeasonLatestRecapPlaceResult;
+import com.nidus.twinly.season.dto.result.SeasonLatestRecapResult;
+import com.nidus.twinly.season.dto.result.SeasonLatestRecapTogetherResult;
 import com.nidus.twinly.season.dto.result.SeasonParticipationResult;
 import com.nidus.twinly.season.service.SeasonService;
 import com.nidus.twinly.user.dto.header.UserInfo;
@@ -18,6 +29,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
+import java.util.List;
 
 import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -171,5 +183,81 @@ class SeasonControllerUnitTest {
         result.andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value(ErrorCode.UNAUTHORIZED.name()));
         then(seasonService).should(never()).participation(anyLong());
+    }
+
+    @Test
+    @DisplayName("최근 리캡 조회 성공 시 200과 함께 id는 문자열로, 0인 항목의 topPercent와 없는 활동 유형은 null로 응답한다")
+    void latestRecap_success() throws Exception {
+        // given: 서비스가 7번 시즌 리캡을 반환 (이동 0분, 활동 유형 없음)
+        given(seasonService.latestRecap(1L)).willReturn(new SeasonLatestRecapResult(
+                7L,
+                Instant.parse("2026-09-30T15:00:00Z"),
+                Instant.parse("2026-10-31T14:59:59Z"),
+                812,
+                new SeasonLatestRecapTogetherResult(24),
+                new SeasonLatestRecapActivityResult(
+                        new SeasonLatestRecapMinutesResult(2460, 12),
+                        new SeasonLatestRecapMinutesResult(9120, 40),
+                        new SeasonLatestRecapMinutesResult(0, null)),
+                new SeasonLatestRecapCountResult(1284, 8),
+                List.of(new SeasonLatestRecapPlaceResult("P0123", "학생 거리 카페", 18, 1260)),
+                new SeasonLatestRecapCountResult(27, 30),
+                new SeasonLatestRecapCountResult(6, 21),
+                List.of(new SeasonLatestRecapMostMetResult(123L, "닉네임", null, 12, 40)),
+                List.of(),
+                List.of(new SeasonLatestRecapBestMatchResult(456L, "닉네임2", null, 90.0, 10, 9)),
+                new SeasonLatestRecapCountResult(19, 15),
+                new SeasonLatestRecapActivityTypeResult(SeasonRecapTimeSlot.LATE_NIGHT,
+                        new SeasonLatestRecapActivityTypeCountsResult(14, 23, 54, 60))
+        ));
+
+        // when: 인증 상태로 최근 리캡 조회 API 호출
+        var result = mockMvc.perform(get("/api/v1/season/recaps/latest")
+                .header("Authorization", "Bearer access-token"));
+
+        // then: 200 + 명세 모양 그대로 직렬화
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.seasonId").value("7"))
+                .andExpect(jsonPath("$.population").value(812))
+                .andExpect(jsonPath("$.together.days").value(24))
+                .andExpect(jsonPath("$.activity.dialogue.minutes").value(2460))
+                .andExpect(jsonPath("$.activity.move.topPercent").value(nullValue()))
+                .andExpect(jsonPath("$.places[0].placeCode").value("P0123"))
+                .andExpect(jsonPath("$.mostMet[0].userId").value("123"))
+                .andExpect(jsonPath("$.mostMet[0].profilePhoto").value(nullValue()))
+                .andExpect(jsonPath("$.closest").isEmpty())
+                .andExpect(jsonPath("$.bestMatches[0].userId").value("456"))
+                .andExpect(jsonPath("$.bestMatches[0].matchRate").value(90.0))
+                .andExpect(jsonPath("$.activityType.type").value("lateNight"))
+                .andExpect(jsonPath("$.activityType.counts.lateNight").value(60));
+
+        // then: 인증 유저 id로 위임
+        then(seasonService).should().latestRecap(1L);
+    }
+
+    @Test
+    @DisplayName("제공 중인 리캡이 없으면 404와 SEASON_RECAP_NOT_FOUND를 반환한다")
+    void latestRecap_not_found_returns_404() throws Exception {
+        // given: 서비스가 리캡 없음으로 거절
+        given(seasonService.latestRecap(1L)).willThrow(new BusinessException(ErrorCode.SEASON_RECAP_NOT_FOUND));
+
+        // when: 인증 상태로 최근 리캡 조회 API 호출
+        var result = mockMvc.perform(get("/api/v1/season/recaps/latest")
+                .header("Authorization", "Bearer access-token"));
+
+        // then: 404 + 오류 코드
+        result.andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("SEASON_RECAP_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("인증 헤더가 없으면 최근 리캡 조회는 401을 반환하고 서비스를 호출하지 않는다")
+    void latestRecap_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 최근 리캡 조회 API 호출
+        var result = mockMvc.perform(get("/api/v1/season/recaps/latest"));
+
+        // then: 401 + 서비스 미호출
+        result.andExpect(status().isUnauthorized());
+        then(seasonService).should(never()).latestRecap(anyLong());
     }
 }

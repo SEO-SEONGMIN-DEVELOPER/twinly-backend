@@ -9,5 +9,6 @@ public enum AppNotificationFeedType {
     @JsonProperty("oneTime")             ONE_TIME,
     @JsonProperty("notice")              NOTICE,
     @JsonProperty("balanceGameAnswered") BALANCE_GAME_ANSWERED,
-    @JsonProperty("schoolVerification")  SCHOOL_VERIFICATION
+    @JsonProperty("schoolVerification")  SCHOOL_VERIFICATION,
+    @JsonProperty("seasonRecap")         SEASON_RECAP
 }

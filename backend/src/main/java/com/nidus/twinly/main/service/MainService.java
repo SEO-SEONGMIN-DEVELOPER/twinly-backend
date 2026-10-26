@@ -1,11 +1,13 @@
 package com.nidus.twinly.main.service;
 
 import com.nidus.twinly.chat.repository.ChatRepository;
+import com.nidus.twinly.main.dto.result.MainTabLatestRecapResult;
 import com.nidus.twinly.main.dto.result.MainTabResult;
 import com.nidus.twinly.main.dto.result.MainTabSeasonResult;
 import com.nidus.twinly.notification.repository.AppNotificationFeedRepository;
 import com.nidus.twinly.season.entity.Season;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
+import com.nidus.twinly.season.repository.SeasonRecapRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +23,7 @@ public class MainService {
     private final CurrentSeasonReader currentSeasonReader;
     private final ChatRepository chatRepository;
     private final AppNotificationFeedRepository appNotificationFeedRepository;
+    private final SeasonRecapRepository seasonRecapRepository;
 
     public MainTabResult mainTab(Long userId) {
         Season season = currentSeasonReader.read();
@@ -35,7 +38,10 @@ public class MainService {
         return new MainTabResult(
                 seasonResult,
                 chatRepository.countUnreadRoomsByUserId(userId),
-                appNotificationFeedRepository.countByUserIdAndReadAtIsNull(userId)
+                appNotificationFeedRepository.countByUserIdAndReadAtIsNull(userId),
+                seasonRecapRepository.findServingByUserId(userId, season.getId())
+                        .map(recap -> new MainTabLatestRecapResult(recap.getSeasonId(), recap.getCreatedAt()))
+                        .orElse(null)
         );
     }
 }

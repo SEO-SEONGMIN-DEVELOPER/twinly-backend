@@ -9,6 +9,10 @@ import java.util.List;
 public class AiChatPromptBuilder {
 
     public String interestPrompt(String affiliation, List<PersonaTrait> traits, List<String> askedQuestions) {
+        return interestPrompt(affiliation, traits, askedQuestions, null);
+    }
+
+    public String interestPrompt(String affiliation, List<PersonaTrait> traits, List<String> askedQuestions, String focusInterest) {
         List<String> interests = traits.stream()
                 .filter(trait -> trait.dimension() == PersonaDimension.INTEREST)
                 .map(PersonaTrait::explanation)
@@ -24,7 +28,9 @@ public class AiChatPromptBuilder {
             }
         }
 
-        if (interests.isEmpty()) {
+        if (focusInterest != null) {
+            sb.append("\n'").append(focusInterest).append("' 관심사에 대한 질문을 한국어로 하나만 물어보세요.\n");
+        } else if (interests.isEmpty()) {
             sb.append("\n위 정보를 참고해서, 사용자를 더 깊이 이해할 수 있는 자연스러운 질문을 한국어로 하나만 물어보세요.\n");
         } else {
             sb.append("\n위 관심사 중 하나를 골라, 그 관심사에 대한 질문을 한국어로 하나만 물어보세요.\n");

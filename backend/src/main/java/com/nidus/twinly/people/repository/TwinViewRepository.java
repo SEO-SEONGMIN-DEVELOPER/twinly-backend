@@ -21,6 +21,18 @@ public interface TwinViewRepository extends JpaRepository<TwinView, Long> {
     List<ViewerCountProjection> countDistinctViewersByViewedAtRange(@Param("from") Instant from,
                                                                    @Param("to") Instant to);
 
+    @Query(value = """
+            SELECT
+                v.target_user_id AS targetUserId
+                , COUNT(DISTINCT v.viewer_user_id) AS viewerCount
+            FROM twin_views v
+            WHERE v.kind = 'PROFILE'
+              AND v.viewed_at >= :from AND v.viewed_at < :to
+            GROUP BY v.target_user_id
+            """, nativeQuery = true)
+    List<ViewerCountProjection> countDistinctProfileViewersByViewedAtRange(@Param("from") Instant from,
+                                                                          @Param("to") Instant to);
+
     interface ViewerCountProjection {
         Long getTargetUserId();
         Long getViewerCount();

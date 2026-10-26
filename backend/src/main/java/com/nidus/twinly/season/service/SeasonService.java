@@ -1,22 +1,42 @@
 package com.nidus.twinly.season.service;
 
+import com.nidus.twinly.block.repository.BlockRepository;
+import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
+import com.nidus.twinly.common.photo.PhotoType;
+import com.nidus.twinly.common.photo.ProfilePhotoInfo;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
+import com.nidus.twinly.season.domain.SeasonRecapData;
 import com.nidus.twinly.season.dto.command.SeasonChangeCommand;
 import com.nidus.twinly.season.dto.result.SeasonChangeResult;
+import com.nidus.twinly.season.dto.result.SeasonLatestRecapActivityResult;
+import com.nidus.twinly.season.dto.result.SeasonLatestRecapActivityTypeCountsResult;
+import com.nidus.twinly.season.dto.result.SeasonLatestRecapActivityTypeResult;
+import com.nidus.twinly.season.dto.result.SeasonLatestRecapBestMatchResult;
+import com.nidus.twinly.season.dto.result.SeasonLatestRecapClosestResult;
+import com.nidus.twinly.season.dto.result.SeasonLatestRecapCountResult;
+import com.nidus.twinly.season.dto.result.SeasonLatestRecapMinutesResult;
+import com.nidus.twinly.season.dto.result.SeasonLatestRecapMostMetResult;
+import com.nidus.twinly.season.dto.result.SeasonLatestRecapPlaceResult;
+import com.nidus.twinly.season.dto.result.SeasonLatestRecapResult;
+import com.nidus.twinly.season.dto.result.SeasonLatestRecapTogetherResult;
 import com.nidus.twinly.season.dto.result.SeasonParticipationResult;
 import com.nidus.twinly.season.entity.Season;
 import com.nidus.twinly.season.entity.SeasonParticipation;
+import com.nidus.twinly.season.entity.SeasonRecap;
 import com.nidus.twinly.season.event.SeasonChangedEvent;
 import com.nidus.twinly.purchase.service.PurchaseService;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.season.repository.SeasonParticipationRepository;
+import com.nidus.twinly.season.repository.SeasonRecapRepository;
 import com.nidus.twinly.season.repository.SeasonRepository;
 import com.nidus.twinly.season.writer.SeasonParticipationWriter;
 import com.nidus.twinly.legal.domain.PolicyKind;
 import com.nidus.twinly.legal.reader.ConsentReader;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
+import com.nidus.twinly.user.entity.Photo;
 import com.nidus.twinly.user.entity.User;
+import com.nidus.twinly.user.repository.PhotoRepository;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -24,7 +44,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import tools.jackson.databind.ObjectMapper;
+
 import java.time.Instant;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 @RequiredArgsConstructor
@@ -40,6 +69,11 @@ public class SeasonService {
     private final EntitlementReader entitlementReader;
     private final ConsentReader consentReader;
     private final UserRepository userRepository;
+    private final SeasonRecapRepository seasonRecapRepository;
+    private final PhotoRepository photoRepository;
+    private final CloudFrontService cloudFrontService;
+    private final BlockRepository blockRepository;
+    private final ObjectMapper objectMapper;
 
     @Transactional
     public SeasonChangeResult changeSeason(SeasonChangeCommand command) {
@@ -89,5 +123,99 @@ public class SeasonService {
                 .orElse(null);
 
         return new SeasonParticipationResult(currentSeasonId, participatedInAt);
+    }
+
+    public SeasonLatestRecapResult latestRecap(Long userId) {
+        SeasonRecap recap = seasonRecapRepository.findServingByUserId(userId, currentSeasonReader.read().getId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.SEASON_RECAP_NOT_FOUND));
+
+        SeasonRecapData data = objectMapper.readValue(recap.getData(), SeasonRecapData.class);
+
+        List<Long> partnerUserIds = Stream.of(
+                        data.mostMet().stream().map(SeasonRecapData.MostMet::userId),
+                        data.closest().stream().map(SeasonRecapData.Closest::userId),
+                        data.bestMatches().stream().map(SeasonRecapData.BestMatch::userId))
+                .flatMap(Function.identity())
+                .distinct()
+                .toList();
+
+        Map<Long, User> visibleUserById = visibleUsers(userId, partnerUserIds);
+        Map<Long, ProfilePhotoInfo> profilePhotoByUserId = visibleUserById.isEmpty()
+                ? Map.of()
+                : photoRepository.findAllByUserIdInAndType(List.copyOf(visibleUserById.keySet()), PhotoType.PROFILE).stream()
+                        .collect(Collectors.toMap(Photo::getUserId,
+                                photo -> new ProfilePhotoInfo(photo.getKey(), cloudFrontService.getSignedUrl(photo.getKey()), photo.position())));
+
+        return new SeasonLatestRecapResult(
+                recap.getSeasonId(),
+                data.startedAt(),
+                data.endedAt(),
+                data.population(),
+                new SeasonLatestRecapTogetherResult(data.togetherDays()),
+                new SeasonLatestRecapActivityResult(
+                        minutes(data.dialogueMinutes()),
+                        minutes(data.actionMinutes()),
+                        minutes(data.moveMinutes())),
+                count(data.bubbles()),
+                data.places().stream()
+                        .map(place -> new SeasonLatestRecapPlaceResult(place.placeCode(), place.name(), place.visitCount(), place.minutes()))
+                        .toList(),
+                count(data.talked()),
+                count(data.friends()),
+                data.mostMet().stream()
+                        .filter(item -> visibleUserById.containsKey(item.userId()))
+                        .map(item -> new SeasonLatestRecapMostMetResult(item.userId(), visibleUserById.get(item.userId()).displayNickname(),
+                                profilePhotoByUserId.get(item.userId()), item.days(), item.sceneCount()))
+                        .toList(),
+                data.closest().stream()
+                        .filter(item -> visibleUserById.containsKey(item.userId()))
+                        .map(item -> new SeasonLatestRecapClosestResult(item.userId(), visibleUserById.get(item.userId()).displayNickname(),
+                                profilePhotoByUserId.get(item.userId()), item.twinIntimacy()))
+                        .toList(),
+                data.bestMatches().stream()
+                        .filter(item -> visibleUserById.containsKey(item.userId()))
+                        .map(item -> new SeasonLatestRecapBestMatchResult(item.userId(), visibleUserById.get(item.userId()).displayNickname(),
+                                profilePhotoByUserId.get(item.userId()), item.matchRate(), item.comparedCount(), item.matchedCount()))
+                        .toList(),
+                count(data.profileViewers()),
+                activityType(data.activityType())
+        );
+    }
+
+    private Map<Long, User> visibleUsers(Long userId, List<Long> partnerUserIds) {
+        if (partnerUserIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Set<Long> blockedUserIds = new HashSet<>();
+        blockRepository.findAllByUserId(userId).forEach(block -> blockedUserIds.add(block.getBlockedUserId()));
+        blockRepository.findAllByUserIdInAndBlockedUserId(partnerUserIds, userId).forEach(block -> blockedUserIds.add(block.getUserId()));
+
+        return userRepository.findAllById(partnerUserIds).stream()
+                .filter(user -> !user.isWithdrawn())
+                .filter(user -> !blockedUserIds.contains(user.getId()))
+                .collect(Collectors.toMap(User::getId, Function.identity()));
+    }
+
+    private static SeasonLatestRecapMinutesResult minutes(SeasonRecapData.Ranked ranked) {
+        return new SeasonLatestRecapMinutesResult(ranked.value(), ranked.topPercent());
+    }
+
+    private static SeasonLatestRecapCountResult count(SeasonRecapData.Ranked ranked) {
+        return new SeasonLatestRecapCountResult(ranked.value(), ranked.topPercent());
+    }
+
+    private static SeasonLatestRecapActivityTypeResult activityType(SeasonRecapData.ActivityType activityType) {
+        if (activityType == null) {
+            return null;
+        }
+
+        return new SeasonLatestRecapActivityTypeResult(
+                activityType.type(),
+                new SeasonLatestRecapActivityTypeCountsResult(
+                        activityType.morning(),
+                        activityType.lunch(),
+                        activityType.evening(),
+                        activityType.lateNight()));
     }
 }

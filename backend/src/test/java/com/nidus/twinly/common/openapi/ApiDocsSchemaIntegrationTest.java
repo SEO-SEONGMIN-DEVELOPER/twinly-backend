@@ -45,7 +45,7 @@ class ApiDocsSchemaIntegrationTest extends AbstractIntegrationTest {
         String feedTarget = "$.components.schemas.MeAppNotificationsFeedsItemResponse.properties.target";
         result.andExpect(jsonPath("$.components.schemas.MeAppNotificationsFeedsItemResponse.required", hasItem("target")))
                 .andExpect(jsonPath(feedTarget + ".type").doesNotExist())
-                .andExpect(jsonPath(feedTarget + ".oneOf.length()", is(5)))
+                .andExpect(jsonPath(feedTarget + ".oneOf.length()", is(6)))
                 .andExpect(jsonPath(feedTarget + ".oneOf[*].type", hasItem("null")));
 
         // then: 탈퇴 시 마스킹 문자열로 대체되는 userName 은 null 타입을 허용하지 않고, 사진은 없을 수 있다

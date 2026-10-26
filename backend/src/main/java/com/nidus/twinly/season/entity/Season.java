@@ -27,6 +27,10 @@ public class Season {
 
     private Instant createdAt;
 
+    private Instant recapCreatedAt;
+
+    private Instant recapNotifiedAt;
+
     public static Season create(Instant startedAt, Instant endedAt) {
         Season season = new Season();
 
@@ -40,5 +44,13 @@ public class Season {
 
     public void deactivate() {
         this.isActive = false;
+    }
+
+    public void markRecapCreated(Instant createdAt) {
+        this.recapCreatedAt = createdAt;
+    }
+
+    public void markRecapNotified(Instant notifiedAt) {
+        this.recapNotifiedAt = notifiedAt;
     }
 }

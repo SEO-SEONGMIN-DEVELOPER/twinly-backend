@@ -1,5 +1,6 @@
 package com.nidus.twinly.season.controller;
 
+import com.nidus.twinly.season.dto.response.SeasonLatestRecapResponse;
 import com.nidus.twinly.season.dto.response.SeasonParticipationResponse;
 import com.nidus.twinly.season.service.SeasonService;
 import com.nidus.twinly.user.dto.header.UserInfo;
@@ -31,5 +32,12 @@ public class SeasonController {
     @GetMapping("/api/v1/season/participation")
     public SeasonParticipationResponse participation(@AuthenticationPrincipal UserInfo userInfo) {
         return SeasonParticipationResponse.from(seasonService.participation(userInfo.id()));
+    }
+
+    @Operation(summary = "최근 시즌 리캡 조회", description = "지금 제공 중인 본인의 가장 최근 시즌 리캡을 준다. 현재 시즌 참여 여부·구독 상태와 관계없이 조회할 수 있다. 상대의 이름·사진은 응답 시점 값이며, 탈퇴했거나 차단 관계인 상대는 빠진다.")
+    @ApiResponse(responseCode = "404", description = "SEASON_RECAP_NOT_FOUND")
+    @GetMapping("/api/v1/season/recaps/latest")
+    public SeasonLatestRecapResponse latestRecap(@AuthenticationPrincipal UserInfo userInfo) {
+        return SeasonLatestRecapResponse.from(seasonService.latestRecap(userInfo.id()));
     }
 }

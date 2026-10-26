@@ -40,6 +40,8 @@ public class AppNotificationFeed {
 
     private Long targetChatRoomId;
 
+    private Long targetSeasonId;
+
     private LocalDate simulationDate;
 
     private Instant readAt;
@@ -73,6 +75,16 @@ public class AppNotificationFeed {
 
         feed.targetKind = AppNotificationFeedTargetType.BALANCE_GAME;
         feed.targetUserId = targetUserId;
+
+        return feed;
+    }
+
+    public static AppNotificationFeed createSeasonRecapTarget(Long userId, AppNotificationFeedType type, String title,
+                                                              String body, Long targetSeasonId) {
+        AppNotificationFeed feed = create(userId, type, title, body);
+
+        feed.targetKind = AppNotificationFeedTargetType.SEASON_RECAP;
+        feed.targetSeasonId = targetSeasonId;
 
         return feed;
     }

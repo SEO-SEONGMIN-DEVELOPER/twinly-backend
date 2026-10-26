@@ -70,8 +70,12 @@ public class AppNotificationFeedPushNotifier {
     }
 
     private Long targetId(AppNotificationFeed feed) {
-        return feed.getTargetKind() == AppNotificationFeedTargetType.CHAT
-                ? feed.getTargetChatRoomId()
-                : feed.getTargetUserId();
+        if (feed.getTargetKind() == AppNotificationFeedTargetType.CHAT) {
+            return feed.getTargetChatRoomId();
+        }
+        if (feed.getTargetKind() == AppNotificationFeedTargetType.SEASON_RECAP) {
+            return feed.getTargetSeasonId();
+        }
+        return feed.getTargetUserId();
     }
 }
