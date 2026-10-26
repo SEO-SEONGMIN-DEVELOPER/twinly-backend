@@ -45,6 +45,7 @@ services:
       - "127.0.0.1:9090:9090"
     volumes:
       - ./monitoring/prometheus/local.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
       - promdata-twinly:/prometheus
     extra_hosts:
       - "host.docker.internal:host-gateway"

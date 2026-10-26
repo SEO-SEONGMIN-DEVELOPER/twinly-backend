@@ -1,0 +1,5 @@
+groups:
+  - name: twinly-api-latency
+    rules:
+      - record: node_caller_le:http_server_requests_seconds_bucket:rate1m
+        expr: sum by (node, caller, le) (rate(http_server_requests_seconds_bucket[1m]))
