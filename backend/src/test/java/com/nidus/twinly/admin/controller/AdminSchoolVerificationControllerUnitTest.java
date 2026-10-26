@@ -64,8 +64,8 @@ class AdminSchoolVerificationControllerUnitTest {
     @DisplayName("검수 대기 목록 조회 성공 시 200과 페이지를 반환하고 userId 는 문자열로 나간다")
     void studentIds_success() throws Exception {
         // given: 대기 중인 제출 1건
-        given(adminSchoolVerificationService.studentIds(0, 20)).willReturn(new AdminPageResult<>(
-                List.of(new AdminSchoolVerificationStudentIdsItemResult(SUBMISSION_ID, 31L, "가온", "트윈리대학교", SUBMITTED_AT, 90L)),
+        given(adminSchoolVerificationService.studentIds(null, 0, 20)).willReturn(new AdminPageResult<>(
+                List.of(new AdminSchoolVerificationStudentIdsItemResult(SUBMISSION_ID, 31L, "가온", "트윈리대학교", StudentIdSubmissionStatus.PENDING, null, SUBMITTED_AT, null, 90L)),
                 0, 20, 1));
 
         // when: 기본 페이지로 대기 목록 조회
@@ -77,8 +77,43 @@ class AdminSchoolVerificationControllerUnitTest {
                 .andExpect(jsonPath("$.items[0].submissionId").value(SUBMISSION_ID.toString()))
                 .andExpect(jsonPath("$.items[0].userId").value("31"))
                 .andExpect(jsonPath("$.items[0].nickname").value("가온"))
+                .andExpect(jsonPath("$.items[0].status").value("PENDING"))
                 .andExpect(jsonPath("$.items[0].elapsedMinutes").value(90))
                 .andExpect(jsonPath("$.totalCount").value(1));
+    }
+
+    @Test
+    @DisplayName("status 로 거르면 그 상태를 서비스에 넘기고 판정 정보를 함께 반환한다")
+    void studentIds_with_status_filter() throws Exception {
+        // given: 승인된 제출 1건
+        Instant decidedAt = SUBMITTED_AT.plusSeconds(3600);
+        given(adminSchoolVerificationService.studentIds(StudentIdSubmissionStatus.APPROVED, 0, 20)).willReturn(new AdminPageResult<>(
+                List.of(new AdminSchoolVerificationStudentIdsItemResult(SUBMISSION_ID, 31L, "가온", "트윈리대학교", StudentIdSubmissionStatus.APPROVED, "ops@trytwinly.com", SUBMITTED_AT, decidedAt, 60L)),
+                0, 20, 1));
+
+        // when: status=APPROVED 로 조회
+        var result = mockMvc.perform(get("/admin/school-verifications/student-ids")
+                .header(ADMIN_TOKEN_HEADER, ADMIN_TOKEN)
+                .param("status", "APPROVED"));
+
+        // then: 200 + 상태·검수자
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].status").value("APPROVED"))
+                .andExpect(jsonPath("$.items[0].reviewer").value("ops@trytwinly.com"))
+                .andExpect(jsonPath("$.items[0].elapsedMinutes").value(60));
+    }
+
+    @Test
+    @DisplayName("없는 status 값이면 400을 반환한다")
+    void studentIds_invalid_status_returns_400() throws Exception {
+        // when: status=DONE 으로 조회
+        var result = mockMvc.perform(get("/admin/school-verifications/student-ids")
+                .header(ADMIN_TOKEN_HEADER, ADMIN_TOKEN)
+                .param("status", "DONE"));
+
+        // then: 400 + 서비스 미호출
+        result.andExpect(status().isBadRequest());
+        verifyNoInteractions(adminSchoolVerificationService);
     }
 
     @Test

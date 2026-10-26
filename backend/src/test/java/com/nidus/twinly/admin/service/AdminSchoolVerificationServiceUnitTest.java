@@ -78,19 +78,60 @@ class AdminSchoolVerificationServiceUnitTest {
         // given: 90분 전에 낸 대기 제출 1건
         StudentIdSubmission submission = pending();
         ReflectionTestUtils.setField(submission, "submittedAt", Instant.now().minus(Duration.ofMinutes(90)));
-        given(studentIdSubmissionRepository.findReviewQueue(PageRequest.of(0, 20)))
+        given(studentIdSubmissionRepository.findForAdmin(StudentIdSubmissionStatus.PENDING, PageRequest.of(0, 20)))
                 .willReturn(new PageImpl<>(List.of(submission), PageRequest.of(0, 20), 1));
         given(userRepository.findAllById(List.of(USER_ID))).willReturn(List.of(user()));
 
-        // when: 대기 목록 조회
-        AdminPageResult<AdminSchoolVerificationStudentIdsItemResult> result = adminSchoolVerificationService.studentIds(0, 20);
+        // when: 대기 상태로 목록 조회
+        AdminPageResult<AdminSchoolVerificationStudentIdsItemResult> result = adminSchoolVerificationService.studentIds(StudentIdSubmissionStatus.PENDING, 0, 20);
 
         // then: 항목 매핑 + 전체 수
         assertThat(result.totalCount()).isEqualTo(1);
         AdminSchoolVerificationStudentIdsItemResult item = result.items().getFirst();
         assertThat(item.nickname()).isEqualTo("가온");
         assertThat(item.organization()).isEqualTo("트윈리대학교");
+        assertThat(item.status()).isEqualTo(StudentIdSubmissionStatus.PENDING);
         assertThat(item.elapsedMinutes()).isBetween(90L, 91L);
+    }
+
+    @Test
+    @DisplayName("목록: 판정된 제출은 상태·검수자·판정 시각을 담고 걸린 분은 판정까지로 잰다")
+    void studentIds_decided_item_measures_until_decided() {
+        // given: 3시간 전에 내고 2시간 전에 승인된 제출
+        StudentIdSubmission submission = pending();
+        submission.approve(REVIEWER);
+        Instant decidedAt = Instant.now().minus(Duration.ofHours(2));
+        ReflectionTestUtils.setField(submission, "submittedAt", decidedAt.minus(Duration.ofMinutes(60)));
+        ReflectionTestUtils.setField(submission, "decidedAt", decidedAt);
+        given(studentIdSubmissionRepository.findForAdmin(null, PageRequest.of(0, 20)))
+                .willReturn(new PageImpl<>(List.of(submission), PageRequest.of(0, 20), 1));
+        given(userRepository.findAllById(List.of(USER_ID))).willReturn(List.of(user()));
+
+        // when: 상태 없이 전체 조회
+        AdminSchoolVerificationStudentIdsItemResult item = adminSchoolVerificationService.studentIds(null, 0, 20).items().getFirst();
+
+        // then: 판정 정보 + 제출부터 판정까지 60분
+        assertThat(item.status()).isEqualTo(StudentIdSubmissionStatus.APPROVED);
+        assertThat(item.reviewer()).isEqualTo(REVIEWER);
+        assertThat(item.decidedAt()).isEqualTo(decidedAt);
+        assertThat(item.elapsedMinutes()).isEqualTo(60L);
+    }
+
+    @Test
+    @DisplayName("목록: 판정 시각 없이 교체된 제출은 걸린 분이 null 이다")
+    void studentIds_replaced_without_decided_at_has_null_elapsed() {
+        // given: 판정 시각이 없는 교체된 제출
+        StudentIdSubmission submission = pending();
+        ReflectionTestUtils.setField(submission, "status", StudentIdSubmissionStatus.REPLACED);
+        given(studentIdSubmissionRepository.findForAdmin(StudentIdSubmissionStatus.REPLACED, PageRequest.of(0, 20)))
+                .willReturn(new PageImpl<>(List.of(submission), PageRequest.of(0, 20), 1));
+        given(userRepository.findAllById(List.of(USER_ID))).willReturn(List.of(user()));
+
+        // when: 교체됨 상태로 조회
+        AdminSchoolVerificationStudentIdsItemResult item = adminSchoolVerificationService.studentIds(StudentIdSubmissionStatus.REPLACED, 0, 20).items().getFirst();
+
+        // then: 걸린 분 없음
+        assertThat(item.elapsedMinutes()).isNull();
     }
 
     @Test

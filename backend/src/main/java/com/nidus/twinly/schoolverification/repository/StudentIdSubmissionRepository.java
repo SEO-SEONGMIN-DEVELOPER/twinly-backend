@@ -1,5 +1,6 @@
 package com.nidus.twinly.schoolverification.repository;
 
+import com.nidus.twinly.schoolverification.domain.StudentIdSubmissionStatus;
 import com.nidus.twinly.schoolverification.entity.StudentIdSubmission;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
@@ -30,19 +31,23 @@ public interface StudentIdSubmissionRepository extends JpaRepository<StudentIdSu
     @Query(value = """
             SELECT s FROM StudentIdSubmission s, User u
             WHERE u.id = s.userId
-              AND s.status = com.nidus.twinly.schoolverification.domain.StudentIdSubmissionStatus.PENDING
-              AND u.withdrawalRequestedAt IS NULL
-              AND u.deletedAt IS NULL
-            ORDER BY s.submittedAt ASC, s.id ASC
+              AND s.status <> com.nidus.twinly.schoolverification.domain.StudentIdSubmissionStatus.REPLACED
+              AND (:status IS NULL OR s.status = :status)
+              AND (s.status <> com.nidus.twinly.schoolverification.domain.StudentIdSubmissionStatus.PENDING
+                   OR (u.withdrawalRequestedAt IS NULL AND u.deletedAt IS NULL))
+            ORDER BY CASE WHEN s.status = com.nidus.twinly.schoolverification.domain.StudentIdSubmissionStatus.PENDING THEN 0 ELSE 1 END,
+                     CASE WHEN s.status = com.nidus.twinly.schoolverification.domain.StudentIdSubmissionStatus.PENDING THEN s.submittedAt END ASC,
+                     s.submittedAt DESC, s.id DESC
             """,
             countQuery = """
             SELECT COUNT(s) FROM StudentIdSubmission s, User u
             WHERE u.id = s.userId
-              AND s.status = com.nidus.twinly.schoolverification.domain.StudentIdSubmissionStatus.PENDING
-              AND u.withdrawalRequestedAt IS NULL
-              AND u.deletedAt IS NULL
+              AND s.status <> com.nidus.twinly.schoolverification.domain.StudentIdSubmissionStatus.REPLACED
+              AND (:status IS NULL OR s.status = :status)
+              AND (s.status <> com.nidus.twinly.schoolverification.domain.StudentIdSubmissionStatus.PENDING
+                   OR (u.withdrawalRequestedAt IS NULL AND u.deletedAt IS NULL))
             """)
-    Page<StudentIdSubmission> findReviewQueue(Pageable pageable);
+    Page<StudentIdSubmission> findForAdmin(@Param("status") StudentIdSubmissionStatus status, Pageable pageable);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<StudentIdSubmission> findWithLockBySubmissionId(UUID submissionId);

@@ -145,10 +145,19 @@
 
     <section class="view" id="v-schools" data-title="학교 인증 관리" data-desc="학생증으로 가입한 회원의 사진을 보고 승인하거나 반려합니다. 제출 후 24시간 안에 처리해 주세요. 판정한 사진은 1시간 안에 지워져요." hidden>
       <div class="card">
-        <div class="card-head"><h2>검수 대기</h2><span class="card-sub">오래 기다린 순 · 탈퇴 신청한 회원은 빠져요</span></div>
+        <div class="toolbar" style="justify-content:space-between">
+          <div class="chips" id="school-chips">
+            <button class="chip" type="button" data-f="" aria-pressed="true">전체</button>
+            <button class="chip" type="button" data-f="PENDING" aria-pressed="false">검수 대기</button>
+            <button class="chip" type="button" data-f="APPROVED" aria-pressed="false">승인</button>
+            <button class="chip" type="button" data-f="REJECTED" aria-pressed="false">반려</button>
+            <button class="chip" type="button" data-f="CANCELED" aria-pressed="false">탈퇴로 인한 취소</button>
+          </div>
+          <span class="hint">검수 대기가 먼저 오래 기다린 순, 나머지는 최근 제출 순 · 탈퇴 신청한 회원의 대기 건은 빠져요</span>
+        </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>회원</th><th>고른 학교</th><th>제출 시각</th><th>기다린 시간</th></tr></thead>
+            <thead><tr><th>회원</th><th>고른 학교</th><th>상태</th><th>제출 시각</th><th>걸린 시간</th><th>검수자</th></tr></thead>
             <tbody id="school-rows"></tbody>
           </table>
         </div>
