@@ -104,6 +104,7 @@ import com.nidus.twinly.people.repository.EncounterRepository;
 import com.nidus.twinly.relationship.domain.Intimacy;
 import com.nidus.twinly.relationship.reader.IntimacyReader;
 import com.nidus.twinly.schoolverification.service.SchoolVerificationReader;
+import com.nidus.twinly.twinupdate.service.TwinUpdateReader;
 import com.nidus.twinly.report.repository.ReportRepository;
 import com.nidus.twinly.season.writer.SeasonParticipationWriter;
 import com.nidus.twinly.user.domain.DisclosureField;
@@ -236,6 +237,9 @@ class MeServiceUnitTest {
 
     @Mock
     SchoolVerificationReader schoolVerificationReader;
+
+    @Mock
+    TwinUpdateReader twinUpdateReader;
 
     @Mock
     StudentIdSubmissionService studentIdSubmissionService;
@@ -1008,12 +1012,14 @@ class MeServiceUnitTest {
                 surveyQuestion(1, PersonaDimension.OPENNESS),
                 surveyQuestion(2, PersonaDimension.EXTRAVERSION)));
         given(personaElementRepository.existsByUserIdAndDimension(ME, PersonaDimension.INTEREST)).willReturn(true);
+        Instant nextUpdatableAt = Instant.parse("2026-11-07T01:00:00Z");
+        given(twinUpdateReader.nextUpdatableAt(user)).willReturn(nextUpdatableAt);
 
         // when: 내 상태 조회
         MeStatusResult result = meService.status(ME);
 
-        // then: 설문·관심사·AI 대화 모두 완료
-        assertThat(result.persona()).isEqualTo(new MeStatusPersonaResult(true, true, true));
+        // then: 설문·관심사·AI 대화 모두 완료이고 다음 업데이트 가능 시각을 함께 내려준다
+        assertThat(result.persona()).isEqualTo(new MeStatusPersonaResult(true, true, true, nextUpdatableAt));
     }
 
     @Test
@@ -1032,7 +1038,7 @@ class MeServiceUnitTest {
         MeStatusResult result = meService.status(ME);
 
         // then: 설문·관심사·AI 대화 모두 미완료
-        assertThat(result.persona()).isEqualTo(new MeStatusPersonaResult(false, false, false));
+        assertThat(result.persona()).isEqualTo(new MeStatusPersonaResult(false, false, false, null));
     }
 
     @Test

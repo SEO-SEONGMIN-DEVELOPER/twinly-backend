@@ -5,11 +5,13 @@ import com.nidus.twinly.auth.event.UserSignedUpEvent;
 import com.nidus.twinly.common.logging.WarnLog;
 import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.common.web.BusinessException;
+import com.nidus.twinly.twinupdate.event.TwinUpdateCompletedEvent;
 import com.nidus.twinly.user.entity.PersonaElement;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.generator.PersonaSummaryGenerator;
 import com.nidus.twinly.user.repository.PersonaElementRepository;
 import com.nidus.twinly.user.repository.UserRepository;
+import com.nidus.twinly.user.service.UserPersonaService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -19,6 +21,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 import static com.nidus.twinly.common.logging.LogField.field;
 
@@ -31,6 +34,7 @@ public class PersonaSummaryWriter {
 
     private final UserRepository userRepository;
     private final PersonaElementRepository personaElementRepository;
+    private final UserPersonaService userPersonaService;
 
     @Async("personaSummaryTaskExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -42,6 +46,24 @@ public class PersonaSummaryWriter {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAiChatCompleted(AiChatCompletedEvent event) {
         writeSummary(event.userId(), "AI 대화 종료 후 페르소나 요약을 생성하지 못했습니다.");
+    }
+
+    @Async("personaSummaryTaskExecutor")
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onTwinUpdateCompleted(TwinUpdateCompletedEvent event) {
+        Long userId = event.userId();
+        User user = userRepository.findById(userId).orElse(null);
+        if (user == null) {
+            return;
+        }
+
+        List<PersonaElement> personaElements = personaElementRepository.findAllByUserIdOrderByIdAsc(userId);
+        if (personaElements.isEmpty()) {
+            return;
+        }
+
+        generateSummary(userId, user, personaElements, "트윈 업데이트 후 페르소나 요약을 다시 생성하지 못했습니다.")
+                .ifPresent(summary -> userPersonaService.replaceSummary(userId, summary));
     }
 
     private void writeSummary(Long userId, String failureMessage) {
@@ -56,14 +78,16 @@ public class PersonaSummaryWriter {
             return;
         }
 
-        String summary;
+        generateSummary(userId, user, personaElements, failureMessage)
+                .ifPresent(summary -> personaElementRepository.save(PersonaElement.create(userId, PersonaDimension.SUMMARY, summary, Instant.now())));
+    }
+
+    private Optional<String> generateSummary(Long userId, User user, List<PersonaElement> personaElements, String failureMessage) {
         try {
-            summary = personaSummaryGenerator.generate(user.getAffiliation(), personaElements);
+            return Optional.of(personaSummaryGenerator.generate(user.getAffiliation(), personaElements));
         } catch (BusinessException e) {
             WarnLog.log(log, failureMessage, e, field("userId", userId));
-            return;
+            return Optional.empty();
         }
-
-        personaElementRepository.save(PersonaElement.create(userId, PersonaDimension.SUMMARY, summary, Instant.now()));
     }
 }

@@ -5,11 +5,13 @@ import com.nidus.twinly.auth.event.UserSignedUpEvent;
 import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
+import com.nidus.twinly.twinupdate.event.TwinUpdateCompletedEvent;
 import com.nidus.twinly.user.entity.PersonaElement;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.generator.PersonaSummaryGenerator;
 import com.nidus.twinly.user.repository.PersonaElementRepository;
 import com.nidus.twinly.user.repository.UserRepository;
+import com.nidus.twinly.user.service.UserPersonaService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -46,6 +48,9 @@ class PersonaSummaryWriterUnitTest {
 
     @Mock
     PersonaElementRepository personaElementRepository;
+
+    @Mock
+    UserPersonaService userPersonaService;
 
     @InjectMocks
     PersonaSummaryWriter personaSummaryWriter;
@@ -155,6 +160,40 @@ class PersonaSummaryWriterUnitTest {
         // when & then
         assertThatCode(() -> personaSummaryWriter.onUserSignedUp(EVENT)).doesNotThrowAnyException();
         then(personaElementRepository).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("트윈 업데이트를 완료하면 이미 SUMMARY 가 있어도 새 요약을 만들어 교체한다")
+    void onTwinUpdateCompleted_replaces_summary() {
+        // given: 기존 요약이 있는 유저, 생성기가 새 요약을 반환
+        givenUser("트윈리대학교");
+        List<PersonaElement> elements = List.of(
+                PersonaElement.create(USER_ID, PersonaDimension.INTEREST, "요리", NOW),
+                PersonaElement.create(USER_ID, PersonaDimension.SUMMARY, "주말마다 산에 오르는 사람", NOW));
+        given(personaElementRepository.findAllByUserIdOrderByIdAsc(USER_ID)).willReturn(elements);
+        given(personaSummaryGenerator.generate("트윈리대학교", elements)).willReturn("파스타를 즐겨 만드는 사람");
+
+        // when
+        personaSummaryWriter.onTwinUpdateCompleted(new TwinUpdateCompletedEvent(USER_ID));
+
+        // then: 기존 요약을 새 요약으로 교체
+        then(userPersonaService).should().replaceSummary(USER_ID, "파스타를 즐겨 만드는 사람");
+    }
+
+    @Test
+    @DisplayName("트윈 업데이트 후 요약 생성이 실패하면 예외를 던지지 않고 기존 요약을 그대로 둔다")
+    void onTwinUpdateCompleted_keeps_summary_when_generation_fails() {
+        // given
+        givenUser("트윈리대학교");
+        given(personaElementRepository.findAllByUserIdOrderByIdAsc(USER_ID)).willReturn(List.of(
+                PersonaElement.create(USER_ID, PersonaDimension.SUMMARY, "주말마다 산에 오르는 사람", NOW)));
+        given(personaSummaryGenerator.generate(any(), anyList()))
+                .willThrow(new BusinessException(ErrorCode.AI_RESPONSE_FAILED));
+
+        // when & then
+        assertThatCode(() -> personaSummaryWriter.onTwinUpdateCompleted(new TwinUpdateCompletedEvent(USER_ID)))
+                .doesNotThrowAnyException();
+        then(userPersonaService).shouldHaveNoInteractions();
     }
 
     private void givenUser(String affiliation) {

@@ -1,5 +1,6 @@
 package com.nidus.twinly.me.service;
 
+import com.nidus.twinly.aichat.service.TwinUpdateAiChatService;
 import com.nidus.twinly.activity.domain.QuestionType;
 import com.nidus.twinly.activity.entity.Question;
 import com.nidus.twinly.activity.repository.QuestionRepository;
@@ -86,6 +87,10 @@ import com.nidus.twinly.me.dto.result.MeProfileVisibilitySettingsResult;
 import com.nidus.twinly.me.dto.result.MePurchasesResult;
 import com.nidus.twinly.me.dto.result.MeSchoolVerificationStudentIdPresignResult;
 import com.nidus.twinly.me.dto.result.MeStatusPersonaResult;
+import com.nidus.twinly.twinupdate.service.TwinUpdateReader;
+import com.nidus.twinly.twinupdate.service.TwinUpdateService;
+import com.nidus.twinly.me.dto.result.MeAiChatMessageResult;
+import com.nidus.twinly.me.dto.result.MeAiChatStartResult;
 import com.nidus.twinly.me.dto.result.MeStatusReportResult;
 import com.nidus.twinly.me.dto.result.MeStatusResult;
 import com.nidus.twinly.me.dto.result.MeStatusSchoolVerificationResult;
@@ -95,6 +100,14 @@ import com.nidus.twinly.me.dto.result.MeTendencyQuestionsItemResult;
 import com.nidus.twinly.me.dto.result.MeTendencyQuestionsOptionResult;
 import com.nidus.twinly.me.dto.result.MeTendencyQuestionsResult;
 import com.nidus.twinly.me.dto.result.MeWithdrawResult;
+import com.nidus.twinly.me.dto.command.MeCompleteTwinUpdateCommand;
+import com.nidus.twinly.me.dto.command.MeSaveTwinUpdateInterestsCommand;
+import com.nidus.twinly.me.dto.command.MeSendTwinUpdateAiChatMessageCommand;
+import com.nidus.twinly.me.dto.command.MeStartTwinUpdateAiChatCommand;
+import com.nidus.twinly.me.dto.command.MeStartTwinUpdateCommand;
+import com.nidus.twinly.me.dto.command.MeSubmitTwinUpdateSurveyAnswerCommand;
+import com.nidus.twinly.me.dto.result.MeCompleteTwinUpdateResult;
+import com.nidus.twinly.me.dto.result.MeTwinUpdateResult;
 import com.nidus.twinly.me.event.FeedbackSentEvent;
 import com.nidus.twinly.notification.domain.AppNotificationFeedType;
 import com.nidus.twinly.notification.domain.NotificationChannel;
@@ -143,6 +156,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -201,6 +215,9 @@ public class MeService {
     private final FeedbackOptionLoader feedbackOptionLoader;
     private final IntimacyReader intimacyReader;
     private final SchoolVerificationReader schoolVerificationReader;
+    private final TwinUpdateReader twinUpdateReader;
+    private final TwinUpdateService twinUpdateService;
+    private final TwinUpdateAiChatService twinUpdateAiChatService;
     private final StudentIdSubmissionService studentIdSubmissionService;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -603,7 +620,8 @@ public class MeService {
         return new MeStatusPersonaResult(
                 isSurveyCompleted(answersToCurrentQuestions(userId)),
                 personaElementRepository.existsByUserIdAndDimension(userId, PersonaDimension.INTEREST),
-                user.getAiChatCompletedAt() != null
+                user.getAiChatCompletedAt() != null,
+                twinUpdateReader.nextUpdatableAt(user)
         );
     }
 
@@ -859,5 +877,39 @@ public class MeService {
     @Transactional
     public void schoolVerificationStudentIdSubmit(Long userId, MeSchoolVerificationStudentIdSubmitCommand command) {
         studentIdSubmissionService.resubmit(userId, command.key());
+    }
+
+    @Transactional
+    public MeTwinUpdateResult startTwinUpdate(Long userId, MeStartTwinUpdateCommand command) {
+        return twinUpdateService.start(userId, command);
+    }
+
+    public MeTwinUpdateResult twinUpdate(Long userId, UUID updateId) {
+        return twinUpdateService.twinUpdate(userId, updateId);
+    }
+
+    @Transactional
+    public void submitTwinUpdateSurveyAnswer(Long userId, MeSubmitTwinUpdateSurveyAnswerCommand command) {
+        twinUpdateService.submitSurveyAnswer(userId, command);
+    }
+
+    @Transactional
+    public void saveTwinUpdateInterests(Long userId, MeSaveTwinUpdateInterestsCommand command) {
+        twinUpdateService.saveInterests(userId, command);
+    }
+
+    @Transactional
+    public MeAiChatStartResult startTwinUpdateAiChat(Long userId, MeStartTwinUpdateAiChatCommand command) {
+        return twinUpdateAiChatService.aiChatStart(userId, command);
+    }
+
+    @Transactional
+    public MeAiChatMessageResult sendTwinUpdateAiChatMessage(Long userId, MeSendTwinUpdateAiChatMessageCommand command) {
+        return twinUpdateAiChatService.aiChatMessage(userId, command);
+    }
+
+    @Transactional
+    public MeCompleteTwinUpdateResult completeTwinUpdate(Long userId, MeCompleteTwinUpdateCommand command) {
+        return twinUpdateService.complete(userId, command);
     }
 }

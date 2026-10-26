@@ -9,6 +9,12 @@ import com.nidus.twinly.common.web.RequestId;
 import com.nidus.twinly.me.domain.HesitationDuration;
 import com.nidus.twinly.me.domain.HesitationStatus;
 import com.nidus.twinly.me.dto.command.MeAiChatMessageCommand;
+import com.nidus.twinly.me.dto.command.MeSubmitTwinUpdateSurveyAnswerCommand;
+import com.nidus.twinly.me.dto.command.MeStartTwinUpdateCommand;
+import com.nidus.twinly.me.dto.command.MeStartTwinUpdateAiChatCommand;
+import com.nidus.twinly.me.dto.command.MeSendTwinUpdateAiChatMessageCommand;
+import com.nidus.twinly.me.dto.command.MeSaveTwinUpdateInterestsCommand;
+import com.nidus.twinly.me.dto.command.MeCompleteTwinUpdateCommand;
 import com.nidus.twinly.me.dto.command.MeAppNotificationsReadAllCommand;
 import com.nidus.twinly.me.dto.command.MeChangeProfileNicknameCommand;
 import com.nidus.twinly.me.dto.command.MeCheckProfileNicknameCommand;
@@ -27,6 +33,14 @@ import com.nidus.twinly.me.dto.command.MeSendFeedbackCommand;
 import com.nidus.twinly.me.dto.command.MeSubmitTendencyAnswerCommand;
 import com.nidus.twinly.me.dto.command.MeSurveyAnswerCommand;
 import com.nidus.twinly.me.dto.request.MeAiChatMessageRequest;
+import com.nidus.twinly.me.dto.response.MeTwinUpdateResponse;
+import com.nidus.twinly.me.dto.response.MeCompleteTwinUpdateResponse;
+import com.nidus.twinly.me.dto.request.MeSubmitTwinUpdateSurveyAnswerRequest;
+import com.nidus.twinly.me.dto.request.MeStartTwinUpdateRequest;
+import com.nidus.twinly.me.dto.request.MeStartTwinUpdateAiChatRequest;
+import com.nidus.twinly.me.dto.request.MeSendTwinUpdateAiChatMessageRequest;
+import com.nidus.twinly.me.dto.request.MeSaveTwinUpdateInterestsRequest;
+import com.nidus.twinly.me.dto.request.MeCompleteTwinUpdateRequest;
 import com.nidus.twinly.me.dto.request.MeAppNotificationsReadAllRequest;
 import com.nidus.twinly.me.dto.request.MeChangeProfileNicknameRequest;
 import com.nidus.twinly.me.dto.request.MeCheckProfileNicknameRequest;
@@ -94,6 +108,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.UUID;
 
 @Tag(name = "내 정보")
 @RestController
@@ -420,5 +435,81 @@ public class MeController {
     public void schoolVerificationStudentIdSubmit(@AuthenticationPrincipal UserInfo userInfo,
                                                   @Valid @RequestBody MeSchoolVerificationStudentIdSubmitRequest request) {
         meService.schoolVerificationStudentIdSubmit(userInfo.id(), MeSchoolVerificationStudentIdSubmitCommand.from(request));
+    }
+
+    @Operation(summary = "트윈 업데이트 시작")
+    @ApiResponses({
+            @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND"),
+            @ApiResponse(responseCode = "409", description = "TWIN_NOT_COMPLETED, TWIN_UPDATE_NOT_AVAILABLE")
+    })
+    @PostMapping("/api/v1/me/twin-update/start")
+    public MeTwinUpdateResponse startTwinUpdate(@AuthenticationPrincipal UserInfo userInfo,
+                                                @Valid @RequestBody MeStartTwinUpdateRequest request) {
+        return MeTwinUpdateResponse.from(meService.startTwinUpdate(userInfo.id(), MeStartTwinUpdateCommand.from(request)));
+    }
+
+    @Operation(summary = "트윈 업데이트 회차 조회")
+    @ApiResponse(responseCode = "404", description = "TWIN_UPDATE_NOT_FOUND")
+    @GetMapping("/api/v1/me/twin-update/{updateId}")
+    public MeTwinUpdateResponse twinUpdate(@AuthenticationPrincipal UserInfo userInfo,
+                                           @PathVariable UUID updateId) {
+        return MeTwinUpdateResponse.from(meService.twinUpdate(userInfo.id(), updateId));
+    }
+
+    @Operation(summary = "트윈 업데이트 설문 응답 제출")
+    @ApiResponses({
+            @ApiResponse(responseCode = "404", description = "TWIN_UPDATE_NOT_FOUND, SURVEY_QUESTION_NOT_FOUND"),
+            @ApiResponse(responseCode = "409", description = "TWIN_UPDATE_STALE, TWIN_UPDATE_ALREADY_COMPLETED"),
+            @ApiResponse(responseCode = "422", description = "SURVEY_ANSWERS_INCOMPLETE")
+    })
+    @PostMapping("/api/v1/me/twin-update/survey-answers")
+    public void submitTwinUpdateSurveyAnswer(@AuthenticationPrincipal UserInfo userInfo,
+                                             @Valid @RequestBody MeSubmitTwinUpdateSurveyAnswerRequest request) {
+        meService.submitTwinUpdateSurveyAnswer(userInfo.id(), MeSubmitTwinUpdateSurveyAnswerCommand.from(request));
+    }
+
+    @Operation(summary = "트윈 업데이트 관심사 저장")
+    @ApiResponses({
+            @ApiResponse(responseCode = "404", description = "TWIN_UPDATE_NOT_FOUND"),
+            @ApiResponse(responseCode = "409", description = "TWIN_UPDATE_STALE, TWIN_UPDATE_ALREADY_COMPLETED")
+    })
+    @PostMapping("/api/v1/me/twin-update/interests")
+    public void saveTwinUpdateInterests(@AuthenticationPrincipal UserInfo userInfo,
+                                        @Valid @RequestBody MeSaveTwinUpdateInterestsRequest request) {
+        meService.saveTwinUpdateInterests(userInfo.id(), MeSaveTwinUpdateInterestsCommand.from(request));
+    }
+
+    @Operation(summary = "트윈 업데이트 AI 대화 시작")
+    @ApiResponses({
+            @ApiResponse(responseCode = "404", description = "TWIN_UPDATE_NOT_FOUND, USER_NOT_FOUND"),
+            @ApiResponse(responseCode = "409", description = "TWIN_UPDATE_STALE, TWIN_UPDATE_ALREADY_COMPLETED")
+    })
+    @PostMapping("/api/v1/me/twin-update/ai-chat/start")
+    public MeAiChatStartResponse startTwinUpdateAiChat(@AuthenticationPrincipal UserInfo userInfo,
+                                                       @Valid @RequestBody MeStartTwinUpdateAiChatRequest request) {
+        return MeAiChatStartResponse.from(meService.startTwinUpdateAiChat(userInfo.id(), MeStartTwinUpdateAiChatCommand.from(request)));
+    }
+
+    @Operation(summary = "트윈 업데이트 AI 대화 메시지 전송")
+    @ApiResponses({
+            @ApiResponse(responseCode = "404", description = "TWIN_UPDATE_NOT_FOUND, AI_QUESTION_NOT_FOUND, USER_NOT_FOUND"),
+            @ApiResponse(responseCode = "409", description = "TWIN_UPDATE_STALE, TWIN_UPDATE_ALREADY_COMPLETED")
+    })
+    @PostMapping("/api/v1/me/twin-update/ai-chat/messages")
+    public MeAiChatMessageResponse sendTwinUpdateAiChatMessage(@AuthenticationPrincipal UserInfo userInfo,
+                                                               @Valid @RequestBody MeSendTwinUpdateAiChatMessageRequest request) {
+        return MeAiChatMessageResponse.from(meService.sendTwinUpdateAiChatMessage(userInfo.id(), MeSendTwinUpdateAiChatMessageCommand.from(request)));
+    }
+
+    @Operation(summary = "트윈 업데이트 완료")
+    @ApiResponses({
+            @ApiResponse(responseCode = "404", description = "TWIN_UPDATE_NOT_FOUND"),
+            @ApiResponse(responseCode = "409", description = "TWIN_UPDATE_STALE"),
+            @ApiResponse(responseCode = "422", description = "SURVEY_ANSWERS_INCOMPLETE, INTERESTS_NOT_SAVED")
+    })
+    @PostMapping("/api/v1/me/twin-update/complete")
+    public MeCompleteTwinUpdateResponse completeTwinUpdate(@AuthenticationPrincipal UserInfo userInfo,
+                                                           @Valid @RequestBody MeCompleteTwinUpdateRequest request) {
+        return MeCompleteTwinUpdateResponse.from(meService.completeTwinUpdate(userInfo.id(), MeCompleteTwinUpdateCommand.from(request)));
     }
 }

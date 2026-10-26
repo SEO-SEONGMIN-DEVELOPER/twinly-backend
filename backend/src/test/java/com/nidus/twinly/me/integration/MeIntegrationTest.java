@@ -58,6 +58,11 @@ import com.nidus.twinly.user.repository.UserFeedbackOptionRepository;
 import com.nidus.twinly.user.repository.UserFeedbackRepository;
 import com.nidus.twinly.user.repository.UserSurveyAnswerRepository;
 import com.nidus.twinly.user.repository.UserTendencyAnswerRepository;
+import com.nidus.twinly.twinupdate.domain.TwinUpdateStatus;
+import com.nidus.twinly.twinupdate.entity.TwinUpdate;
+import com.nidus.twinly.twinupdate.repository.TwinUpdateInterestRepository;
+import com.nidus.twinly.twinupdate.repository.TwinUpdateRepository;
+import com.nidus.twinly.user.entity.UserSurveyAnswer;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -68,6 +73,12 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DataAccessException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Duration;
@@ -75,6 +86,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -89,6 +101,9 @@ import com.nidus.twinly.common.tendency.TendencyOption;
 import com.nidus.twinly.common.tendency.TendencyQuestion;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verify;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.Matchers.startsWith;
@@ -113,6 +128,7 @@ class MeIntegrationTest extends AbstractIntegrationTest {
 
     /** MeService가 오늘 날짜를 판정할 때 쓰는 타임존과 동일해야 한다. */
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+    private static final Instant TWIN_COMPLETED_LONG_AGO = Instant.now().minus(Duration.ofDays(30)).truncatedTo(ChronoUnit.MICROS);
 
     @Autowired
     PolicyNameRepository policyNameRepository;
@@ -189,6 +205,18 @@ class MeIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     AppNotificationFeedRepository appNotificationFeedRepository;
+
+    @Autowired
+    TwinUpdateRepository twinUpdateRepository;
+
+    @Autowired
+    TwinUpdateInterestRepository twinUpdateInterestRepository;
+
+    @Autowired
+    JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    ObjectMapper objectMapper;
 
     /**
      * V2 마이그레이션이 넣는 운영 정책명 6건을 비운다.
@@ -1969,5 +1997,307 @@ class MeIntegrationTest extends AbstractIntegrationTest {
                 .filter(feedback -> feedback.getUserId().equals(user.getId()))
                 .sorted(Comparator.comparing(UserFeedback::getId))
                 .toList();
+    }
+
+    // ---------------------------------------------------------------- 트윈 업데이트
+
+    @Test
+    @DisplayName("트윈 업데이트 시작: 인증 헤더가 없으면 실제 컨텍스트에서도 401을 반환하고 회차를 만들지 않는다")
+    void startTwinUpdate_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 시작 요청
+        mockMvc.perform(post("/api/v1/me/twin-update/start")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"restart\": false}"))
+                .andExpect(status().isUnauthorized());
+
+        // then: 회차가 생기지 않음
+        assertThat(twinUpdateRepository.count()).isZero();
+    }
+
+    @Test
+    @DisplayName("시작: 트윈을 아직 완성하지 않은 회원은 409 TWIN_NOT_COMPLETED 를 받는다")
+    void start_rejects_incomplete_twin() throws Exception {
+        // given: 설문·관심사·AI 대화를 하나도 하지 않은 회원
+        User me = saveUser();
+
+        // when & then
+        startTwinUpdate(me, false)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("TWIN_NOT_COMPLETED"));
+    }
+
+    @Test
+    @DisplayName("시작: 트윈을 완성한 지 14일이 안 됐으면 409 TWIN_UPDATE_NOT_AVAILABLE 이고, /me/status 는 완성 시각 + 14일을 내려준다")
+    void start_rejects_within_interval() throws Exception {
+        // given: 하루 전에 트윈을 완성한 회원
+        Instant completedAt = Instant.now().minus(Duration.ofDays(1)).truncatedTo(ChronoUnit.MICROS);
+        User me = twinCompletedUser(completedAt);
+
+        // when & then: 시작은 막히고 상태 조회에 다음 가능 시각이 보인다
+        startTwinUpdate(me, false)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("TWIN_UPDATE_NOT_AVAILABLE"));
+        assertThat(nextUpdatableAtOf(me)).isEqualTo(completedAt.plus(Duration.ofDays(14)));
+    }
+
+    @Test
+    @DisplayName("시작: restart:false 재요청은 같은 진행 회차를 돌려주고, restart:true 는 진행 회차를 버리고 입력까지 지운 뒤 새 회차를 연다")
+    void start_resumes_or_restarts() throws Exception {
+        // given: 14일이 지난 회원이 회차를 열고 관심사를 저장
+        User me = twinCompletedUser(TWIN_COMPLETED_LONG_AGO);
+        assertThat(nextUpdatableAtOf(me)).isNull();
+        UUID first = startTwinUpdateAndGetId(me, false);
+        saveTwinUpdateInterestsOk(me, first, List.of("등산"));
+
+        // when: 같은 요청을 다시 보내고, 이어서 다시 시작
+        UUID resumed = startTwinUpdateAndGetId(me, false);
+        UUID restarted = startTwinUpdateAndGetId(me, true);
+
+        // then: 재요청은 같은 회차, 다시 시작은 새 회차이고 옛 회차는 폐기·입력 삭제
+        assertThat(resumed).isEqualTo(first);
+        assertThat(restarted).isNotEqualTo(first);
+        flushAndClear();
+        TwinUpdate discarded = twinUpdateRepository.findByUpdateId(first).orElseThrow();
+        assertThat(discarded.getStatus()).isEqualTo(TwinUpdateStatus.DISCARDED);
+        assertThat(twinUpdateInterestRepository.existsByTwinUpdateId(discarded.getId())).isFalse();
+
+        // then: 옛 회차로 저장하면 409 TWIN_UPDATE_STALE 이고 새 회차에 대신 저장하지 않는다
+        saveTwinUpdateInterests(me, first, List.of("요리"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("TWIN_UPDATE_STALE"));
+        mockMvc.perform(get("/api/v1/me/twin-update/{updateId}", first).header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("discarded"));
+        mockMvc.perform(get("/api/v1/me/twin-update/{updateId}", restarted).header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("inProgress"))
+                .andExpect(jsonPath("$.isInterestsCompleted").value(false));
+    }
+
+    @Test
+    @DisplayName("회차 조회·저장: 다른 회원의 updateId 는 존재 여부를 알리지 않고 404 TWIN_UPDATE_NOT_FOUND 를 준다")
+    void other_users_update_is_not_found() throws Exception {
+        // given: 다른 회원이 연 회차
+        User owner = twinCompletedUser(TWIN_COMPLETED_LONG_AGO);
+        User me = twinCompletedUser(TWIN_COMPLETED_LONG_AGO);
+        UUID ownersUpdateId = startTwinUpdateAndGetId(owner, false);
+
+        // when & then
+        mockMvc.perform(get("/api/v1/me/twin-update/{updateId}", ownersUpdateId).header("Authorization", bearer(me.getId())))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("TWIN_UPDATE_NOT_FOUND"));
+        completeTwinUpdate(me, ownersUpdateId)
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("TWIN_UPDATE_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("설문: 앞 문항을 빼고 마지막 문항을 내면 422 SURVEY_ANSWERS_INCOMPLETE 를 받는다")
+    void survey_last_question_requires_all_answers() throws Exception {
+        // given
+        User me = twinCompletedUser(TWIN_COMPLETED_LONG_AGO);
+        UUID updateId = startTwinUpdateAndGetId(me, false);
+        List<SurveyQuestion> questions = surveyLoader.getAllQuestions();
+
+        // when & then
+        submitTwinUpdateSurveyAnswer(me, updateId, questions.getLast().id(), SurveyOptionName.B)
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("SURVEY_ANSWERS_INCOMPLETE"));
+    }
+
+    @Test
+    @DisplayName("완료: 관심사를 저장하지 않았으면 422 INTERESTS_NOT_SAVED 이고 트윈은 그대로다")
+    void complete_requires_interests() throws Exception {
+        // given: 설문만 마친 회차
+        User me = twinCompletedUser(TWIN_COMPLETED_LONG_AGO);
+        UUID updateId = startTwinUpdateAndGetId(me, false);
+        answerAllTwinUpdateSurvey(me, updateId, SurveyOptionName.B);
+
+        // when & then
+        completeTwinUpdate(me, updateId)
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("INTERESTS_NOT_SAVED"));
+        flushAndClear();
+        assertThat(userSurveyAnswerRepository.findAllByUserId(me.getId()))
+                .extracting(UserSurveyAnswer::getOptionName)
+                .containsOnly(SurveyOptionName.A);
+    }
+
+    @Test
+    @DisplayName("완료: 진행 중에는 트윈이 그대로이고, 완료하면 설문·관심사를 교체하고 이번 인터뷰 DETAIL 을 더하며, 재요청은 같은 결과를 돌려준다")
+    void full_update_flow() throws Exception {
+        // given: 관심사 '등산'으로 트윈을 완성한 지 30일 지난 회원, 새 관심사 '요리'를 추가한 회차
+        User me = twinCompletedUser(TWIN_COMPLETED_LONG_AGO);
+        given(bedrockService.converse(anyString())).willReturn("요리는 주로 뭘 해?", "제일 자신 있는 메뉴는?");
+        UUID updateId = startTwinUpdateAndGetId(me, false);
+        answerAllTwinUpdateSurvey(me, updateId, SurveyOptionName.B);
+        saveTwinUpdateInterestsOk(me, updateId, List.of("등산", "요리"));
+
+        // when: 인터뷰 0턴을 시작하고 답한다
+        mockMvc.perform(post("/api/v1/me/twin-update/ai-chat/start")
+                        .header("Authorization", bearer(me.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"updateId\": \"%s\"}".formatted(updateId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("요리는 주로 뭘 해?"))
+                .andExpect(jsonPath("$.turnIndex").value(0));
+        mockMvc.perform(post("/api/v1/me/twin-update/ai-chat/messages")
+                        .header("Authorization", bearer(me.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"updateId\": \"%s\", \"message\": \"파스타\", \"turnIndex\": 0}".formatted(updateId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("제일 자신 있는 메뉴는?"))
+                .andExpect(jsonPath("$.turnIndex").value(1))
+                .andExpect(jsonPath("$.isEnd").value(false));
+
+        // then: 첫 주제는 새 관심사이고, 이전 인터뷰 질문을 이미 물어본 질문으로 넘긴다
+        verify(bedrockService).converse(argThat(prompt -> prompt.contains("'요리' 관심사에 대한 질문") && prompt.contains("- 예전 질문")));
+
+        // then: 완료 전에는 실제 트윈이 바뀌지 않는다
+        flushAndClear();
+        assertThat(explanationsOf(me, PersonaDimension.INTEREST)).containsExactly("등산");
+        assertThat(explanationsOf(me, PersonaDimension.DETAIL)).containsExactly("예전 질문: 예전 답");
+
+        // when: 완료
+        String body = completeTwinUpdate(me, updateId)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.updateId").value(updateId.toString()))
+                .andReturn().getResponse().getContentAsString();
+
+        // then: 설문 답·설문 요소·관심사가 이번 회차로 바뀌고 DETAIL 은 쌓인다
+        flushAndClear();
+        assertThat(userSurveyAnswerRepository.findAllByUserId(me.getId()))
+                .hasSize(surveyLoader.getAllQuestions().size())
+                .extracting(UserSurveyAnswer::getOptionName)
+                .containsOnly(SurveyOptionName.B);
+        SurveyQuestion firstQuestion = surveyLoader.getAllQuestions().getFirst();
+        assertThat(explanationsOf(me, firstQuestion.dimension())).contains(firstQuestion.traitFor(SurveyOptionName.B));
+        assertThat(explanationsOf(me, PersonaDimension.INTEREST)).containsExactly("등산", "요리");
+        assertThat(explanationsOf(me, PersonaDimension.DETAIL)).containsExactly("예전 질문: 예전 답", "요리는 주로 뭘 해?: 파스타");
+        assertThat(userRepository.findById(me.getId()).orElseThrow().getAiChatCompletedAt()).isEqualTo(TWIN_COMPLETED_LONG_AGO);
+
+        // then: 같은 회차 완료 재요청은 원래 결과 그대로, 조회는 completed, 이후 저장은 막힌다
+        completeTwinUpdate(me, updateId)
+                .andExpect(status().isOk())
+                .andExpect(content -> assertThat(objectMapper.readTree(content.getResponse().getContentAsString()))
+                        .isEqualTo(objectMapper.readTree(body)));
+        JsonNode completed = objectMapper.readTree(body);
+        Instant completedAt = Instant.parse(completed.get("completedAt").asString());
+        assertThat(Instant.parse(completed.get("nextUpdatableAt").asString())).isEqualTo(completedAt.plus(Duration.ofDays(14)));
+        mockMvc.perform(get("/api/v1/me/twin-update/{updateId}", updateId).header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("completed"))
+                .andExpect(jsonPath("$.isSurveyCompleted").value(true))
+                .andExpect(jsonPath("$.isInterestsCompleted").value(true))
+                .andExpect(jsonPath("$.completedAt").value(completed.get("completedAt").asString()))
+                .andExpect(jsonPath("$.nextUpdatableAt").value(completed.get("nextUpdatableAt").asString()));
+        saveTwinUpdateInterests(me, updateId, List.of("독서"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("TWIN_UPDATE_ALREADY_COMPLETED"));
+        startTwinUpdate(me, false)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("TWIN_UPDATE_NOT_AVAILABLE"));
+        assertThat(nextUpdatableAtOf(me)).isEqualTo(completedAt.plus(Duration.ofDays(14)));
+    }
+
+    @Test
+    @DisplayName("DB 는 계정당 진행 중 회차를 하나만 허용하고, 끝난 회차는 여러 개 쌓을 수 있다")
+    void only_one_in_progress_update_per_user() {
+        // given
+        User me = saveUser();
+        twinUpdateRepository.saveAndFlush(TwinUpdate.create(me.getId()));
+
+        // when & then: 두 번째 진행 회차는 유니크 키에 걸린다
+        assertThatThrownBy(() -> twinUpdateRepository.saveAndFlush(TwinUpdate.create(me.getId())))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    @DisplayName("DB 는 완료 상태와 완료 시각이 어긋난 회차를 거부한다")
+    void completed_update_requires_completed_at() {
+        // given
+        User me = saveUser();
+        TwinUpdate twinUpdate = twinUpdateRepository.saveAndFlush(TwinUpdate.create(me.getId()));
+
+        // when & then
+        assertThatThrownBy(() -> jdbcTemplate.update("UPDATE twin_updates SET status = 'COMPLETED' WHERE id = ?", twinUpdate.getId()))
+                .isInstanceOf(DataAccessException.class)
+                .hasMessageContaining("ck_twin_updates_completed_at");
+    }
+
+    private User twinCompletedUser(Instant aiChatCompletedAt) {
+        User user = saveUser();
+        Instant now = Instant.now();
+        surveyLoader.getAllQuestions().forEach(question ->
+                userSurveyAnswerRepository.save(UserSurveyAnswer.create(user.getId(), question.id(), SurveyOptionName.A)));
+        personaElementRepository.save(PersonaElement.create(user.getId(), PersonaDimension.INTEREST, "등산", now));
+        personaElementRepository.save(PersonaElement.create(user.getId(), PersonaDimension.DETAIL, "예전 질문: 예전 답", now));
+        flushAndClear();
+        userRepository.markAiChatCompleted(user.getId(), aiChatCompletedAt);
+        jdbcTemplate.update("INSERT INTO ai_chats (user_id, sender, message, turn_index) VALUES (?, 'AI', '예전 질문', 0)", user.getId());
+        return user;
+    }
+
+    private ResultActions startTwinUpdate(User user, boolean restart) throws Exception {
+        return mockMvc.perform(post("/api/v1/me/twin-update/start")
+                .header("Authorization", bearer(user.getId()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"restart\": %s}".formatted(restart)));
+    }
+
+    private UUID startTwinUpdateAndGetId(User user, boolean restart) throws Exception {
+        String body = startTwinUpdate(user, restart)
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        return UUID.fromString(objectMapper.readTree(body).get("updateId").asString());
+    }
+
+    private ResultActions submitTwinUpdateSurveyAnswer(User user, UUID updateId, Integer qId, SurveyOptionName optionName) throws Exception {
+        return mockMvc.perform(post("/api/v1/me/twin-update/survey-answers")
+                .header("Authorization", bearer(user.getId()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"updateId\": \"%s\", \"answer\": {\"qId\": %d, \"optionName\": \"%s\"}}"
+                        .formatted(updateId, qId, optionName.name())));
+    }
+
+    private void answerAllTwinUpdateSurvey(User user, UUID updateId, SurveyOptionName optionName) throws Exception {
+        for (SurveyQuestion question : surveyLoader.getAllQuestions()) {
+            submitTwinUpdateSurveyAnswer(user, updateId, question.id(), optionName).andExpect(status().isOk());
+        }
+    }
+
+    private ResultActions saveTwinUpdateInterests(User user, UUID updateId, List<String> interests) throws Exception {
+        return mockMvc.perform(post("/api/v1/me/twin-update/interests")
+                .header("Authorization", bearer(user.getId()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(new TwinUpdateInterestsBody(updateId, interests))));
+    }
+
+    private void saveTwinUpdateInterestsOk(User user, UUID updateId, List<String> interests) throws Exception {
+        saveTwinUpdateInterests(user, updateId, interests).andExpect(status().isOk());
+    }
+
+    private ResultActions completeTwinUpdate(User user, UUID updateId) throws Exception {
+        return mockMvc.perform(post("/api/v1/me/twin-update/complete")
+                .header("Authorization", bearer(user.getId()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"updateId\": \"%s\"}".formatted(updateId)));
+    }
+
+    private Instant nextUpdatableAtOf(User user) throws Exception {
+        String body = mockMvc.perform(get("/api/v1/me/status").header("Authorization", bearer(user.getId())))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        JsonNode nextUpdatableAt = objectMapper.readTree(body).get("persona").get("nextUpdatableAt");
+        return nextUpdatableAt.isNull() ? null : Instant.parse(nextUpdatableAt.asString());
+    }
+
+    private List<String> explanationsOf(User user, PersonaDimension dimension) {
+        return personaElementRepository.findAllByUserIdAndDimensionOrderByIdAsc(user.getId(), dimension).stream()
+                .map(PersonaElement::getExplanation)
+                .toList();
+    }
+
+    private record TwinUpdateInterestsBody(UUID updateId, List<String> interests) {
     }
 }
