@@ -421,7 +421,7 @@
     },
     {
         "name": "twinly-prod-monitoring-disk-used",
-        "description": "루트 볼륨 사용률 80% 초과. 디스크가 차면 prometheus 가 TSDB 를 쓰지 못해 수집이 멈춘다.\n\n이 인스턴스에는 prometheus·grafana·admin-web(관리자 콘솔)·cloudflared 가 올라간다. 서비스 트래픽과는 무관하지만, 여기서 프로세스가 죽으면 Grafana 알림과 관리자 콘솔이 함께 멎는다. EC2 자체는 살아 있으므로 status-check 알람으로는 잡히지 않아, CloudWatch 쪽에서 감시하는 수단은 이 알람뿐이다.\n\nprometheus 보관 기간이 15일(--storage.tsdb.retention.time=15d)이라 TSDB 는 일정 크기에서 더 늘지 않고, 컨테이너 로그도 json-file 10MB × 3 으로 제한돼 있다. 2026-10-20 기준 30GB 중 23% 이고 7일간 변화가 거의 없었다. 따라서 이 알람은 대개 쌓인 이미지나 예상 밖의 파일이 원인이다.\n\n조치:\n1. SSM으로 접속해 df -h 로 현황 확인\n2. docker system df 로 이미지·볼륨·컨테이너 중 어디가 큰지 확인\n3. 볼륨이면 promdata-twinly 크기를 보고, 보관 기간 설정이 실제 컨테이너에 적용됐는지 확인\n4. 이미지면 docker system prune -f 로 미사용 이미지/컨테이너 정리",
+        "description": "루트 볼륨 사용률 80% 초과. 디스크가 차면 prometheus 가 TSDB 를 쓰지 못해 수집이 멈춘다.\n\n이 인스턴스에는 prometheus·grafana·admin-web(관리자 콘솔)·cloudflared 가 올라간다. 서비스 트래픽과는 무관하지만, 여기서 프로세스가 죽으면 Grafana 알림과 관리자 콘솔이 함께 멎는다. EC2 자체는 살아 있으므로 status-check 알람으로는 잡히지 않아, CloudWatch 쪽에서 감시하는 수단은 이 알람뿐이다.\n\nprometheus 보관 기간은 90일·10GB 중 먼저 닿는 쪽(--storage.tsdb.retention.time=90d, --storage.tsdb.retention.size=10GB)이다. 15일치가 776MB(2026-10-27)라 TSDB 는 90일까지 약 4.7GB 로 늘어나며 디스크 사용률이 40% 안팎까지 오르는 것은 정상이다. 10GB 상한이 있어 TSDB 만으로 80% 에 닿지는 않고, 컨테이너 로그도 json-file 10MB × 3 으로 제한돼 있다. 따라서 이 알람은 대개 쌓인 이미지나 예상 밖의 파일이 원인이다.\n\n조치:\n1. SSM으로 접속해 df -h 로 현황 확인\n2. docker system df 로 이미지·볼륨·컨테이너 중 어디가 큰지 확인\n3. 볼륨이면 promdata-twinly 크기를 보고, 보관 기간 설정이 실제 컨테이너에 적용됐는지 확인\n4. 이미지면 docker system prune -f 로 미사용 이미지/컨테이너 정리",
         "namespace": "CWAgent",
         "metric": "disk_used_percent",
         "statistic": "Average",
