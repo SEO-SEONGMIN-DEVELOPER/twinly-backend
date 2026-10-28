@@ -23,11 +23,25 @@ public record SimulationPersonaResponse(
         Map<PersonaDimension, List<String>> personaElements,
         Integer poolNumber,
         LocalDateTime intimacyAsOf,
-        List<SimulationPersonaIntimacyResponse> intimacies
+        List<SimulationPersonaIntimacyResponse> intimacies,
+        List<SimulationPersonaHesitationAnswersItemResponse> hesitationAnswers
 ) {
 
     public static SimulationPersonaResponse from(SimulationPersonaResult result) {
-        return new SimulationPersonaResponse(result.userId(), result.familyName(), result.givenName(), result.nickname(), result.gender(), result.organization(), result.affiliation(), result.birthDate(), result.personaElements(), result.poolNumber(),
-                result.intimacyAsOf(), result.intimacies().stream().map(SimulationPersonaIntimacyResponse::from).toList());
+        return new SimulationPersonaResponse(
+                result.userId(),
+                result.familyName(),
+                result.givenName(),
+                result.nickname(),
+                result.gender(),
+                result.organization(),
+                result.affiliation(),
+                result.birthDate(),
+                result.personaElements(),
+                result.poolNumber(),
+                result.intimacyAsOf(),
+                result.intimacies().stream().map(SimulationPersonaIntimacyResponse::from).toList(),
+                result.hesitationAnswers().stream().map(SimulationPersonaHesitationAnswersItemResponse::from).toList()
+        );
     }
 }

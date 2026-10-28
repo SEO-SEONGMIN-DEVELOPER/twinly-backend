@@ -2,6 +2,7 @@ package com.nidus.twinly.simulation.service;
 
 import com.nidus.twinly.activity.domain.QuestionType;
 import com.nidus.twinly.activity.domain.SceneType;
+import com.nidus.twinly.activity.entity.Question;
 import com.nidus.twinly.activity.entity.Scene;
 import com.nidus.twinly.activity.entity.ScenePartner;
 import com.nidus.twinly.activity.repository.QuestionPartnerRepository;
@@ -30,6 +31,7 @@ import com.nidus.twinly.simulation.dto.command.SimulationsMoveSceneCommand;
 import com.nidus.twinly.simulation.dto.command.SimulationsQuestionCommand;
 import com.nidus.twinly.simulation.dto.command.SimulationsRelationshipCommand;
 import com.nidus.twinly.simulation.dto.command.SimulationsSceneCommand;
+import com.nidus.twinly.simulation.dto.result.SimulationPersonaHesitationAnswersItemResult;
 import com.nidus.twinly.simulation.dto.result.SimulationPersonaIntimacyResult;
 import com.nidus.twinly.simulation.dto.result.SimulationPersonaResult;
 import com.nidus.twinly.user.entity.PersonaElement;
@@ -832,6 +834,46 @@ class SimulationServiceUnitTest {
     }
 
     @Test
+    @DisplayName("답변한 망설임 질문을 날짜·질문·선택지·고른 답으로 페르소나에 담는다")
+    void persona_includes_answered_hesitations() {
+        // given: 시뮬레이션 권한과 동의가 있고, 망설임 질문 두 개에 답한 유저
+        given(entitlementReader.hasSimulationAccess(USER_ID)).willReturn(true);
+        given(consentReader.hasAgreedAllRequired(USER_ID, PolicyKind.PARALLEL_ENTRY)).willReturn(true);
+        given(userRepository.findById(USER_ID)).willReturn(Optional.of(user(USER_ID, "서", "성민", "컴퓨터공학과", "1999-03-21")));
+        given(personaElementRepository.findAllByUserIdOrderByIdAsc(USER_ID)).willReturn(List.of());
+        given(questionRepository.findAllByUserIdAndTypeAndAnsweredAtIsNotNullOrderByDateAscTimeAsc(USER_ID, QuestionType.PERSONA))
+                .willReturn(List.of(
+                        answeredQuestion(LocalDate.of(2026, 10, 1), "주말에 뭐 할까?", List.of("집에서 쉰다", "밖에 나간다"), "집에서 쉰다"),
+                        answeredQuestion(LocalDate.of(2026, 10, 2), "약속에 늦을 것 같다면?", List.of("미리 연락한다", "뛰어간다"), "미리 연락한다")));
+
+        // when: 페르소나 조회
+        SimulationPersonaResult result = simulationService.persona(USER_ID, LocalDate.of(2026, 10, 3));
+
+        // then: 조회한 순서 그대로 담긴다
+        assertThat(result.hesitationAnswers()).containsExactly(
+                new SimulationPersonaHesitationAnswersItemResult(LocalDate.of(2026, 10, 1), "주말에 뭐 할까?", List.of("집에서 쉰다", "밖에 나간다"), "집에서 쉰다"),
+                new SimulationPersonaHesitationAnswersItemResult(LocalDate.of(2026, 10, 2), "약속에 늦을 것 같다면?", List.of("미리 연락한다", "뛰어간다"), "미리 연락한다"));
+    }
+
+    @Test
+    @DisplayName("답변한 망설임 질문이 없으면 hesitationAnswers는 빈 리스트다")
+    void persona_without_answered_hesitations_returns_empty_list() {
+        // given: 시뮬레이션 권한과 동의가 있고, 답한 망설임 질문이 없는 유저
+        given(entitlementReader.hasSimulationAccess(USER_ID)).willReturn(true);
+        given(consentReader.hasAgreedAllRequired(USER_ID, PolicyKind.PARALLEL_ENTRY)).willReturn(true);
+        given(userRepository.findById(USER_ID)).willReturn(Optional.of(user(USER_ID, "서", "성민", "컴퓨터공학과", "1999-03-21")));
+        given(personaElementRepository.findAllByUserIdOrderByIdAsc(USER_ID)).willReturn(List.of());
+        given(questionRepository.findAllByUserIdAndTypeAndAnsweredAtIsNotNullOrderByDateAscTimeAsc(USER_ID, QuestionType.PERSONA))
+                .willReturn(List.of());
+
+        // when: 페르소나 조회
+        SimulationPersonaResult result = simulationService.persona(USER_ID, LocalDate.of(2026, 10, 3));
+
+        // then: null 이 아니라 빈 리스트
+        assertThat(result.hesitationAnswers()).isEmpty();
+    }
+
+    @Test
     @DisplayName("존재하지 않는 유저면 USER_NOT_FOUND 예외가 발생하고 성향을 조회하지 않는다")
     void persona_user_not_found_throws() {
         // given: 해당 id의 유저 없음
@@ -964,6 +1006,13 @@ class SimulationServiceUnitTest {
         ReflectionTestUtils.setField(user, "id", id);
 
         return user;
+    }
+
+    private Question answeredQuestion(LocalDate date, String text, List<String> options, String choice) {
+        Question question = Question.create(USER_ID, date, "v1", date.atTime(12, 0), QuestionType.PERSONA, text, options);
+        question.answer(choice);
+
+        return question;
     }
 
     private PersonaElement personaElement(PersonaDimension dimension, String explanation) {

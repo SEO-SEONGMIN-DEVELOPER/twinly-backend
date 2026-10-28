@@ -1,5 +1,6 @@
 package com.nidus.twinly.simulation.service;
 
+import com.nidus.twinly.activity.domain.QuestionType;
 import com.nidus.twinly.activity.entity.Question;
 import com.nidus.twinly.activity.entity.QuestionPartner;
 import com.nidus.twinly.activity.entity.Scene;
@@ -30,6 +31,7 @@ import com.nidus.twinly.relationship.entity.Relationship;
 import com.nidus.twinly.relationship.reader.IntimacyReader;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
 import com.nidus.twinly.simulation.dto.command.*;
+import com.nidus.twinly.simulation.dto.result.SimulationPersonaHesitationAnswersItemResult;
 import com.nidus.twinly.simulation.dto.result.SimulationPersonaIntimacyResult;
 import com.nidus.twinly.simulation.dto.result.SimulationPersonaResult;
 import com.nidus.twinly.user.entity.PersonaElement;
@@ -435,6 +437,12 @@ public class SimulationService {
                 .map(entry -> new SimulationPersonaIntimacyResult(entry.getKey(), entry.getValue()))
                 .toList();
 
+        List<SimulationPersonaHesitationAnswersItemResult> hesitationAnswers = questionRepository
+                .findAllByUserIdAndTypeAndAnsweredAtIsNotNullOrderByDateAscTimeAsc(userId, QuestionType.PERSONA).stream()
+                .map(question -> new SimulationPersonaHesitationAnswersItemResult(
+                        question.getDate(), question.getText(), question.getOptions(), question.getChoice()))
+                .toList();
+
         return new SimulationPersonaResult(
                 user.getId(),
                 user.getFamilyName(),
@@ -447,7 +455,8 @@ public class SimulationService {
                 personaElements,
                 user.getPoolNumber(),
                 intimacyAsOf,
-                intimacies
+                intimacies,
+                hesitationAnswers
         );
     }
 

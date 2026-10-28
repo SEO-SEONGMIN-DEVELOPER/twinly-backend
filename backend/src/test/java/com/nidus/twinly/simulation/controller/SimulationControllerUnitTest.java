@@ -9,6 +9,7 @@ import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.simulation.dto.command.SimulationsCommand;
 import com.nidus.twinly.simulation.dto.command.SimulationsDialogueSceneCommand;
 import com.nidus.twinly.simulation.dto.command.SimulationsMoveSceneCommand;
+import com.nidus.twinly.simulation.dto.result.SimulationPersonaHesitationAnswersItemResult;
 import com.nidus.twinly.simulation.dto.result.SimulationPersonaIntimacyResult;
 import com.nidus.twinly.simulation.dto.result.SimulationPersonaResult;
 import com.nidus.twinly.simulation.service.SimulationService;
@@ -79,7 +80,8 @@ class SimulationControllerUnitTest {
         personaElements.put(PersonaDimension.INTEREST, List.of("등산", "재즈"));
         given(simulationService.persona(USER_ID, DATE)).willReturn(new SimulationPersonaResult(
                 USER_ID, "서", "성민", "성민이", Gender.MALE, "성균관대학교", "컴퓨터공학과", LocalDate.of(1999, 3, 21), personaElements, 3,
-                LocalDateTime.of(2026, 10, 3, 10, 30, 0), List.of(new SimulationPersonaIntimacyResult(34L, 46))));
+                LocalDateTime.of(2026, 10, 3, 10, 30, 0), List.of(new SimulationPersonaIntimacyResult(34L, 46)),
+                List.of(new SimulationPersonaHesitationAnswersItemResult(LocalDate.of(2026, 10, 1), "주말에 뭐 할까?", List.of("집에서 쉰다", "밖에 나간다"), "집에서 쉰다"))));
 
         // when: 경로 변수 userId로 페르소나 조회 API 호출
         var result = mockMvc.perform(get("/internal/v1/users/{userId}/persona", "12").param("date", "2026-10-01"));
@@ -102,7 +104,13 @@ class SimulationControllerUnitTest {
                 .andExpect(jsonPath("$.intimacyAsOf", is("2026-10-03T10:30:00")))
                 .andExpect(jsonPath("$.intimacies", hasSize(1)))
                 .andExpect(jsonPath("$.intimacies[0].partnerId", is("34")))
-                .andExpect(jsonPath("$.intimacies[0].intimacy", is(46)));
+                .andExpect(jsonPath("$.intimacies[0].intimacy", is(46)))
+                .andExpect(jsonPath("$.hesitationAnswers", hasSize(1)))
+                .andExpect(jsonPath("$.hesitationAnswers[0].date", is("2026-10-01")))
+                .andExpect(jsonPath("$.hesitationAnswers[0].text", is("주말에 뭐 할까?")))
+                .andExpect(jsonPath("$.hesitationAnswers[0].options", hasSize(2)))
+                .andExpect(jsonPath("$.hesitationAnswers[0].options[1]", is("밖에 나간다")))
+                .andExpect(jsonPath("$.hesitationAnswers[0].choice", is("집에서 쉰다")));
         then(simulationService).should().persona(USER_ID, DATE);
     }
 
@@ -135,14 +143,15 @@ class SimulationControllerUnitTest {
         // given: 성향이 하나도 없는 유저의 페르소나 조회 결과
         given(simulationService.persona(USER_ID, DATE)).willReturn(new SimulationPersonaResult(
                 USER_ID, "서", "성민", "성민이", Gender.MALE, "성균관대학교", "컴퓨터공학과", LocalDate.of(1999, 3, 21), Map.of(), 1,
-                LocalDateTime.of(2026, 10, 3, 10, 30, 0), List.of()));
+                LocalDateTime.of(2026, 10, 3, 10, 30, 0), List.of(), List.of()));
 
         // when: 페르소나 조회 API 호출
         var result = mockMvc.perform(get("/internal/v1/users/{userId}/persona", "12").param("date", "2026-10-01"));
 
-        // then: 200 반환 + personaElements는 빈 객체
+        // then: 200 반환 + personaElements는 빈 객체, hesitationAnswers는 빈 배열
         result.andExpect(status().isOk())
-                .andExpect(jsonPath("$.personaElements").isEmpty());
+                .andExpect(jsonPath("$.personaElements").isEmpty())
+                .andExpect(jsonPath("$.hesitationAnswers", hasSize(0)));
     }
 
     @Test

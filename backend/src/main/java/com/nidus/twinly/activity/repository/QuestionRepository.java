@@ -18,6 +18,8 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
 
     List<Question> findAllByUserIdAndTypeAndIsSkippedFalseAndDate(Long userId, QuestionType type, LocalDate date);
 
+    List<Question> findAllByUserIdAndTypeAndAnsweredAtIsNotNullOrderByDateAscTimeAsc(Long userId, QuestionType type);
+
     @Modifying
     @Query("DELETE FROM Question q WHERE q.userId IN :userIds")
     void deleteAllByUserIdIn(@Param("userIds") List<Long> userIds);

@@ -20,6 +20,7 @@ public record SimulationPersonaResult(
         Map<PersonaDimension, List<String>> personaElements,
         Integer poolNumber,
         LocalDateTime intimacyAsOf,
-        List<SimulationPersonaIntimacyResult> intimacies
+        List<SimulationPersonaIntimacyResult> intimacies,
+        List<SimulationPersonaHesitationAnswersItemResult> hesitationAnswers
 ) {
 }
