@@ -36,6 +36,7 @@ public class GlobalExceptionHandler {
         }
         return ResponseEntity
                 .status(errorCode.getStatus())
+                .headers(e.getHeaders())
                 .body(ErrorResponse.of(errorCode));
     }
 

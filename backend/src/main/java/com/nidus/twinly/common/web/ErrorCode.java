@@ -148,6 +148,10 @@ public enum ErrorCode {
     INTIMACY_QUIZ_EXPIRED(HttpStatus.GONE, "답변 시간이 지난 친밀도 퀴즈입니다."),
     INTIMACY_QUIZ_ALREADY_ANSWERED(HttpStatus.CONFLICT, "이미 답변한 친밀도 퀴즈입니다."),
 
+    // 세계 트랙
+    WORLD_TRACK_TOO_LARGE(HttpStatus.CONTENT_TOO_LARGE, "세계 트랙 본문이 허용 크기를 넘었습니다."),
+    WORLD_TRACK_SAVE_BUSY(HttpStatus.TOO_MANY_REQUESTS, "세계 트랙 저장 요청이 많습니다. 잠시 후 다시 보내 주세요."),
+
     // 외부 연동
     EMAIL_SEND_FAILED(HttpStatus.BAD_GATEWAY, "이메일 발송에 실패했습니다."),
     SMS_SEND_FAILED(HttpStatus.BAD_GATEWAY, "SMS 발송에 실패했습니다."),

@@ -7,6 +7,7 @@ import com.nidus.twinly.season.repository.SeasonRecapRepository;
 import com.nidus.twinly.twinupdate.service.TwinUpdateService;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.UserRepository;
+import com.nidus.twinly.world.repository.WorldTrackRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -24,6 +25,7 @@ public class WithdrawnUserChunkDeletionService {
     private final SeasonRecapRepository seasonRecapRepository;
     private final SimulationHomeObjectRepository simulationHomeObjectRepository;
     private final UserRoomRepository userRoomRepository;
+    private final WorldTrackRepository worldTrackRepository;
     private final TwinUpdateService twinUpdateService;
 
     @Transactional
@@ -40,6 +42,7 @@ public class WithdrawnUserChunkDeletionService {
             seasonRecapRepository.deleteAllByUserIdIn(userIds);
             simulationHomeObjectRepository.deleteAllByUserIdIn(userIds);
             userRoomRepository.deleteAllByUserIdIn(userIds);
+            worldTrackRepository.deleteAllByViewerUserIdIn(userIds);
         }
 
         users.forEach(user -> twinUpdateService.discardInProgress(user.getId()));
