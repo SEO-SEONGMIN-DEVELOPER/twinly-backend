@@ -185,6 +185,8 @@ parallel:
 
 server:
   port: 8080
+  compression:
+    enabled: true
   tomcat:
     mbeanregistry:
       enabled: true
