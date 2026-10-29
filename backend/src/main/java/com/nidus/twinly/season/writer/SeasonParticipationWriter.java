@@ -6,6 +6,7 @@ import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.legal.domain.PolicyKind;
 import com.nidus.twinly.legal.reader.ConsentReader;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
+import com.nidus.twinly.relationship.writer.StarterRelationshipWriter;
 import com.nidus.twinly.schoolverification.domain.SchoolVerificationStatus;
 import com.nidus.twinly.season.event.SeasonParticipationStartedEvent;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
@@ -33,6 +34,7 @@ public class SeasonParticipationWriter {
     private final ConsentReader consentReader;
     private final SeasonParticipationRepository seasonParticipationRepository;
     private final UserRepository userRepository;
+    private final StarterRelationshipWriter starterRelationshipWriter;
     private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
@@ -58,7 +60,9 @@ public class SeasonParticipationWriter {
         seasonParticipationRepository.upsert(userId, seasonId);
 
         if (!participated) {
-            eventPublisher.publishEvent(new SeasonParticipationStartedEvent(userId, Instant.now()));
+            Instant participatedAt = Instant.now();
+            starterRelationshipWriter.connect(userId, seasonId, participatedAt);
+            eventPublisher.publishEvent(new SeasonParticipationStartedEvent(userId, participatedAt));
         }
     }
 
