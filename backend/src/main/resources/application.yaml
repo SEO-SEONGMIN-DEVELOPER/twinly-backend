@@ -139,6 +139,12 @@ simulation:
 app-block:
   cache-ttl: 5s
 
+world:
+  track:
+    max-compressed-size: 5MB
+    max-decompressed-size: 60MB
+    max-concurrent-saves: 2
+
 withdrawn-user-deletion:
   chunk-size: 500
   max-chunks: 100
@@ -179,6 +185,8 @@ parallel:
 
 server:
   port: 8080
+  compression:
+    enabled: true
   tomcat:
     mbeanregistry:
       enabled: true

@@ -19,7 +19,7 @@ public record ShowcaseDialogueSceneResponse(
         @JsonFormat(shape = JsonFormat.Shape.STRING)
         List<Long> with,
         List<ShowcaseLineResponse> lines
-) implements ShowcaseSceneResponse, ShowcaseV2SceneResponse {
+) implements ShowcaseSceneResponse {
 
     public static ShowcaseDialogueSceneResponse from(ShowcaseDialogueSceneResult result) {
         return new ShowcaseDialogueSceneResponse(

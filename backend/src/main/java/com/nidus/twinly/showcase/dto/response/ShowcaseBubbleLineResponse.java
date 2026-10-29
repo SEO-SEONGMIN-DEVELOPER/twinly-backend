@@ -14,7 +14,7 @@ public record ShowcaseBubbleLineResponse(
         String action,
         String text,
         OffsetDateTime occursAt
-) implements ShowcaseLineResponse {
+) implements ShowcaseLineResponse, ShowcaseV2LineResponse {
 
     public static ShowcaseBubbleLineResponse from(ShowcaseBubbleLineResult result) {
         return new ShowcaseBubbleLineResponse(result.t(), result.userRef(), result.action(), result.text(), result.occursAt());

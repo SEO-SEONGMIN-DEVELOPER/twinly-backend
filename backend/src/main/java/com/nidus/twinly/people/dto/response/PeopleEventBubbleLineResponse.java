@@ -14,7 +14,7 @@ public record PeopleEventBubbleLineResponse(
         String action,
         String text,
         OffsetDateTime occursAt
-) implements PeopleEventLineResponse {
+) implements PeopleEventLineResponse, PeopleEventV2LineResponse {
 
     public static PeopleEventBubbleLineResponse from(SceneBubbleLine line) {
         return new PeopleEventBubbleLineResponse(

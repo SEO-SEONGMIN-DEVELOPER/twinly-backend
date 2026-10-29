@@ -5,6 +5,7 @@ import java.time.OffsetDateTime;
 public record ShowcaseNarrationLineResult(
         String t,
         String text,
-        OffsetDateTime occursAt
+        OffsetDateTime occursAt,
+        String speaker
 ) implements ShowcaseLineResult {
 }

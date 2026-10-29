@@ -23,7 +23,7 @@ public record PeopleEventActionSceneResponse(
         String narration,
         @Schema(nullable = true)
         String mind
-) implements PeopleEventSceneResponse, PeopleEventV2SceneResponse {
+) implements PeopleEventSceneResponse {
 
     public static PeopleEventActionSceneResponse from(PeopleEventActionSceneResult result) {
         return new PeopleEventActionSceneResponse(

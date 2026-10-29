@@ -17,9 +17,19 @@ import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.showcase.dto.result.*;
 import com.nidus.twinly.showcase.entity.Showcase;
+import com.nidus.twinly.showcase.entity.ShowcaseUserRef;
 import com.nidus.twinly.showcase.repository.ShowcaseRepository;
+import com.nidus.twinly.showcase.repository.ShowcaseUserRefRepository;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.UserRepository;
+import com.nidus.twinly.world.domain.TrackWindow;
+import com.nidus.twinly.world.entity.WorldTrack;
+import com.nidus.twinly.world.reader.WorldTrackSlice;
+import com.nidus.twinly.world.service.WorldActorProfile;
+import com.nidus.twinly.world.service.WorldService;
+import com.nidus.twinly.world.service.WorldTrackMerger;
+import com.nidus.twinly.world.service.WorldTrackPublisher;
+import com.nidus.twinly.world.service.WorldTrackView;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -54,6 +64,7 @@ import static com.nidus.twinly.common.logging.LogField.field;
 public class ShowcaseService {
 
     private static final long TARGET_USER_REF = 1L;
+    private static final String TARGET_WORLD_REF = WorldService.toUserRef(TARGET_USER_REF);
     private static final String MASKED_GIVEN_NAME = "OO";
     private static final int TOTAL_USER_COUNT_OFFSET = 70;
     private static final int SAME_ORGANIZATION_USER_COUNT_OFFSET = 2;
@@ -65,43 +76,102 @@ public class ShowcaseService {
     private final ShowcaseRepository showcaseRepository;
     private final SceneRepository sceneRepository;
     private final ScenePartnerRepository scenePartnerRepository;
+    private final ShowcaseUserRefRepository showcaseUserRefRepository;
     private final UserRepository userRepository;
     private final CurrentSeasonReader currentSeasonReader;
     private final SceneNameRenderer sceneNameRenderer;
+    private final ShowcaseOutsiderRefs showcaseOutsiderRefs;
+    private final WorldService worldService;
+    private final WorldTrackMerger worldTrackMerger;
+    private final WorldTrackPublisher worldTrackPublisher;
     private final ObjectMapper objectMapper;
 
     @Transactional
     public ShowcaseTodayResult today(Long userId) {
+        ShowcaseState state = resolve(userId);
+        Set<Long> displayedUserIds = displayedUserIds(state.userRefByUserId(), state.scenes());
+        Map<Long, User> userById = userRepository.findAllById(displayedUserIds).stream()
+                .collect(Collectors.toMap(User::getId, Function.identity()));
+        Map<Long, String> nameByUserId = maskedNameByUserId(state.showcase().getId(), state.userRefByUserId(), displayedUserIds, userById);
+
+        return new ShowcaseTodayResult(
+                state.showcase().getId(),
+                state.showcase().getRefVersion(),
+                TARGET_USER_REF,
+                state.date(),
+                Instant.now(),
+                state.scenes().stream()
+                        .map(scene -> toSceneResult(scene, state.partnerUserIdsBySceneId().get(scene.getId()), state.sceneLinesBySceneId().get(scene.getId()), state.userRefByUserId(), nameByUserId))
+                        .toList(),
+                toUserInfoResults(state.userRefByUserId(), userById, nameByUserId),
+                toUserCountsResult(userId)
+        );
+    }
+
+    @Transactional
+    public ShowcaseTodaySectorsResult todaySectors(Long userId, String sectorCode, LocalDate date, String rawFrom, String rawTo) {
+        TrackWindow window = TrackWindow.of(date, rawFrom, rawTo);
+        ShowcaseState state = resolve(userId);
+        Showcase showcase = state.showcase();
+
+        User target = userRepository.findById(showcase.getTargetUserId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.WORLD_TRACK_NOT_FOUND));
+        if (target.getPoolNumber() == null || !sceneRepository.existsByUserIdAndDate(target.getId(), date)) {
+            throw new BusinessException(ErrorCode.WORLD_TRACK_NOT_FOUND);
+        }
+
+        WorldTrackSlice publicTrack = worldService.readTrack(target.getPoolNumber(), date, sectorCode, WorldTrack.PUBLIC_VIEWER_USER_ID, window);
+        if (publicTrack == null) {
+            throw new BusinessException(ErrorCode.WORLD_TRACK_NOT_FOUND);
+        }
+
+        Set<Long> listedUserIds = new LinkedHashSet<>(state.userRefByUserId().keySet());
+        Map<Long, User> listedUserById = userRepository.findAllById(listedUserIds).stream()
+                .collect(Collectors.toMap(User::getId, Function.identity()));
+        Map<Long, String> nameByUserId = maskedNameByUserId(showcase.getId(), state.userRefByUserId(), listedUserIds, listedUserById);
+
+        WorldTrackView view = worldTrackMerger.merge(publicTrack, null, TARGET_WORLD_REF, Set.of(), window);
+        Map<Long, User> userById = userRepository.findAllById(WorldService.userIdsOf(view)).stream()
+                .collect(Collectors.toMap(User::getId, Function.identity()));
+        worldTrackPublisher.publish(view,
+                ref -> worldProfile(WorldService.toUserId(ref), nameByUserId, userById),
+                ref -> toShowcaseWorldRef(ref, showcase.getId(), state.userRefByUserId()));
+
+        return new ShowcaseTodaySectorsResult(
+                view.poolNumber(),
+                date,
+                sectorCode,
+                view.layoutVersion(),
+                OffsetDateTime.now(KstTimes.ZONE),
+                TARGET_WORLD_REF,
+                showcase.getId(),
+                showcase.getRefVersion(),
+                view.actors(),
+                view.talks(),
+                view.gestures(),
+                view.objects(),
+                view.events(),
+                view.items()
+        );
+    }
+
+    private ShowcaseState resolve(Long userId) {
         LocalDate date = KstTimes.today();
-        Showcase showcase = showcaseRepository.findByViewerUserIdAndDate(userId, date)
+        Showcase showcase = showcaseRepository.findWithLockByViewerUserIdAndDate(userId, date)
                 .orElseGet(() -> showcaseRepository.save(Showcase.create(userId, pickTargetUserId(userId, date), date)));
 
         List<Scene> scenes = sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(showcase.getTargetUserId(), date);
         if (scenes.isEmpty()) {
             WarnLog.log(log, "관람 대상의 오늘 씬이 없어 대상을 다시 배정합니다.", field("showcaseId", showcase.getId()), field("targetUserId", showcase.getTargetUserId()));
             showcase.changeTarget(pickTargetUserId(userId, date));
+            showcaseUserRefRepository.deleteAllByShowcaseId(showcase.getId());
             scenes = sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(showcase.getTargetUserId(), date);
         }
         Map<Long, List<Long>> partnerUserIdsBySceneId = partnerUserIdsBySceneId(scenes);
         Map<Long, List<SceneLine>> sceneLinesBySceneId = sceneLinesBySceneId(scenes);
+        Map<Long, Long> userRefByUserId = assignUserRefs(showcase, scenes, partnerUserIdsBySceneId, sceneLinesBySceneId);
 
-        Map<Long, Long> userRefByUserId = userRefByUserId(showcase.getTargetUserId(), scenes, partnerUserIdsBySceneId, sceneLinesBySceneId);
-        Set<Long> displayedUserIds = displayedUserIds(userRefByUserId, scenes);
-        Map<Long, User> userById = userRepository.findAllById(displayedUserIds).stream()
-                .collect(Collectors.toMap(User::getId, Function.identity()));
-        Map<Long, String> nameByUserId = maskedNameByUserId(showcase.getId(), displayedUserIds, userById);
-
-        return new ShowcaseTodayResult(
-                showcase.getId(),
-                TARGET_USER_REF,
-                date,
-                Instant.now(),
-                scenes.stream()
-                        .map(scene -> toSceneResult(scene, partnerUserIdsBySceneId.get(scene.getId()), sceneLinesBySceneId.get(scene.getId()), userRefByUserId, nameByUserId))
-                        .toList(),
-                toUserInfoResults(userRefByUserId, userById, nameByUserId),
-                toUserCountsResult(userId)
-        );
+        return new ShowcaseState(showcase, date, scenes, partnerUserIdsBySceneId, sceneLinesBySceneId, userRefByUserId);
     }
 
     private Long pickTargetUserId(Long viewerUserId, LocalDate date) {
@@ -139,19 +209,34 @@ public class ShowcaseService {
                 .collect(Collectors.toMap(Scene::getId, this::toSceneLines));
     }
 
-    private Map<Long, Long> userRefByUserId(Long targetUserId,
-                                            List<Scene> scenes,
-                                            Map<Long, List<Long>> partnerUserIdsBySceneId,
-                                            Map<Long, List<SceneLine>> sceneLinesBySceneId) {
-        Map<Long, Long> userRefByUserId = new LinkedHashMap<>();
-        userRefByUserId.put(targetUserId, TARGET_USER_REF);
+    private Map<Long, Long> assignUserRefs(Showcase showcase,
+                                           List<Scene> scenes,
+                                           Map<Long, List<Long>> partnerUserIdsBySceneId,
+                                           Map<Long, List<SceneLine>> sceneLinesBySceneId) {
+        Map<Long, Long> storedRefByUserId = showcaseUserRefRepository.findAllByShowcaseId(showcase.getId()).stream()
+                .collect(Collectors.toMap(ShowcaseUserRef::getUserId, ShowcaseUserRef::getUserRef));
+        long nextRef = storedRefByUserId.values().stream().mapToLong(Long::longValue).max().orElse(TARGET_USER_REF) + 1;
 
+        Set<Long> candidateUserIds = new LinkedHashSet<>();
+        candidateUserIds.add(showcase.getTargetUserId());
         Stream.concat(
                 partnerUserIdsBySceneId.values().stream().flatMap(List::stream),
                 scenes.stream().flatMap(scene -> bubbleUserIds(sceneLinesBySceneId.get(scene.getId())).stream())
-        ).forEach(userId -> userRefByUserId.putIfAbsent(userId, (long) (userRefByUserId.size() + 1)));
+        ).forEach(candidateUserIds::add);
 
-        return userRefByUserId;
+        Map<Long, Long> userRefByUserId = new HashMap<>();
+        for (Long candidateUserId : candidateUserIds) {
+            Long userRef = storedRefByUserId.get(candidateUserId);
+            if (userRef == null) {
+                userRef = candidateUserId.equals(showcase.getTargetUserId()) ? TARGET_USER_REF : nextRef++;
+                showcaseUserRefRepository.save(ShowcaseUserRef.create(showcase.getId(), candidateUserId, userRef));
+            }
+            userRefByUserId.put(candidateUserId, userRef);
+        }
+
+        return userRefByUserId.entrySet().stream()
+                .sorted(Map.Entry.comparingByValue())
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (a, b) -> a, LinkedHashMap::new));
     }
 
     private List<Long> bubbleUserIds(List<SceneLine> sceneLines) {
@@ -173,19 +258,21 @@ public class ShowcaseService {
         return userIds;
     }
 
-    private Map<Long, String> maskedNameByUserId(Long showcaseId, Set<Long> displayedUserIds, Map<Long, User> userById) {
+    private Map<Long, String> maskedNameByUserId(Long showcaseId, Map<Long, Long> userRefByUserId, Set<Long> displayedUserIds, Map<Long, User> userById) {
         List<String> familyNames = new ArrayList<>(PSEUDONYM_FAMILY_NAMES);
         Collections.shuffle(familyNames, new Random(showcaseId));
 
         Map<Long, String> maskedNameByUserId = new HashMap<>();
-        int index = 0;
+        long nextIndex = userRefByUserId.values().stream().mapToLong(Long::longValue).max().orElse(0);
 
         for (Long userId : displayedUserIds) {
             if (!userById.containsKey(userId)) {
                 continue;
             }
 
-            maskedNameByUserId.put(userId, familyNames.get(index++ % familyNames.size()) + MASKED_GIVEN_NAME);
+            Long userRef = userRefByUserId.get(userId);
+            long index = userRef != null ? userRef - 1 : nextIndex++;
+            maskedNameByUserId.put(userId, familyNames.get((int) (index % familyNames.size())) + MASKED_GIVEN_NAME);
         }
 
         return maskedNameByUserId;
@@ -210,7 +297,8 @@ public class ShowcaseService {
                     scene.getPlaceCode(),
                     with,
                     sceneNameRenderer.render(scene.getNarration(), nameByUserId),
-                    sceneNameRenderer.render(scene.getMind(), nameByUserId)
+                    sceneNameRenderer.render(scene.getMind(), nameByUserId),
+                    scene.getLines() == null ? null : toLineResults(sceneLines, userRefByUserId, nameByUserId)
             );
             case DIALOGUE -> new ShowcaseDialogueSceneResult(
                     scene.getId(),
@@ -262,7 +350,8 @@ public class ShowcaseService {
             case SceneNarrationLine narration -> new ShowcaseNarrationLineResult(
                     narration.t(),
                     narration.text(),
-                    narration.occursAt()
+                    narration.occursAt(),
+                    narration.speaker()
             );
             case SceneBubbleLine bubble -> new ShowcaseBubbleLineResult(
                     bubble.t(),
@@ -324,5 +413,35 @@ public class ShowcaseService {
                         + SAME_ORGANIZATION_USER_COUNT_OFFSET,
                 viewer.shortOrganization()
         );
+    }
+
+    private WorldActorProfile worldProfile(Long userId, Map<Long, String> nameByUserId, Map<Long, User> userById) {
+        User user = userId == null ? null : userById.get(userId);
+        if (user == null) {
+            return WorldService.anonymousProfile();
+        }
+
+        return new WorldActorProfile(
+                nameByUserId.getOrDefault(userId, WorldService.ANONYMOUS_DISPLAY_NAME),
+                WorldService.isWithdrawn(user) ? null : WorldService.genderOf(user)
+        );
+    }
+
+    private String toShowcaseWorldRef(String ref, Long showcaseId, Map<Long, Long> userRefByUserId) {
+        Long userId = WorldService.toUserId(ref);
+        if (userId == null) {
+            return ref;
+        }
+
+        Long userRef = userRefByUserId.get(userId);
+        return WorldService.toUserRef(userRef != null ? userRef : showcaseOutsiderRefs.refOf(showcaseId, userId));
+    }
+
+    private record ShowcaseState(Showcase showcase,
+                                 LocalDate date,
+                                 List<Scene> scenes,
+                                 Map<Long, List<Long>> partnerUserIdsBySceneId,
+                                 Map<Long, List<SceneLine>> sceneLinesBySceneId,
+                                 Map<Long, Long> userRefByUserId) {
     }
 }

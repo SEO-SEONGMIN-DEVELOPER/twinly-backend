@@ -9,6 +9,8 @@ import com.nidus.twinly.activity.repository.QuestionPartnerRepository;
 import com.nidus.twinly.activity.repository.QuestionRepository;
 import com.nidus.twinly.activity.repository.ScenePartnerRepository;
 import com.nidus.twinly.activity.repository.SceneRepository;
+import com.nidus.twinly.activity.repository.SimulationHomeObjectRepository;
+import com.nidus.twinly.activity.repository.UserRoomRepository;
 import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.common.web.BusinessException;
@@ -129,12 +131,18 @@ class SimulationServiceUnitTest {
     @Mock
     IntimacyReader intimacyReader;
 
+    @Mock
+    SimulationHomeObjectRepository simulationHomeObjectRepository;
+
+    @Mock
+    UserRoomRepository userRoomRepository;
+
     SimulationService simulationService;
 
     @BeforeEach
     void setUp() {
         simulationService = new SimulationService(
-                sceneRepository, scenePartnerRepository, questionRepository, questionPartnerRepository,
+                sceneRepository, scenePartnerRepository, simulationHomeObjectRepository, userRoomRepository, questionRepository, questionPartnerRepository,
                 relationshipRepository, encounterRepository, chatRoomOpener, chatRoomOpeningRepository,
                 appNotificationScheduleRepository, userRepository,
                 personaElementRepository, entitlementReader, consentReader, purchaseService, new ObjectMapper(), intimacyReader);
@@ -227,7 +235,7 @@ class SimulationServiceUnitTest {
         givenEmptyPreviousSimulation();
 
         // when: 시뮬레이션 결과 저장
-        simulationService.simulations(USER_ID, new SimulationsCommand(USER_ID, DATE, List.of(), List.of(), List.of(), null));
+        simulationService.simulations(USER_ID, new SimulationsCommand(USER_ID, DATE, List.of(), List.of(), List.of(), null, null, null));
 
         // then: 바뀐 결과에 없는 일이 예약된 채 남아 발송되지 않도록 미발송 예약을 비운다
         then(appNotificationScheduleRepository).should().deleteAllUnsentByUserIdAndSimulationDate(USER_ID, DATE);
@@ -243,7 +251,7 @@ class SimulationServiceUnitTest {
         SimulationsCommand command = new SimulationsCommand(USER_ID, FUTURE_DATE, List.of(
                 dialogueScene(FUTURE_DATE, 15, List.of(PARTNER_ID)),
                 dialogueScene(FUTURE_DATE, 11, List.of(PARTNER_ID))
-        ), List.of(), List.of(), null);
+        ), List.of(), List.of(), null, null, null);
 
         // when: 시뮬레이션 결과 저장
         simulationService.simulations(USER_ID, command);
@@ -266,7 +274,7 @@ class SimulationServiceUnitTest {
                 .willReturn(List.of(PARTNER_ID));
         SimulationsCommand command = new SimulationsCommand(USER_ID, FUTURE_DATE, List.of(
                 dialogueScene(FUTURE_DATE, 11, List.of(PARTNER_ID))
-        ), List.of(), List.of(), null);
+        ), List.of(), List.of(), null, null, null);
 
         // when: 시뮬레이션 결과 저장
         simulationService.simulations(USER_ID, command);
@@ -282,7 +290,7 @@ class SimulationServiceUnitTest {
         givenEmptyPreviousSimulation();
         given(scenePartnerRepository.findPartnerUserIdsWithDialogueBeforeDate(USER_ID, List.of(PARTNER_ID), DATE))
                 .willReturn(List.of());
-        SimulationsCommand command = new SimulationsCommand(USER_ID, DATE, List.of(dialogueScene("카페")), List.of(), List.of(), null);
+        SimulationsCommand command = new SimulationsCommand(USER_ID, DATE, List.of(dialogueScene("카페")), List.of(), List.of(), null, null, null);
 
         // when: 시뮬레이션 결과 저장
         simulationService.simulations(USER_ID, command);
@@ -300,9 +308,9 @@ class SimulationServiceUnitTest {
         givenEmptyPreviousSimulation(FUTURE_DATE);
         SimulationsCommand command = new SimulationsCommand(USER_ID, FUTURE_DATE, List.of(
                 new SimulationsActionSceneCommand(FUTURE_DATE.atTime(9, 0), FUTURE_DATE.atTime(10, 0), "action", "학교",
-                        null, List.of(PARTNER_ID), "narration", null),
+                        null, List.of(PARTNER_ID), "narration", null, null, null, null),
                 dialogueScene(FUTURE_DATE, 11, List.of(USER_ID))
-        ), List.of(), List.of(), null);
+        ), List.of(), List.of(), null, null, null);
 
         // when: 시뮬레이션 결과 저장
         simulationService.simulations(USER_ID, command);
@@ -321,7 +329,7 @@ class SimulationServiceUnitTest {
         SimulationsCommand command = new SimulationsCommand(USER_ID, DATE, List.of(), List.of(), List.of(
                 new SimulationsRelationshipCommand(PARTNER_ID, DATE.atTime(21, 0), 40, "{}"),
                 new SimulationsRelationshipCommand(PARTNER_ID, DATE.atTime(15, 0), 36, "{}")
-        ), null);
+        ), null, null, null);
 
         // when: 시뮬레이션 결과 저장
         simulationService.simulations(USER_ID, command);
@@ -343,7 +351,7 @@ class SimulationServiceUnitTest {
                 .willReturn(List.of(PARTNER_ID));
         SimulationsCommand command = new SimulationsCommand(USER_ID, DATE, List.of(
                 dialogueScene(DATE, 11, List.of(PARTNER_ID, newPartnerId))
-        ), List.of(), List.of(), null);
+        ), List.of(), List.of(), null, null, null);
 
         // when: 시뮬레이션 결과 저장
         simulationService.simulations(USER_ID, command);
@@ -367,7 +375,7 @@ class SimulationServiceUnitTest {
                 dialogueScene(DATE, 11, List.of(PARTNER_ID, newPartnerId))
         ), List.of(), List.of(
                 new SimulationsRelationshipCommand(PARTNER_ID, DATE.atTime(21, 0), 20, "AI가 파악한 상대")
-        ), null);
+        ), null, null, null);
 
         // when: 시뮬레이션 결과 저장
         simulationService.simulations(USER_ID, command);
@@ -395,7 +403,7 @@ class SimulationServiceUnitTest {
                 dialogueScene(DATE, 11, List.of(PARTNER_ID))
         ), List.of(), List.of(
                 new SimulationsRelationshipCommand(PARTNER_ID, DATE.atTime(21, 0), 20, "AI가 파악한 상대")
-        ), intimacyAsOf);
+        ), intimacyAsOf, null, null);
 
         // when: 시뮬레이션 결과 저장
         simulationService.simulations(USER_ID, command);
@@ -423,7 +431,7 @@ class SimulationServiceUnitTest {
         ), List.of(), List.of(
                 new SimulationsRelationshipCommand(PARTNER_ID, DATE.atTime(11, 0), 20, "{}"),
                 new SimulationsRelationshipCommand(newPartnerId, DATE.atTime(10, 0), 20, "{}")
-        ), null);
+        ), null, null, null);
 
         // when: 시뮬레이션 결과 저장
         simulationService.simulations(USER_ID, command);
@@ -445,7 +453,7 @@ class SimulationServiceUnitTest {
                 .willReturn(Optional.of(relationship(20)));
         SimulationsCommand command = new SimulationsCommand(USER_ID, DATE, List.of(
                 dialogueScene(DATE, 11, List.of(PARTNER_ID))
-        ), List.of(), List.of(), null);
+        ), List.of(), List.of(), null, null, null);
 
         // when: 시뮬레이션 결과 저장
         simulationService.simulations(USER_ID, command);
@@ -477,7 +485,7 @@ class SimulationServiceUnitTest {
     @DisplayName("경로의 userId와 본문의 userId가 다르면 INVALID_REQUEST 예외가 발생하고 예약을 건드리지 않는다")
     void simulations_with_mismatched_user_id_throws() {
         // given: 본문의 userId가 경로의 userId와 다른 요청
-        SimulationsCommand command = new SimulationsCommand(PARTNER_ID, DATE, List.of(), List.of(), List.of(), null);
+        SimulationsCommand command = new SimulationsCommand(PARTNER_ID, DATE, List.of(), List.of(), List.of(), null, null, null);
 
         // when & then: INVALID_REQUEST 예외가 나고, 다른 유저의 예약을 지우거나 새로 만들지 않는다
         assertThatThrownBy(() -> simulationService.simulations(USER_ID, command))
@@ -512,7 +520,7 @@ class SimulationServiceUnitTest {
         given(userRepository.countByIdIn(Set.of(PARTNER_ID, 999L))).willReturn(1L);
         SimulationsCommand command = new SimulationsCommand(USER_ID, DATE, List.of(
                 dialogueScene(DATE, 11, List.of(PARTNER_ID, 999L))
-        ), List.of(), List.of(), null);
+        ), List.of(), List.of(), null, null, null);
 
         // when & then: 외래 키 위반으로 서버 오류가 나기 전에 요청 오류로 끊고, 기존 결과와 예약은 그대로 둔다
         assertThatThrownBy(() -> simulationService.simulations(USER_ID, command))
@@ -533,7 +541,7 @@ class SimulationServiceUnitTest {
         given(userRepository.countByIdIn(Set.of(PARTNER_ID, 999L))).willReturn(1L);
         SimulationsCommand command = new SimulationsCommand(USER_ID, DATE, List.of(),
                 List.of(new SimulationsQuestionCommand(DATE.atTime(21, 0), QuestionType.PROMISE, List.of(PARTNER_ID), "오늘 어땠어?", List.of())),
-                List.of(new SimulationsRelationshipCommand(999L, DATE.atTime(21, 0), 40, "{}")), null);
+                List.of(new SimulationsRelationshipCommand(999L, DATE.atTime(21, 0), 40, "{}")), null, null, null);
 
         // when & then: 어느 항목에서 나온 상대든 하나라도 없으면 요청 오류다
         assertThatThrownBy(() -> simulationService.simulations(USER_ID, command))
@@ -552,7 +560,7 @@ class SimulationServiceUnitTest {
         SimulationsCommand command = new SimulationsCommand(USER_ID, DATE, List.of(
                 actionScene("학교:정문:앞"),
                 dialogueScene("카페:2층")
-        ), List.of(), List.of(), null);
+        ), List.of(), List.of(), null, null, null);
 
         // when: 시뮬레이션 결과 저장
         simulationService.simulations(USER_ID, command);
@@ -571,9 +579,9 @@ class SimulationServiceUnitTest {
         givenEmptyPreviousSimulation();
         SimulationsCommand command = new SimulationsCommand(USER_ID, DATE, List.of(
                 new SimulationsActionSceneCommand(DATE.atTime(9, 0), DATE.atTime(10, 0), "action", "학교 정문",
-                        "SCHOOL_GATE", List.of(), "narration", null),
+                        "SCHOOL_GATE", List.of(), "narration", null, null, null, null),
                 dialogueScene("카페")
-        ), List.of(), List.of(), null);
+        ), List.of(), List.of(), null, null, null);
 
         // when: 시뮬레이션 결과 저장
         simulationService.simulations(USER_ID, command);
@@ -592,7 +600,7 @@ class SimulationServiceUnitTest {
         givenEmptyPreviousSimulation();
         SimulationsCommand command = new SimulationsCommand(USER_ID, DATE, List.of(
                 moveScene("성북구:주택가:집", "성북구:학생 거리:탐앤탐스", List.of())
-        ), List.of(), List.of(), null);
+        ), List.of(), List.of(), null, null, null);
 
         // when: 시뮬레이션 결과 저장
         simulationService.simulations(USER_ID, command);
@@ -632,7 +640,7 @@ class SimulationServiceUnitTest {
         given(questionRepository.saveAll(any())).willReturn(List.of());
         SimulationsCommand command = new SimulationsCommand(USER_ID, DATE, List.of(
                 moveScene("집", "학생 거리 탐앤탐스", List.of(PARTNER_ID))
-        ), List.of(), List.of(), null);
+        ), List.of(), List.of(), null, null, null);
 
         // when: 시뮬레이션 결과 저장
         simulationService.simulations(USER_ID, command);
@@ -653,7 +661,7 @@ class SimulationServiceUnitTest {
         given(userRepository.countByIdIn(Set.of(999L))).willReturn(0L);
         SimulationsCommand command = new SimulationsCommand(USER_ID, DATE, List.of(
                 moveScene("집", "학생 거리 탐앤탐스", List.of(999L))
-        ), List.of(), List.of(), null);
+        ), List.of(), List.of(), null, null, null);
 
         // when & then: 대화 상대와 같은 규칙으로 요청 오류로 끊고, 기존 결과는 그대로 둔다
         assertThatThrownBy(() -> simulationService.simulations(USER_ID, command))
@@ -673,7 +681,7 @@ class SimulationServiceUnitTest {
 
     private SimulationsSceneCommand actionScene(String place) {
         return new SimulationsActionSceneCommand(
-                DATE.atTime(9, 0), DATE.atTime(10, 0), "action", place, null, List.of(), "narration", null);
+                DATE.atTime(9, 0), DATE.atTime(10, 0), "action", place, null, List.of(), "narration", null, null, null, null);
     }
 
     private SimulationsSceneCommand dialogueScene(String place) {
@@ -707,7 +715,7 @@ class SimulationServiceUnitTest {
     private SimulationsCommand simulationsCommand(LocalDate date, Integer rapport) {
         return new SimulationsCommand(USER_ID, date, List.of(), List.of(), List.of(
                 new SimulationsRelationshipCommand(PARTNER_ID, date.atTime(21, 0), rapport, "{}")
-        ), null);
+        ), null, null, null);
     }
 
     private IntimacyBonus bonus(int amount) {

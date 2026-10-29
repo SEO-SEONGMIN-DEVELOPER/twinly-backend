@@ -9,6 +9,8 @@ import com.nidus.twinly.activity.entity.ScenePartner;
 import com.nidus.twinly.activity.repository.QuestionRepository;
 import com.nidus.twinly.activity.repository.ScenePartnerRepository;
 import com.nidus.twinly.activity.repository.SceneRepository;
+import com.nidus.twinly.activity.repository.SimulationHomeObjectRepository;
+import com.nidus.twinly.activity.repository.UserRoomRepository;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
 import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.photo.PhotoPosInfo;
@@ -70,13 +72,19 @@ class ActivityServiceUnitTest {
     @Mock
     CurrentSeasonReader currentSeasonReader;
 
+    @Mock
+    SimulationHomeObjectRepository simulationHomeObjectRepository;
+
+    @Mock
+    UserRoomRepository userRoomRepository;
+
     ActivityService activityService;
 
     @BeforeEach
     void setUp() {
         // lines(JSON) 파싱은 서비스의 실제 책임이므로 ObjectMapper는 mock이 아닌 실제 객체를 주입한다.
         activityService = new ActivityService(
-                sceneRepository, scenePartnerRepository, questionRepository, userRepository, photoRepository, cloudFrontService, currentSeasonReader, new SceneNameRenderer(), new ObjectMapper());
+                sceneRepository, scenePartnerRepository, questionRepository, simulationHomeObjectRepository, userRoomRepository, userRepository, photoRepository, cloudFrontService, currentSeasonReader, new SceneNameRenderer(), new ObjectMapper());
 
         // 현재 시즌은 DB의 활성 시즌에서 읽어오므로 리포지토리 스텁으로 대체한다.
         Season currentSeason = BeanUtils.instantiateClass(Season.class);

@@ -1,5 +1,7 @@
 package com.nidus.twinly.common.config;
 
+import org.springframework.util.unit.DataSize;
+
 import java.time.Duration;
 
 public final class RequiredProperty {
@@ -17,6 +19,12 @@ public final class RequiredProperty {
 
     public static void requirePositive(String key, Duration value) {
         if (value == null || value.isZero() || value.isNegative()) {
+            throw new IllegalStateException(key + " 는 0보다 커야 합니다.");
+        }
+    }
+
+    public static void requirePositive(String key, DataSize value) {
+        if (value == null || value.isNegative() || value.toBytes() == 0) {
             throw new IllegalStateException(key + " 는 0보다 커야 합니다.");
         }
     }

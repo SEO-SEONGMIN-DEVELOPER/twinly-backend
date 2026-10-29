@@ -3,6 +3,7 @@ package com.nidus.twinly.activity.dto.response;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.nidus.twinly.activity.dto.result.ActivityResult;
 import io.swagger.v3.oas.annotations.media.Schema;
+import tools.jackson.databind.JsonNode;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -19,7 +20,11 @@ public record ActivityV2Response(
         Instant serverNow,
         List<ActivityV2SceneResponse> scenes,
         List<ActivityQuestionResponse> questions,
-        List<ActivityUserInfoResponse> userInfos
+        List<ActivityUserInfoResponse> userInfos,
+        @Schema(nullable = true)
+        JsonNode room,
+        @Schema(nullable = true)
+        JsonNode homeObjects
 ) {
 
     public static ActivityV2Response from(ActivityResult result) {
@@ -31,7 +36,9 @@ public record ActivityV2Response(
                 result.serverNow(),
                 result.scenes().stream().map(ActivityV2SceneResponse::from).toList(),
                 result.questions().stream().map(ActivityQuestionResponse::from).toList(),
-                result.userInfos().stream().map(ActivityUserInfoResponse::from).toList()
+                result.userInfos().stream().map(ActivityUserInfoResponse::from).toList(),
+                result.room(),
+                result.homeObjects()
         );
     }
 }

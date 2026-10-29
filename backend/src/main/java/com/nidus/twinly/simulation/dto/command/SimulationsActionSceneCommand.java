@@ -13,7 +13,10 @@ public record SimulationsActionSceneCommand(
         String placeCode,
         List<Long> with,
         String narration,
-        String mind
+        String mind,
+        String activity,
+        String motion,
+        List<SimulationsNarrationLineCommand> lines
 ) implements SimulationsSceneCommand {
 
     public static SimulationsActionSceneCommand from(SimulationsActionSceneRequest request) {
@@ -25,7 +28,10 @@ public record SimulationsActionSceneCommand(
                 request.placeCode(),
                 request.with(),
                 request.narration(),
-                request.mind()
+                request.mind(),
+                request.activity(),
+                request.motion(),
+                request.lines() == null ? null : request.lines().stream().map(SimulationsNarrationLineCommand::from).toList()
         );
     }
 }

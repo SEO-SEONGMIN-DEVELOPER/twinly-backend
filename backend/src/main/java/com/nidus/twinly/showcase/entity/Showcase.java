@@ -26,6 +26,8 @@ public class Showcase {
 
     private LocalDate date;
 
+    private Integer refVersion;
+
     private Instant createdAt;
 
     public static Showcase create(Long viewerUserId, Long targetUserId, LocalDate date) {
@@ -34,6 +36,7 @@ public class Showcase {
         showcase.viewerUserId = viewerUserId;
         showcase.targetUserId = targetUserId;
         showcase.date = date;
+        showcase.refVersion = 0;
         showcase.createdAt = Instant.now();
 
         return showcase;
@@ -41,5 +44,6 @@ public class Showcase {
 
     public void changeTarget(Long targetUserId) {
         this.targetUserId = targetUserId;
+        this.refVersion++;
     }
 }

@@ -29,6 +29,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     boolean existsByDiHash(String diHash);
 
+    boolean existsByPoolNumber(Integer poolNumber);
+
+    boolean existsByIdAndDeletedAtIsNull(Long id);
+
     long countByIdIn(Collection<Long> ids);
 
     Optional<User> findByPhoneNumberHash(String phoneNumberHash);

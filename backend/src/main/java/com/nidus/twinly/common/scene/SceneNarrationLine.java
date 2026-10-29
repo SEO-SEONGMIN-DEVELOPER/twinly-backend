@@ -7,14 +7,16 @@ import java.time.OffsetDateTime;
 public record SceneNarrationLine(
         String t,
         String text,
-        OffsetDateTime occursAt
+        OffsetDateTime occursAt,
+        String speaker
 ) implements SceneLine {
 
     public static SceneNarrationLine from(StoredSceneNarrationLine line) {
         return new SceneNarrationLine(
                 line.t(),
                 line.text(),
-                KstTimes.toKstOffsetDateTime(line.occursAt())
+                KstTimes.toKstOffsetDateTime(line.occursAt()),
+                line.speaker()
         );
     }
 }

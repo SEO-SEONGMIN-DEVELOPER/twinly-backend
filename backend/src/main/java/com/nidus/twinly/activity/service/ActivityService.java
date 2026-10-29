@@ -7,6 +7,8 @@ import com.nidus.twinly.activity.entity.ScenePartner;
 import com.nidus.twinly.activity.repository.QuestionRepository;
 import com.nidus.twinly.activity.repository.ScenePartnerRepository;
 import com.nidus.twinly.activity.repository.SceneRepository;
+import com.nidus.twinly.activity.repository.SimulationHomeObjectRepository;
+import com.nidus.twinly.activity.repository.UserRoomRepository;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
 import com.nidus.twinly.common.logging.WarnLog;
 import com.nidus.twinly.common.scene.SceneLine;
@@ -26,6 +28,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
@@ -49,6 +52,8 @@ public class ActivityService {
     private final SceneRepository sceneRepository;
     private final ScenePartnerRepository scenePartnerRepository;
     private final QuestionRepository questionRepository;
+    private final SimulationHomeObjectRepository simulationHomeObjectRepository;
+    private final UserRoomRepository userRoomRepository;
     private final UserRepository userRepository;
     private final PhotoRepository photoRepository;
     private final CloudFrontService cloudFrontService;
@@ -89,7 +94,9 @@ public class ActivityService {
                 Instant.now(),
                 sceneResults,
                 questionResults,
-                toUserInfoResults(userInfoUserIds, userById)
+                toUserInfoResults(userInfoUserIds, userById),
+                userRoomRepository.findByUserId(userId).map(room -> objectMapper.readTree(room.getRoom())).orElse(null),
+                simulationHomeObjectRepository.findByUserIdAndDate(userId, date).map(homeObject -> objectMapper.readTree(homeObject.getObjects())).orElse(null)
         );
     }
 
@@ -121,7 +128,10 @@ public class ActivityService {
                     scene.getPlaceCode(),
                     with,
                     sceneNameRenderer.render(scene.getNarration(), nameByUserId),
-                    sceneNameRenderer.render(scene.getMind(), nameByUserId)
+                    sceneNameRenderer.render(scene.getMind(), nameByUserId),
+                    scene.getActivity(),
+                    scene.getMotion(),
+                    scene.getLines() == null ? null : toSceneLines(scene, nameByUserId)
             );
             case DIALOGUE -> new ActivityDialogueSceneResult(
                     scene.getId(),

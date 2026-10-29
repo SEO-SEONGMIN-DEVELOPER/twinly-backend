@@ -6,6 +6,7 @@ import java.util.List;
 
 public record ShowcaseTodayResult(
         Long showcaseId,
+        Integer refVersion,
         Long userRef,
         LocalDate date,
         Instant serverNow,

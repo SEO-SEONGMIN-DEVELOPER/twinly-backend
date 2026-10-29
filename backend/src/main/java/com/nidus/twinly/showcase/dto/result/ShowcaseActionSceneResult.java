@@ -12,6 +12,7 @@ public record ShowcaseActionSceneResult(
         String placeCode,
         List<Long> with,
         String narration,
-        String mind
+        String mind,
+        List<ShowcaseLineResult> lines
 ) implements ShowcaseSceneResult {
 }

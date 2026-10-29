@@ -734,7 +734,7 @@ class PeopleServiceUnitTest {
                 .willReturn(List.of(
                         relationship(ME, 20L, day1, 10, "{}"),
                         relationship(ME, 20L, day2, 35, "{}")));
-        willReturn(List.of(new StoredSceneNarrationLine("narr", "안녕이라고 했다", day1.atTime(12, 0))))
+        willReturn(List.of(new StoredSceneNarrationLine("narr", "안녕이라고 했다", day1.atTime(12, 0), null)))
                 .given(objectMapper).readValue(eq(linesJson), any(TypeReference.class));
 
         // when: 이벤트 목록 조회
