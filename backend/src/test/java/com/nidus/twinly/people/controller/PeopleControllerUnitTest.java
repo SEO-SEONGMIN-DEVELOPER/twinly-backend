@@ -423,7 +423,7 @@ class PeopleControllerUnitTest {
                                 "SCHOOL_HALLWAY",
                                 List.of(42L),
                                 "복도를 함께 걸었다",
-                                "조금 설렜다")),
+                                "조금 설렜다", null, null, null)),
                         List.of(new PeopleEventUserInfoResult(42L, "홍길동",
                                 new ProfilePhotoInfo("profile/42/key", "https://cdn.example.com/signed",
                                         new PhotoPosInfo(new PhotoPosInfo.StartPos(10, 20), 100, 200))))));

@@ -549,7 +549,10 @@ public class PeopleService {
                     scene.getPlaceCode(),
                     with,
                     sceneNameRenderer.render(scene.getNarration(), nameByUserId),
-                    sceneNameRenderer.render(scene.getMind(), nameByUserId)
+                    sceneNameRenderer.render(scene.getMind(), nameByUserId),
+                    scene.getActivity(),
+                    scene.getMotion(),
+                    scene.getLines() == null ? null : toSceneLines(scene, nameByUserId)
             );
             case DIALOGUE -> new PeopleEventDialogueSceneResult(
                     scene.getId(),

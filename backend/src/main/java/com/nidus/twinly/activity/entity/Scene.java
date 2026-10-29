@@ -62,14 +62,27 @@ public class Scene {
 
     private String mapVersion;
 
+    private String activity;
+
+    private String motion;
+
     private Instant createdAt;
 
     public static Scene createAction(Long userId, LocalDate date, String version, String place, String placeCode,
                                      LocalDateTime startsAt, LocalDateTime endsAt, String narration, String mind) {
+        return createAction(userId, date, version, place, placeCode, startsAt, endsAt, narration, mind, null, null, null);
+    }
+
+    public static Scene createAction(Long userId, LocalDate date, String version, String place, String placeCode,
+                                     LocalDateTime startsAt, LocalDateTime endsAt, String narration, String mind,
+                                     String lines, String activity, String motion) {
         Scene scene = newScene(userId, date, version, place, placeCode, startsAt, endsAt, SceneType.ACTION);
 
         scene.narration = narration;
         scene.mind = mind;
+        scene.lines = lines;
+        scene.activity = activity;
+        scene.motion = motion;
 
         return scene;
     }

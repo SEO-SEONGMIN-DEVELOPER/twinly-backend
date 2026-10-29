@@ -53,7 +53,8 @@ public class SceneNameRenderer {
             case SceneNarrationLine narration -> new SceneNarrationLine(
                     narration.t(),
                     render(narration.text(), nameByUserId),
-                    narration.occursAt()
+                    narration.occursAt(),
+                    narration.speaker()
             );
             case SceneBubbleLine bubble -> new SceneBubbleLine(
                     bubble.t(),

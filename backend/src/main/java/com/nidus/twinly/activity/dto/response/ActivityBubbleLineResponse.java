@@ -14,7 +14,7 @@ public record ActivityBubbleLineResponse(
         String action,
         String text,
         OffsetDateTime occursAt
-) implements ActivityLineResponse {
+) implements ActivityLineResponse, ActivityV2LineResponse {
 
     public static ActivityBubbleLineResponse from(SceneBubbleLine line) {
         return new ActivityBubbleLineResponse(

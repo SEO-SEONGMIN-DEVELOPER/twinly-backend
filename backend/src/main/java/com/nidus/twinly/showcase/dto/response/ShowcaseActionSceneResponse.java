@@ -22,7 +22,7 @@ public record ShowcaseActionSceneResponse(
         String narration,
         @Schema(nullable = true)
         String mind
-) implements ShowcaseSceneResponse, ShowcaseV2SceneResponse {
+) implements ShowcaseSceneResponse {
 
     public static ShowcaseActionSceneResponse from(ShowcaseActionSceneResult result) {
         return new ShowcaseActionSceneResponse(

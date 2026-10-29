@@ -210,7 +210,7 @@ class ShowcaseControllerUnitTest {
                 LocalDate.parse("2026-08-18"),
                 Instant.parse("2026-08-18T04:20:11Z"),
                 List.of(
-                        new ShowcaseActionSceneResult(88101L, "action", startsAt, endsAt, "학교 정문", "SCHOOL_GATE", List.of(), "김OO이 뛰었다.", "아슬아슬했다."),
+                        new ShowcaseActionSceneResult(88101L, "action", startsAt, endsAt, "학교 정문", "SCHOOL_GATE", List.of(), "김OO이 뛰었다.", "아슬아슬했다.", null),
                         new ShowcaseDialogueSceneResult(88102L, "dialogue", startsAt, endsAt, "식당", null, List.of(2L),
                                 List.of(new ShowcaseBubbleLineResult("bubble", 2L, "웃으며", "여기 앉아.", startsAt)))
                 ),

@@ -9,16 +9,16 @@ import com.nidus.twinly.showcase.dto.result.ShowcaseSceneResult;
 
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.EXISTING_PROPERTY, property = "type")
 @JsonSubTypes({
-        @JsonSubTypes.Type(value = ShowcaseActionSceneResponse.class, name = "action"),
-        @JsonSubTypes.Type(value = ShowcaseDialogueSceneResponse.class, name = "dialogue"),
+        @JsonSubTypes.Type(value = ShowcaseV2ActionSceneResponse.class, name = "action"),
+        @JsonSubTypes.Type(value = ShowcaseV2DialogueSceneResponse.class, name = "dialogue"),
         @JsonSubTypes.Type(value = ShowcaseMoveSceneResponse.class, name = "move")
 })
-public sealed interface ShowcaseV2SceneResponse permits ShowcaseActionSceneResponse, ShowcaseDialogueSceneResponse, ShowcaseMoveSceneResponse {
+public sealed interface ShowcaseV2SceneResponse permits ShowcaseV2ActionSceneResponse, ShowcaseV2DialogueSceneResponse, ShowcaseMoveSceneResponse {
 
     static ShowcaseV2SceneResponse from(ShowcaseSceneResult result) {
         return switch (result) {
-            case ShowcaseActionSceneResult r -> ShowcaseActionSceneResponse.from(r);
-            case ShowcaseDialogueSceneResult r -> ShowcaseDialogueSceneResponse.from(r);
+            case ShowcaseActionSceneResult r -> ShowcaseV2ActionSceneResponse.from(r);
+            case ShowcaseDialogueSceneResult r -> ShowcaseV2DialogueSceneResponse.from(r);
             case ShowcaseMoveSceneResult r -> ShowcaseMoveSceneResponse.from(r);
         };
     }

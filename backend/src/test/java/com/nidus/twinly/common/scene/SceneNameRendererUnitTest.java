@@ -75,7 +75,7 @@ class SceneNameRendererUnitTest {
     @DisplayName("나레이션 줄도 치환한다")
     void narration_line_text_is_replaced() {
         // given
-        SceneNarrationLine line = new SceneNarrationLine("narr", "{user_100}이 교실에 들어왔다", OCCURS_AT);
+        SceneNarrationLine line = new SceneNarrationLine("narr", "{user_100}이 교실에 들어왔다", OCCURS_AT, null);
 
         // when
         SceneNarrationLine rendered = (SceneNarrationLine) renderer.render(line, Map.of(100L, "길동"));

@@ -5,10 +5,13 @@ import com.nidus.twinly.activity.entity.Question;
 import com.nidus.twinly.activity.entity.QuestionPartner;
 import com.nidus.twinly.activity.entity.Scene;
 import com.nidus.twinly.activity.entity.ScenePartner;
+import com.nidus.twinly.activity.entity.SimulationHomeObject;
 import com.nidus.twinly.activity.repository.QuestionPartnerRepository;
 import com.nidus.twinly.activity.repository.QuestionRepository;
 import com.nidus.twinly.activity.repository.ScenePartnerRepository;
 import com.nidus.twinly.activity.repository.SceneRepository;
+import com.nidus.twinly.activity.repository.SimulationHomeObjectRepository;
+import com.nidus.twinly.activity.repository.UserRoomRepository;
 import com.nidus.twinly.chat.opener.ChatRoomOpener;
 import com.nidus.twinly.common.logging.InfoLog;
 import com.nidus.twinly.common.time.KstTimes;
@@ -45,6 +48,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -78,6 +83,8 @@ public class SimulationService {
 
     private final SceneRepository sceneRepository;
     private final ScenePartnerRepository scenePartnerRepository;
+    private final SimulationHomeObjectRepository simulationHomeObjectRepository;
+    private final UserRoomRepository userRoomRepository;
     private final QuestionRepository questionRepository;
     private final QuestionPartnerRepository questionPartnerRepository;
     private final RelationshipRepository relationshipRepository;
@@ -116,6 +123,8 @@ public class SimulationService {
         scheduleFirstMeetings(userId, date, firstMeetingStartByPartnerUserId);
         saveQuestions(userId, date, version, command.questions());
         saveRelationships(userId, date, version, command.relationships(), firstMeetingStartByPartnerUserId, command.intimacyAsOf());
+        saveHomeObjects(userId, date, command.homeObjects());
+        saveRoom(userId, date, command.room());
     }
 
     private void validatePartnersExist(SimulationsCommand command) {
@@ -170,6 +179,8 @@ public class SimulationService {
         relationshipRepository.deleteAllByUserIdAndDate(userId, date);
         relationshipRepository.flush();
 
+        simulationHomeObjectRepository.deleteAllByUserIdAndDate(userId, date);
+
         appNotificationScheduleRepository.deleteAllUnsentByUserIdAndSimulationDate(userId, date);
     }
 
@@ -196,7 +207,10 @@ public class SimulationService {
                     action.start(),
                     action.end(),
                     action.narration(),
-                    action.mind()
+                    action.mind(),
+                    writeActionLines(action.lines()),
+                    action.activity(),
+                    action.motion()
             );
             case SimulationsDialogueSceneCommand dialogue -> Scene.createDialogue(
                     userId,
@@ -234,7 +248,15 @@ public class SimulationService {
         return place.replace(PLACE_SEPARATOR, PLACE_SEPARATOR_REPLACEMENT);
     }
 
-    private String writeLines(List<SimulationsLineCommand> commands) {
+    private String writeActionLines(List<SimulationsNarrationLineCommand> commands) {
+        if (commands == null || commands.isEmpty()) {
+            return null;
+        }
+
+        return writeLines(commands);
+    }
+
+    private String writeLines(List<? extends SimulationsLineCommand> commands) {
         return objectMapper.writeValueAsString(commands.stream()
                 .map(this::toSceneLine)
                 .toList());
@@ -245,7 +267,8 @@ public class SimulationService {
             case SimulationsNarrationLineCommand narration -> new StoredSceneNarrationLine(
                     narration.t(),
                     narration.text(),
-                    narration.occursAt()
+                    narration.occursAt(),
+                    narration.speaker()
             );
             case SimulationsBubbleLineCommand bubble -> new StoredSceneBubbleLine(
                     bubble.t(),
@@ -255,6 +278,22 @@ public class SimulationService {
                     bubble.occursAt()
             );
         };
+    }
+
+    private void saveHomeObjects(Long userId, LocalDate date, ArrayNode homeObjects) {
+        if (homeObjects == null) {
+            return;
+        }
+
+        simulationHomeObjectRepository.save(SimulationHomeObject.create(userId, date, objectMapper.writeValueAsString(homeObjects)));
+    }
+
+    private void saveRoom(Long userId, LocalDate date, ObjectNode room) {
+        if (room == null) {
+            return;
+        }
+
+        userRoomRepository.upsertIfNotOlder(userId, objectMapper.writeValueAsString(room), date);
     }
 
     private List<Long> partnerUserIds(SimulationsSceneCommand command) {

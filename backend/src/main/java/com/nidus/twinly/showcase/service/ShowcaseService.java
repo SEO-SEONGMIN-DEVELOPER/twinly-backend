@@ -210,7 +210,8 @@ public class ShowcaseService {
                     scene.getPlaceCode(),
                     with,
                     sceneNameRenderer.render(scene.getNarration(), nameByUserId),
-                    sceneNameRenderer.render(scene.getMind(), nameByUserId)
+                    sceneNameRenderer.render(scene.getMind(), nameByUserId),
+                    scene.getLines() == null ? null : toLineResults(sceneLines, userRefByUserId, nameByUserId)
             );
             case DIALOGUE -> new ShowcaseDialogueSceneResult(
                     scene.getId(),
@@ -262,7 +263,8 @@ public class ShowcaseService {
             case SceneNarrationLine narration -> new ShowcaseNarrationLineResult(
                     narration.t(),
                     narration.text(),
-                    narration.occursAt()
+                    narration.occursAt(),
+                    narration.speaker()
             );
             case SceneBubbleLine bubble -> new ShowcaseBubbleLineResult(
                     bubble.t(),

@@ -270,7 +270,7 @@ class ActivityControllerUnitTest {
 
         ActivityUserInfoResult me = new ActivityUserInfoResult(1L, "자신", null);
 
-        return new ActivityResult(1L, 7L, DATE, "v1", Instant.now(), List.of(move), List.of(), List.of(me));
+        return new ActivityResult(1L, 7L, DATE, "v1", Instant.now(), List.of(move), List.of(), List.of(me), null, null);
     }
 
     private ActivityResult sampleResult() {
@@ -286,7 +286,7 @@ class ActivityControllerUnitTest {
                 List.of(userId),
                 "복도를 천천히 걸었다",
                 "조금 설레었다"
-        );
+        , null, null, null);
 
         ActivityDialogueSceneResult dialogue = new ActivityDialogueSceneResult(
                 11L,
@@ -298,7 +298,7 @@ class ActivityControllerUnitTest {
                 List.of(userId),
                 List.of(
                         new SceneNarrationLine("narr", "교실이 조용해졌다",
-                                OffsetDateTime.of(2026, 7, 26, 12, 0, 0, 0, KST)),
+                                OffsetDateTime.of(2026, 7, 26, 12, 0, 0, 0, KST), null),
                         new SceneBubbleLine("bubble", userId, "웃으며", "안녕",
                                 OffsetDateTime.of(2026, 7, 26, 12, 5, 0, 0, KST))
                 )
@@ -316,6 +316,6 @@ class ActivityControllerUnitTest {
                 new ProfilePhotoInfo("profile/100/key", "https://cdn.example.com/signed",
                         new PhotoPosInfo(new PhotoPosInfo.StartPos(10, 20), 100, 200)));
 
-        return new ActivityResult(1L, 7L, DATE, "v1", Instant.now(), List.of(action, dialogue), List.of(question), List.of(userInfo));
+        return new ActivityResult(1L, 7L, DATE, "v1", Instant.now(), List.of(action, dialogue), List.of(question), List.of(userInfo), null, null);
     }
 }

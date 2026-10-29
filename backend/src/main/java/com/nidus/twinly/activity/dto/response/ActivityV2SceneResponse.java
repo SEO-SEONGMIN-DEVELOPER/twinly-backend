@@ -9,16 +9,16 @@ import com.nidus.twinly.activity.dto.result.ActivitySceneResult;
 
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.EXISTING_PROPERTY, property = "type")
 @JsonSubTypes({
-        @JsonSubTypes.Type(value = ActivityActionSceneResponse.class, name = "action"),
-        @JsonSubTypes.Type(value = ActivityDialogueSceneResponse.class, name = "dialogue"),
+        @JsonSubTypes.Type(value = ActivityV2ActionSceneResponse.class, name = "action"),
+        @JsonSubTypes.Type(value = ActivityV2DialogueSceneResponse.class, name = "dialogue"),
         @JsonSubTypes.Type(value = ActivityMoveSceneResponse.class, name = "move")
 })
-public sealed interface ActivityV2SceneResponse permits ActivityActionSceneResponse, ActivityDialogueSceneResponse, ActivityMoveSceneResponse {
+public sealed interface ActivityV2SceneResponse permits ActivityV2ActionSceneResponse, ActivityV2DialogueSceneResponse, ActivityMoveSceneResponse {
 
     static ActivityV2SceneResponse from(ActivitySceneResult result) {
         return switch (result) {
-            case ActivityActionSceneResult r -> ActivityActionSceneResponse.from(r);
-            case ActivityDialogueSceneResult r -> ActivityDialogueSceneResponse.from(r);
+            case ActivityActionSceneResult r -> ActivityV2ActionSceneResponse.from(r);
+            case ActivityDialogueSceneResult r -> ActivityV2DialogueSceneResponse.from(r);
             case ActivityMoveSceneResult r -> ActivityMoveSceneResponse.from(r);
         };
     }

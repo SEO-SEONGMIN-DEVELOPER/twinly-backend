@@ -23,7 +23,7 @@ public record ActivityActionSceneResponse(
         String narration,
         @Schema(nullable = true)
         String mind
-) implements ActivitySceneResponse, ActivityV2SceneResponse {
+) implements ActivitySceneResponse {
 
     public static ActivityActionSceneResponse from(ActivityActionSceneResult result) {
         return new ActivityActionSceneResponse(
