@@ -1,6 +1,12 @@
 package com.nidus.twinly.season.integration;
 
+import com.nidus.twinly.common.domain.Gender;
+import com.nidus.twinly.common.time.KstTimes;
+import com.nidus.twinly.people.repository.EncounterRepository;
 import com.nidus.twinly.purchase.client.RevenueCatClient;
+import com.nidus.twinly.relationship.entity.Relationship;
+import com.nidus.twinly.relationship.reader.IntimacyReader;
+import com.nidus.twinly.relationship.repository.RelationshipRepository;
 import com.nidus.twinly.purchase.client.RevenueCatEntitlement;
 import com.nidus.twinly.purchase.entity.UserEntitlement;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
@@ -20,9 +26,12 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.entry;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
@@ -41,6 +50,15 @@ class SeasonIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     UserEntitlementRepository userEntitlementRepository;
+
+    @Autowired
+    RelationshipRepository relationshipRepository;
+
+    @Autowired
+    EncounterRepository encounterRepository;
+
+    @Autowired
+    IntimacyReader intimacyReader;
 
     // 참여 API 가 RevenueCat 과 먼저 동기화하므로 실제 호출을 막는다.
     @MockitoBean
@@ -104,6 +122,49 @@ class SeasonIntegrationTest extends AbstractIntegrationTest {
 
         // then: 현재 시즌 참가 행이 생긴다
         assertThat(seasonParticipationRepository.findByUserIdAndSeasonId(user.getId(), CURRENT_SEASON_ID)).isPresent();
+    }
+
+    @Test
+    @DisplayName("시즌 첫 참여: 같은 풀 이성 참가자 2명과 양방향 0점 인연이 생기고 인연탭·페르소나 친밀도에 바로 잡힌다")
+    void participateIn_connects_starter_relationships_end_to_end() throws Exception {
+        // given: 풀 13의 남자 신규 유저, 같은 풀에 참가 중인 여자 2명·남자 1명, 다른 풀의 여자 1명
+        Instant now = Instant.now();
+        saveCurrentSeason(now.minus(Duration.ofDays(30)), now.plus(Duration.ofDays(30)));
+        User user = saveEntitledUser(now);
+        agreeRequiredParallelEntryPolicies(user.getId());
+        placeInPool(user, Gender.MALE, 13);
+        User femaleA = saveParticipant(Gender.FEMALE, 13);
+        User femaleB = saveParticipant(Gender.FEMALE, 13);
+        User male = saveParticipant(Gender.MALE, 13);
+        User otherPoolFemale = saveParticipant(Gender.FEMALE, 14);
+
+        // when: 시즌 참여 API 호출
+        mockMvc.perform(put("/api/v1/season/participation")
+                        .header("Authorization", bearer(user.getId())))
+                .andExpect(status().isOk());
+
+        // then: 같은 풀 여자 2명과만 양쪽 방향 인연 행이 생긴다
+        entityManager.clear();
+        LocalDateTime kstNow = KstTimes.now();
+        assertThat(relationshipRepository.findLatestUntilByUserIdAndPartnerUserIdIn(
+                user.getId(), List.of(femaleA.getId(), femaleB.getId(), male.getId(), otherPoolFemale.getId()), kstNow))
+                .extracting(Relationship::getPartnerUserId, Relationship::getIntimacy)
+                .containsExactlyInAnyOrder(tuple(femaleA.getId(), 0), tuple(femaleB.getId(), 0));
+        assertThat(relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(femaleA.getId(), user.getId(), kstNow)).isPresent();
+        assertThat(relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(femaleB.getId(), user.getId(), kstNow)).isPresent();
+        assertThat(encounterRepository.findByUserAIdAndUserBId(
+                Math.min(user.getId(), femaleA.getId()), Math.max(user.getId(), femaleA.getId()))).isPresent();
+
+        // then: 기존 유저 인연탭에 신규 유저가 친밀도 0으로 보인다
+        mockMvc.perform(get("/api/v1/people")
+                        .header("Authorization", bearer(femaleA.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.people[0].userId").value(String.valueOf(user.getId())))
+                .andExpect(jsonPath("$.people[0].intimacy").value(0));
+
+        // then: 선생성 첫날 페르소나에도 두 상대가 친밀도 0으로 실린다
+        assertThat(intimacyReader.readForSimulation(user.getId(), KstTimes.today(), Instant.now()))
+                .containsOnly(entry(femaleA.getId(), 0), entry(femaleB.getId(), 0));
     }
 
     @Test
@@ -179,6 +240,21 @@ class SeasonIntegrationTest extends AbstractIntegrationTest {
                 user.getId(), EntitlementReader.SIMULATION_ACCESS, expiresAt, now));
         given(revenueCatClient.entitlements(user.getRevenueCatUserId().toString()))
                 .willReturn(List.of(new RevenueCatEntitlement(EntitlementReader.SIMULATION_ACCESS, expiresAt)));
+        return user;
+    }
+
+    /** 영속 상태인 유저의 성별·풀을 바꾸고 바로 DB에 반영한다. */
+    private void placeInPool(User user, Gender gender, int poolNumber) {
+        ReflectionTestUtils.setField(user, "gender", gender);
+        ReflectionTestUtils.setField(user, "poolNumber", poolNumber);
+        userRepository.saveAndFlush(user);
+    }
+
+    /** 지정한 풀에서 현재 시즌에 참가 중인 유저. */
+    private User saveParticipant(Gender gender, int poolNumber) {
+        User user = saveUser();
+        placeInPool(user, gender, poolNumber);
+        seasonParticipationRepository.save(SeasonParticipation.create(user.getId(), CURRENT_SEASON_ID));
         return user;
     }
 

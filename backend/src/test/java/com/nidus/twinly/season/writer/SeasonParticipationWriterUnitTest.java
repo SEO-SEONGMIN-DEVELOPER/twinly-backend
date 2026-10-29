@@ -5,6 +5,7 @@ import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.legal.domain.PolicyKind;
 import com.nidus.twinly.legal.reader.ConsentReader;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
+import com.nidus.twinly.relationship.writer.StarterRelationshipWriter;
 import com.nidus.twinly.schoolverification.domain.SchoolVerificationStatus;
 import com.nidus.twinly.season.entity.Season;
 import com.nidus.twinly.season.event.SeasonParticipationStartedEvent;
@@ -53,6 +54,9 @@ class SeasonParticipationWriterUnitTest {
 
     @Mock
     UserRepository userRepository;
+
+    @Mock
+    StarterRelationshipWriter starterRelationshipWriter;
 
     @Mock
     ApplicationEventPublisher eventPublisher;
@@ -127,6 +131,23 @@ class SeasonParticipationWriterUnitTest {
     }
 
     @Test
+    @DisplayName("현재 시즌에 처음 참가하면 이벤트와 같은 참가 시각으로 시작 인연을 연결한다")
+    void participateInCurrentSeason_first_in_season_connects_starter_relationships() {
+        // given: 활성 시즌에 아직 참가 행이 없는 유저
+        givenSchoolVerification(10L, SchoolVerificationStatus.APPROVED);
+        given(currentSeasonReader.read()).willReturn(season());
+        given(seasonParticipationRepository.existsByUserIdAndSeasonId(10L, CURRENT_SEASON_ID)).willReturn(false);
+
+        // when: 현재 시즌 참가
+        seasonParticipationWriter.participateInCurrentSeason(10L);
+
+        // then: 선생성 이벤트 커밋 전에 같은 트랜잭션에서 시작 인연이 같은 참가 시각으로 연결된다
+        ArgumentCaptor<SeasonParticipationStartedEvent> eventCaptor = ArgumentCaptor.forClass(SeasonParticipationStartedEvent.class);
+        then(eventPublisher).should().publishEvent(eventCaptor.capture());
+        then(starterRelationshipWriter).should().connect(10L, CURRENT_SEASON_ID, eventCaptor.getValue().participatedAt());
+    }
+
+    @Test
     @DisplayName("현재 시즌에 이미 참가한 유저면 참가는 upsert 하되 이벤트를 다시 발행하지 않는다")
     void participateInCurrentSeason_already_in_season_does_not_publish_event() {
         // given: 같은 시즌 참가 행이 이미 있는 유저 (구매 동기화·참가 요청이 반복되는 경우)
@@ -137,9 +158,10 @@ class SeasonParticipationWriterUnitTest {
         // when: 현재 시즌 참가
         seasonParticipationWriter.participateInCurrentSeason(10L);
 
-        // then: 최초 참가 시각은 upsert 가 지키고, 선생성은 다시 요청하지 않는다
+        // then: 최초 참가 시각은 upsert 가 지키고, 선생성·시작 인연은 다시 만들지 않는다
         then(seasonParticipationRepository).should().upsert(10L, CURRENT_SEASON_ID);
         then(eventPublisher).should(never()).publishEvent(any());
+        then(starterRelationshipWriter).should(never()).connect(any(), any(), any());
     }
 
     @Test

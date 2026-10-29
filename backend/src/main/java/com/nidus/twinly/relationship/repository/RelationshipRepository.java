@@ -13,6 +13,8 @@ import java.util.Optional;
 
 public interface RelationshipRepository extends JpaRepository<Relationship, Long> {
 
+    boolean existsByUserId(Long userId);
+
     @Query(value = """
         SELECT r.*
         FROM relationships r

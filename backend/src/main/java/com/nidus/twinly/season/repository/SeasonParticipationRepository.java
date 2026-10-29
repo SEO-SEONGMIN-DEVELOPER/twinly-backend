@@ -101,6 +101,36 @@ public interface SeasonParticipationRepository extends JpaRepository<SeasonParti
                                                               @Param("disclosurePolicyIdentifier") String disclosurePolicyIdentifier);
 
     @Query("""
+            SELECT u.id AS userId, u.gender AS gender
+            FROM SeasonParticipation p
+            JOIN User u ON u.id = p.userId
+            WHERE p.seasonId = :seasonId
+              AND p.userId <> :userId
+              AND u.poolNumber = :poolNumber
+              AND u.isSeed = FALSE
+              AND u.withdrawalRequestedAt IS NULL
+              AND u.deletedAt IS NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM Relationship r
+                  WHERE r.userId = p.userId
+                    AND r.partnerUserId = :userId
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM Block b
+                  WHERE b.userId = :userId
+                    AND b.blockedUserId = p.userId
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM Block b
+                  WHERE b.userId = p.userId
+                    AND b.blockedUserId = :userId
+              )
+            """)
+    List<StarterCandidateProjection> findAllStarterCandidates(@Param("userId") Long userId,
+                                                              @Param("seasonId") Long seasonId,
+                                                              @Param("poolNumber") Integer poolNumber);
+
+    @Query("""
             SELECT p.userId AS userId, p.participatedInAt AS participatedInAt
             FROM SeasonParticipation p
             JOIN User u ON u.id = p.userId
@@ -127,6 +157,11 @@ public interface SeasonParticipationRepository extends JpaRepository<SeasonParti
     }
 
     interface PreviewCandidateProjection {
+        Long getUserId();
+        Gender getGender();
+    }
+
+    interface StarterCandidateProjection {
         Long getUserId();
         Gender getGender();
     }
