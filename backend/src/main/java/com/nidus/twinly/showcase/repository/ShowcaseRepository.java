@@ -1,7 +1,9 @@
 package com.nidus.twinly.showcase.repository;
 
 import com.nidus.twinly.showcase.entity.Showcase;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -12,7 +14,9 @@ import java.util.Optional;
 
 public interface ShowcaseRepository extends JpaRepository<Showcase, Long> {
 
-    Optional<Showcase> findByViewerUserIdAndDate(Long viewerUserId, LocalDate date);
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT s FROM Showcase s WHERE s.viewerUserId = :viewerUserId AND s.date = :date")
+    Optional<Showcase> findWithLockByViewerUserIdAndDate(@Param("viewerUserId") Long viewerUserId, @Param("date") LocalDate date);
 
     @Query(value = """
             SELECT DISTINCT s.user_id

@@ -10,6 +10,7 @@ import java.util.List;
 public record ShowcaseTodayV2Response(
         @JsonFormat(shape = JsonFormat.Shape.STRING)
         Long showcaseId,
+        Integer refVersion,
         @JsonFormat(shape = JsonFormat.Shape.STRING)
         Long userRef,
         LocalDate date,
@@ -22,6 +23,7 @@ public record ShowcaseTodayV2Response(
     public static ShowcaseTodayV2Response from(ShowcaseTodayResult result) {
         return new ShowcaseTodayV2Response(
                 result.showcaseId(),
+                result.refVersion(),
                 result.userRef(),
                 result.date(),
                 result.serverNow(),

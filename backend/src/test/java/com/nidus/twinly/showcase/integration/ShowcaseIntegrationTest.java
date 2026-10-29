@@ -1,5 +1,6 @@
 package com.nidus.twinly.showcase.integration;
 
+import com.jayway.jsonpath.JsonPath;
 import com.nidus.twinly.activity.entity.Scene;
 import com.nidus.twinly.activity.entity.ScenePartner;
 import com.nidus.twinly.activity.repository.ScenePartnerRepository;
@@ -7,21 +8,36 @@ import com.nidus.twinly.activity.repository.SceneRepository;
 import com.nidus.twinly.block.entity.Block;
 import com.nidus.twinly.block.repository.BlockRepository;
 import com.nidus.twinly.common.time.KstTimes;
+import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.season.entity.Season;
 import com.nidus.twinly.season.repository.SeasonParticipationRepository;
 import com.nidus.twinly.season.repository.SeasonRepository;
 import com.nidus.twinly.showcase.repository.ShowcaseRepository;
+import com.nidus.twinly.showcase.repository.ShowcaseUserRefRepository;
 import com.nidus.twinly.support.AbstractIntegrationTest;
 import com.nidus.twinly.user.entity.User;
+import com.nidus.twinly.world.entity.WorldTrack;
+import com.nidus.twinly.world.repository.WorldTrackRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.test.web.servlet.ResultActions;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.List;
+import java.util.regex.MatchResult;
+import java.util.regex.Pattern;
+import java.util.zip.GZIPOutputStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.matchesPattern;
@@ -30,6 +46,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 class ShowcaseIntegrationTest extends AbstractIntegrationTest {
+
+    private static final int POOL_NUMBER = 7;
+    private static final String SECTOR_CODE = "S034";
+    private static final long OUTSIDER_REF_MIN = 1L << 40;
 
     @Autowired
     ShowcaseRepository showcaseRepository;
@@ -49,7 +69,22 @@ class ShowcaseIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     BlockRepository blockRepository;
 
+    @Autowired
+    WorldTrackRepository worldTrackRepository;
+
+    @Autowired
+    ShowcaseUserRefRepository showcaseUserRefRepository;
+
+    @PersistenceContext
+    EntityManager entityManager;
+
     Season season;
+
+    LocalDate today;
+    User viewer;
+    User target;
+    User partner;
+    User outsider;
 
     @BeforeEach
     void setUpSeason() {
@@ -86,7 +121,7 @@ class ShowcaseIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.scenes[0].sceneId").value(scene.getId().toString()));
 
         // then: 오늘자 배정 행이 실제로 생성됐다
-        assertThat(showcaseRepository.findByViewerUserIdAndDate(viewer.getId(), KstTimes.today()))
+        assertThat(showcaseRepository.findWithLockByViewerUserIdAndDate(viewer.getId(), KstTimes.today()))
                 .get()
                 .satisfies(showcase -> assertThat(showcase.getTargetUserId()).isEqualTo(target.getId()));
     }
@@ -124,7 +159,7 @@ class ShowcaseIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.scenes[0].narration").value(matchesPattern("[가-힣]OO과 카페로 향했다")));
 
         // then: v2 호출도 v1 과 같이 오늘자 배정 행을 만든다
-        assertThat(showcaseRepository.findByViewerUserIdAndDate(viewer.getId(), KstTimes.today()))
+        assertThat(showcaseRepository.findWithLockByViewerUserIdAndDate(viewer.getId(), KstTimes.today()))
                 .get()
                 .satisfies(showcase -> assertThat(showcase.getTargetUserId()).isEqualTo(target.getId()));
 
@@ -271,6 +306,139 @@ class ShowcaseIntegrationTest extends AbstractIntegrationTest {
         assertThat(showcaseRepository.count()).isZero();
     }
 
+    @Test
+    @DisplayName("둘러보기 대상의 풀을 보여 주고, 대상은 user:1·동행자는 둘러보기와 같은 번호와 가상 이름, 나머지는 큰 번호와 누군가의 트윈이다")
+    void showcase_sector_uses_showcase_numbering() throws Exception {
+        // given: 대상·동행자·둘러보기에 없는 트윈이 함께 있는 공용 트랙과, 대상의 개인 트랙
+        setUpWorld();
+        saveWorldTrack(WorldTrack.PUBLIC_VIEWER_USER_ID, """
+                {"poolNumber": "7", "date": "%1$s", "sectorCode": "S034", "layoutVersion": "sha256:aa", "viewerUserId": null,
+                 "actors": [
+                   {"ref": "user:%2$d", "segments": [{"start": "%1$sT13:00:00", "end": "%1$sT13:30:00"}]},
+                   {"ref": "user:%3$d", "segments": [{"start": "%1$sT13:00:00", "end": "%1$sT13:30:00"}]},
+                   {"ref": "user:%4$d", "segments": [{"start": "%1$sT13:00:00", "end": "%1$sT13:30:00"}]},
+                   {"ref": "npc:npc082", "segments": [{"start": "%1$sT08:00:00", "end": "%1$sT19:00:00"}]}
+                 ],
+                 "talks": [{"start": "%1$sT13:10:00", "end": "%1$sT13:11:00", "members": ["user:%2$d", "user:%4$d"]}],
+                 "gestures": [{"ref": "user:%2$d", "start": "%1$sT13:05:00", "end": "%1$sT13:05:00"}],
+                 "objects": [{"objectId": "P0103-o3", "initial": "닫힘", "changes": [{"at": "%1$sT13:20:00", "state": "열림", "by": "user:%3$d"}]}],
+                 "events": [],
+                 "items": [{"owner": "user:%4$d", "item": "물", "start": "%1$sT13:00:00", "end": "%1$sT13:30:00"}]}
+                """.formatted(today, target.getId(), partner.getId(), outsider.getId()));
+        saveWorldTrack(target.getId(), """
+                {"poolNumber": "7", "date": "%1$s", "sectorCode": "S034", "layoutVersion": "sha256:aa", "viewerUserId": "%2$d",
+                 "actors": [{"ref": "extra:SECRET", "segments": [{"start": "%1$sT13:00:00", "end": "%1$sT13:30:00"}]}],
+                 "talks": [], "gestures": [], "objects": [], "events": [], "items": []}
+                """.formatted(today, target.getId()));
+        flushAndClear();
+        String showcase = mockMvc.perform(get("/api/v2/showcases/today").header("Authorization", bearer(viewer.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.refVersion").value(0))
+                .andReturn().getResponse().getContentAsString();
+
+        // when: 오늘 둘러보기 기준 건물 화면 조회
+        String body = todaySector(today).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+
+        // then: 둘러보기와 같은 showcaseId·번호·가상 이름
+        assertThat(JsonPath.<String>read(body, "$.showcaseId")).isEqualTo(JsonPath.<String>read(showcase, "$.showcaseId"));
+        assertThat(JsonPath.<Integer>read(body, "$.refVersion")).isZero();
+        assertThat(JsonPath.<String>read(body, "$.focusRef")).isEqualTo("user:1");
+        assertThat(JsonPath.<String>read(body, "$.poolNumber")).isEqualTo("7");
+        assertThat(JsonPath.<String>read(body, "$.actors[0].ref")).isEqualTo("user:1");
+        assertThat(JsonPath.<String>read(body, "$.actors[0].displayName")).isEqualTo(JsonPath.<String>read(showcase, "$.userInfos[0].userName"));
+        assertThat(JsonPath.<String>read(body, "$.actors[1].ref")).isEqualTo("user:2");
+        assertThat(JsonPath.<String>read(body, "$.actors[1].displayName")).isEqualTo(JsonPath.<String>read(showcase, "$.userInfos[1].userName"));
+
+        // then: 둘러보기에 없는 트윈은 겹치지 않는 큰 번호이고, 모든 칸에서 같은 번호다
+        String outsiderRef = JsonPath.read(body, "$.actors[2].ref");
+        assertThat(Long.parseLong(outsiderRef.substring("user:".length()))).isGreaterThanOrEqualTo(OUTSIDER_REF_MIN);
+        assertThat(JsonPath.<String>read(body, "$.actors[2].displayName")).isEqualTo("누군가의 트윈");
+        assertThat(JsonPath.<String>read(body, "$.actors[2].gender")).isEqualTo("male");
+        assertThat(JsonPath.<List<String>>read(body, "$.talks[0].members")).containsExactly("user:1", outsiderRef);
+        assertThat(JsonPath.<String>read(body, "$.items[0].owner")).isEqualTo(outsiderRef);
+        assertThat(JsonPath.<String>read(body, "$.gestures[0].ref")).isEqualTo("user:1");
+        assertThat(JsonPath.<String>read(body, "$.objects[0].changes[0].by")).isEqualTo("user:2");
+
+        // then: user: 로 나가는 값은 둘러보기 번호뿐이고(실제 ID 없음), 대상의 개인 트랙은 섞이지 않는다
+        assertThat(Pattern.compile("user:\\d+").matcher(body).results().map(MatchResult::group).distinct())
+                .containsExactlyInAnyOrder("user:1", "user:2", outsiderRef);
+        assertThat(body).doesNotContain("extra:SECRET");
+
+        // when & then: 다시 불러도 같은 번호
+        String again = todaySector(today).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<String>read(again, "$.actors[2].ref")).isEqualTo(outsiderRef);
+
+        // then: DB 번호표에는 둘러보기에 나온 대상·동행자만 저장되고, 바깥 트윈은 저장되지 않는다
+        Long showcaseId = Long.valueOf(JsonPath.<String>read(body, "$.showcaseId"));
+        assertThat(showcaseUserRefRepository.findAllByShowcaseId(showcaseId))
+                .extracting(ref -> ref.getUserId() + ":" + ref.getUserRef())
+                .containsExactlyInAnyOrder(target.getId() + ":1", partner.getId() + ":2");
+    }
+
+    @Test
+    @DisplayName("AI 가 대상의 하루를 다시 보내 장면 순서가 바뀌어도, 같은 둘러보기 안에서 동행자 번호는 그대로다")
+    void showcase_numbering_survives_resimulation() throws Exception {
+        // given: 처음 조회로 동행자가 2번을 받는다
+        setUpWorld();
+        mockMvc.perform(get("/api/v2/showcases/today").header("Authorization", bearer(viewer.getId())))
+                .andExpect(jsonPath("$.userInfos[1].userRef").value("2"));
+
+        // when: 하루를 다시 받아 새 동행자의 장면이 먼저 저장되고 기존 동행자의 장면이 뒤에 다시 저장된다
+        User newPartner = saveUserInPool();
+        scenePartnerRepository.deleteAll();
+        sceneRepository.deleteAll();
+        saveTargetSceneWith(newPartner, 8);
+        saveTargetSceneWith(partner, 9);
+        flushAndClear();
+
+        // then: 기존 동행자는 2 그대로, 새 동행자는 3
+        String showcase = mockMvc.perform(get("/api/v2/showcases/today").header("Authorization", bearer(viewer.getId())))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        List<String> refs = JsonPath.read(showcase, "$.userInfos[*].userRef");
+        assertThat(refs).containsExactly("1", "2", "3");
+        assertThat(JsonPath.<List<String>>read(showcase, "$.scenes[?(@.startsAt =~ /.*T09:00.*/)].with[0]")).containsExactly("2");
+    }
+
+    @Test
+    @DisplayName("대상이 그날 시뮬레이션되지 않았거나 그 구역 트랙이 없으면 404 WORLD_TRACK_NOT_FOUND")
+    void showcase_sector_not_found() throws Exception {
+        // given: 오늘 트랙은 있지만 어제는 대상의 장면이 없다
+        setUpWorld();
+        saveWorldTrack(WorldTrack.PUBLIC_VIEWER_USER_ID, """
+                {"poolNumber": "7", "date": "%s", "sectorCode": "S034", "layoutVersion": "sha256:aa", "viewerUserId": null,
+                 "actors": [], "talks": [], "gestures": [], "objects": [], "events": [], "items": []}
+                """.formatted(today));
+        worldTrackRepository.upsert(POOL_NUMBER, today.minusDays(1), SECTOR_CODE, WorldTrack.PUBLIC_VIEWER_USER_ID, gzip("""
+                {"poolNumber": "7", "date": "%s", "sectorCode": "S034", "layoutVersion": "sha256:aa", "viewerUserId": null,
+                 "actors": [], "talks": [], "gestures": [], "objects": [], "events": [], "items": []}
+                """.formatted(today.minusDays(1))));
+
+        // when & then: 오늘은 200, 어제는 404, 트랙 없는 구역도 404
+        todaySector(today).andExpect(status().isOk());
+        todaySector(today.minusDays(1))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(ErrorCode.WORLD_TRACK_NOT_FOUND.name()));
+        mockMvc.perform(get("/api/v1/showcases/today/sectors/{sectorCode}", "S099").header("Authorization", bearer(viewer.getId()))
+                        .param("date", today.toString()).param("from", today + "T13:00:00+09:00").param("to", today + "T14:00:00+09:00"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(ErrorCode.WORLD_TRACK_NOT_FOUND.name()));
+    }
+
+    @Test
+    @DisplayName("둘러보기 건물 화면: 인증 헤더가 없으면 401 이고 둘러보기 행을 만들지 않는다")
+    void showcase_sector_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 둘러보기 건물 화면 조회
+        mockMvc.perform(get("/api/v1/showcases/today/sectors/{sectorCode}", SECTOR_CODE)
+                        .param("date", KstTimes.today().toString())
+                        .param("from", KstTimes.today() + "T13:00:00+09:00")
+                        .param("to", KstTimes.today() + "T14:00:00+09:00"))
+                .andExpect(status().isUnauthorized());
+
+        // then: 둘러보기 행이 하나도 생기지 않았다
+        assertThat(showcaseRepository.findAll()).isEmpty();
+    }
+
     private String todayShowcaseId(User viewer) throws Exception {
         String body = mockMvc.perform(get("/api/v1/showcases/today")
                         .header("Authorization", bearer(viewer.getId())))
@@ -308,5 +476,56 @@ class ShowcaseIntegrationTest extends AbstractIntegrationTest {
                 LocalDateTime.of(today, java.time.LocalTime.of(9, 0)),
                 LocalDateTime.of(today, java.time.LocalTime.of(9, 40)),
                 narration, "아슬아슬했다."));
+    }
+
+    private void setUpWorld() {
+        today = KstTimes.today();
+        viewer = saveUser();
+        target = saveSeedParticipant();
+        userRepository.assignPoolNumber(target.getId(), POOL_NUMBER);
+        partner = saveUserInPool();
+        outsider = saveUserInPool();
+        target = userRepository.findById(target.getId()).orElseThrow();
+        saveTargetSceneWith(partner, 9);
+    }
+
+    private ResultActions todaySector(LocalDate date) throws Exception {
+        return mockMvc.perform(get("/api/v1/showcases/today/sectors/{sectorCode}", SECTOR_CODE)
+                .header("Authorization", bearer(viewer.getId()))
+                .param("date", date.toString())
+                .param("from", date + "T13:00:00+09:00")
+                .param("to", date + "T14:00:00+09:00"));
+    }
+
+    private void saveTargetSceneWith(User with, int hour) {
+        Scene scene = sceneRepository.save(Scene.createAction(target.getId(), today, "v1", "카페", "P0103",
+                today.atTime(LocalTime.of(hour, 0)), today.atTime(LocalTime.of(hour, 30)), "커피를 마셨다.", null));
+        scenePartnerRepository.save(ScenePartner.create(scene.getId(), with.getId()));
+    }
+
+    private User saveUserInPool() {
+        User user = saveUser();
+        userRepository.assignPoolNumber(user.getId(), POOL_NUMBER);
+        flushAndClear();
+        return userRepository.findById(user.getId()).orElseThrow();
+    }
+
+    private void saveWorldTrack(long viewerUserId, String body) {
+        worldTrackRepository.upsert(POOL_NUMBER, today, SECTOR_CODE, viewerUserId, gzip(body));
+    }
+
+    private void flushAndClear() {
+        entityManager.flush();
+        entityManager.clear();
+    }
+
+    private static byte[] gzip(String body) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try (GZIPOutputStream gzip = new GZIPOutputStream(out)) {
+            gzip.write(body.getBytes(StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
+        return out.toByteArray();
     }
 }

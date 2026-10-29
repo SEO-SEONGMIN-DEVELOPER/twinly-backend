@@ -10,6 +10,7 @@ import com.nidus.twinly.showcase.dto.result.ShowcaseBubbleLineResult;
 import com.nidus.twinly.showcase.dto.result.ShowcaseDialogueSceneResult;
 import com.nidus.twinly.showcase.dto.result.ShowcaseMoveSceneResult;
 import com.nidus.twinly.showcase.dto.result.ShowcaseTodayResult;
+import com.nidus.twinly.showcase.dto.result.ShowcaseTodaySectorsResult;
 import com.nidus.twinly.showcase.dto.result.ShowcaseUserCountsResult;
 import com.nidus.twinly.showcase.dto.result.ShowcaseUserInfoResult;
 import com.nidus.twinly.showcase.service.ShowcaseService;
@@ -23,6 +24,8 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -31,6 +34,7 @@ import java.util.List;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.nullValue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
@@ -43,6 +47,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(ShowcaseController.class)
 @Import(SecurityConfig.class)
 class ShowcaseControllerUnitTest {
+
+    private static final String SECTOR_FROM = "2026-10-16T13:00:00+09:00";
+    private static final String SECTOR_TO = "2026-10-16T14:00:00+09:00";
 
     @Autowired
     MockMvc mockMvc;
@@ -183,12 +190,77 @@ class ShowcaseControllerUnitTest {
                 .andExpect(jsonPath("$.code").value("SHOWCASE_TARGET_NOT_FOUND"));
     }
 
+    @Test
+    @DisplayName("건물 화면 조회 성공 시 200 과 함께 showcaseId 를 문자열로, refVersion 과 focusRef user:1 을 내려 주고 경로·쿼리를 그대로 넘긴다")
+    void todaySectors_success() throws Exception {
+        // given: 서비스가 대상(user:1) 한 명이 든 1시간 창을 돌려준다
+        ObjectNode actor = new ObjectMapper().createObjectNode().put("ref", "user:1").put("displayName", "김OO");
+        given(showcaseService.todaySectors(12L, "S034", LocalDate.parse("2026-10-16"), SECTOR_FROM, SECTOR_TO))
+                .willReturn(new ShowcaseTodaySectorsResult("7", LocalDate.parse("2026-10-16"), "S034", "sha256:aa",
+                        OffsetDateTime.parse("2026-10-16T13:20:00+09:00"), "user:1", 3312L, 2,
+                        List.of(actor), List.of(), List.of(), List.of(), List.of(), List.of()));
+
+        // when: 인증 상태로 둘러보기 건물 화면 조회
+        var result = mockMvc.perform(get("/api/v1/showcases/today/sectors/{sectorCode}", "S034")
+                .header("Authorization", "Bearer access-token")
+                .param("date", "2026-10-16").param("from", SECTOR_FROM).param("to", SECTOR_TO));
+
+        // then: 200 + showcaseId 문자열 + refVersion + 원소 그대로
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.showcaseId").value("3312"))
+                .andExpect(jsonPath("$.refVersion").value(2))
+                .andExpect(jsonPath("$.focusRef").value("user:1"))
+                .andExpect(jsonPath("$.actors[0].displayName").value("김OO"))
+                .andExpect(jsonPath("$.items").isEmpty());
+    }
+
+    @Test
+    @DisplayName("건물 화면: 인증 헤더가 없으면 401, from·to 가 없거나 구역 코드 형식이 틀리면 400 이고 서비스를 호출하지 않는다")
+    void todaySectors_rejects_unauthenticated_and_invalid_requests() throws Exception {
+        // when & then: 인증 헤더 없음
+        mockMvc.perform(get("/api/v1/showcases/today/sectors/{sectorCode}", "S034")
+                        .param("date", "2026-10-16").param("from", SECTOR_FROM).param("to", SECTOR_TO))
+                .andExpect(status().isUnauthorized());
+
+        // when & then: from·to 없음
+        mockMvc.perform(get("/api/v1/showcases/today/sectors/{sectorCode}", "S034").header("Authorization", "Bearer access-token")
+                        .param("date", "2026-10-16"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(ErrorCode.INVALID_REQUEST.name()));
+
+        // when & then: 구역 코드 형식 틀림
+        mockMvc.perform(get("/api/v1/showcases/today/sectors/{sectorCode}", "S03").header("Authorization", "Bearer access-token")
+                        .param("date", "2026-10-16").param("from", SECTOR_FROM).param("to", SECTOR_TO))
+                .andExpect(status().isBadRequest());
+
+        // then: 서비스는 호출되지 않음
+        then(showcaseService).should(never()).todaySectors(anyLong(), anyString(), any(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("건물 화면: 트랙이 없으면 404 WORLD_TRACK_NOT_FOUND 로 매핑된다")
+    void todaySectors_maps_not_found() throws Exception {
+        // given: 서비스가 대상의 그날 트랙이 없다고 예외를 던진다
+        given(showcaseService.todaySectors(12L, "S034", LocalDate.parse("2026-10-16"), SECTOR_FROM, SECTOR_TO))
+                .willThrow(new BusinessException(ErrorCode.WORLD_TRACK_NOT_FOUND));
+
+        // when: 건물 화면 조회
+        var result = mockMvc.perform(get("/api/v1/showcases/today/sectors/{sectorCode}", "S034")
+                .header("Authorization", "Bearer access-token")
+                .param("date", "2026-10-16").param("from", SECTOR_FROM).param("to", SECTOR_TO));
+
+        // then: 404 와 WORLD_TRACK_NOT_FOUND 코드
+        result.andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(ErrorCode.WORLD_TRACK_NOT_FOUND.name()));
+    }
+
     private ShowcaseTodayResult moveResult() {
         OffsetDateTime startsAt = OffsetDateTime.parse("2026-08-18T11:00:00+09:00");
         OffsetDateTime endsAt = OffsetDateTime.parse("2026-08-18T11:20:00+09:00");
 
         return new ShowcaseTodayResult(
                 3312L,
+                0,
                 1L,
                 LocalDate.parse("2026-08-18"),
                 Instant.parse("2026-08-18T04:20:11Z"),
@@ -206,6 +278,7 @@ class ShowcaseControllerUnitTest {
 
         return new ShowcaseTodayResult(
                 3312L,
+                0,
                 1L,
                 LocalDate.parse("2026-08-18"),
                 Instant.parse("2026-08-18T04:20:11Z"),

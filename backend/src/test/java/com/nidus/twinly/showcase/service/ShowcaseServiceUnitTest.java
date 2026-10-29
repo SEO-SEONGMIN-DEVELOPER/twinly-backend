@@ -17,11 +17,18 @@ import com.nidus.twinly.showcase.dto.result.ShowcaseBubbleLineResult;
 import com.nidus.twinly.showcase.dto.result.ShowcaseDialogueSceneResult;
 import com.nidus.twinly.showcase.dto.result.ShowcaseMoveSceneResult;
 import com.nidus.twinly.showcase.dto.result.ShowcaseTodayResult;
+import com.nidus.twinly.showcase.dto.result.ShowcaseTodaySectorsResult;
 import com.nidus.twinly.showcase.dto.result.ShowcaseUserInfoResult;
 import com.nidus.twinly.showcase.entity.Showcase;
+import com.nidus.twinly.showcase.entity.ShowcaseUserRef;
 import com.nidus.twinly.showcase.repository.ShowcaseRepository;
+import com.nidus.twinly.showcase.repository.ShowcaseUserRefRepository;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.UserRepository;
+import com.nidus.twinly.world.reader.WorldTrackSlice;
+import com.nidus.twinly.world.service.WorldService;
+import com.nidus.twinly.world.service.WorldTrackMerger;
+import com.nidus.twinly.world.service.WorldTrackPublisher;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,6 +39,7 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -46,10 +54,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 
 @ExtendWith(MockitoExtension.class)
 class ShowcaseServiceUnitTest {
@@ -68,6 +78,9 @@ class ShowcaseServiceUnitTest {
     ScenePartnerRepository scenePartnerRepository;
 
     @Mock
+    ShowcaseUserRefRepository showcaseUserRefRepository;
+
+    @Mock
     UserRepository userRepository;
 
     @Mock
@@ -80,6 +93,19 @@ class ShowcaseServiceUnitTest {
     @Spy
     ObjectMapper objectMapper = new ObjectMapper();
 
+    @Mock
+    ShowcaseOutsiderRefs showcaseOutsiderRefs;
+
+    @Mock
+    WorldService worldService;
+
+    // 건물 화면의 번호 바꾸기·이름 붙이기는 진짜 구현이 돌아야 검증할 수 있다.
+    @Spy
+    WorldTrackMerger worldTrackMerger = new WorldTrackMerger(new ObjectMapper());
+
+    @Spy
+    WorldTrackPublisher worldTrackPublisher = new WorldTrackPublisher();
+
     @InjectMocks
     ShowcaseService showcaseService;
 
@@ -87,7 +113,7 @@ class ShowcaseServiceUnitTest {
     @DisplayName("오늘 배정이 없으면 후보 중 하나를 뽑아 저장한다")
     void today_assigns_target_when_absent() {
         // given: 오늘 배정이 없고 후보가 한 명뿐이다
-        given(showcaseRepository.findByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.empty());
+        given(showcaseRepository.findWithLockByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.empty());
         given(currentSeasonReader.read()).willReturn(season());
         given(showcaseRepository.findAllTargetCandidateUserIds(anyLong(), anyLong(), any(), anyBoolean(), anyBoolean())).willReturn(List.of(TARGET_ID));
         given(showcaseRepository.save(any())).willAnswer(invocation -> {
@@ -112,7 +138,7 @@ class ShowcaseServiceUnitTest {
     @DisplayName("같은 학교 시드 후보가 있으면 그중에서 뽑고 전체 후보는 조회하지 않는다")
     void today_prefers_same_organization_candidates() {
         // given: 오늘 배정이 없고 같은 학교 후보가 한 명 있다
-        given(showcaseRepository.findByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.empty());
+        given(showcaseRepository.findWithLockByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.empty());
         given(currentSeasonReader.read()).willReturn(season());
         given(showcaseRepository.findAllTargetCandidateUserIds(anyLong(), anyLong(), any(), eq(true), eq(true))).willReturn(List.of(TARGET_ID));
         given(showcaseRepository.save(any())).willAnswer(invocation -> {
@@ -140,7 +166,7 @@ class ShowcaseServiceUnitTest {
     @DisplayName("같은 학교 시드 후보가 없으면 전체 시드 후보 중에서 뽑는다")
     void today_falls_back_to_all_candidates() {
         // given: 같은 학교 후보는 없고 전체 후보로는 한 명 있다
-        given(showcaseRepository.findByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.empty());
+        given(showcaseRepository.findWithLockByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.empty());
         given(currentSeasonReader.read()).willReturn(season());
         given(showcaseRepository.findAllTargetCandidateUserIds(anyLong(), anyLong(), any(), eq(true), eq(true))).willReturn(List.of());
         given(showcaseRepository.findAllTargetCandidateUserIds(anyLong(), anyLong(), any(), eq(false), eq(true))).willReturn(List.of(PARTNER_ID));
@@ -168,7 +194,7 @@ class ShowcaseServiceUnitTest {
     @DisplayName("시드 후보가 없으면 실제 유저 중 같은 학교 후보에서 뽑고 실제 유저 전체 후보는 조회하지 않는다")
     void today_falls_back_to_real_users_preferring_same_organization() {
         // given: 시드 후보는 같은 학교·전체 모두 없고, 실제 유저 중 같은 학교 후보가 한 명 있다
-        given(showcaseRepository.findByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.empty());
+        given(showcaseRepository.findWithLockByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.empty());
         given(currentSeasonReader.read()).willReturn(season());
         given(showcaseRepository.findAllTargetCandidateUserIds(anyLong(), anyLong(), any(), anyBoolean(), eq(true))).willReturn(List.of());
         given(showcaseRepository.findAllTargetCandidateUserIds(anyLong(), anyLong(), any(), eq(true), eq(false))).willReturn(List.of(PARTNER_ID));
@@ -197,7 +223,7 @@ class ShowcaseServiceUnitTest {
     @DisplayName("오늘 배정이 이미 있으면 후보를 다시 뽑지 않는다 (하루 고정)")
     void today_reuses_existing_assignment() {
         // given: 오늘 배정이 이미 있고 대상에게 오늘 씬이 있다
-        given(showcaseRepository.findByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(showcase()));
+        given(showcaseRepository.findWithLockByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(showcase()));
         given(sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(anyLong(), any()))
                 .willReturn(List.of(actionScene(88101L, "등교했다.", null)));
         given(scenePartnerRepository.findAllBySceneIdIn(anyList())).willReturn(List.of());
@@ -217,7 +243,7 @@ class ShowcaseServiceUnitTest {
     @DisplayName("후보가 없으면 SHOWCASE_TARGET_NOT_FOUND 예외가 발생하고 배정을 저장하지 않는다")
     void today_without_candidate_throws() {
         // given: 오늘 배정이 없고 후보도 없다
-        given(showcaseRepository.findByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.empty());
+        given(showcaseRepository.findWithLockByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.empty());
         given(currentSeasonReader.read()).willReturn(season());
         given(showcaseRepository.findAllTargetCandidateUserIds(anyLong(), anyLong(), any(), anyBoolean(), anyBoolean())).willReturn(List.of());
 
@@ -235,7 +261,7 @@ class ShowcaseServiceUnitTest {
     void today_reassigns_target_without_scenes() {
         // given: 기존 배정 대상(204)은 오늘 씬이 없고, 후보(311)에게는 있다
         Showcase existing = showcase();
-        given(showcaseRepository.findByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(existing));
+        given(showcaseRepository.findWithLockByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(existing));
         given(sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(eq(TARGET_ID), any())).willReturn(List.of());
         given(currentSeasonReader.read()).willReturn(season());
         given(showcaseRepository.findAllTargetCandidateUserIds(anyLong(), anyLong(), any(), anyBoolean(), anyBoolean())).willReturn(List.of(PARTNER_ID));
@@ -253,13 +279,43 @@ class ShowcaseServiceUnitTest {
         assertThat(result.showcaseId()).isEqualTo(3312L);
         assertThat(result.scenes()).hasSize(1);
         then(showcaseRepository).should(never()).save(any());
+
+        // then: 번호표를 비우고 refVersion 을 올려 앱이 받아 둔 창을 버리게 한다
+        assertThat(result.refVersion()).isEqualTo(1);
+        then(showcaseUserRefRepository).should().deleteAllByShowcaseId(3312L);
+    }
+
+    @Test
+    @DisplayName("이미 번호표에 있는 사람은 장면 순서가 바뀌어도 같은 번호를 쓰고, 새로 나온 사람만 다음 번호를 받는다")
+    void today_keeps_stored_user_refs() {
+        // given: 번호표에 대상=1, 기존 동행자(311)=2 가 있고, 다시 받은 하루에는 새 동행자(312)가 먼저 나온다
+        Long newPartnerId = 312L;
+        given(showcaseRepository.findWithLockByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(showcase()));
+        given(sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(anyLong(), any()))
+                .willReturn(List.of(actionScene(88101L, "등교했다.", null), actionScene(88102L, "점심을 먹었다.", null)));
+        given(scenePartnerRepository.findAllBySceneIdIn(anyList()))
+                .willReturn(List.of(ScenePartner.create(88101L, newPartnerId), ScenePartner.create(88102L, PARTNER_ID)));
+        given(showcaseUserRefRepository.findAllByShowcaseId(3312L))
+                .willReturn(List.of(ShowcaseUserRef.create(3312L, TARGET_ID, 1L), ShowcaseUserRef.create(3312L, PARTNER_ID, 2L)));
+        given(userRepository.findAllById(any()))
+                .willReturn(List.of(user(TARGET_ID, "김", "민수"), user(PARTNER_ID, "박", "지훈"), user(newPartnerId, "최", "유진")));
+        givenViewerCounts();
+
+        // when: 오늘 관람 조회
+        ShowcaseTodayResult result = showcaseService.today(VIEWER_ID);
+
+        // then: 기존 동행자는 2 그대로, 새 동행자는 3 이고 새 번호만 저장된다
+        assertThat(result.userInfos()).extracting(ShowcaseUserInfoResult::userRef).containsExactly(1L, 2L, 3L);
+        assertThat(((ShowcaseActionSceneResult) result.scenes().get(0)).with()).containsExactly(3L);
+        then(showcaseUserRefRepository).should().save(argThat(ref -> ref.getUserId().equals(newPartnerId) && ref.getUserRef() == 3L));
+        then(showcaseUserRefRepository).should(times(1)).save(any());
     }
 
     @Test
     @DisplayName("다시 배정할 후보도 없으면 빈 화면 대신 SHOWCASE_TARGET_NOT_FOUND 예외가 발생한다")
     void today_reassign_without_candidate_throws() {
         // given: 기존 배정 대상은 오늘 씬이 없고 후보도 없다
-        given(showcaseRepository.findByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(showcase()));
+        given(showcaseRepository.findWithLockByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(showcase()));
         given(sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(anyLong(), any())).willReturn(List.of());
         given(currentSeasonReader.read()).willReturn(season());
         given(showcaseRepository.findAllTargetCandidateUserIds(anyLong(), anyLong(), any(), anyBoolean(), anyBoolean())).willReturn(List.of());
@@ -275,7 +331,7 @@ class ShowcaseServiceUnitTest {
     @DisplayName("관람 대상은 userRef 1번, 등장 인물은 2번부터 받고 실제 유저 id는 나가지 않는다")
     void today_assigns_user_refs() {
         // given: 대상의 하루에 동행자 한 명이 등장하는 대화 씬이 있다
-        given(showcaseRepository.findByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(showcase()));
+        given(showcaseRepository.findWithLockByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(showcase()));
         Scene dialogue = dialogueScene(88102L, """
                 [{"t":"bubble","userId":311,"action":"웃으며","text":"여기 앉아.","occursAt":"2026-08-18T12:13:00"}]
                 """);
@@ -302,7 +358,7 @@ class ShowcaseServiceUnitTest {
     @DisplayName("본문과 userInfos의 이름은 실제 이름이 아닌 같은 가명(랜덤 성+OO)으로 치환된다")
     void today_masks_names_in_scene_text() {
         // given: 나레이션에 이름 자리가 들어 있는 행동 씬
-        given(showcaseRepository.findByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(showcase()));
+        given(showcaseRepository.findWithLockByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(showcase()));
         given(sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(anyLong(), any()))
                 .willReturn(List.of(actionScene(88101L, "{user_204}이 뛰어서 등교했다.", "아슬아슬했다.")));
         given(scenePartnerRepository.findAllBySceneIdIn(anyList())).willReturn(List.of());
@@ -323,7 +379,7 @@ class ShowcaseServiceUnitTest {
     @DisplayName("탈퇴 유예 중이거나 파기된 등장인물도 다른 사람과 같은 가명을 받는다")
     void today_names_withdrawal_requested_and_deleted_users() {
         // given: 대상은 탈퇴 유예 중이고, 동행자는 파기된 상태
-        given(showcaseRepository.findByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(showcase()));
+        given(showcaseRepository.findWithLockByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(showcase()));
         given(sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(anyLong(), any()))
                 .willReturn(List.of(actionScene(88101L, "{user_204}와 {user_311}이 등교했다.", null)));
         given(scenePartnerRepository.findAllBySceneIdIn(anyList()))
@@ -347,7 +403,7 @@ class ShowcaseServiceUnitTest {
     @DisplayName("같은 관람을 다시 조회해도 가명이 유지되고, 한 관람 안의 서로 다른 유저는 서로 다른 가명을 받는다")
     void today_pseudonyms_are_stable_and_distinct() {
         // given: 대상과 동행자가 함께 나오는 씬
-        given(showcaseRepository.findByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(showcase()));
+        given(showcaseRepository.findWithLockByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(showcase()));
         given(sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(anyLong(), any()))
                 .willReturn(List.of(actionScene(88101L, "{user_204}와 {user_311}이 등교했다.", null)));
         given(scenePartnerRepository.findAllBySceneIdIn(anyList()))
@@ -373,7 +429,7 @@ class ShowcaseServiceUnitTest {
     @DisplayName("소속이 대학교로 끝나면 학교를 떼고, 그 밖의 소속은 그대로 내려간다")
     void today_shortens_university_organization() {
         // given: 대상은 대학교, 동행자는 고등학교 소속이다
-        given(showcaseRepository.findByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(showcase()));
+        given(showcaseRepository.findWithLockByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(showcase()));
         given(sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(anyLong(), any()))
                 .willReturn(List.of(actionScene(88101L, "등교했다.", null)));
         given(scenePartnerRepository.findAllBySceneIdIn(anyList()))
@@ -394,7 +450,7 @@ class ShowcaseServiceUnitTest {
     @DisplayName("소속이 여자대학교로 끝나면 여대로 줄여서 내려간다")
     void today_shortens_womens_university_organization() {
         // given: 대상과 동행자 모두 여자대학교 소속이다
-        given(showcaseRepository.findByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(showcase()));
+        given(showcaseRepository.findWithLockByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(showcase()));
         given(sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(anyLong(), any()))
                 .willReturn(List.of(actionScene(88101L, "등교했다.", null)));
         given(scenePartnerRepository.findAllBySceneIdIn(anyList()))
@@ -415,7 +471,7 @@ class ShowcaseServiceUnitTest {
     @DisplayName("userCounts.organization은 관람 대상이 아니라 호출자의 소속을 userInfos와 같은 표기로 내려준다")
     void today_user_counts_include_viewer_organization() {
         // given: 관람 대상은 고려대학교, 호출자는 성신여자대학교 소속이다
-        given(showcaseRepository.findByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(showcase()));
+        given(showcaseRepository.findWithLockByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(showcase()));
         given(sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(anyLong(), any()))
                 .willReturn(List.of(actionScene(88101L, "등교했다.", null)));
         given(scenePartnerRepository.findAllBySceneIdIn(anyList())).willReturn(List.of());
@@ -438,7 +494,7 @@ class ShowcaseServiceUnitTest {
     @DisplayName("move 장면은 출발지·도착지·이동 정보를 담고, 함께 이동한 인물은 userRef로, 문장 속 이름은 가명으로 내려간다")
     void today_maps_move_scene() {
         // given: 대상이 동행자와 함께 집에서 카페로 이동한 장면, 나레이션에 동행자 이름 자리가 있다
-        given(showcaseRepository.findByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(showcase()));
+        given(showcaseRepository.findWithLockByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(showcase()));
         given(sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(anyLong(), any()))
                 .willReturn(List.of(moveScene(88103L, "{user_311}과 카페로 향했다")));
         given(scenePartnerRepository.findAllBySceneIdIn(anyList()))
@@ -482,6 +538,69 @@ class ShowcaseServiceUnitTest {
         ReflectionTestUtils.setField(showcase, "id", 3312L);
 
         return showcase;
+    }
+
+    @Test
+    @DisplayName("건물 화면: 대상이 그날 시뮬레이션되지 않았으면 트랙을 읽지 않고 WORLD_TRACK_NOT_FOUND")
+    void todaySectors_target_without_scenes_on_date_throws() {
+        // given: 오늘 둘러보기는 있지만 대상(204)은 요청한 날짜(어제)에 장면이 없다
+        LocalDate yesterday = KstTimes.today().minusDays(1);
+        given(showcaseRepository.findWithLockByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(showcase()));
+        given(sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(anyLong(), any())).willReturn(List.of(actionScene(88101L, "등교했다.", null)));
+        given(scenePartnerRepository.findAllBySceneIdIn(anyList())).willReturn(List.of());
+        given(userRepository.findById(TARGET_ID)).willReturn(Optional.of(userInPool(TARGET_ID, "김", 7)));
+        given(sceneRepository.existsByUserIdAndDate(TARGET_ID, yesterday)).willReturn(false);
+
+        // when & then: WORLD_TRACK_NOT_FOUND + 트랙 조회 없음
+        assertThatThrownBy(() -> showcaseService.todaySectors(VIEWER_ID, "S034", yesterday, yesterday + "T13:00:00+09:00", yesterday + "T14:00:00+09:00"))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.WORLD_TRACK_NOT_FOUND);
+        then(worldService).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("건물 화면: 대상 풀의 공용 트랙을 보여 주고, 대상은 user:1·동행자는 둘러보기 번호와 가상 이름, 나머지는 큰 번호와 누군가의 트윈이다")
+    void todaySectors_renumbers_users_with_showcase_refs() {
+        // given: 대상(204)·동행자(311)가 나오는 둘러보기와, 둘러보기에 없는 트윈(999)까지 있는 공용 트랙
+        LocalDate today = KstTimes.today();
+        given(showcaseRepository.findWithLockByViewerUserIdAndDate(eq(VIEWER_ID), any())).willReturn(Optional.of(showcase()));
+        given(sceneRepository.findAllByUserIdAndDateOrderByStartsAtAsc(anyLong(), any())).willReturn(List.of(actionScene(88101L, "등교했다.", null)));
+        given(scenePartnerRepository.findAllBySceneIdIn(anyList())).willReturn(List.of(ScenePartner.create(88101L, PARTNER_ID)));
+        given(userRepository.findById(TARGET_ID)).willReturn(Optional.of(userInPool(TARGET_ID, "김", 7)));
+        given(sceneRepository.existsByUserIdAndDate(TARGET_ID, today)).willReturn(true);
+        given(worldService.readTrack(eq(7), eq(today), eq("S034"), eq(0L), any())).willReturn(new WorldTrackSlice("7", "sha256:aa",
+                List.of(worldActor("user:" + TARGET_ID, today), worldActor("user:" + PARTNER_ID, today), worldActor("user:999", today)),
+                List.of(), List.of(), List.of(), List.of(), List.of()));
+        given(userRepository.findAllById(any())).willReturn(List.of(user(TARGET_ID, "김", "민수"), user(PARTNER_ID, "박", "지훈"), user(999L, "최", "유진")));
+        given(showcaseOutsiderRefs.refOf(3312L, 999L)).willReturn(1_099_511_627_776L);
+
+        // when: 오늘 둘러보기 기준 건물 화면 조회
+        ShowcaseTodaySectorsResult result = showcaseService.todaySectors(VIEWER_ID, "S034", today, today + "T13:00:00+09:00", today + "T14:00:00+09:00");
+
+        // then: 둘러보기 id·refVersion·focusRef 와 바뀐 번호
+        assertThat(result.showcaseId()).isEqualTo(3312L);
+        assertThat(result.refVersion()).isZero();
+        assertThat(result.focusRef()).isEqualTo("user:1");
+        assertThat(result.actors()).extracting(actor -> actor.get("ref").asString())
+                .containsExactly("user:1", "user:2", "user:1099511627776");
+
+        // then: 둘러보기에 나온 사람은 가상 이름, 나머지는 누군가의 트윈
+        assertThat(result.actors().get(0).get("displayName").asString()).matches("[가-힣]OO");
+        assertThat(result.actors().get(1).get("displayName").asString()).matches("[가-힣]OO");
+        assertThat(result.actors().get(2).get("displayName").asString()).isEqualTo("누군가의 트윈");
+    }
+
+    private User userInPool(Long id, String familyName, int poolNumber) {
+        User user = user(id, familyName, "민수");
+        ReflectionTestUtils.setField(user, "poolNumber", poolNumber);
+        return user;
+    }
+
+    private ObjectNode worldActor(String ref, LocalDate date) {
+        return (ObjectNode) new ObjectMapper().readTree("""
+                {"ref": "%s", "segments": [{"start": "%sT13:00:00", "end": "%sT13:30:00"}]}
+                """.formatted(ref, date, date));
     }
 
     private Season season() {

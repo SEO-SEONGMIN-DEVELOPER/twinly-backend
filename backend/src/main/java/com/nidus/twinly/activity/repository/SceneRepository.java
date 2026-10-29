@@ -20,6 +20,8 @@ public interface SceneRepository extends JpaRepository<Scene, Long> {
 
     List<Scene> findAllByUserIdAndDateOrderByStartsAtAsc(Long userId, LocalDate date);
 
+    boolean existsByUserIdAndDate(Long userId, LocalDate date);
+
     List<Scene> findAllByUserIdAndDateAndType(Long userId, LocalDate date, SceneType type);
 
     @Query(value = """
