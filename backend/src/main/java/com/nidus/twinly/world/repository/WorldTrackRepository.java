@@ -9,8 +9,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.Collection;
+import java.util.Optional;
 
 public interface WorldTrackRepository extends JpaRepository<WorldTrack, Long> {
+
+    Optional<WorldTrack> findByPoolNumberAndDateAndSectorCodeAndViewerUserId(Integer poolNumber, LocalDate date, String sectorCode, Long viewerUserId);
 
     @Transactional
     @Modifying

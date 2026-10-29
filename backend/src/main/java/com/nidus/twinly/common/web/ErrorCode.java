@@ -149,6 +149,8 @@ public enum ErrorCode {
     INTIMACY_QUIZ_ALREADY_ANSWERED(HttpStatus.CONFLICT, "이미 답변한 친밀도 퀴즈입니다."),
 
     // 세계 트랙
+    WORLD_PARTICIPATION_REQUIRED(HttpStatus.FORBIDDEN, "이번 시즌에 참여한 사용자만 볼 수 있습니다."),
+    WORLD_TRACK_NOT_FOUND(HttpStatus.NOT_FOUND, "보여 줄 세계 트랙이 없습니다."),
     WORLD_TRACK_TOO_LARGE(HttpStatus.CONTENT_TOO_LARGE, "세계 트랙 본문이 허용 크기를 넘었습니다."),
     WORLD_TRACK_SAVE_BUSY(HttpStatus.TOO_MANY_REQUESTS, "세계 트랙 저장 요청이 많습니다. 잠시 후 다시 보내 주세요."),
 
