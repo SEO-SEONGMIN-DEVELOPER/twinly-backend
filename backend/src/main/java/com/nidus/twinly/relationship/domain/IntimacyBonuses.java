@@ -5,6 +5,7 @@ import com.nidus.twinly.relationship.entity.Relationship;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Predicate;
 
 public class IntimacyBonuses {
@@ -17,11 +18,13 @@ public class IntimacyBonuses {
 
     public Intimacy intimacyOf(Relationship relationship, Instant until) {
         Instant asOf = relationship.getIntimacyAsOf();
+        Predicate<IntimacyBonus> inSeason = bonus -> Objects.equals(bonus.getSeasonId(), relationship.getSeasonId())
+                && bonus.getCreatedAt().isBefore(until);
 
         return Intimacy.of(
                 relationship.getIntimacy(),
-                sum(bonus -> bonus.getCreatedAt().isBefore(until) && (asOf == null || bonus.getCreatedAt().isAfter(asOf))),
-                sum(bonus -> bonus.getCreatedAt().isBefore(until)));
+                sum(inSeason.and(bonus -> asOf == null || bonus.getCreatedAt().isAfter(asOf))),
+                sum(inSeason));
     }
 
     private long sum(Predicate<IntimacyBonus> condition) {

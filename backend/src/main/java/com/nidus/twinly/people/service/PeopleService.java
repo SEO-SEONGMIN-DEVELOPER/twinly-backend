@@ -44,6 +44,7 @@ import com.nidus.twinly.relationship.domain.RelationshipType;
 import com.nidus.twinly.relationship.entity.Relationship;
 import com.nidus.twinly.relationship.reader.IntimacyReader;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
+import com.nidus.twinly.season.domain.SeasonScope;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.user.domain.DisclosureField;
 import com.nidus.twinly.user.entity.DisclosureAgreement;
@@ -113,9 +114,9 @@ public class PeopleService {
     public PeopleResult people(Long userId, Long cursor, Integer limit) {
         int effectiveLimit = (limit != null && limit > 0) ? limit : DEFAULT_PEOPLE_LIMIT;
         LocalDateTime now = KstTimes.now();
-        LocalDateTime seasonStartedAt = KstTimes.toLocalDateTime(currentSeasonReader.read().getStartedAt());
+        SeasonScope seasonScope = currentSeasonReader.scopeOf(now.toLocalDate());
 
-        List<Long> fetched = relationshipRepository.findPartnerUserIdsByUserId(userId, cursor, effectiveLimit + 1, seasonStartedAt, now);
+        List<Long> fetched = relationshipRepository.findPartnerUserIdsByUserId(userId, cursor, effectiveLimit + 1, seasonScope.seasonId(), seasonScope.startDate(), now);
 
         boolean hasMore = fetched.size() > effectiveLimit;
         List<Long> partnerUserIds = hasMore ? fetched.subList(0, effectiveLimit) : fetched;
@@ -278,8 +279,10 @@ public class PeopleService {
     }
 
     public PeopleIntimacySeriesResult intimacySeries(Long userId, Long partnerUserId) {
-        List<Relationship> relationships = relationshipRepository
-                .findAllByUserIdAndPartnerUserIdAndUpdateTimeLessThanEqualOrderByDateAscUpdateTimeAsc(userId, partnerUserId, KstTimes.now());
+        LocalDateTime now = KstTimes.now();
+        SeasonScope seasonScope = currentSeasonReader.scopeOf(now.toLocalDate());
+        List<Relationship> relationships = relationshipRepository.findAllInSeasonByUserIdAndPartnerUserId(
+                userId, partnerUserId, seasonScope.seasonId(), seasonScope.startDate(), now);
 
         if (relationships.isEmpty()) {
             throw new BusinessException(ErrorCode.RELATIONSHIP_NOT_FOUND);
@@ -335,7 +338,9 @@ public class PeopleService {
 
         int effectiveLimit = (limit != null && limit > 0) ? limit : DEFAULT_EVENTS_LIMIT;
 
-        List<LocalDate> fetchedDates = sceneRepository.findDistinctDatesFromCursorByUserIdAndWithPartnerUserId(userId, partnerUserId, cursor, effectiveLimit + 1, now);
+        SeasonScope seasonScope = currentSeasonReader.scopeOf(now.toLocalDate());
+        List<LocalDate> fetchedDates = sceneRepository.findDistinctDatesFromCursorByUserIdAndWithPartnerUserId(
+                userId, partnerUserId, cursor, effectiveLimit + 1, seasonScope.seasonId(), seasonScope.startDate(), now);
         boolean hasMore = fetchedDates.size() > effectiveLimit;
         List<LocalDate> pageDates = hasMore ? fetchedDates.subList(0, effectiveLimit) : fetchedDates;
 
@@ -395,8 +400,12 @@ public class PeopleService {
             return List.of();
         }
 
+        SeasonScope seasonScope = currentSeasonReader.scopeOf(now.toLocalDate());
+
         return relationshipRepository.findForDeltaRange(
-                userId, partnerUserId, pageDates.get(pageDates.size() - 1), pageDates.get(0), now);
+                        userId, partnerUserId, pageDates.get(pageDates.size() - 1), pageDates.get(0), now).stream()
+                .filter(relationship -> seasonScope.includes(relationship.getSeasonId(), relationship.getDate()))
+                .toList();
     }
 
     private String preview(Scene scene, Map<Long, String> nameByUserId) {
@@ -460,9 +469,7 @@ public class PeopleService {
             throw new BusinessException(ErrorCode.USER_NOT_FOUND);
         }
 
-        List<Scene> scenes = sceneRepository.findAllByUserIdAndWithPartnerUserIdAndDateIn(userId, partnerUserId, List.of(date), KstTimes.now());
-
-        return toEventResult(userId, partnerUserId, date, scenes);
+        return toEventResult(userId, partnerUserId, date, sharedScenesInSeason(userId, partnerUserId, date));
     }
 
     public PeopleEventResult eventV2(Long userId, Long partnerUserId, LocalDate date) {
@@ -470,9 +477,18 @@ public class PeopleService {
             throw new BusinessException(ErrorCode.USER_NOT_FOUND);
         }
 
-        List<Scene> sharedScenes = sceneRepository.findAllByUserIdAndWithPartnerUserIdAndDateIn(userId, partnerUserId, List.of(date), KstTimes.now());
+        List<Scene> sharedScenes = sharedScenesInSeason(userId, partnerUserId, date);
 
         return toEventResult(userId, partnerUserId, date, withPrecedingMoves(userId, date, sharedScenes));
+    }
+
+    private List<Scene> sharedScenesInSeason(Long userId, Long partnerUserId, LocalDate date) {
+        LocalDateTime now = KstTimes.now();
+        SeasonScope seasonScope = currentSeasonReader.scopeOf(now.toLocalDate());
+
+        return sceneRepository.findAllByUserIdAndWithPartnerUserIdAndDateIn(userId, partnerUserId, List.of(date), now).stream()
+                .filter(scene -> seasonScope.includes(scene.getSeasonId(), date))
+                .toList();
     }
 
     private List<Scene> withPrecedingMoves(Long userId, LocalDate date, List<Scene> sharedScenes) {
@@ -584,7 +600,10 @@ public class PeopleService {
     }
 
     public PeopleLearnedFactsResult learnedFacts(Long userId, Long partnerUserId) {
-        Relationship relationship = relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(userId, partnerUserId, KstTimes.now())
+        LocalDateTime now = KstTimes.now();
+        SeasonScope seasonScope = currentSeasonReader.scopeOf(now.toLocalDate());
+        Relationship relationship = relationshipRepository.findLatestInSeasonByUserIdAndPartnerUserId(
+                        userId, partnerUserId, seasonScope.seasonId(), seasonScope.startDate(), now)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RELATIONSHIP_NOT_FOUND));
 
         return new PeopleLearnedFactsResult(relationship.getPartnerModel());

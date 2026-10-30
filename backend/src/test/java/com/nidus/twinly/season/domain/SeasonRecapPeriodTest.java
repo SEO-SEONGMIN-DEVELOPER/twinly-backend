@@ -59,7 +59,7 @@ class SeasonRecapPeriodTest {
         Season season = BeanUtils.instantiateClass(Season.class);
         ReflectionTestUtils.setField(season, "startedAt", startedAt);
         ReflectionTestUtils.setField(season, "endedAt", endedAt);
-        ReflectionTestUtils.setField(season, "createdAt", createdAt);
+        ReflectionTestUtils.setField(season, "activatedAt", createdAt);
         return season;
     }
 }

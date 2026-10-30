@@ -663,7 +663,7 @@ class ChatServiceUnitTest {
         given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, PARTNER)).willReturn(Optional.empty());
         given(userRepository.findById(PARTNER)).willReturn(Optional.of(user(PARTNER, "partnerNick")));
         given(photoRepository.findByUserIdAndType(PARTNER, PhotoType.PROFILE)).willReturn(Optional.empty());
-        given(intimacyReader.read(eq(ME), eq(PARTNER), any(LocalDateTime.class))).willReturn(Intimacy.ZERO);
+        given(intimacyReader.readLatest(eq(ME), eq(PARTNER), any(LocalDateTime.class))).willReturn(Intimacy.ZERO);
         given(disclosureAgreementRepository.findAllByUserId(PARTNER)).willReturn(List.of());
         given(currentSeasonReader.read()).willReturn(currentSeason());
 
@@ -692,7 +692,7 @@ class ChatServiceUnitTest {
         given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, PARTNER)).willReturn(Optional.of(partner));
         given(userRepository.findById(PARTNER)).willReturn(Optional.of(user(PARTNER, "partnerNick")));
         given(photoRepository.findByUserIdAndType(PARTNER, PhotoType.PROFILE)).willReturn(Optional.empty());
-        given(intimacyReader.read(eq(ME), eq(PARTNER), any(LocalDateTime.class))).willReturn(Intimacy.ZERO);
+        given(intimacyReader.readLatest(eq(ME), eq(PARTNER), any(LocalDateTime.class))).willReturn(Intimacy.ZERO);
         given(disclosureAgreementRepository.findAllByUserId(PARTNER)).willReturn(List.of());
         given(currentSeasonReader.read()).willReturn(currentSeason());
 
@@ -868,7 +868,7 @@ class ChatServiceUnitTest {
 
         given(userRepository.findAllById(List.of(PARTNER))).willReturn(List.of(user(PARTNER, "partnerNick")));
         given(photoRepository.findAllByUserIdInAndType(List.of(PARTNER), PhotoType.PROFILE)).willReturn(List.of());
-        given(intimacyReader.readAll(eq(ME), eq(List.of(PARTNER)), any(LocalDateTime.class))).willReturn(Map.of(PARTNER, new Intimacy(45, 6)));
+        given(intimacyReader.readAllLatest(eq(ME), eq(List.of(PARTNER)), any(LocalDateTime.class))).willReturn(Map.of(PARTNER, new Intimacy(45, 6)));
         given(chatRepository.findLatestByRoomIdIn(List.of(ROOM_ID)))
                 .willReturn(List.of(chat(55L, ROOM_ID, PARTNER, ME, "hello", "client-55")));
         given(chatRepository.countUnreadByRoomIdIn(ME, List.of(ROOM_ID))).willReturn(List.of());
@@ -906,7 +906,7 @@ class ChatServiceUnitTest {
 
         given(userRepository.findAllById(List.of(PARTNER))).willReturn(List.of(user(PARTNER, "partnerNick")));
         given(photoRepository.findAllByUserIdInAndType(List.of(PARTNER), PhotoType.PROFILE)).willReturn(List.of());
-        given(intimacyReader.readAll(eq(ME), eq(List.of(PARTNER)), any(LocalDateTime.class))).willReturn(Map.of());
+        given(intimacyReader.readAllLatest(eq(ME), eq(List.of(PARTNER)), any(LocalDateTime.class))).willReturn(Map.of());
         given(chatRepository.findLatestByRoomIdIn(List.of(ROOM_ID))).willReturn(List.of());
         given(chatRepository.countUnreadByRoomIdIn(ME, List.of(ROOM_ID))).willReturn(List.of());
 
@@ -940,7 +940,7 @@ class ChatServiceUnitTest {
 
         given(userRepository.findAllById(List.of(PARTNER, 3L))).willReturn(List.of(user(PARTNER, "p1"), user(3L, "p2")));
         given(photoRepository.findAllByUserIdInAndType(List.of(PARTNER, 3L), PhotoType.PROFILE)).willReturn(List.of());
-        given(intimacyReader.readAll(eq(ME), eq(List.of(PARTNER, 3L)), any(LocalDateTime.class))).willReturn(Map.of());
+        given(intimacyReader.readAllLatest(eq(ME), eq(List.of(PARTNER, 3L)), any(LocalDateTime.class))).willReturn(Map.of());
         given(chatRepository.findLatestByRoomIdIn(List.of(ROOM_ID, 20L))).willReturn(List.of());
         given(chatRepository.countUnreadByRoomIdIn(ME, List.of(ROOM_ID, 20L))).willReturn(List.of());
 
@@ -976,7 +976,7 @@ class ChatServiceUnitTest {
         given(userRepository.findAllById(List.of(PARTNER, 3L, 4L)))
                 .willReturn(List.of(user(PARTNER, "p1"), user(3L, "p2"), user(4L, "p3")));
         given(photoRepository.findAllByUserIdInAndType(List.of(PARTNER, 3L, 4L), PhotoType.PROFILE)).willReturn(List.of());
-        given(intimacyReader.readAll(eq(ME), eq(List.of(PARTNER, 3L, 4L)), any(LocalDateTime.class))).willReturn(Map.of());
+        given(intimacyReader.readAllLatest(eq(ME), eq(List.of(PARTNER, 3L, 4L)), any(LocalDateTime.class))).willReturn(Map.of());
         Chat oldChat = chat(55L, ROOM_ID, PARTNER, ME, "old", "client-55");
         ReflectionTestUtils.setField(oldChat, "sentAt", base.plusSeconds(60));
         Chat newChat = chat(56L, 20L, 3L, ME, "new", "client-56");
@@ -1004,7 +1004,7 @@ class ChatServiceUnitTest {
         given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, ME)).willReturn(Optional.of(mine));
         given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, PARTNER)).willReturn(Optional.empty());
         given(photoRepository.findByUserIdAndType(PARTNER, PhotoType.PROFILE)).willReturn(Optional.empty());
-        given(intimacyReader.read(eq(ME), eq(PARTNER), any(LocalDateTime.class))).willReturn(new Intimacy(45, 6));
+        given(intimacyReader.readLatest(eq(ME), eq(PARTNER), any(LocalDateTime.class))).willReturn(new Intimacy(45, 6));
         given(disclosureAgreementRepository.findAllByUserId(PARTNER))
                 .willReturn(List.of(DisclosureAgreement.create(PARTNER, DisclosureField.AFFILIATION)));
 
@@ -1109,7 +1109,7 @@ class ChatServiceUnitTest {
         given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, ME)).willReturn(Optional.of(participation(ROOM_ID, ME)));
         given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, PARTNER)).willReturn(Optional.of(participation(ROOM_ID, PARTNER)));
         given(photoRepository.findByUserIdAndType(PARTNER, PhotoType.PROFILE)).willReturn(Optional.empty());
-        given(intimacyReader.read(eq(ME), eq(PARTNER), any(LocalDateTime.class))).willReturn(Intimacy.ZERO);
+        given(intimacyReader.readLatest(eq(ME), eq(PARTNER), any(LocalDateTime.class))).willReturn(Intimacy.ZERO);
         given(disclosureAgreementRepository.findAllByUserId(PARTNER)).willReturn(List.of());
 
         // when: 채팅방 상세 조회
@@ -1134,7 +1134,7 @@ class ChatServiceUnitTest {
         mine.agree();
         given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, ME)).willReturn(Optional.of(mine));
         given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, PARTNER)).willReturn(Optional.empty());
-        given(intimacyReader.read(eq(ME), eq(PARTNER), any(LocalDateTime.class))).willReturn(Intimacy.ZERO);
+        given(intimacyReader.readLatest(eq(ME), eq(PARTNER), any(LocalDateTime.class))).willReturn(Intimacy.ZERO);
 
         // when: 채팅방 상세 조회
         ChatRoomDetailResult result = chatService.roomDetail(ME, ROOM_ID);

@@ -158,6 +158,72 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("사람 목록 조회: 이전 회차 기록이 시즌 시작 뒤 시각이어도 새 시즌 인연으로 치지 않는다")
+    void people_excludes_previous_round_relationship_past_midnight() throws Exception {
+        // given: 현재 시즌이 DAY_2 에 시작했고, DAY_1 회차 기록의 시각이 자정을 넘겨 DAY_2 새벽임
+        seasonRepository.save(Season.create(KstTimes.toInstant(DAY_2.atStartOfDay()), Instant.parse("2027-01-01T00:00:00Z")));
+        User me = saveUser();
+        User partner = saveUser();
+        saveRelationshipOn(me.getId(), partner.getId(), DAY_1, DAY_2.atTime(1, 30), 40, "{}");
+
+        // when: 사람 목록 조회
+        var result = mockMvc.perform(get("/api/v1/people")
+                .header("Authorization", bearer(me.getId())));
+
+        // then: 목록에 나오지 않는다
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.people.length()").value(0));
+    }
+
+    @Test
+    @DisplayName("사람 목록 조회: 시즌 첫날 참가해 전날 날짜로 저장된 시작 인연은 나온다")
+    void people_includes_starter_of_first_season_day() throws Exception {
+        // given: 현재 시즌이 DAY_2 에 시작했고, DAY_2 에 참가해 date 가 DAY_1 인 시작 인연
+        Season current = seasonRepository.save(Season.create(KstTimes.toInstant(DAY_2.atStartOfDay()), Instant.parse("2027-01-01T00:00:00Z")));
+        User me = saveUser();
+        User partner = saveUser();
+        Relationship starter = saveRelationshipOn(me.getId(), partner.getId(), DAY_1, DAY_2.atTime(9, 0), 0, "{}");
+        ReflectionTestUtils.setField(starter, "version", "starter");
+        ReflectionTestUtils.setField(starter, "seasonId", current.getId());
+        relationshipRepository.saveAndFlush(starter);
+
+        // when: 사람 목록 조회
+        var result = mockMvc.perform(get("/api/v1/people")
+                .header("Authorization", bearer(me.getId())));
+
+        // then: 목록에 나온다
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.people.length()").value(1))
+                .andExpect(jsonPath("$.people[0].userId").value(partner.getId().toString()));
+    }
+
+    @Test
+    @DisplayName("이전 시즌 상대의 프로필은 친밀도 0, 그래프·알게 된 점은 404, 장면은 빈 목록으로 인연 없는 상대처럼 보인다")
+    void previous_season_partner_looks_like_stranger() throws Exception {
+        // given: 현재 시즌이 DAY_2 에 시작했고, 상대와는 DAY_1 회차 기록과 장면만 있음
+        seasonRepository.save(Season.create(KstTimes.toInstant(DAY_2.atStartOfDay()), Instant.parse("2027-01-01T00:00:00Z")));
+        User me = saveUser();
+        User partner = saveUser();
+        saveRelationship(me.getId(), partner.getId(), DAY_1, 70, "{}");
+        Scene scene = saveSceneAt(me.getId(), DAY_1.atTime(10, 0), DAY_1.atTime(11, 0), "카페");
+        scenePartnerRepository.saveAndFlush(ScenePartner.create(scene.getId(), partner.getId()));
+
+        // when & then
+        mockMvc.perform(get("/api/v1/people/{userId}/profile", partner.getId().toString()).header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.intimacy").value(0));
+        mockMvc.perform(get("/api/v1/people/{userId}/intimacy-series", partner.getId().toString()).header("Authorization", bearer(me.getId())))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RELATIONSHIP_NOT_FOUND"));
+        mockMvc.perform(get("/api/v1/people/{userId}/learned-facts", partner.getId().toString()).header("Authorization", bearer(me.getId())))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RELATIONSHIP_NOT_FOUND"));
+        mockMvc.perform(get("/api/v1/people/{userId}/events", partner.getId().toString()).header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.events.length()").value(0));
+    }
+
+    @Test
     @DisplayName("사람 목록 조회: 관계가 없는 시즌 미참여자는 오류 없이 200 과 빈 목록을 받는다")
     void people_without_relationship_returns_empty() throws Exception {
         // given: 시즌 참여·관계가 없는 사용자

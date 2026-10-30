@@ -1,5 +1,6 @@
 package com.nidus.twinly.simulation.service;
 
+import com.nidus.twinly.season.domain.SeasonScope;
 import com.nidus.twinly.activity.domain.QuestionType;
 import com.nidus.twinly.activity.domain.SceneType;
 import com.nidus.twinly.activity.entity.Question;
@@ -42,6 +43,8 @@ import com.nidus.twinly.legal.domain.PolicyKind;
 import com.nidus.twinly.legal.reader.ConsentReader;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.purchase.service.PurchaseService;
+import com.nidus.twinly.purchase.writer.PurchaseWriter;
+import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.user.repository.PersonaElementRepository;
 import com.nidus.twinly.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -84,6 +87,8 @@ class SimulationServiceUnitTest {
     private static final Long USER_ID = 12L;
     private static final Long PARTNER_ID = 34L;
     private static final LocalDate DATE = LocalDate.of(2026, 8, 3);
+    private static final LocalDate SEASON_START_DATE = LocalDate.of(2020, 1, 1);
+    private static final SeasonScope SEASON_SCOPE = new SeasonScope(null, SEASON_START_DATE);
     private static final LocalDate FUTURE_DATE = KstTimes.today().plusDays(1);
 
     @Mock
@@ -129,6 +134,12 @@ class SimulationServiceUnitTest {
     PurchaseService purchaseService;
 
     @Mock
+    PurchaseWriter purchaseWriter;
+
+    @Mock
+    CurrentSeasonReader currentSeasonReader;
+
+    @Mock
     IntimacyReader intimacyReader;
 
     @Mock
@@ -145,7 +156,8 @@ class SimulationServiceUnitTest {
                 sceneRepository, scenePartnerRepository, simulationHomeObjectRepository, userRoomRepository, questionRepository, questionPartnerRepository,
                 relationshipRepository, encounterRepository, chatRoomOpener, chatRoomOpeningRepository,
                 appNotificationScheduleRepository, userRepository,
-                personaElementRepository, entitlementReader, consentReader, purchaseService, new ObjectMapper(), intimacyReader);
+                personaElementRepository, entitlementReader, consentReader, purchaseService, new ObjectMapper(), intimacyReader, purchaseWriter, currentSeasonReader);
+        lenient().when(currentSeasonReader.scopeOf(any())).thenReturn(SEASON_SCOPE);
         lenient().when(intimacyReader.readBonuses(any(), any())).thenReturn(new IntimacyBonuses(List.of()));
     }
 
@@ -154,7 +166,7 @@ class SimulationServiceUnitTest {
     void simulations_schedules_friend_when_relationship_type_becomes_friend() {
         // given: 직전 관계는 지인(20)이고 이번 시뮬레이션에서 친구 기준(35)을 넘김
         givenEmptyPreviousSimulation();
-        given(relationshipRepository.findLatestByUserIdAndPartnerUserIdBeforeDate(USER_ID, PARTNER_ID, DATE))
+        given(relationshipRepository.findLatestByUserIdAndPartnerUserIdBeforeDate(USER_ID, PARTNER_ID, DATE, null, SEASON_START_DATE))
                 .willReturn(Optional.of(relationship(20)));
 
         // when: 시뮬레이션 결과 저장
@@ -170,7 +182,7 @@ class SimulationServiceUnitTest {
     void simulations_schedules_friend_without_previous_relationship() {
         // given: 직전 관계 기록이 없음
         givenEmptyPreviousSimulation();
-        given(relationshipRepository.findLatestByUserIdAndPartnerUserIdBeforeDate(USER_ID, PARTNER_ID, DATE))
+        given(relationshipRepository.findLatestByUserIdAndPartnerUserIdBeforeDate(USER_ID, PARTNER_ID, DATE, null, SEASON_START_DATE))
                 .willReturn(Optional.empty());
 
         // when: 친구 기준을 넘는 친밀도로 저장
@@ -186,7 +198,7 @@ class SimulationServiceUnitTest {
     void simulations_does_not_schedule_friend_when_already_friend() {
         // given: 직전 관계가 이미 친구(40)
         givenEmptyPreviousSimulation();
-        given(relationshipRepository.findLatestByUserIdAndPartnerUserIdBeforeDate(USER_ID, PARTNER_ID, DATE))
+        given(relationshipRepository.findLatestByUserIdAndPartnerUserIdBeforeDate(USER_ID, PARTNER_ID, DATE, null, SEASON_START_DATE))
                 .willReturn(Optional.of(relationship(40)));
 
         // when: 친밀도가 더 오른 채로 저장
@@ -201,7 +213,7 @@ class SimulationServiceUnitTest {
     void simulations_does_not_schedule_friend_below_threshold() {
         // given: 직전 관계도 지인이고 이번에도 지인
         givenEmptyPreviousSimulation();
-        given(relationshipRepository.findLatestByUserIdAndPartnerUserIdBeforeDate(USER_ID, PARTNER_ID, DATE))
+        given(relationshipRepository.findLatestByUserIdAndPartnerUserIdBeforeDate(USER_ID, PARTNER_ID, DATE, null, SEASON_START_DATE))
                 .willReturn(Optional.of(relationship(10)));
 
         // when: 친구 기준 미만으로 저장
@@ -216,7 +228,7 @@ class SimulationServiceUnitTest {
     void simulations_schedules_friend_when_update_time_is_future() {
         // given: 내일 21시에 친구 기준을 넘는 결과가 미리 들어옴
         givenEmptyPreviousSimulation(FUTURE_DATE);
-        given(relationshipRepository.findLatestByUserIdAndPartnerUserIdBeforeDate(USER_ID, PARTNER_ID, FUTURE_DATE))
+        given(relationshipRepository.findLatestByUserIdAndPartnerUserIdBeforeDate(USER_ID, PARTNER_ID, FUTURE_DATE, null, SEASON_START_DATE))
                 .willReturn(Optional.of(relationship(20)));
 
         // when: 시뮬레이션 결과 저장
@@ -246,7 +258,7 @@ class SimulationServiceUnitTest {
     void simulations_schedules_first_meeting_at_earliest_dialogue_start() {
         // given: 내일 같은 상대와 대화 장면이 두 번 있고, 이전 날짜에 대화한 적은 없음
         givenEmptyPreviousSimulation(FUTURE_DATE);
-        given(scenePartnerRepository.findPartnerUserIdsWithDialogueBeforeDate(USER_ID, List.of(PARTNER_ID), FUTURE_DATE))
+        given(scenePartnerRepository.findPartnerUserIdsWithDialogueBeforeDate(USER_ID, List.of(PARTNER_ID), FUTURE_DATE, null, SEASON_START_DATE))
                 .willReturn(List.of());
         SimulationsCommand command = new SimulationsCommand(USER_ID, FUTURE_DATE, List.of(
                 dialogueScene(FUTURE_DATE, 15, List.of(PARTNER_ID)),
@@ -270,7 +282,7 @@ class SimulationServiceUnitTest {
     void simulations_does_not_schedule_first_meeting_for_already_met_partner() {
         // given: 내일 대화 장면이 있지만 그 상대와는 이전 날짜에 대화한 기록이 있음
         givenEmptyPreviousSimulation(FUTURE_DATE);
-        given(scenePartnerRepository.findPartnerUserIdsWithDialogueBeforeDate(USER_ID, List.of(PARTNER_ID), FUTURE_DATE))
+        given(scenePartnerRepository.findPartnerUserIdsWithDialogueBeforeDate(USER_ID, List.of(PARTNER_ID), FUTURE_DATE, null, SEASON_START_DATE))
                 .willReturn(List.of(PARTNER_ID));
         SimulationsCommand command = new SimulationsCommand(USER_ID, FUTURE_DATE, List.of(
                 dialogueScene(FUTURE_DATE, 11, List.of(PARTNER_ID))
@@ -288,7 +300,7 @@ class SimulationServiceUnitTest {
     void simulations_schedules_first_meeting_for_past_dialogue() {
         // given: 이미 지난 날짜의 대화 장면, 이전 날짜에 대화한 적은 없음
         givenEmptyPreviousSimulation();
-        given(scenePartnerRepository.findPartnerUserIdsWithDialogueBeforeDate(USER_ID, List.of(PARTNER_ID), DATE))
+        given(scenePartnerRepository.findPartnerUserIdsWithDialogueBeforeDate(USER_ID, List.of(PARTNER_ID), DATE, null, SEASON_START_DATE))
                 .willReturn(List.of());
         SimulationsCommand command = new SimulationsCommand(USER_ID, DATE, List.of(dialogueScene("카페")), List.of(), List.of(), null, null, null);
 
@@ -324,7 +336,7 @@ class SimulationServiceUnitTest {
     void simulations_schedules_friend_once_at_earliest_update_time() {
         // given: 같은 상대에 대해 친구 기준을 넘는 관계가 21시, 15시 두 건
         givenEmptyPreviousSimulation();
-        given(relationshipRepository.findLatestByUserIdAndPartnerUserIdBeforeDate(USER_ID, PARTNER_ID, DATE))
+        given(relationshipRepository.findLatestByUserIdAndPartnerUserIdBeforeDate(USER_ID, PARTNER_ID, DATE, null, SEASON_START_DATE))
                 .willReturn(Optional.of(relationship(20)));
         SimulationsCommand command = new SimulationsCommand(USER_ID, DATE, List.of(), List.of(), List.of(
                 new SimulationsRelationshipCommand(PARTNER_ID, DATE.atTime(21, 0), 40, "{}"),
@@ -347,7 +359,7 @@ class SimulationServiceUnitTest {
         // given: 두 사람과 함께한 대화 장면, 그중 한 사람과는 이전 날짜에 대화한 기록이 있음
         Long newPartnerId = 56L;
         givenEmptyPreviousSimulation();
-        given(scenePartnerRepository.findPartnerUserIdsWithDialogueBeforeDate(USER_ID, List.of(PARTNER_ID, newPartnerId), DATE))
+        given(scenePartnerRepository.findPartnerUserIdsWithDialogueBeforeDate(USER_ID, List.of(PARTNER_ID, newPartnerId), DATE, null, SEASON_START_DATE))
                 .willReturn(List.of(PARTNER_ID));
         SimulationsCommand command = new SimulationsCommand(USER_ID, DATE, List.of(
                 dialogueScene(DATE, 11, List.of(PARTNER_ID, newPartnerId))
@@ -369,7 +381,7 @@ class SimulationServiceUnitTest {
         // given: 두 사람과 11시에 처음 대화했고, AI는 그중 한 사람의 관계만 21시로 보냈다
         Long newPartnerId = 56L;
         givenEmptyPreviousSimulation();
-        given(scenePartnerRepository.findPartnerUserIdsWithDialogueBeforeDate(USER_ID, List.of(PARTNER_ID, newPartnerId), DATE))
+        given(scenePartnerRepository.findPartnerUserIdsWithDialogueBeforeDate(USER_ID, List.of(PARTNER_ID, newPartnerId), DATE, null, SEASON_START_DATE))
                 .willReturn(List.of());
         SimulationsCommand command = new SimulationsCommand(USER_ID, DATE, List.of(
                 dialogueScene(DATE, 11, List.of(PARTNER_ID, newPartnerId))
@@ -397,7 +409,7 @@ class SimulationServiceUnitTest {
         // given: 11시에 처음 대화했고, AI는 21시 관계와 기준 시각을 함께 보냈다
         Instant intimacyAsOf = Instant.parse("2026-07-27T00:30:00.123456Z");
         givenEmptyPreviousSimulation();
-        given(scenePartnerRepository.findPartnerUserIdsWithDialogueBeforeDate(USER_ID, List.of(PARTNER_ID), DATE))
+        given(scenePartnerRepository.findPartnerUserIdsWithDialogueBeforeDate(USER_ID, List.of(PARTNER_ID), DATE, null, SEASON_START_DATE))
                 .willReturn(List.of());
         SimulationsCommand command = new SimulationsCommand(USER_ID, DATE, List.of(
                 dialogueScene(DATE, 11, List.of(PARTNER_ID))
@@ -424,7 +436,7 @@ class SimulationServiceUnitTest {
         // given: 11시에 두 사람과 처음 대화했고, AI 관계는 한 사람은 11시 정각, 다른 사람은 10시
         Long newPartnerId = 56L;
         givenEmptyPreviousSimulation();
-        given(scenePartnerRepository.findPartnerUserIdsWithDialogueBeforeDate(USER_ID, List.of(PARTNER_ID, newPartnerId), DATE))
+        given(scenePartnerRepository.findPartnerUserIdsWithDialogueBeforeDate(USER_ID, List.of(PARTNER_ID, newPartnerId), DATE, null, SEASON_START_DATE))
                 .willReturn(List.of());
         SimulationsCommand command = new SimulationsCommand(USER_ID, DATE, List.of(
                 dialogueScene(DATE, 11, List.of(PARTNER_ID, newPartnerId))
@@ -447,9 +459,9 @@ class SimulationServiceUnitTest {
     void simulations_skips_zero_intimacy_relationship_when_previous_relationship_exists() {
         // given: 오늘 처음 대화했지만 대화 없이 쌓인 이전 날짜 관계 기록이 있다
         givenEmptyPreviousSimulation();
-        given(scenePartnerRepository.findPartnerUserIdsWithDialogueBeforeDate(USER_ID, List.of(PARTNER_ID), DATE))
+        given(scenePartnerRepository.findPartnerUserIdsWithDialogueBeforeDate(USER_ID, List.of(PARTNER_ID), DATE, null, SEASON_START_DATE))
                 .willReturn(List.of());
-        given(relationshipRepository.findLatestByUserIdAndPartnerUserIdBeforeDate(USER_ID, PARTNER_ID, DATE))
+        given(relationshipRepository.findLatestByUserIdAndPartnerUserIdBeforeDate(USER_ID, PARTNER_ID, DATE, null, SEASON_START_DATE))
                 .willReturn(Optional.of(relationship(20)));
         SimulationsCommand command = new SimulationsCommand(USER_ID, DATE, List.of(
                 dialogueScene(DATE, 11, List.of(PARTNER_ID))
@@ -469,7 +481,7 @@ class SimulationServiceUnitTest {
     void simulations_deletes_unsent_schedules_before_inserting_new_ones() {
         // given: 친구 기준을 넘는 결과
         givenEmptyPreviousSimulation();
-        given(relationshipRepository.findLatestByUserIdAndPartnerUserIdBeforeDate(USER_ID, PARTNER_ID, DATE))
+        given(relationshipRepository.findLatestByUserIdAndPartnerUserIdBeforeDate(USER_ID, PARTNER_ID, DATE, null, SEASON_START_DATE))
                 .willReturn(Optional.of(relationship(20)));
 
         // when: 시뮬레이션 결과 저장
@@ -731,6 +743,45 @@ class SimulationServiceUnitTest {
     }
 
     @Test
+    @DisplayName("풀 번호가 없는 유저를 페르소나로 조회하면 풀을 배정하고 그 번호를 반환한다")
+    void persona_assigns_pool_when_user_has_none() {
+        // given: 재배정 대상에서 빠져 풀 번호가 없는 유저, 배정 후 다시 읽으면 번호가 있다
+        given(entitlementReader.hasSimulationAccess(USER_ID)).willReturn(true);
+        given(consentReader.hasAgreedAllRequired(USER_ID, PolicyKind.PARALLEL_ENTRY)).willReturn(true);
+        User withoutPool = user(USER_ID, "서", "성민", "컴퓨터공학과", "1999-03-21");
+        User withPool = user(USER_ID, "서", "성민", "컴퓨터공학과", "1999-03-21");
+        ReflectionTestUtils.setField(withPool, "poolNumber", 15);
+        given(userRepository.findById(USER_ID)).willReturn(Optional.of(withoutPool), Optional.of(withPool));
+        given(personaElementRepository.findAllByUserIdOrderByIdAsc(USER_ID)).willReturn(List.of());
+
+        // when: 페르소나 조회
+        SimulationPersonaResult result = simulationService.persona(USER_ID, LocalDate.of(2026, 11, 1));
+
+        // then: 풀을 배정하고 배정된 번호를 AI 에 돌려준다
+        then(purchaseWriter).should().assignPool(USER_ID);
+        assertThat(result.poolNumber()).isEqualTo(15);
+    }
+
+    @Test
+    @DisplayName("풀 번호가 이미 있으면 페르소나 조회가 풀을 배정하지 않는다")
+    void persona_keeps_existing_pool() {
+        // given: 풀 번호가 있는 유저
+        given(entitlementReader.hasSimulationAccess(USER_ID)).willReturn(true);
+        given(consentReader.hasAgreedAllRequired(USER_ID, PolicyKind.PARALLEL_ENTRY)).willReturn(true);
+        User user = user(USER_ID, "서", "성민", "컴퓨터공학과", "1999-03-21");
+        ReflectionTestUtils.setField(user, "poolNumber", 13);
+        given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+        given(personaElementRepository.findAllByUserIdOrderByIdAsc(USER_ID)).willReturn(List.of());
+
+        // when: 페르소나 조회
+        SimulationPersonaResult result = simulationService.persona(USER_ID, LocalDate.of(2026, 11, 1));
+
+        // then: 기존 번호를 그대로 돌려준다
+        then(purchaseWriter).should(never()).assignPool(any());
+        assertThat(result.poolNumber()).isEqualTo(13);
+    }
+
+    @Test
     @DisplayName("유저 기본 정보와 성향을 차원별로 묶어 반환하고 birthDate를 LocalDate로 변환한다")
     void persona_groups_elements_by_dimension() {
         given(entitlementReader.hasSimulationAccess(USER_ID)).willReturn(true);
@@ -774,7 +825,7 @@ class SimulationServiceUnitTest {
         given(userRepository.findById(USER_ID)).willReturn(Optional.of(user(USER_ID, "서", "성민", "컴퓨터공학과", "1999-03-21")));
         given(personaElementRepository.findAllByUserIdOrderByIdAsc(USER_ID)).willReturn(List.of());
         LocalDate date = LocalDate.of(2026, 10, 1);
-        given(intimacyReader.readForSimulation(eq(USER_ID), eq(date), any(Instant.class)))
+        given(intimacyReader.readForSimulation(eq(USER_ID), eq(date), eq(SEASON_SCOPE), any(Instant.class)))
                 .willReturn(Map.of(56L, 20, PARTNER_ID, 46));
         LocalDateTime before = KstTimes.now();
 
@@ -793,7 +844,7 @@ class SimulationServiceUnitTest {
         assertThat(result.intimacyAsOf()).isAfter(before.minusSeconds(7));
 
         // then: 친밀도 계산에 쓴 시각과 내려준 시각이 정확히 같아야 AI가 돌려줄 때 짝이 맞는다
-        then(intimacyReader).should().readForSimulation(USER_ID, date, KstTimes.toInstant(result.intimacyAsOf()));
+        then(intimacyReader).should().readForSimulation(USER_ID, date, SEASON_SCOPE, KstTimes.toInstant(result.intimacyAsOf()));
     }
 
     @Test

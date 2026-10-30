@@ -112,6 +112,9 @@ public enum ErrorCode {
 
     // 시즌
     INVALID_SEASON_PERIOD(HttpStatus.UNPROCESSABLE_CONTENT, "시즌 시작 시각은 종료 시각보다 앞서야 합니다."),
+    INVALID_SEASON_RESERVATION(HttpStatus.UNPROCESSABLE_CONTENT, "예약 시작은 현재 시즌이 끝나는 미래의 KST 자정, 종료는 KST 자정이어야 합니다."),
+    SEASON_RESERVATION_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 대기 중인 시즌 전환 예약이 있습니다."),
+    SEASON_RESERVATION_NOT_FOUND(HttpStatus.NOT_FOUND, "대기 중인 시즌 전환 예약이 없습니다."),
     SEASON_RECAP_NOT_FOUND(HttpStatus.NOT_FOUND, "제공 중인 시즌 리캡이 없습니다."),
     SCHOOL_VERIFICATION_NOT_APPROVED(HttpStatus.FORBIDDEN, "학교 인증이 승인되지 않았습니다."),
 

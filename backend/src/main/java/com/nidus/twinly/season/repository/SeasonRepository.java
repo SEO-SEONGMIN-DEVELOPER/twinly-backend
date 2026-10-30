@@ -1,8 +1,11 @@
 package com.nidus.twinly.season.repository;
 
 import com.nidus.twinly.season.entity.Season;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -13,4 +16,13 @@ public interface SeasonRepository extends JpaRepository<Season, Long> {
     List<Season> findAllByIsActiveTrue();
 
     Optional<Season> findFirstByIdLessThanOrderByIdDesc(Long id);
+
+    Optional<Season> findFirstByStartedAtBeforeOrderByStartedAtDesc(Instant startedAt);
+
+    boolean existsByIsActiveFalseAndActivatedAtIsNull();
+
+    Optional<Season> findFirstByIsActiveFalseAndActivatedAtIsNullOrderByStartedAtAsc();
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<Season> findFirstByIsActiveFalseAndActivatedAtIsNullAndStartedAtLessThanEqualOrderByStartedAtAsc(Instant now);
 }

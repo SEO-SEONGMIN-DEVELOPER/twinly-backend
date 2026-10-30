@@ -1,5 +1,7 @@
 package com.nidus.twinly.people.service;
 
+import com.nidus.twinly.season.domain.SeasonScope;
+import org.junit.jupiter.api.BeforeEach;
 import com.nidus.twinly.activity.domain.SceneType;
 import com.nidus.twinly.activity.entity.Scene;
 import com.nidus.twinly.activity.entity.ScenePartner;
@@ -88,6 +90,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.IntStream;
 
+import static org.mockito.Mockito.lenient;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -168,12 +171,18 @@ class PeopleServiceUnitTest {
 
     // ------------------------------------------------------------------ people()
 
+    @BeforeEach
+    void setUpSeasonStartDate() {
+        lenient().when(currentSeasonReader.startDateOf(any())).thenReturn(LocalDate.EPOCH);
+        lenient().when(currentSeasonReader.scopeOf(any())).thenReturn(SeasonScope.UNBOUNDED);
+    }
+
     @Test
     @DisplayName("사람 목록은 사진·친밀도·씬 수·채팅방·즐겨찾기를 파트너별로 결합해 반환한다")
     void people_merges_all_sources() {
         // given: 파트너 2명(10,20) 중 10만 사진·매칭/채팅방·씬·즐겨찾기가 있는 상태
         givenCurrentSeason(CURRENT_SEASON_ID);
-        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), any(LocalDateTime.class), any(LocalDateTime.class)))
+        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), isNull(), any(LocalDate.class), any(LocalDateTime.class)))
                 .willReturn(List.of(10L, 20L));
         given(userRepository.findAllById(List.of(10L, 20L)))
                 .willReturn(List.of(user(10L, "길동"), user(20L, "철수")));
@@ -226,7 +235,7 @@ class PeopleServiceUnitTest {
     void people_hasMore_boundary() {
         // given: limit 2에 대해 3건이 조회된 상태(다음 페이지 존재)
         givenCurrentSeason(CURRENT_SEASON_ID);
-        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(3), any(LocalDateTime.class), any(LocalDateTime.class)))
+        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(3), isNull(), any(LocalDate.class), any(LocalDateTime.class)))
                 .willReturn(List.of(10L, 20L, 30L));
         given(userRepository.findAllById(List.of(10L, 20L)))
                 .willReturn(List.of(user(10L, "길동"), user(20L, "철수")));
@@ -245,7 +254,7 @@ class PeopleServiceUnitTest {
     void people_includes_intimacy_quiz_status() {
         // given: 현재 회차(id 3)에서 10은 둘 다 같은 답, 20은 나만 답, 30은 상대만 답, 40은 아무도 안 답한 상태
         givenCurrentSeason(CURRENT_SEASON_ID);
-        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), any(LocalDateTime.class), any(LocalDateTime.class)))
+        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), isNull(), any(LocalDate.class), any(LocalDateTime.class)))
                 .willReturn(List.of(10L, 20L, 30L, 40L));
         given(userRepository.findAllById(List.of(10L, 20L, 30L, 40L)))
                 .willReturn(List.of(user(10L, "길동"), user(20L, "철수"), user(30L, "영희"), user(40L, "민수")));
@@ -269,7 +278,7 @@ class PeopleServiceUnitTest {
     void people_intimacy_quiz_status_without_round() {
         // given: 파트너 1명, 현재 회차 행이 아직 없는 상태
         givenCurrentSeason(CURRENT_SEASON_ID);
-        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), any(LocalDateTime.class), any(LocalDateTime.class)))
+        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), isNull(), any(LocalDate.class), any(LocalDateTime.class)))
                 .willReturn(List.of(10L));
         given(userRepository.findAllById(List.of(10L))).willReturn(List.of(user(10L, "길동")));
         given(balanceGameRoundRepository.findByStartsAt(any(Instant.class))).willReturn(Optional.empty());
@@ -287,7 +296,7 @@ class PeopleServiceUnitTest {
     void people_intimacy_quiz_round_is_current_kst_round() {
         // given: 파트너 1명
         givenCurrentSeason(CURRENT_SEASON_ID);
-        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), any(LocalDateTime.class), any(LocalDateTime.class)))
+        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), isNull(), any(LocalDate.class), any(LocalDateTime.class)))
                 .willReturn(List.of(10L));
         given(userRepository.findAllById(List.of(10L))).willReturn(List.of(user(10L, "길동")));
         Instant before = BalanceGameSchedule.roundStartOf(KstTimes.now());
@@ -307,7 +316,7 @@ class PeopleServiceUnitTest {
     void people_intimacy_quiz_status_null_for_blocking_partner() {
         // given: 30은 나를 차단한 상태
         givenCurrentSeason(CURRENT_SEASON_ID);
-        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), any(LocalDateTime.class), any(LocalDateTime.class)))
+        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), isNull(), any(LocalDate.class), any(LocalDateTime.class)))
                 .willReturn(List.of(10L, 30L));
         given(userRepository.findAllById(List.of(10L, 30L)))
                 .willReturn(List.of(user(10L, "길동"), user(30L, "영희")));
@@ -327,7 +336,7 @@ class PeopleServiceUnitTest {
     void people_empty_short_circuits() {
         // given: 관계된 파트너가 하나도 없는 상태
         givenCurrentSeason(CURRENT_SEASON_ID);
-        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), any(LocalDateTime.class), any(LocalDateTime.class)))
+        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), isNull(), any(LocalDate.class), any(LocalDateTime.class)))
                 .willReturn(List.of());
 
         // when: 사람 목록 조회
@@ -350,7 +359,7 @@ class PeopleServiceUnitTest {
     void people_queries_with_current_kst_time() {
         // given: 관계된 파트너가 없는 상태에서 조회 전후의 KST 시각
         givenCurrentSeason(CURRENT_SEASON_ID);
-        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), any(LocalDateTime.class), any(LocalDateTime.class)))
+        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), isNull(), any(LocalDate.class), any(LocalDateTime.class)))
                 .willReturn(List.of());
         LocalDateTime before = KstTimes.now();
 
@@ -360,16 +369,17 @@ class PeopleServiceUnitTest {
 
         // then: 조회 기준 시각은 호출 전후의 KST 시각 사이다 (UTC 로 넘기면 9시간 어긋나 범위를 벗어난다)
         ArgumentCaptor<LocalDateTime> captor = ArgumentCaptor.forClass(LocalDateTime.class);
-        then(relationshipRepository).should().findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), any(LocalDateTime.class), captor.capture());
+        then(relationshipRepository).should().findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), isNull(), any(LocalDate.class), captor.capture());
         assertThat(captor.getValue()).isBetween(before, after);
     }
 
     @Test
     @DisplayName("사람 목록은 현재 시즌 시작 시각(KST) 이후에 갱신된 관계만 조회한다")
     void people_queries_since_current_season_started_at_in_kst() {
+        given(currentSeasonReader.scopeOf(any())).willReturn(new SeasonScope(null, LocalDate.of(2026, 11, 1)));
         // given: 현재 시즌이 KST 2026-11-01 00:00 에 시작했고 관계된 파트너가 없는 상태
         givenCurrentSeason(CURRENT_SEASON_ID);
-        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), any(LocalDateTime.class), any(LocalDateTime.class)))
+        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), isNull(), any(LocalDate.class), any(LocalDateTime.class)))
                 .willReturn(List.of());
 
         // when: 사람 목록 조회
@@ -377,7 +387,7 @@ class PeopleServiceUnitTest {
 
         // then: 조회 하한은 시즌 시작 시각을 KST 벽시계로 바꾼 값이다
         then(relationshipRepository).should().findPartnerUserIdsByUserId(
-                eq(ME), isNull(), eq(51), eq(LocalDateTime.of(2026, 11, 1, 0, 0)), any(LocalDateTime.class));
+                eq(ME), isNull(), eq(51), isNull(), eq(LocalDate.of(2026, 11, 1)), any(LocalDateTime.class));
     }
 
     // ----------------------------------------------------------------- profile()
@@ -587,7 +597,7 @@ class PeopleServiceUnitTest {
         // given: 59일 전 첫 기록(10)과 10일 전 기록(50)
         LocalDate today = KstTimes.today();
         given(intimacyReader.readBonuses(ME, 20L)).willReturn(new IntimacyBonuses(List.of()));
-        given(relationshipRepository.findAllByUserIdAndPartnerUserIdAndUpdateTimeLessThanEqualOrderByDateAscUpdateTimeAsc(eq(ME), eq(20L), any(LocalDateTime.class)))
+        given(relationshipRepository.findAllInSeasonByUserIdAndPartnerUserId(eq(ME), eq(20L), isNull(), any(LocalDate.class), any(LocalDateTime.class)))
                 .willReturn(List.of(
                         relationship(ME, 20L, today.minusDays(59), 10, "{}"),
                         relationship(ME, 20L, today.minusDays(10), 50, "{}")));
@@ -620,7 +630,7 @@ class PeopleServiceUnitTest {
         // given: 2일 전 첫 기록(10)과 오늘 기록(30)
         LocalDate today = KstTimes.today();
         given(intimacyReader.readBonuses(ME, 20L)).willReturn(new IntimacyBonuses(List.of()));
-        given(relationshipRepository.findAllByUserIdAndPartnerUserIdAndUpdateTimeLessThanEqualOrderByDateAscUpdateTimeAsc(eq(ME), eq(20L), any(LocalDateTime.class)))
+        given(relationshipRepository.findAllInSeasonByUserIdAndPartnerUserId(eq(ME), eq(20L), isNull(), any(LocalDate.class), any(LocalDateTime.class)))
                 .willReturn(List.of(
                         relationship(ME, 20L, today.minusDays(2), 10, "{}"),
                         relationship(ME, 20L, today, 30, "{}")));
@@ -639,7 +649,7 @@ class PeopleServiceUnitTest {
     @DisplayName("관계 기록이 전혀 없으면 RELATIONSHIP_NOT_FOUND 예외가 발생한다")
     void intimacySeries_without_relationship_throws() {
         // given: 두 유저 사이의 관계 기록이 없음
-        given(relationshipRepository.findAllByUserIdAndPartnerUserIdAndUpdateTimeLessThanEqualOrderByDateAscUpdateTimeAsc(eq(ME), eq(20L), any(LocalDateTime.class)))
+        given(relationshipRepository.findAllInSeasonByUserIdAndPartnerUserId(eq(ME), eq(20L), isNull(), any(LocalDate.class), any(LocalDateTime.class)))
                 .willReturn(List.of());
 
         // when & then: 만난 첫 날을 정할 수 없으므로 RELATIONSHIP_NOT_FOUND 예외 발생
@@ -695,7 +705,7 @@ class PeopleServiceUnitTest {
 
         given(userRepository.findById(20L)).willReturn(Optional.of(user(20L, "철수")));
         given(intimacyReader.read(eq(ME), eq(20L), any(LocalDateTime.class))).willReturn(Intimacy.ZERO);
-        given(sceneRepository.findDistinctDatesFromCursorByUserIdAndWithPartnerUserId(eq(ME), eq(20L), isNull(), eq(21), any(LocalDateTime.class)))
+        given(sceneRepository.findDistinctDatesFromCursorByUserIdAndWithPartnerUserId(eq(ME), eq(20L), isNull(), eq(21), isNull(), any(LocalDate.class), any(LocalDateTime.class)))
                 .willReturn(List.of(day));
         given(sceneRepository.findAllByUserIdAndWithPartnerUserIdAndDateIn(eq(ME), eq(20L), eq(List.of(day)), any(LocalDateTime.class)))
                 .willReturn(List.of(scene(200L, ME, day, "v1", "학교 복도", SceneType.DIALOGUE, null, null, brokenJson)));
@@ -722,7 +732,7 @@ class PeopleServiceUnitTest {
         given(intimacyReader.readBonuses(ME, 20L)).willReturn(new IntimacyBonuses(List.of()));
         given(userRepository.findById(20L)).willReturn(Optional.of(user(20L, "철수")));
         given(intimacyReader.read(eq(ME), eq(20L), any(LocalDateTime.class))).willReturn(new Intimacy(35, 0));
-        given(sceneRepository.findDistinctDatesFromCursorByUserIdAndWithPartnerUserId(eq(ME), eq(20L), isNull(), eq(21), any(LocalDateTime.class)))
+        given(sceneRepository.findDistinctDatesFromCursorByUserIdAndWithPartnerUserId(eq(ME), eq(20L), isNull(), eq(21), isNull(), any(LocalDate.class), any(LocalDateTime.class)))
                 .willReturn(List.of(day));
         given(sceneRepository.findAllByUserIdAndWithPartnerUserIdAndDateIn(eq(ME), eq(20L), eq(List.of(day)), any(LocalDateTime.class)))
                 .willReturn(List.of(scene(100L, ME, day, "v1", "카페", SceneType.ACTION, "커피를 마셨다", "즐거웠다", null)));
@@ -750,7 +760,7 @@ class PeopleServiceUnitTest {
         given(intimacyReader.readBonuses(ME, 20L)).willReturn(new IntimacyBonuses(List.of()));
         given(userRepository.findById(20L)).willReturn(Optional.of(user(20L, "철수")));
         given(intimacyReader.read(eq(ME), eq(20L), any(LocalDateTime.class))).willReturn(new Intimacy(45, 0));
-        given(sceneRepository.findDistinctDatesFromCursorByUserIdAndWithPartnerUserId(eq(ME), eq(20L), isNull(), eq(21), any(LocalDateTime.class)))
+        given(sceneRepository.findDistinctDatesFromCursorByUserIdAndWithPartnerUserId(eq(ME), eq(20L), isNull(), eq(21), isNull(), any(LocalDate.class), any(LocalDateTime.class)))
                 .willReturn(List.of(day2, day1));
         given(sceneRepository.findAllByUserIdAndWithPartnerUserIdAndDateIn(eq(ME), eq(20L), eq(List.of(day2, day1)), any(LocalDateTime.class)))
                 .willReturn(List.of(
@@ -808,7 +818,7 @@ class PeopleServiceUnitTest {
 
         given(userRepository.findById(20L)).willReturn(Optional.of(user(20L, "철수")));
         given(intimacyReader.read(eq(ME), eq(20L), any(LocalDateTime.class))).willReturn(Intimacy.ZERO);
-        given(sceneRepository.findDistinctDatesFromCursorByUserIdAndWithPartnerUserId(eq(ME), eq(20L), isNull(), eq(21), any(LocalDateTime.class)))
+        given(sceneRepository.findDistinctDatesFromCursorByUserIdAndWithPartnerUserId(eq(ME), eq(20L), isNull(), eq(21), isNull(), any(LocalDate.class), any(LocalDateTime.class)))
                 .willReturn(List.of(day));
         given(sceneRepository.findAllByUserIdAndWithPartnerUserIdAndDateIn(eq(ME), eq(20L), eq(List.of(day)), any(LocalDateTime.class)))
                 .willReturn(List.of(scene(100L, ME, day, "v1", "카페", SceneType.ACTION, "{user_20}와 카페에 갔다", null, null)));
@@ -830,7 +840,7 @@ class PeopleServiceUnitTest {
 
         given(userRepository.findById(20L)).willReturn(Optional.of(user(20L, "철수")));
         given(intimacyReader.read(eq(ME), eq(20L), any(LocalDateTime.class))).willReturn(Intimacy.ZERO);
-        given(sceneRepository.findDistinctDatesFromCursorByUserIdAndWithPartnerUserId(eq(ME), eq(20L), isNull(), eq(21), any(LocalDateTime.class)))
+        given(sceneRepository.findDistinctDatesFromCursorByUserIdAndWithPartnerUserId(eq(ME), eq(20L), isNull(), eq(21), isNull(), any(LocalDate.class), any(LocalDateTime.class)))
                 .willReturn(List.of(day));
         given(sceneRepository.findAllByUserIdAndWithPartnerUserIdAndDateIn(eq(ME), eq(20L), eq(List.of(day)), any(LocalDateTime.class)))
                 .willReturn(List.of(move(201L, day.atTime(9, 0), day.atTime(9, 10), "집", "카페")));
@@ -1112,7 +1122,7 @@ class PeopleServiceUnitTest {
     @DisplayName("알게 된 사실은 최신 관계 기록의 partnerModel을 그대로 반환한다")
     void learnedFacts_returns_partner_model() {
         // given: 최신 관계 기록에 상대 모델이 저장된 상태
-        given(relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(eq(ME), eq(20L), any(LocalDateTime.class)))
+        given(relationshipRepository.findLatestInSeasonByUserIdAndPartnerUserId(eq(ME), eq(20L), isNull(), any(LocalDate.class), any(LocalDateTime.class)))
                 .willReturn(Optional.of(relationship(ME, 20L, LocalDate.of(2026, 7, 20), 50, "커피를 좋아한다")));
 
         // when: 알게 된 사실 조회
@@ -1307,7 +1317,7 @@ class PeopleServiceUnitTest {
         Season season = newInstance(Season.class);
         ReflectionTestUtils.setField(season, "id", seasonId);
         ReflectionTestUtils.setField(season, "startedAt", SEASON_STARTED_AT);
-        given(currentSeasonReader.read()).willReturn(season);
+        lenient().when(currentSeasonReader.read()).thenReturn(season);
     }
 
     private MatchRateProjection matchRate(Long comparedCount, Long matchedCount) {

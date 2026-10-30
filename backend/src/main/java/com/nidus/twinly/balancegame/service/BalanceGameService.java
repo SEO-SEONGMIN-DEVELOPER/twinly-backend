@@ -26,6 +26,7 @@ import com.nidus.twinly.relationship.entity.IntimacyBonus;
 import com.nidus.twinly.relationship.reader.IntimacyReader;
 import com.nidus.twinly.relationship.repository.IntimacyBonusRepository;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
+import com.nidus.twinly.season.domain.SeasonScope;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.UserRepository;
@@ -112,7 +113,7 @@ public class BalanceGameService {
 
         Optional<Long> partnerOptionId = optionIdOf(round, partnerUserId, userId);
         if (partnerOptionId.filter(command.optionId()::equals).isPresent()) {
-            intimacyBonusRepository.save(IntimacyBonus.create(userId, partnerUserId, MATCH_BONUS));
+            intimacyBonusRepository.save(IntimacyBonus.create(userId, partnerUserId, MATCH_BONUS, round.getSeasonId()));
             openChatRoomIfBestFriend(userId, partnerUserId);
         }
         appNotificationFeedWriter.writeBalanceGameAnswered(partnerUserId, userId, partnerOptionId.isPresent());
@@ -127,7 +128,8 @@ public class BalanceGameService {
             throw new BusinessException(ErrorCode.USER_NOT_FOUND);
         }
 
-        if (relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(userId, partnerUserId, now).isEmpty()
+        SeasonScope seasonScope = currentSeasonReader.scopeOf(now.toLocalDate());
+        if (relationshipRepository.findLatestInSeasonByUserIdAndPartnerUserId(userId, partnerUserId, seasonScope.seasonId(), seasonScope.startDate(), now).isEmpty()
                 || isBlockedEitherWay(userId, partnerUserId)) {
             throw new BusinessException(ErrorCode.RELATIONSHIP_NOT_FOUND);
         }

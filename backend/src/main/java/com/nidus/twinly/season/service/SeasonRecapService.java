@@ -45,6 +45,6 @@ public class SeasonRecapService {
     }
 
     private Instant notifyAt(Season current) {
-        return KstTimes.toInstant(KstTimes.toLocalDateTime(current.getCreatedAt()).toLocalDate().atTime(NOTIFY_TIME));
+        return KstTimes.toInstant(KstTimes.toLocalDateTime(current.getActivatedAt()).toLocalDate().atTime(NOTIFY_TIME));
     }
 }

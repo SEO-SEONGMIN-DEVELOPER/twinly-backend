@@ -8,6 +8,8 @@ import com.nidus.twinly.common.fcm.PushRecipientResolver;
 import com.nidus.twinly.common.logging.InfoLog;
 import com.nidus.twinly.notification.domain.NotificationType;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
+import com.nidus.twinly.season.domain.SeasonScope;
+import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.season.repository.SeasonRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +31,7 @@ public class BalanceGameOpenNotificationService {
     private static final int PUSH_BATCH_SIZE = 500;
 
     private final SeasonRepository seasonRepository;
+    private final CurrentSeasonReader currentSeasonReader;
     private final RelationshipRepository relationshipRepository;
     private final PushRecipientResolver pushRecipientResolver;
     private final PushMessageBuilder pushMessageBuilder;
@@ -40,7 +43,8 @@ public class BalanceGameOpenNotificationService {
             return;
         }
 
-        List<Long> userIds = relationshipRepository.findUserIdsWithVisiblePartner(kstNow);
+        SeasonScope seasonScope = currentSeasonReader.scopeOf(kstNow.toLocalDate());
+        List<Long> userIds = relationshipRepository.findUserIdsWithVisiblePartner(seasonScope.seasonId(), seasonScope.startDate(), kstNow);
         List<PushMessage> pushMessages = pushMessageBuilder.balanceGameOpened(
                 pushRecipientResolver.resolve(userIds, NotificationType.EVENT),
                 new BalanceGameOpenedPushContent(TITLE, BODY, Instant.now()));

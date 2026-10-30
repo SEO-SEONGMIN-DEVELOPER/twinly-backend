@@ -272,7 +272,7 @@ class SeasonRecapIntegrationTest extends AbstractIntegrationTest {
 
     private void saveSeason(long id, Instant startedAt, Instant endedAt, boolean active, Instant createdAt) {
         entityManager.createNativeQuery(
-                        "INSERT INTO seasons (id, started_at, ended_at, is_active, created_at) VALUES (?1, ?2, ?3, ?4, ?5)")
+                        "INSERT INTO seasons (id, started_at, ended_at, is_active, created_at, activated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?5)")
                 .setParameter(1, id)
                 .setParameter(2, Timestamp.from(startedAt))
                 .setParameter(3, Timestamp.from(endedAt))

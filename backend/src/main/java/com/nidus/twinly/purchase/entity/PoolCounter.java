@@ -16,7 +16,7 @@ public class PoolCounter {
 
     public static final int SINGLETON_ID = 1;
     public static final int FIRST_POOL_NUMBER = 13;
-    public static final int POOL_SIZE = 100;
+    public static final int POOL_SIZE = 80;
 
     @Id
     @Column(columnDefinition = "TINYINT")
@@ -24,8 +24,16 @@ public class PoolCounter {
 
     private int assignedCount;
 
+    public static int poolNumberAt(int index) {
+        return FIRST_POOL_NUMBER + index / POOL_SIZE;
+    }
+
     public int nextPoolNumber() {
-        return FIRST_POOL_NUMBER + assignedCount / POOL_SIZE;
+        return poolNumberAt(assignedCount);
+    }
+
+    public void resetTo(int assignedCount) {
+        this.assignedCount = assignedCount;
     }
 
     public void increase() {

@@ -60,6 +60,25 @@ class IntimacyBonusesUnitTest {
         assertThat(intimacy).isEqualTo(new Intimacy(40, 2));
     }
 
+    @Test
+    @DisplayName("행과 시즌 id 가 같은 게임 점수만 값과 게임 몫에 더한다")
+    void intimacyOf_counts_only_bonuses_of_same_season() {
+        // given: 시즌 2 행, 시즌 1·2·없음 점수
+        Relationship relationship = Relationship.create(1L, LocalDate.of(2026, 10, 1), "v1", 2L, 40, "model", null, AS_OF, 2L);
+        IntimacyBonus previous = IntimacyBonus.create(1L, 2L, 7, 1L);
+        IntimacyBonus current = IntimacyBonus.create(1L, 2L, 3, 2L);
+        IntimacyBonus unknown = IntimacyBonus.create(1L, 2L, 5);
+        ReflectionTestUtils.setField(previous, "createdAt", Instant.parse("2026-10-01T10:00:00Z"));
+        ReflectionTestUtils.setField(current, "createdAt", Instant.parse("2026-10-01T10:00:00Z"));
+        ReflectionTestUtils.setField(unknown, "createdAt", Instant.parse("2026-10-01T10:00:00Z"));
+
+        // when
+        Intimacy intimacy = new IntimacyBonuses(List.of(previous, current, unknown)).intimacyOf(relationship, Instant.parse("2026-10-02T00:00:00Z"));
+
+        // then: 시즌 2 점수 3 만 더해진다
+        assertThat(intimacy).isEqualTo(new Intimacy(43, 3));
+    }
+
     private static Relationship relationship(int intimacy, Instant intimacyAsOf) {
         return Relationship.create(1L, LocalDate.of(2026, 10, 1), "v1", 2L, intimacy, "model", null, intimacyAsOf);
     }

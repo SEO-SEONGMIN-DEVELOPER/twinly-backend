@@ -1,5 +1,7 @@
 package com.nidus.twinly.me.service;
 
+import com.nidus.twinly.season.domain.SeasonScope;
+import org.junit.jupiter.api.BeforeEach;
 import com.nidus.twinly.activity.domain.QuestionType;
 import com.nidus.twinly.activity.entity.Question;
 import com.nidus.twinly.activity.repository.QuestionRepository;
@@ -100,7 +102,8 @@ import com.nidus.twinly.notification.repository.NotificationSettingRepository;
 import com.nidus.twinly.report.domain.ReportReason;
 import com.nidus.twinly.report.domain.ReportStatus;
 import com.nidus.twinly.report.entity.Report;
-import com.nidus.twinly.people.repository.EncounterRepository;
+import com.nidus.twinly.relationship.repository.RelationshipRepository;
+import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.relationship.domain.Intimacy;
 import com.nidus.twinly.relationship.reader.IntimacyReader;
 import com.nidus.twinly.schoolverification.service.SchoolVerificationReader;
@@ -151,6 +154,7 @@ import com.nidus.twinly.me.dto.command.MeSchoolVerificationStudentIdSubmitComman
 import com.nidus.twinly.me.dto.command.MeSchoolVerificationStudentIdPresignCommand;
 import com.nidus.twinly.schoolverification.service.StudentIdSubmissionService;
 
+import static org.mockito.Mockito.lenient;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -230,7 +234,10 @@ class MeServiceUnitTest {
     PersonaElementRepository personaElementRepository;
 
     @Mock
-    EncounterRepository encounterRepository;
+    RelationshipRepository relationshipRepository;
+
+    @Mock
+    CurrentSeasonReader currentSeasonReader;
 
     @Mock
     IntimacyReader intimacyReader;
@@ -278,6 +285,12 @@ class MeServiceUnitTest {
     MeService meService;
 
     // ---------------------------------------------------------------- 프로필 사진
+
+    @BeforeEach
+    void setUpSeasonStartDate() {
+        lenient().when(currentSeasonReader.startDateOf(any())).thenReturn(LocalDate.EPOCH);
+        lenient().when(currentSeasonReader.scopeOf(any())).thenReturn(SeasonScope.UNBOUNDED);
+    }
 
     @Test
     @DisplayName("프로필 사진 presign은 PROFILE 타입으로 presign 서비스에 위임하고 결과를 그대로 변환한다")
@@ -1269,7 +1282,7 @@ class MeServiceUnitTest {
                 personaElement(PersonaDimension.INTEREST, "영화"),
                 personaElement(PersonaDimension.SUMMARY, "주말마다 북한산에 오르며 사진으로 순간을 남기는 사람")));
 
-        given(encounterRepository.findAllPartnerUserIdsByUserId(ME)).willReturn(List.of(10L, 20L));
+        given(relationshipRepository.findAllPartnerFirstUpdatesByUserId(eq(ME), any(), any())).willReturn(List.of(partnerUpdate(10L), partnerUpdate(20L)));
         given(intimacyReader.readAll(eq(ME), eq(List.of(10L, 20L)), any(LocalDateTime.class)))
                 .willReturn(Map.of(10L, new Intimacy(75, 0), 20L, new Intimacy(10, 0)));
 
@@ -1351,7 +1364,7 @@ class MeServiceUnitTest {
         User user = user();
         ReflectionTestUtils.setField(user, "id", ME);
         given(userRepository.findById(ME)).willReturn(Optional.of(user));
-        given(encounterRepository.findAllPartnerUserIdsByUserId(ME)).willReturn(List.of());
+        given(relationshipRepository.findAllPartnerFirstUpdatesByUserId(eq(ME), any(), any())).willReturn(List.of());
 
         // when: 내 프로필 조회
         MeProfileResult result = meService.profile(ME);
@@ -1387,7 +1400,7 @@ class MeServiceUnitTest {
         given(personaElementRepository.findAllByUserIdOrderByIdAsc(ME)).willReturn(List.of(
                 personaElement(PersonaDimension.INTEREST, "등산"),
                 personaElement(PersonaDimension.SUMMARY, "주말마다 북한산에 오르며 사진으로 순간을 남기는 사람")));
-        given(encounterRepository.findAllPartnerUserIdsByUserId(ME)).willReturn(List.of());
+        given(relationshipRepository.findAllPartnerFirstUpdatesByUserId(eq(ME), any(), any())).willReturn(List.of());
 
         // when: 내 프로필 v2 조회
         MeProfileV2Result result = meService.profileV2(ME);
@@ -2161,5 +2174,19 @@ class MeServiceUnitTest {
 
         // then: 위임
         then(studentIdSubmissionService).should().resubmit(1L, "student-id/upload/user-1/a");
+    }
+
+    private RelationshipRepository.PartnerFirstUpdateProjection partnerUpdate(Long partnerUserId) {
+        return new RelationshipRepository.PartnerFirstUpdateProjection() {
+            @Override
+            public Long getPartnerUserId() {
+                return partnerUserId;
+            }
+
+            @Override
+            public LocalDateTime getFirstUpdateTime() {
+                return LocalDateTime.of(2026, 10, 1, 12, 0);
+            }
+        };
     }
 }

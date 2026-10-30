@@ -31,6 +31,7 @@ public interface SceneRepository extends JpaRepository<Scene, Long> {
             WHERE s.user_id = :userId
               AND sp.user_id = :partnerUserId
               AND s.ends_at <= :now
+              AND (s.season_id = :seasonId OR (s.season_id IS NULL AND s.date >= :seasonStartDate))
               AND (:cursor IS NULL OR s.date < :cursor)
             ORDER BY s.date DESC
             LIMIT :limit
@@ -39,6 +40,8 @@ public interface SceneRepository extends JpaRepository<Scene, Long> {
                                                                             @Param("partnerUserId") Long partnerUserId,
                                                                             @Param("cursor") LocalDate cursor,
                                                                             @Param("limit") Integer limit,
+                                                                            @Param("seasonId") Long seasonId,
+                                                                            @Param("seasonStartDate") LocalDate seasonStartDate,
                                                                             @Param("now") LocalDateTime now);
 
     @Query(value = """
@@ -82,6 +85,14 @@ public interface SceneRepository extends JpaRepository<Scene, Long> {
     List<SceneRecapProjection> findAllRecapByUserIdAndOverlapping(@Param("userId") Long userId,
                                                                   @Param("from") LocalDateTime from,
                                                                   @Param("to") LocalDateTime to);
+
+    @Modifying
+    @Query("UPDATE Scene s SET s.seasonId = :seasonId WHERE s.seasonId IS NULL AND s.date >= :from AND s.date < :to")
+    void fillSeasonId(@Param("seasonId") Long seasonId, @Param("from") LocalDate from, @Param("to") LocalDate to);
+
+    @Modifying
+    @Query("UPDATE Scene s SET s.seasonId = NULL WHERE s.seasonId = :seasonId")
+    void clearSeasonId(@Param("seasonId") Long seasonId);
 
     @Modifying
     @Query("DELETE FROM Scene s WHERE s.userId IN :userIds")

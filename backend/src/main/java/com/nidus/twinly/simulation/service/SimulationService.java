@@ -31,9 +31,12 @@ import com.nidus.twinly.legal.reader.ConsentReader;
 import com.nidus.twinly.purchase.service.PurchaseService;
 import com.nidus.twinly.relationship.domain.RelationshipType;
 import com.nidus.twinly.relationship.entity.Relationship;
+import com.nidus.twinly.purchase.writer.PurchaseWriter;
 import com.nidus.twinly.relationship.reader.IntimacyReader;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
 import com.nidus.twinly.simulation.dto.command.*;
+import com.nidus.twinly.season.domain.SeasonScope;
+import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.simulation.dto.result.SimulationPersonaHesitationAnswersItemResult;
 import com.nidus.twinly.simulation.dto.result.SimulationPersonaIntimacyResult;
 import com.nidus.twinly.simulation.dto.result.SimulationPersonaResult;
@@ -99,6 +102,8 @@ public class SimulationService {
     private final PurchaseService purchaseService;
     private final ObjectMapper objectMapper;
     private final IntimacyReader intimacyReader;
+    private final PurchaseWriter purchaseWriter;
+    private final CurrentSeasonReader currentSeasonReader;
 
     public void simulations(Long userId, SimulationsCommand command) {
         if (!userId.equals(command.userId())) {
@@ -118,11 +123,12 @@ public class SimulationService {
 
         deletePrevious(userId, date, previousScenes);
 
-        saveScenes(userId, date, version, command.scenes());
-        Map<Long, LocalDateTime> firstMeetingStartByPartnerUserId = firstMeetingStartByPartnerUserId(userId, date, command.scenes());
+        SeasonScope seasonScope = currentSeasonReader.scopeOf(date);
+        saveScenes(userId, date, version, seasonScope.seasonId(), command.scenes());
+        Map<Long, LocalDateTime> firstMeetingStartByPartnerUserId = firstMeetingStartByPartnerUserId(userId, date, seasonScope, command.scenes());
         scheduleFirstMeetings(userId, date, firstMeetingStartByPartnerUserId);
         saveQuestions(userId, date, version, command.questions());
-        saveRelationships(userId, date, version, command.relationships(), firstMeetingStartByPartnerUserId, command.intimacyAsOf());
+        saveRelationships(userId, date, seasonScope, version, command.relationships(), firstMeetingStartByPartnerUserId, command.intimacyAsOf());
         saveHomeObjects(userId, date, command.homeObjects());
         saveRoom(userId, date, command.room());
     }
@@ -184,10 +190,13 @@ public class SimulationService {
         appNotificationScheduleRepository.deleteAllUnsentByUserIdAndSimulationDate(userId, date);
     }
 
-    private void saveScenes(Long userId, LocalDate date, String version, List<SimulationsSceneCommand> commands) {
-        List<Scene> scenes = sceneRepository.saveAll(commands.stream()
+    private void saveScenes(Long userId, LocalDate date, String version, Long seasonId, List<SimulationsSceneCommand> commands) {
+        List<Scene> newScenes = commands.stream()
                 .map(command -> toScene(userId, date, version, command))
-                .toList());
+                .toList();
+        newScenes.forEach(scene -> scene.assignSeason(seasonId));
+
+        List<Scene> scenes = sceneRepository.saveAll(newScenes);
 
         scenePartnerRepository.saveAll(IntStream.range(0, scenes.size())
                 .boxed()
@@ -306,7 +315,7 @@ public class SimulationService {
         return distinct(with);
     }
 
-    private Map<Long, LocalDateTime> firstMeetingStartByPartnerUserId(Long userId, LocalDate date, List<SimulationsSceneCommand> commands) {
+    private Map<Long, LocalDateTime> firstMeetingStartByPartnerUserId(Long userId, LocalDate date, SeasonScope seasonScope, List<SimulationsSceneCommand> commands) {
         Map<Long, LocalDateTime> firstDialogueStartByPartnerUserId = firstDialogueStartByPartnerUserId(userId, commands);
 
         if (firstDialogueStartByPartnerUserId.isEmpty()) {
@@ -314,7 +323,7 @@ public class SimulationService {
         }
 
         List<Long> alreadyMetPartnerUserIds = scenePartnerRepository.findPartnerUserIdsWithDialogueBeforeDate(
-                userId, List.copyOf(firstDialogueStartByPartnerUserId.keySet()), date);
+                userId, List.copyOf(firstDialogueStartByPartnerUserId.keySet()), date, seasonScope.seasonId(), seasonScope.startDate());
 
         firstDialogueStartByPartnerUserId.keySet().removeAll(alreadyMetPartnerUserIds);
         return firstDialogueStartByPartnerUserId;
@@ -352,17 +361,17 @@ public class SimulationService {
                 .toList());
     }
 
-    private void saveRelationships(Long userId, LocalDate date, String version, List<SimulationsRelationshipCommand> commands,
+    private void saveRelationships(Long userId, LocalDate date, SeasonScope seasonScope, String version, List<SimulationsRelationshipCommand> commands,
                                    Map<Long, LocalDateTime> firstMeetingStartByPartnerUserId, Instant intimacyAsOf) {
-        Map<Long, LocalDateTime> becameFriendTimeByPartnerUserId = becameFriendTimeByPartnerUserId(userId, date, commands);
+        Map<Long, LocalDateTime> becameFriendTimeByPartnerUserId = becameFriendTimeByPartnerUserId(userId, date, seasonScope, commands);
 
         List<Relationship> aiRelationships = commands.stream()
                 .map(command -> Relationship.create(userId, date, version, command.partnerId(), command.rapport(),
-                        command.partnerModel(), command.updateTime(), intimacyAsOf))
+                        command.partnerModel(), command.updateTime(), intimacyAsOf, seasonScope.seasonId()))
                 .toList();
         List<Relationship> relationships = Stream.concat(
                         aiRelationships.stream(),
-                        firstMeetingRelationships(userId, date, version, commands, firstMeetingStartByPartnerUserId, intimacyAsOf).stream())
+                        firstMeetingRelationships(userId, date, seasonScope, version, commands, firstMeetingStartByPartnerUserId, intimacyAsOf).stream())
                 .toList();
         relationshipRepository.saveAll(relationships);
 
@@ -381,7 +390,7 @@ public class SimulationService {
                 relationship.getUpdateTime()));
     }
 
-    private List<Relationship> firstMeetingRelationships(Long userId, LocalDate date, String version,
+    private List<Relationship> firstMeetingRelationships(Long userId, LocalDate date, SeasonScope seasonScope, String version,
                                                          List<SimulationsRelationshipCommand> commands,
                                                          Map<Long, LocalDateTime> firstMeetingStartByPartnerUserId,
                                                          Instant intimacyAsOf) {
@@ -392,22 +401,22 @@ public class SimulationService {
         return firstMeetingStartByPartnerUserId.entrySet().stream()
                 .filter(entry -> !earliestUpdateTimeByPartnerUserId.containsKey(entry.getKey())
                         || earliestUpdateTimeByPartnerUserId.get(entry.getKey()).isAfter(entry.getValue()))
-                .filter(entry -> relationshipRepository.findLatestByUserIdAndPartnerUserIdBeforeDate(userId, entry.getKey(), date).isEmpty())
+                .filter(entry -> relationshipRepository.findLatestByUserIdAndPartnerUserIdBeforeDate(userId, entry.getKey(), date, seasonScope.seasonId(), seasonScope.startDate()).isEmpty())
                 .map(entry -> Relationship.create(userId, date, version, entry.getKey(), FIRST_MEETING_INTIMACY,
-                        FIRST_MEETING_PARTNER_MODEL, entry.getValue(), intimacyAsOf))
+                        FIRST_MEETING_PARTNER_MODEL, entry.getValue(), intimacyAsOf, seasonScope.seasonId()))
                 .toList();
     }
 
-    private Map<Long, LocalDateTime> becameFriendTimeByPartnerUserId(Long userId, LocalDate date, List<SimulationsRelationshipCommand> commands) {
+    private Map<Long, LocalDateTime> becameFriendTimeByPartnerUserId(Long userId, LocalDate date, SeasonScope seasonScope, List<SimulationsRelationshipCommand> commands) {
         return commands.stream()
-                .filter(command -> becameFriend(userId, date, command))
+                .filter(command -> becameFriend(userId, date, seasonScope, command))
                 .collect(Collectors.toMap(SimulationsRelationshipCommand::partnerId,
                         SimulationsRelationshipCommand::updateTime, this::earlier, LinkedHashMap::new));
     }
 
-    private boolean becameFriend(Long userId, LocalDate date, SimulationsRelationshipCommand command) {
+    private boolean becameFriend(Long userId, LocalDate date, SeasonScope seasonScope, SimulationsRelationshipCommand command) {
         RelationshipType previous = relationshipRepository
-                .findLatestByUserIdAndPartnerUserIdBeforeDate(userId, command.partnerId(), date)
+                .findLatestByUserIdAndPartnerUserIdBeforeDate(userId, command.partnerId(), date, seasonScope.seasonId(), seasonScope.startDate())
                 .map(relationship -> RelationshipType.fromIntimacy(relationship.getIntimacy()))
                 .orElse(RelationshipType.ACQUAINTANCE);
 
@@ -462,6 +471,8 @@ public class SimulationService {
             throw new BusinessException(ErrorCode.SIMULATION_CONSENT_REQUIRED);
         }
 
+        user = withPool(user);
+
         Map<PersonaDimension, List<String>> personaElements = personaElementRepository.findAllByUserIdOrderByIdAsc(userId).stream()
                 .collect(Collectors.groupingBy(
                         PersonaElement::getDimension,
@@ -471,7 +482,7 @@ public class SimulationService {
 
         LocalDateTime intimacyAsOf = KstTimes.now().minus(INTIMACY_AS_OF_MARGIN).truncatedTo(ChronoUnit.SECONDS);
         List<SimulationPersonaIntimacyResult> intimacies = intimacyReader
-                .readForSimulation(userId, date, KstTimes.toInstant(intimacyAsOf)).entrySet().stream()
+                .readForSimulation(userId, date, currentSeasonReader.scopeOf(date), KstTimes.toInstant(intimacyAsOf)).entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
                 .map(entry -> new SimulationPersonaIntimacyResult(entry.getKey(), entry.getValue()))
                 .toList();
@@ -497,6 +508,17 @@ public class SimulationService {
                 intimacies,
                 hesitationAnswers
         );
+    }
+
+    private User withPool(User user) {
+        if (user.getPoolNumber() != null) {
+            return user;
+        }
+
+        purchaseWriter.assignPool(user.getId());
+
+        return userRepository.findById(user.getId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
     }
 
     private LocalDate birthDate(User user) {

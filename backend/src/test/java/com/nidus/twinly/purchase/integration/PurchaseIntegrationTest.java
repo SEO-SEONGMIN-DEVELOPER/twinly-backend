@@ -174,6 +174,7 @@ class PurchaseIntegrationTest extends AbstractIntegrationTest {
         seasonRepository.save(Season.create(now.minus(Duration.ofDays(30)), now.plus(Duration.ofDays(30))));
         User first = saveUser();
         User second = saveUser();
+        int assignedBefore = poolCounterRepository.findById(PoolCounter.SINGLETON_ID).orElseThrow().getAssignedCount();
         given(revenueCatClient.entitlements(anyString()))
                 .willReturn(List.of(new RevenueCatEntitlement(
                         EntitlementReader.SIMULATION_ACCESS, now.plus(Duration.ofDays(30)))));
@@ -195,7 +196,7 @@ class PurchaseIntegrationTest extends AbstractIntegrationTest {
         entityManager.clear();
         assertThat(userRepository.findById(first.getId()).orElseThrow().getPoolNumber()).isEqualTo(13);
         assertThat(userRepository.findById(second.getId()).orElseThrow().getPoolNumber()).isEqualTo(13);
-        assertThat(poolCounterRepository.findById(PoolCounter.SINGLETON_ID).orElseThrow().getAssignedCount()).isEqualTo(2);
+        assertThat(poolCounterRepository.findById(PoolCounter.SINGLETON_ID).orElseThrow().getAssignedCount()).isEqualTo(assignedBefore + 2);
     }
 
     @Test
