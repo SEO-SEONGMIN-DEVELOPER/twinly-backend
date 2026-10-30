@@ -1,5 +1,6 @@
 package com.nidus.twinly.main.service;
 
+import com.nidus.twinly.app.service.AppFeatureFlagService;
 import com.nidus.twinly.chat.repository.ChatRepository;
 import com.nidus.twinly.main.dto.result.MainTabLatestRecapResult;
 import com.nidus.twinly.main.dto.result.MainTabResult;
@@ -24,6 +25,7 @@ public class MainService {
     private final ChatRepository chatRepository;
     private final AppNotificationFeedRepository appNotificationFeedRepository;
     private final SeasonRecapRepository seasonRecapRepository;
+    private final AppFeatureFlagService appFeatureFlagService;
 
     public MainTabResult mainTab(Long userId) {
         Season season = currentSeasonReader.read();
@@ -41,7 +43,8 @@ public class MainService {
                 appNotificationFeedRepository.countByUserIdAndReadAtIsNull(userId),
                 seasonRecapRepository.findServingByUserId(userId, season.getId())
                         .map(recap -> new MainTabLatestRecapResult(recap.getSeasonId(), recap.getCreatedAt()))
-                        .orElse(null)
+                        .orElse(null),
+                appFeatureFlagService.dotWorldEnabled()
         );
     }
 }

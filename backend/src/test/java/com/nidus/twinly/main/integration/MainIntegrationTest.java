@@ -59,7 +59,8 @@ class MainIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.season.progress").value("50%"))
                 .andExpect(jsonPath("$.season.endedAt").value(endedAt.atOffset(ZoneOffset.ofHours(9)).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)))
                 .andExpect(jsonPath("$.unreadChatRoomCount").value(0))
-                .andExpect(jsonPath("$.unreadNotificationCount").value(1));
+                .andExpect(jsonPath("$.unreadNotificationCount").value(1))
+                .andExpect(jsonPath("$.dotWorldEnabled").value(false));
 
         // then: 응답의 미읽음 알림 개수가 실제 DB 집계와 일치한다 (읽은 알림은 제외됨)
         assertThat(appNotificationFeedRepository.countByUserIdAndReadAtIsNull(me.getId())).isEqualTo(1);

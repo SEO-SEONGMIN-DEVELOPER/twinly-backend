@@ -8,7 +8,8 @@ public record MainTabResponse(
         Integer unreadChatRoomCount,
         Integer unreadNotificationCount,
         @Schema(nullable = true)
-        MainTabLatestRecapResponse latestRecap
+        MainTabLatestRecapResponse latestRecap,
+        boolean dotWorldEnabled
 ) {
 
     public static MainTabResponse from(MainTabResult result) {
@@ -16,7 +17,8 @@ public record MainTabResponse(
                 MainTabSeasonResponse.from(result.season()),
                 result.unreadChatRoomCount(),
                 result.unreadNotificationCount(),
-                result.latestRecap() != null ? MainTabLatestRecapResponse.from(result.latestRecap()) : null
+                result.latestRecap() != null ? MainTabLatestRecapResponse.from(result.latestRecap()) : null,
+                result.dotWorldEnabled()
         );
     }
 }
