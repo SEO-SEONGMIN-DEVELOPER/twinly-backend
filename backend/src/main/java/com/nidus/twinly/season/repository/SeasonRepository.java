@@ -19,6 +19,9 @@ public interface SeasonRepository extends JpaRepository<Season, Long> {
 
     Optional<Season> findFirstByStartedAtBeforeOrderByStartedAtDesc(Instant startedAt);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<Season> findWithLockById(Long id);
+
     boolean existsByIsActiveFalseAndActivatedAtIsNull();
 
     Optional<Season> findFirstByIsActiveFalseAndActivatedAtIsNullOrderByStartedAtAsc();

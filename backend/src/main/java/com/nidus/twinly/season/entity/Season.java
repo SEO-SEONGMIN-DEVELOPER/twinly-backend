@@ -37,6 +37,8 @@ public class Season {
 
     private Instant activatedAt;
 
+    private Instant poolsReassignedAt;
+
     public static Season create(Instant startedAt, Instant endedAt) {
         Season season = new Season();
 
@@ -63,6 +65,10 @@ public class Season {
     public void activate(Instant activatedAt) {
         this.isActive = true;
         this.activatedAt = activatedAt;
+    }
+
+    public void markPoolsReassigned(Instant reassignedAt) {
+        this.poolsReassignedAt = reassignedAt;
     }
 
     public LocalDate startDate() {

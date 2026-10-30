@@ -91,8 +91,8 @@ class SeasonAdminControllerUnitTest {
     @DisplayName("풀 재배정 성공 시 200과 풀별 인원을 반환한다")
     void reassignPools_success() throws Exception {
         // given: 서비스가 재배정 결과를 반환
-        given(seasonService.reassignPools()).willReturn(SeasonPoolReassignResult.from(List.of(
-                new PoolAssignment(13, 80, 42, 38), new PoolAssignment(14, 5, 3, 2))));
+        given(seasonService.reassignPools()).willReturn(SeasonPoolReassignResult.of(List.of(
+                new PoolAssignment(13, 80, 42, 38), new PoolAssignment(14, 5, 3, 2)), false));
 
         // when: 관리자 토큰으로 재배정 요청
         var result = mockMvc.perform(post("/admin/season/pools/reassign").header(ADMIN_TOKEN_HEADER, ADMIN_TOKEN));
@@ -100,6 +100,7 @@ class SeasonAdminControllerUnitTest {
         // then: 전체 인원과 풀별 성비가 내려간다
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.assignedCount").value(85))
+                .andExpect(jsonPath("$.alreadyReassigned").value(false))
                 .andExpect(jsonPath("$.pools[0].poolNumber").value(13))
                 .andExpect(jsonPath("$.pools[0].maleCount").value(42))
                 .andExpect(jsonPath("$.pools[1].memberCount").value(5));
