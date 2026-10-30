@@ -28,6 +28,7 @@ import com.nidus.twinly.common.photo.PhotoType;
 import com.nidus.twinly.user.entity.Photo;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.PhotoRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import jakarta.persistence.EntityManager;
@@ -93,6 +94,13 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     SeasonRepository seasonRepository;
 
+    private Season season;
+
+    @BeforeEach
+    void setUpSeason() {
+        season = seasonRepository.save(Season.create(Instant.parse("2026-01-01T00:00:00Z"), Instant.parse("2027-01-01T00:00:00Z")));
+    }
+
     @Test
     @DisplayName("사람 목록 조회: 실제 관계 데이터를 파트너 id 오름차순으로 관통 조회해 친밀도·관계 타입을 내려준다")
     void people_success_end_to_end() throws Exception {
@@ -124,6 +132,29 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.threshold.bestFriend").value(70))
                 .andExpect(jsonPath("$.page.hasMore").value(false))
                 .andExpect(jsonPath("$.page.nextCursor").isEmpty());
+    }
+
+    @Test
+    @DisplayName("사람 목록 조회: 현재 시즌 시작 전에만 갱신된 관계는 빠지고, 시즌 안에서 갱신된 관계만 나온다")
+    void people_shows_only_relationships_updated_in_current_season() throws Exception {
+        // given: 현재 시즌이 KST 07-20 00:00 에 시작했고, partner1 은 이전 시즌에만, partner2 는 이전·현재 시즌 모두 기록이 있음
+        seasonRepository.save(Season.create(KstTimes.toInstant(DAY_2.atStartOfDay()), Instant.parse("2027-01-01T00:00:00Z")));
+        User me = saveUser();
+        User partner1 = saveUser();
+        User partner2 = saveUser();
+        saveRelationship(me.getId(), partner1.getId(), DAY_1, 40, "{}");
+        saveRelationship(me.getId(), partner2.getId(), DAY_1, 30, "{}");
+        saveRelationship(me.getId(), partner2.getId(), DAY_2, 50, "{}");
+
+        // when: 사람 목록 조회
+        var result = mockMvc.perform(get("/api/v1/people")
+                .header("Authorization", bearer(me.getId())));
+
+        // then: 현재 시즌에 갱신된 partner2 만 최신 친밀도로 나온다
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.people.length()").value(1))
+                .andExpect(jsonPath("$.people[0].userId").value(partner2.getId().toString()))
+                .andExpect(jsonPath("$.people[0].intimacy").value(50));
     }
 
     @Test
@@ -179,7 +210,7 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
 
         Instant currentStartsAt = BalanceGameSchedule.roundStartOf(KstTimes.now());
         Instant previousStartsAt = BalanceGameSchedule.previousRoundStartOf(KstTimes.now());
-        Long seasonId = seasonRepository.save(Season.create(Instant.now().minusSeconds(86400), Instant.now().plusSeconds(86400))).getId();
+        Long seasonId = season.getId();
         balanceGameRoundRepository.upsert(currentStartsAt, 1L, seasonId);
         balanceGameRoundRepository.upsert(previousStartsAt, 1L, seasonId);
         Long currentRoundId = balanceGameRoundRepository.findByStartsAt(currentStartsAt).orElseThrow().getId();
@@ -375,6 +406,7 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
             TestTransaction.start();
             twinViewRepository.deleteAll();
             userRepository.deleteAll(List.of(me, partner));
+            seasonRepository.delete(season);
             TestTransaction.flagForCommit();
             TestTransaction.end();
         }

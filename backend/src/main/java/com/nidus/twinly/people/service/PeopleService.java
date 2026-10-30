@@ -113,8 +113,9 @@ public class PeopleService {
     public PeopleResult people(Long userId, Long cursor, Integer limit) {
         int effectiveLimit = (limit != null && limit > 0) ? limit : DEFAULT_PEOPLE_LIMIT;
         LocalDateTime now = KstTimes.now();
+        LocalDateTime seasonStartedAt = KstTimes.toLocalDateTime(currentSeasonReader.read().getStartedAt());
 
-        List<Long> fetched = relationshipRepository.findPartnerUserIdsByUserId(userId, cursor, effectiveLimit + 1, now);
+        List<Long> fetched = relationshipRepository.findPartnerUserIdsByUserId(userId, cursor, effectiveLimit + 1, seasonStartedAt, now);
 
         boolean hasMore = fetched.size() > effectiveLimit;
         List<Long> partnerUserIds = hasMore ? fetched.subList(0, effectiveLimit) : fetched;

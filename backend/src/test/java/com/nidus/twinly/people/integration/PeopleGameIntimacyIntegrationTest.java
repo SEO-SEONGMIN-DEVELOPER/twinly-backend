@@ -9,6 +9,8 @@ import com.nidus.twinly.relationship.entity.IntimacyBonus;
 import com.nidus.twinly.relationship.entity.Relationship;
 import com.nidus.twinly.relationship.repository.IntimacyBonusRepository;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
+import com.nidus.twinly.season.entity.Season;
+import com.nidus.twinly.season.repository.SeasonRepository;
 import com.nidus.twinly.support.AbstractIntegrationTest;
 import com.nidus.twinly.user.entity.User;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,6 +40,9 @@ class PeopleGameIntimacyIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     ScenePartnerRepository scenePartnerRepository;
 
+    @Autowired
+    SeasonRepository seasonRepository;
+
     private LocalDate twoDaysAgo;
     private LocalDate yesterday;
     private User me;
@@ -50,6 +55,7 @@ class PeopleGameIntimacyIntegrationTest extends AbstractIntegrationTest {
         LocalDate today = KstTimes.today();
         twoDaysAgo = today.minusDays(2);
         yesterday = today.minusDays(1);
+        seasonRepository.save(Season.create(KstTimes.toInstant(today.minusDays(30).atStartOfDay()), KstTimes.toInstant(today.plusDays(30).atStartOfDay())));
         me = saveUser();
         partner = saveUser();
         saveRelationship(twoDaysAgo, 30);
