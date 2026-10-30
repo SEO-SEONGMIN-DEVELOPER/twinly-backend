@@ -60,7 +60,8 @@ class MainControllerUnitTest {
                 new MainTabSeasonResult(7L, Instant.parse("2026-07-26T03:00:00Z"), "42%", Instant.parse("2026-09-30T14:59:59Z")),
                 3,
                 5,
-                null
+                null,
+                true
         ));
 
         // when: 인증 상태로 메인 탭 조회 API 호출
@@ -75,7 +76,8 @@ class MainControllerUnitTest {
                 .andExpect(jsonPath("$.season.endedAt").isString())
                 .andExpect(jsonPath("$.unreadChatRoomCount").value(3))
                 .andExpect(jsonPath("$.unreadNotificationCount").value(5))
-                .andExpect(jsonPath("$.latestRecap").value(nullValue()));
+                .andExpect(jsonPath("$.latestRecap").value(nullValue()))
+                .andExpect(jsonPath("$.dotWorldEnabled").value(true));
 
         // then: 인증 유저 id로 서비스에 위임
         then(mainService).should().mainTab(1L);
@@ -89,7 +91,8 @@ class MainControllerUnitTest {
                 new MainTabSeasonResult(8L, Instant.parse("2026-11-01T01:00:02Z"), "1%", Instant.parse("2026-11-30T14:59:59Z")),
                 0,
                 1,
-                new MainTabLatestRecapResult(7L, Instant.parse("2026-10-31T15:03:12Z"))
+                new MainTabLatestRecapResult(7L, Instant.parse("2026-10-31T15:03:12Z")),
+                false
         ));
 
         // when: 인증 상태로 메인 탭 조회 API 호출
@@ -99,7 +102,8 @@ class MainControllerUnitTest {
         // then: latestRecap.seasonId는 문자열, createdAt은 date-time 문자열
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.latestRecap.seasonId").value("7"))
-                .andExpect(jsonPath("$.latestRecap.createdAt").isString());
+                .andExpect(jsonPath("$.latestRecap.createdAt").isString())
+                .andExpect(jsonPath("$.dotWorldEnabled").value(false));
     }
 
     @Test

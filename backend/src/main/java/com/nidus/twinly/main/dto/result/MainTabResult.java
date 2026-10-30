@@ -4,6 +4,7 @@ public record MainTabResult(
         MainTabSeasonResult season,
         Integer unreadChatRoomCount,
         Integer unreadNotificationCount,
-        MainTabLatestRecapResult latestRecap
+        MainTabLatestRecapResult latestRecap,
+        boolean dotWorldEnabled
 ) {
 }

@@ -1,5 +1,6 @@
 package com.nidus.twinly.main.service;
 
+import com.nidus.twinly.app.service.AppFeatureFlagService;
 import com.nidus.twinly.chat.repository.ChatRepository;
 import com.nidus.twinly.main.dto.result.MainTabResult;
 import com.nidus.twinly.notification.repository.AppNotificationFeedRepository;
@@ -43,6 +44,9 @@ class MainServiceUnitTest {
     @Mock
     SeasonRecapRepository seasonRecapRepository;
 
+    @Mock
+    AppFeatureFlagService appFeatureFlagService;
+
     @InjectMocks
     MainService mainService;
 
@@ -71,6 +75,22 @@ class MainServiceUnitTest {
         // then: 미읽음 집계는 인증 유저 id로 각 리포지토리에 위임한다
         then(chatRepository).should().countUnreadRoomsByUserId(USER_ID);
         then(appNotificationFeedRepository).should().countByUserIdAndReadAtIsNull(USER_ID);
+    }
+
+    @Test
+    @DisplayName("도트 세계 스위치 값을 그대로 결과에 담는다")
+    void mainTab_returns_dot_world_flag() {
+        // given: 도트 세계 스위치가 켜진 상태
+        Instant now = Instant.now();
+        given(currentSeasonReader.read()).willReturn(
+                season(CURRENT_SEASON_ID, now.minus(Duration.ofDays(1)), now.plus(Duration.ofDays(1))));
+        given(appFeatureFlagService.dotWorldEnabled()).willReturn(true);
+
+        // when: 메인 탭 조회
+        MainTabResult result = mainService.mainTab(USER_ID);
+
+        // then: 켜짐으로 담긴다
+        assertThat(result.dotWorldEnabled()).isTrue();
     }
 
     @Test
