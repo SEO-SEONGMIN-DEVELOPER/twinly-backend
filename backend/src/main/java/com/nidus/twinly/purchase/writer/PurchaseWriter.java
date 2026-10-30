@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
+import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -94,6 +95,16 @@ public class PurchaseWriter {
         }
 
         counter.increase();
+    }
+
+    public List<PoolAssignment> currentPoolAssignments() {
+        Map<Integer, List<Gender>> gendersByPoolNumber = new TreeMap<>();
+        userRepository.findPoolMembersOfNonSeeds().forEach(member -> gendersByPoolNumber
+                .computeIfAbsent(member.getPoolNumber(), key -> new ArrayList<>()).add(member.getGender()));
+
+        return gendersByPoolNumber.entrySet().stream()
+                .map(entry -> PoolAssignment.of(entry.getKey(), entry.getValue()))
+                .toList();
     }
 
     @Transactional

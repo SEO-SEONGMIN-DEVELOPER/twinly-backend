@@ -6,10 +6,11 @@ import java.util.List;
 
 public record SeasonPoolReassignResult(
         int assignedCount,
+        boolean alreadyReassigned,
         List<PoolAssignment> pools
 ) {
 
-    public static SeasonPoolReassignResult from(List<PoolAssignment> pools) {
-        return new SeasonPoolReassignResult(pools.stream().mapToInt(PoolAssignment::memberCount).sum(), pools);
+    public static SeasonPoolReassignResult of(List<PoolAssignment> pools, boolean alreadyReassigned) {
+        return new SeasonPoolReassignResult(pools.stream().mapToInt(PoolAssignment::memberCount).sum(), alreadyReassigned, pools);
     }
 }

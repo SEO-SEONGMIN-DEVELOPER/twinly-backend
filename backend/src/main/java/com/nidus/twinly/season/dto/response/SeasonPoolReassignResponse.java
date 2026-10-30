@@ -7,10 +7,11 @@ import java.util.List;
 
 public record SeasonPoolReassignResponse(
         int assignedCount,
+        boolean alreadyReassigned,
         List<PoolAssignment> pools
 ) {
 
     public static SeasonPoolReassignResponse from(SeasonPoolReassignResult result) {
-        return new SeasonPoolReassignResponse(result.assignedCount(), result.pools());
+        return new SeasonPoolReassignResponse(result.assignedCount(), result.alreadyReassigned(), result.pools());
     }
 }

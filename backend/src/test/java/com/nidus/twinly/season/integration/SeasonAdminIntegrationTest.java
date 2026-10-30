@@ -312,7 +312,8 @@ class SeasonAdminIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("풀 재배정: 자동 참가 대상만 13번 풀부터 배정하고 나머지는 비우며 시드와 카운터를 올바르게 처리한다")
     void reassignPools_end_to_end() throws Exception {
-        // given: 대상 남 2명·여 1명, 결제만 한 유저, 시드 유저
+        // given: 활성 시즌과 대상 남 2명·여 1명, 결제만 한 유저, 시드 유저
+        seasonRepository.save(Season.create(Instant.parse("2026-01-01T00:00:00Z"), Instant.parse("2027-01-01T00:00:00Z")));
         User male1 = eligibleUser(Gender.MALE, 99);
         User male2 = eligibleUser(Gender.MALE, 99);
         User female = eligibleUser(Gender.FEMALE, 99);
@@ -342,6 +343,88 @@ class SeasonAdminIntegrationTest extends AbstractIntegrationTest {
         assertThat(userRepository.findById(paidWithoutConsent.getId()).orElseThrow().getPoolNumber()).isNull();
         assertThat(userRepository.findById(seed.getId()).orElseThrow().getPoolNumber()).isEqualTo(3);
         assertThat(poolCounterRepository.findById(PoolCounter.SINGLETON_ID).orElseThrow().getAssignedCount()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("풀 재배정은 시즌당 한 번만 실행되고, 내부·관리자 어느 쪽으로 다시 호출해도 다시 섞지 않는다")
+    void reassignPools_runs_once_per_season() throws Exception {
+        // given: 활성 시즌과 예약 시즌, 대상 유저
+        LocalDate boundary = KstTimes.today().plusDays(1);
+        Instant startedAt = KstTimes.toInstant(boundary.atStartOfDay());
+        seasonRepository.save(Season.create(Instant.parse("2026-01-01T00:00:00Z"), startedAt));
+        Season reserved = seasonRepository.save(Season.reserve(startedAt, KstTimes.toInstant(boundary.plusMonths(1).atStartOfDay())));
+        User first = eligibleUser(Gender.MALE, 99);
+        entityManager.flush();
+
+        // when: 내부 경로로 첫 호출
+        mockMvc.perform(post(internalReassignPath(reserved.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.alreadyReassigned").value(false))
+                .andExpect(jsonPath("$.assignedCount").value(1));
+        entityManager.flush();
+        entityManager.clear();
+        assertThat(userRepository.findById(first.getId()).orElseThrow().getPoolNumber()).isEqualTo(13);
+
+        // given: 그 뒤 새 대상이 생기고 카운터도 움직임
+        User second = eligibleUser(Gender.FEMALE, 77);
+        entityManager.flush();
+        entityManager.clear();
+
+        // when: 내부 재시도와 관리자 호출
+        mockMvc.perform(post(internalReassignPath(reserved.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.alreadyReassigned").value(true));
+        mockMvc.perform(post("/admin/season/pools/reassign").header("X-Admin-Token", ADMIN_TOKEN))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.alreadyReassigned").value(true));
+        entityManager.flush();
+        entityManager.clear();
+
+        // then: 다시 섞이지 않아 나중 유저 번호도 그대로이고, 카운터도 그대로다
+        assertThat(userRepository.findById(first.getId()).orElseThrow().getPoolNumber()).isEqualTo(13);
+        assertThat(userRepository.findById(second.getId()).orElseThrow().getPoolNumber()).isEqualTo(77);
+        assertThat(poolCounterRepository.findById(PoolCounter.SINGLETON_ID).orElseThrow().getAssignedCount()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("다음 시즌이 예약돼 있으면 현재 시즌 재배정은 409, 없는 시즌은 404 다")
+    void reassignPools_rejects_wrong_season() throws Exception {
+        // given: 활성 시즌과 예약 시즌
+        LocalDate boundary = KstTimes.today().plusDays(1);
+        Instant startedAt = KstTimes.toInstant(boundary.atStartOfDay());
+        Season current = seasonRepository.save(Season.create(Instant.parse("2026-01-01T00:00:00Z"), startedAt));
+        Season reserved = seasonRepository.save(Season.reserve(startedAt, KstTimes.toInstant(boundary.plusMonths(1).atStartOfDay())));
+
+        // when & then
+        mockMvc.perform(post(internalReassignPath(current.getId())))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value(ErrorCode.SEASON_POOL_REASSIGN_NOT_ALLOWED.name()));
+        mockMvc.perform(post(internalReassignPath(reserved.getId() + 1000)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(ErrorCode.SEASON_NOT_FOUND.name()));
+    }
+
+    @Test
+    @DisplayName("관리자 재배정은 예약 시즌이 있으면 그 시즌을 대상으로 한다")
+    void admin_reassign_targets_reserved_season() throws Exception {
+        // given: 활성 시즌과 예약 시즌, 대상 유저
+        LocalDate boundary = KstTimes.today().plusDays(1);
+        Instant startedAt = KstTimes.toInstant(boundary.atStartOfDay());
+        Season current = seasonRepository.save(Season.create(Instant.parse("2026-01-01T00:00:00Z"), startedAt));
+        Season reserved = seasonRepository.save(Season.reserve(startedAt, KstTimes.toInstant(boundary.plusMonths(1).atStartOfDay())));
+        eligibleUser(Gender.MALE, 99);
+        entityManager.flush();
+
+        // when
+        mockMvc.perform(post("/admin/season/pools/reassign").header("X-Admin-Token", ADMIN_TOKEN))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.alreadyReassigned").value(false));
+        entityManager.flush();
+        entityManager.clear();
+
+        // then: 예약 시즌에 완료 표시가 남는다
+        assertThat(seasonRepository.findById(reserved.getId()).orElseThrow().getPoolsReassignedAt()).isNotNull();
+        assertThat(seasonRepository.findById(current.getId()).orElseThrow().getPoolsReassignedAt()).isNull();
     }
 
     @Test
@@ -385,6 +468,10 @@ class SeasonAdminIntegrationTest extends AbstractIntegrationTest {
 
     private String period(Instant startedAt, Instant endedAt) {
         return "{\"startedAt\":\"%s\",\"endedAt\":\"%s\"}".formatted(startedAt, endedAt);
+    }
+
+    private String internalReassignPath(Long seasonId) {
+        return "/internal/v1/seasons/" + seasonId + "/pools/reassign";
     }
 
     private User eligibleUser(Gender gender, int poolNumber) {

@@ -75,6 +75,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
             """)
     List<PoolCandidateProjection> findPoolCandidatesByIdIn(@Param("ids") Collection<Long> ids);
 
+    @Query("SELECT u.poolNumber AS poolNumber, u.gender AS gender FROM User u WHERE u.isSeed = FALSE AND u.poolNumber IS NOT NULL")
+    List<PoolMemberProjection> findPoolMembersOfNonSeeds();
+
     @Modifying
     @Query("UPDATE User u SET u.poolNumber = NULL WHERE u.isSeed = FALSE AND u.poolNumber IS NOT NULL")
     void clearNonSeedPoolNumbers();
@@ -167,6 +170,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
                                   @Param("requiredPolicyIds") Collection<Long> requiredPolicyIds,
                                   @Param("requiredPolicyCount") int requiredPolicyCount,
                                   @Param("limit") int limit);
+
+    interface PoolMemberProjection {
+        Integer getPoolNumber();
+        Gender getGender();
+    }
 
     interface PoolCandidateProjection {
         Long getId();

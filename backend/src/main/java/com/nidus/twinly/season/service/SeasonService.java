@@ -124,13 +124,47 @@ public class SeasonService {
 
     @Transactional
     public SeasonPoolReassignResult reassignPools() {
+        Long seasonId = seasonRepository.findFirstByIsActiveFalseAndActivatedAtIsNullOrderByStartedAtAsc()
+                .map(Season::getId)
+                .orElseGet(() -> currentSeasonReader.read().getId());
+
+        return reassignPools(seasonId);
+    }
+
+    @Transactional
+    public SeasonPoolReassignResult reassignPools(Long seasonId) {
+        Season season = seasonRepository.findWithLockById(seasonId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SEASON_NOT_FOUND));
+
+        validatePoolReassignTarget(season);
+
+        if (season.getPoolsReassignedAt() != null) {
+            InfoLog.log(log, "이미 풀을 재배정한 시즌이라 건너뜁니다.", field("seasonId", seasonId));
+
+            return SeasonPoolReassignResult.of(purchaseWriter.currentPoolAssignments(), true);
+        }
+
         List<PoolAssignment> assignments = purchaseWriter.reassignPools(seasonParticipationWriter.eligibleUserIds());
 
-        SeasonPoolReassignResult result = SeasonPoolReassignResult.from(assignments);
+        if (!assignments.isEmpty()) {
+            season.markPoolsReassigned(Instant.now());
+        }
 
-        InfoLog.log(log, "시즌 풀을 다시 배정했습니다.", field("assignedCount", result.assignedCount()), field("poolCount", result.pools().size()));
+        SeasonPoolReassignResult result = SeasonPoolReassignResult.of(assignments, false);
+
+        InfoLog.log(log, "시즌 풀을 다시 배정했습니다.", field("seasonId", seasonId),
+                field("assignedCount", result.assignedCount()), field("poolCount", result.pools().size()));
 
         return result;
+    }
+
+    private void validatePoolReassignTarget(Season season) {
+        boolean reserved = !season.getIsActive() && season.getActivatedAt() == null;
+        boolean activeWithoutReservation = season.getIsActive() && !seasonRepository.existsByIsActiveFalseAndActivatedAtIsNull();
+
+        if (!reserved && !activeWithoutReservation) {
+            throw new BusinessException(ErrorCode.SEASON_POOL_REASSIGN_NOT_ALLOWED);
+        }
     }
 
     @Transactional(propagation = Propagation.SUPPORTS)
