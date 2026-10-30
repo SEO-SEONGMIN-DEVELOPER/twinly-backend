@@ -95,6 +95,7 @@ public class ChatService {
 
         List<ChatRoomParticipation> participations = chatRoomParticipationRepository.findAllByRoomId(roomId);
         checkActiveParticipant(participations, userId);
+        checkVisibleInCurrentSeason(match, roomId);
 
         if (room.getClosedAt() != null) {
             throw new BusinessException(ErrorCode.ROOM_CLOSED);
@@ -201,8 +202,12 @@ public class ChatService {
                 .map(Block::getBlockedUserId)
                 .collect(Collectors.toSet());
 
+        Long currentSeasonId = currentSeasonReader.read().getId();
+
         List<ChatRoom> visibleRooms = filterVisibleRooms(rooms, myParticipationByRoomId).stream()
                 .filter(room -> !blockedUserIds.contains(resolvePartnerId(matchById.get(room.getMatchId()), userId)))
+                .filter(room -> matchById.get(room.getMatchId()).getSeasonId().equals(currentSeasonId)
+                        || bothEntered(myParticipationByRoomId.get(room.getId()), partnerParticipationByRoomId.get(room.getId())))
                 .toList();
         List<Long> visibleRoomIds = visibleRooms.stream().map(ChatRoom::getId).toList();
 
@@ -229,8 +234,6 @@ public class ChatService {
                 chatRepository.countUnreadByRoomIdIn(userId, visibleRoomIds).stream()
                         .collect(Collectors.toMap(ChatRepository.UnreadCountProjection::getRoomId, ChatRepository.UnreadCountProjection::getCount))
         );
-
-        Long currentSeasonId = currentSeasonReader.read().getId();
 
         List<ChatRoomResult> roomResults = visibleRooms.stream()
                 .sorted(Comparator.comparing((ChatRoom room) -> lastActivityAt(room, context.lastChatByRoomId())).reversed()
@@ -262,6 +265,25 @@ public class ChatService {
         return participations.stream()
                 .filter(p -> mine == p.getUserId().equals(userId))
                 .collect(Collectors.toMap(ChatRoomParticipation::getRoomId, Function.identity()));
+    }
+
+    private boolean bothEntered(ChatRoomParticipation mine, ChatRoomParticipation partner) {
+        return mine != null && mine.getEntryAgreedAt() != null
+                && partner != null && partner.getEntryAgreedAt() != null;
+    }
+
+    private void checkVisibleInCurrentSeason(Match match, Long roomId) {
+        if (match.getSeasonId().equals(currentSeasonReader.read().getId())) {
+            return;
+        }
+
+        List<ChatRoomParticipation> participations = chatRoomParticipationRepository.findAllByRoomId(roomId);
+        boolean bothEntered = participations.size() == 2
+                && participations.stream().allMatch(participation -> participation.getEntryAgreedAt() != null);
+
+        if (!bothEntered) {
+            throw new BusinessException(ErrorCode.ROOM_NOT_FOUND);
+        }
     }
 
     private List<ChatRoom> filterVisibleRooms(List<ChatRoom> rooms, Map<Long, ChatRoomParticipation> myParticipationByRoomId) {
@@ -325,6 +347,11 @@ public class ChatService {
         ChatRoomParticipation partnerParticipation = chatRoomParticipationRepository.findByRoomIdAndUserId(roomId, partnerId)
                 .orElse(null);
 
+        Long currentSeasonId = currentSeasonReader.read().getId();
+        if (!match.getSeasonId().equals(currentSeasonId) && !bothEntered(myParticipation, partnerParticipation)) {
+            throw new BusinessException(ErrorCode.ROOM_NOT_FOUND);
+        }
+
         Photo partnerPhoto = partner.isWithdrawn() ? null
                 : photoRepository.findByUserIdAndType(partnerId, PhotoType.PROFILE)
                         .orElse(null);
@@ -340,8 +367,6 @@ public class ChatService {
                 : personaElementRepository.findAllByUserIdAndDimensionOrderByIdAsc(partnerId, PersonaDimension.INTEREST).stream()
                         .map(PersonaElement::getExplanation)
                         .toList();
-
-        Long currentSeasonId = currentSeasonReader.read().getId();
 
         return new ChatRoomDetailResult(
                 room.getId(),
@@ -383,6 +408,7 @@ public class ChatService {
         Long partnerUserId = resolvePartnerId(match, userId);
 
         ChatRoomParticipation mine = getActiveParticipation(roomId, userId);
+        checkVisibleInCurrentSeason(match, roomId);
         mine.agree();
 
         return roomDetail(userId, roomId);
@@ -413,6 +439,7 @@ public class ChatService {
 
         Long partnerUserId = resolvePartnerId(match, userId);
         getActiveParticipation(roomId, userId);
+        checkVisibleInCurrentSeason(match, roomId);
 
         Long lastReadMessageId = chatRoomParticipationRepository.findByRoomIdAndUserId(roomId, partnerUserId)
                 .map(ChatRoomParticipation::getLastReadMessageId)
@@ -455,6 +482,7 @@ public class ChatService {
         checkUserInMatch(match, userId);
 
         getActiveParticipation(roomId, userId);
+        checkVisibleInCurrentSeason(match, roomId);
 
         if (!chatRepository.existsByIdAndRoomId(command.lastMsgId(), roomId)) {
             throw new BusinessException(ErrorCode.MESSAGE_NOT_IN_ROOM);
@@ -513,6 +541,7 @@ public class ChatService {
 
         List<ChatRoomParticipation> participations = chatRoomParticipationRepository.findAllByRoomId(roomId);
         checkActiveParticipant(participations, userId);
+        checkVisibleInCurrentSeason(match, roomId);
         checkAllEntryAgreed(participations);
 
         if (room.getCommonPoint() != null) {

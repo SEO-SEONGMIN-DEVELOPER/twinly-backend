@@ -45,6 +45,7 @@ import com.nidus.twinly.user.repository.DisclosureAgreementRepository;
 import com.nidus.twinly.user.repository.PersonaElementRepository;
 import com.nidus.twinly.user.repository.PhotoRepository;
 import com.nidus.twinly.user.repository.UserRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -71,6 +72,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
@@ -129,6 +131,11 @@ class ChatServiceUnitTest {
 
     @InjectMocks
     ChatService chatService;
+
+    @BeforeEach
+    void setUp() {
+        lenient().when(currentSeasonReader.read()).thenReturn(currentSeason());
+    }
 
     @Test
     @DisplayName("메시지 전송 정상: 수신자를 매칭 상대로 채워 Chat을 저장하고 생성 이벤트를 발행한다")
@@ -912,6 +919,43 @@ class ChatServiceUnitTest {
     }
 
     @Test
+    @DisplayName("채팅방 목록에서 둘 다 입장하기 전인 방은 현재 시즌 방만, 둘 다 입장한 방은 이전 시즌 방도 보여준다")
+    void rooms_shows_unentered_rooms_only_in_current_season() {
+        // given: 10번은 현재 시즌·둘 다 입장 전, 20번은 이전 시즌·둘 다 입장, 30번은 이전 시즌·상대 입장 전
+        Long previousSeasonId = CURRENT_SEASON_ID - 1;
+        given(currentSeasonReader.read()).willReturn(currentSeason());
+        given(matchRepository.findAllByUserAIdOrUserBId(ME, ME)).willReturn(List.of(
+                match(MATCH_ID, ME, PARTNER, CURRENT_SEASON_ID),
+                match(200L, ME, 3L, previousSeasonId),
+                match(300L, ME, 4L, previousSeasonId)
+        ));
+        given(chatRoomRepository.findAllByMatchIdIn(List.of(MATCH_ID, 200L, 300L))).willReturn(List.of(
+                room(ROOM_ID, MATCH_ID), room(20L, 200L), room(30L, 300L)
+        ));
+        given(chatRoomParticipationRepository.findAllByRoomIdIn(List.of(ROOM_ID, 20L, 30L))).willReturn(List.of(
+                notAgreedParticipation(ROOM_ID, ME), notAgreedParticipation(ROOM_ID, PARTNER),
+                participation(20L, ME), participation(20L, 3L),
+                participation(30L, ME), notAgreedParticipation(30L, 4L)
+        ));
+
+        given(userRepository.findAllById(List.of(PARTNER, 3L))).willReturn(List.of(user(PARTNER, "p1"), user(3L, "p2")));
+        given(photoRepository.findAllByUserIdInAndType(List.of(PARTNER, 3L), PhotoType.PROFILE)).willReturn(List.of());
+        given(intimacyReader.readAll(eq(ME), eq(List.of(PARTNER, 3L)), any(LocalDateTime.class))).willReturn(Map.of());
+        given(chatRepository.findLatestByRoomIdIn(List.of(ROOM_ID, 20L))).willReturn(List.of());
+        given(chatRepository.countUnreadByRoomIdIn(ME, List.of(ROOM_ID, 20L))).willReturn(List.of());
+
+        // when: 채팅방 목록 조회
+        ChatRoomsResult result = chatService.rooms(ME);
+
+        // then: 이전 시즌의 입장 전 방(30)만 빠지고, 이전 시즌 입장 완료 방은 isCurrentSeason=false 로 남는다
+        assertThat(result.rooms()).extracting(ChatRoomResult::roomId).containsExactlyInAnyOrder(ROOM_ID, 20L);
+        assertThat(result.rooms()).filteredOn(room -> room.roomId().equals(20L))
+                .singleElement()
+                .extracting(ChatRoomResult::isCurrentSeason)
+                .isEqualTo(false);
+    }
+
+    @Test
     @DisplayName("채팅방 목록은 마지막 메시지 시각 내림차순, 메시지가 없는 방은 생성 시각으로 정렬한다")
     void rooms_sorted_by_last_activity_desc() {
         // given: 방 3개 — 10번은 오래된 메시지, 20번은 최신 메시지, 30번은 메시지 없이 가장 오래전 생성
@@ -979,6 +1023,101 @@ class ChatServiceUnitTest {
         assertThat(result.partner().birthYear()).isEqualTo("00");
         assertThat(result.entryStatus().myEntryAgreed()).isTrue();
         assertThat(result.entryStatus().partnerEntryAgreed()).isFalse();
+    }
+
+    @Test
+    @DisplayName("이전 시즌 방은 둘 다 입장하기 전이면 상세 조회 시 ROOM_NOT_FOUND 예외가 발생한다")
+    void roomDetail_of_unentered_previous_season_room_throws() {
+        // given: 이전 시즌 매칭의 방에 나만 입장하고 상대는 입장 전
+        given(currentSeasonReader.read()).willReturn(currentSeason());
+        given(chatRoomRepository.findById(ROOM_ID)).willReturn(Optional.of(room(ROOM_ID, MATCH_ID)));
+        given(matchRepository.findById(MATCH_ID)).willReturn(Optional.of(match(MATCH_ID, ME, PARTNER, CURRENT_SEASON_ID - 1)));
+        given(userRepository.findById(PARTNER)).willReturn(Optional.of(user(PARTNER, "partnerNick")));
+        given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, ME)).willReturn(Optional.of(participation(ROOM_ID, ME)));
+        given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, PARTNER))
+                .willReturn(Optional.of(notAgreedParticipation(ROOM_ID, PARTNER)));
+
+        // when & then: 목록에서 빠진 방이므로 없는 방으로 취급하고 상대 정보를 더 조회하지 않는다
+        assertThatThrownBy(() -> chatService.roomDetail(ME, ROOM_ID))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.ROOM_NOT_FOUND);
+        then(intimacyReader).should(never()).read(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("이전 시즌 방에 둘 다 입장하기 전이면 입장 동의 시 ROOM_NOT_FOUND 예외가 발생하고 동의 시각을 남기지 않는다")
+    void enterRoom_of_unentered_previous_season_room_throws() {
+        // given: 이전 시즌 매칭의 방에 상대만 입장함
+        ChatRoomParticipation mine = notAgreedParticipation(ROOM_ID, ME);
+        given(chatRoomRepository.findById(ROOM_ID)).willReturn(Optional.of(room(ROOM_ID, MATCH_ID)));
+        given(matchRepository.findById(MATCH_ID)).willReturn(Optional.of(match(MATCH_ID, ME, PARTNER, CURRENT_SEASON_ID - 1)));
+        given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, ME)).willReturn(Optional.of(mine));
+        given(chatRoomParticipationRepository.findAllByRoomId(ROOM_ID)).willReturn(List.of(mine, participation(ROOM_ID, PARTNER)));
+
+        // when & then: 없는 방으로 취급하고 내 동의 시각은 비어 있다
+        assertThatThrownBy(() -> chatService.enterRoom(ME, ROOM_ID))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.ROOM_NOT_FOUND);
+        assertThat(mine.getEntryAgreedAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("이전 시즌 방에 둘 다 입장하기 전이면 메시지 목록 조회 시 ROOM_NOT_FOUND 예외가 발생한다")
+    void messages_of_unentered_previous_season_room_throws() {
+        // given: 이전 시즌 매칭의 방에 아무도 입장하지 않음
+        given(chatRoomRepository.findById(ROOM_ID)).willReturn(Optional.of(room(ROOM_ID, MATCH_ID)));
+        given(matchRepository.findById(MATCH_ID)).willReturn(Optional.of(match(MATCH_ID, ME, PARTNER, CURRENT_SEASON_ID - 1)));
+        given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, ME)).willReturn(Optional.of(notAgreedParticipation(ROOM_ID, ME)));
+        given(chatRoomParticipationRepository.findAllByRoomId(ROOM_ID))
+                .willReturn(List.of(notAgreedParticipation(ROOM_ID, ME), notAgreedParticipation(ROOM_ID, PARTNER)));
+
+        // when & then: 메시지를 읽지 않고 없는 방으로 응답한다
+        assertThatThrownBy(() -> chatService.messages(ME, ROOM_ID, null, null))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.ROOM_NOT_FOUND);
+        then(chatRepository).should(never()).findBeforeCursorByRoomId(any(), any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("이전 시즌 방이라도 둘 다 입장했으면 메시지를 보낼 수 있다")
+    void sendMessage_in_entered_previous_season_room_succeeds() {
+        // given: 이전 시즌 매칭의 방에 둘 다 입장함
+        given(chatRoomRepository.findById(ROOM_ID)).willReturn(Optional.of(room(ROOM_ID, MATCH_ID)));
+        given(matchRepository.findById(MATCH_ID)).willReturn(Optional.of(match(MATCH_ID, ME, PARTNER, CURRENT_SEASON_ID - 1)));
+        List<ChatRoomParticipation> participations = List.of(participation(ROOM_ID, ME), participation(ROOM_ID, PARTNER));
+        given(chatRoomParticipationRepository.findAllByRoomId(ROOM_ID)).willReturn(participations);
+        given(chatRepository.findBySenderUserIdAndClientMsgId(ME, "client-1")).willReturn(Optional.empty());
+
+        // when: 메시지 전송
+        chatService.sendMessage(ME, ROOM_ID, new ChatSendMessageCommand("hi", "client-1"));
+
+        // then: 메시지가 저장된다
+        then(chatRepository).should().save(any(Chat.class));
+    }
+
+    @Test
+    @DisplayName("이전 시즌 방이라도 둘 다 입장했으면 상세 조회되고 isCurrentSeason=false 로 내려간다")
+    void roomDetail_of_entered_previous_season_room_is_visible() {
+        // given: 이전 시즌 매칭의 방에 둘 다 입장함
+        given(currentSeasonReader.read()).willReturn(currentSeason());
+        given(chatRoomRepository.findById(ROOM_ID)).willReturn(Optional.of(room(ROOM_ID, MATCH_ID)));
+        given(matchRepository.findById(MATCH_ID)).willReturn(Optional.of(match(MATCH_ID, ME, PARTNER, CURRENT_SEASON_ID - 1)));
+        given(userRepository.findById(PARTNER)).willReturn(Optional.of(user(PARTNER, "partnerNick")));
+        given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, ME)).willReturn(Optional.of(participation(ROOM_ID, ME)));
+        given(chatRoomParticipationRepository.findByRoomIdAndUserId(ROOM_ID, PARTNER)).willReturn(Optional.of(participation(ROOM_ID, PARTNER)));
+        given(photoRepository.findByUserIdAndType(PARTNER, PhotoType.PROFILE)).willReturn(Optional.empty());
+        given(intimacyReader.read(eq(ME), eq(PARTNER), any(LocalDateTime.class))).willReturn(Intimacy.ZERO);
+        given(disclosureAgreementRepository.findAllByUserId(PARTNER)).willReturn(List.of());
+
+        // when: 채팅방 상세 조회
+        ChatRoomDetailResult result = chatService.roomDetail(ME, ROOM_ID);
+
+        // then: 정상 응답이며 이전 시즌 방으로 표시된다
+        assertThat(result.roomId()).isEqualTo(ROOM_ID);
+        assertThat(result.isCurrentSeason()).isFalse();
     }
 
     @Test
