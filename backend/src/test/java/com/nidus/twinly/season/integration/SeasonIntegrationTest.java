@@ -1,5 +1,6 @@
 package com.nidus.twinly.season.integration;
 
+import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.people.repository.EncounterRepository;
@@ -26,6 +27,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -44,6 +46,9 @@ class SeasonIntegrationTest extends AbstractIntegrationTest {
 
     /** 활성 시즌으로 넣을 시즌 id. */
     private static final long CURRENT_SEASON_ID = 1L;
+
+    @Autowired
+    CurrentSeasonReader currentSeasonReader;
 
     @Autowired
     SeasonParticipationRepository seasonParticipationRepository;
@@ -163,7 +168,7 @@ class SeasonIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.people[0].intimacy").value(0));
 
         // then: 선생성 첫날 페르소나에도 두 상대가 친밀도 0으로 실린다
-        assertThat(intimacyReader.readForSimulation(user.getId(), KstTimes.today(), Instant.now()))
+        assertThat(intimacyReader.readForSimulation(user.getId(), KstTimes.today(), currentSeasonReader.scopeOf(KstTimes.today()), Instant.now()))
                 .containsOnly(entry(femaleA.getId(), 0), entry(femaleB.getId(), 0));
     }
 

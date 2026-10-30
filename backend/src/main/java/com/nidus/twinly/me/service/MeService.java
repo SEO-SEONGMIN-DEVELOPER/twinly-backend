@@ -116,9 +116,11 @@ import com.nidus.twinly.notification.entity.AppNotificationFeed;
 import com.nidus.twinly.notification.entity.NotificationSetting;
 import com.nidus.twinly.notification.repository.AppNotificationFeedRepository;
 import com.nidus.twinly.notification.repository.NotificationSettingRepository;
-import com.nidus.twinly.people.repository.EncounterRepository;
 import com.nidus.twinly.relationship.domain.RelationshipType;
 import com.nidus.twinly.relationship.reader.IntimacyReader;
+import com.nidus.twinly.relationship.repository.RelationshipRepository;
+import com.nidus.twinly.season.domain.SeasonScope;
+import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.report.domain.ReportStatus;
 import com.nidus.twinly.report.entity.Report;
 import com.nidus.twinly.report.repository.ReportRepository;
@@ -199,7 +201,8 @@ public class MeService {
     private final ReportRepository reportRepository;
     private final QuestionRepository questionRepository;
     private final PersonaElementRepository personaElementRepository;
-    private final EncounterRepository encounterRepository;
+    private final RelationshipRepository relationshipRepository;
+    private final CurrentSeasonReader currentSeasonReader;
     private final UserSurveyAnswerRepository userSurveyAnswerRepository;
     private final UserTendencyAnswerRepository userTendencyAnswerRepository;
     private final UserFeedbackRepository userFeedbackRepository;
@@ -695,7 +698,10 @@ public class MeService {
                         Collectors.mapping(PersonaElement::getExplanation, Collectors.toList())
                 ));
 
-        List<Long> partnerUserIds = encounterRepository.findAllPartnerUserIdsByUserId(userId);
+        SeasonScope seasonScope = currentSeasonReader.scopeOf(KstTimes.today());
+        List<Long> partnerUserIds = relationshipRepository.findAllPartnerFirstUpdatesByUserId(userId, seasonScope.seasonId(), seasonScope.startDate()).stream()
+                .map(RelationshipRepository.PartnerFirstUpdateProjection::getPartnerUserId)
+                .toList();
 
         return new MeProfileResult(
                 user.getId(),

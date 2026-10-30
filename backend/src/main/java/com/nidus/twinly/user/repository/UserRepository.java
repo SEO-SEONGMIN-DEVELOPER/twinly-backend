@@ -1,5 +1,6 @@
 package com.nidus.twinly.user.repository;
 
+import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.schoolverification.domain.SchoolVerificationStatus;
 import com.nidus.twinly.user.entity.User;
 import jakarta.persistence.LockModeType;
@@ -63,6 +64,24 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Modifying
     @Query("UPDATE User u SET u.poolNumber = :poolNumber WHERE u.id = :userId AND u.poolNumber IS NULL")
     int assignPoolNumber(@Param("userId") Long userId, @Param("poolNumber") int poolNumber);
+
+    @Query("""
+            SELECT u.id AS id, u.gender AS gender
+            FROM User u
+            WHERE u.id IN :ids
+              AND u.isSeed = FALSE
+              AND u.withdrawalRequestedAt IS NULL
+              AND u.deletedAt IS NULL
+            """)
+    List<PoolCandidateProjection> findPoolCandidatesByIdIn(@Param("ids") Collection<Long> ids);
+
+    @Modifying
+    @Query("UPDATE User u SET u.poolNumber = NULL WHERE u.isSeed = FALSE AND u.poolNumber IS NOT NULL")
+    void clearNonSeedPoolNumbers();
+
+    @Modifying
+    @Query("UPDATE User u SET u.poolNumber = :poolNumber WHERE u.id IN :ids")
+    void updatePoolNumber(@Param("ids") Collection<Long> ids, @Param("poolNumber") int poolNumber);
 
     @Transactional
     @Modifying
@@ -148,4 +167,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
                                   @Param("requiredPolicyIds") Collection<Long> requiredPolicyIds,
                                   @Param("requiredPolicyCount") int requiredPolicyCount,
                                   @Param("limit") int limit);
+
+    interface PoolCandidateProjection {
+        Long getId();
+        Gender getGender();
+    }
 }

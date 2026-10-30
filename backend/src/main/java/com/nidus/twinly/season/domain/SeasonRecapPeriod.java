@@ -13,7 +13,7 @@ public record SeasonRecapPeriod(
 ) {
 
     public static SeasonRecapPeriod of(Season season, Season nextSeason) {
-        Instant resetAt = nextSeason.getCreatedAt();
+        Instant resetAt = nextSeason.getActivatedAt();
         Instant endedAt = resetAt.isBefore(season.getEndedAt()) ? resetAt : season.getEndedAt();
 
         return new SeasonRecapPeriod(season.getStartedAt(), endedAt);

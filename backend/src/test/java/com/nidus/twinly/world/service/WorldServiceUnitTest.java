@@ -1,5 +1,7 @@
 package com.nidus.twinly.world.service;
 
+import com.nidus.twinly.season.domain.SeasonScope;
+import org.junit.jupiter.api.BeforeEach;
 import com.nidus.twinly.activity.entity.Scene;
 import com.nidus.twinly.activity.repository.SceneRepository;
 import com.nidus.twinly.block.entity.Block;
@@ -40,6 +42,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+import static org.mockito.Mockito.lenient;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -100,6 +103,12 @@ class WorldServiceUnitTest {
     @InjectMocks
     WorldService worldService;
 
+    @BeforeEach
+    void setUpSeasonStartDate() {
+        lenient().when(currentSeasonReader.startDateOf(any())).thenReturn(LocalDate.EPOCH);
+        lenient().when(currentSeasonReader.scopeOf(any())).thenReturn(SeasonScope.UNBOUNDED);
+    }
+
     @Test
     @DisplayName("창 규칙을 어기면 참여 여부를 보기 전에 INVALID_REQUEST")
     void sectors_rejects_invalid_window_first() {
@@ -150,7 +159,7 @@ class WorldServiceUnitTest {
         givenParticipant(me);
         givenTrack(WorldTrack.PUBLIC_VIEWER_USER_ID, PUBLIC_BODY, slice("sha256:aa", 12, 31, 32, 33, 34, 35));
         givenTrack(ME, null, null);
-        given(relationshipRepository.findAllPartnerFirstUpdatesByUserId(ME)).willReturn(List.of(
+        given(relationshipRepository.findAllPartnerFirstUpdatesByUserId(eq(ME), any(), any())).willReturn(List.of(
                 firstUpdate(31L, LocalDateTime.of(2026, 10, 15, 23, 0)),
                 firstUpdate(32L, LocalDateTime.of(2026, 10, 16, 9, 0)),
                 firstUpdate(33L, LocalDateTime.of(2026, 10, 10, 9, 0)),

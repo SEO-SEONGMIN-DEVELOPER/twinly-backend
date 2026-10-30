@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -38,7 +39,7 @@ class BalanceGameOpenNotificationIntegrationTest extends AbstractIntegrationTest
         relate(me, other, now.minusHours(1));
 
         // when
-        List<Long> userIds = relationshipRepository.findUserIdsWithVisiblePartner(now);
+        List<Long> userIds = relationshipRepository.findUserIdsWithVisiblePartner(null, LocalDate.EPOCH, now);
 
         // then: me 는 한 번, 관계 기록이 없는 partner·other 는 대상이 아니다
         assertThat(userIds).containsOnlyOnce(me.getId());
@@ -72,7 +73,7 @@ class BalanceGameOpenNotificationIntegrationTest extends AbstractIntegrationTest
         relate(leftAlone, withdrawnPartner, now.minusHours(1));
 
         // when
-        List<Long> userIds = relationshipRepository.findUserIdsWithVisiblePartner(now);
+        List<Long> userIds = relationshipRepository.findUserIdsWithVisiblePartner(null, LocalDate.EPOCH, now);
 
         // then
         assertThat(userIds).doesNotContain(notYetVisible.getId(), seed.getId(), withdrawing.getId(), leftAlone.getId());
@@ -97,11 +98,28 @@ class BalanceGameOpenNotificationIntegrationTest extends AbstractIntegrationTest
         blockRepository.save(Block.create(stillPlaying.getId(), blocked.getId()));
 
         // when
-        List<Long> userIds = relationshipRepository.findUserIdsWithVisiblePartner(now);
+        List<Long> userIds = relationshipRepository.findUserIdsWithVisiblePartner(null, LocalDate.EPOCH, now);
 
         // then
         assertThat(userIds).doesNotContain(blocker.getId(), blocked.getId());
         assertThat(userIds).contains(stillPlaying.getId());
+    }
+
+    @Test
+    @DisplayName("이번 시즌 인연이 없는 유저는 출제 알림 대상이 아니다")
+    void findUserIdsWithVisiblePartner_excludes_previous_season_only_user() {
+        // given: 시즌 시작 전 회차의 관계만 있는 유저
+        LocalDateTime now = LocalDateTime.of(2026, 11, 2, 12, 0);
+        User user = saveUser();
+        User partner = saveUser();
+        relationshipRepository.save(Relationship.create(user.getId(), LocalDate.of(2026, 10, 31), "v1", partner.getId(), 40, "model",
+                LocalDateTime.of(2026, 10, 31, 12, 0), null));
+
+        // when: 11-01 시작 시즌 기준으로 조회
+        List<Long> userIds = relationshipRepository.findUserIdsWithVisiblePartner(null, LocalDate.of(2026, 11, 1), now);
+
+        // then
+        assertThat(userIds).doesNotContain(user.getId());
     }
 
     private void relate(User user, User partner, LocalDateTime updateTime) {

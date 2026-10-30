@@ -44,11 +44,14 @@ public interface ScenePartnerRepository extends JpaRepository<ScenePartner, Long
             WHERE s.user_id = :userId
               AND sp.user_id IN (:partnerUserIds)
               AND s.type = 'DIALOGUE'
+              AND (s.season_id = :seasonId OR (s.season_id IS NULL AND s.date >= :seasonStartDate))
               AND s.date < :date
             """, nativeQuery = true)
     List<Long> findPartnerUserIdsWithDialogueBeforeDate(@Param("userId") Long userId,
                                                         @Param("partnerUserIds") List<Long> partnerUserIds,
-                                                        @Param("date") LocalDate date);
+                                                        @Param("date") LocalDate date,
+                                                        @Param("seasonId") Long seasonId,
+                                                        @Param("seasonStartDate") LocalDate seasonStartDate);
 
     interface SceneCountProjection {
         Long getPartnerUserId();

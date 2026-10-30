@@ -68,6 +68,8 @@ public class Scene {
 
     private Instant createdAt;
 
+    private Long seasonId;
+
     public static Scene createAction(Long userId, LocalDate date, String version, String place, String placeCode,
                                      LocalDateTime startsAt, LocalDateTime endsAt, String narration, String mind) {
         return createAction(userId, date, version, place, placeCode, startsAt, endsAt, narration, mind, null, null, null);
@@ -126,5 +128,9 @@ public class Scene {
         scene.createdAt = Instant.now();
 
         return scene;
+    }
+
+    public void assignSeason(Long seasonId) {
+        this.seasonId = seasonId;
     }
 }

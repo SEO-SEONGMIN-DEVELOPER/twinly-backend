@@ -104,7 +104,7 @@ class SeasonRecapServiceUnitTest {
         ReflectionTestUtils.setField(season, "id", id);
         ReflectionTestUtils.setField(season, "startedAt", startedAt);
         ReflectionTestUtils.setField(season, "endedAt", endedAt);
-        ReflectionTestUtils.setField(season, "createdAt", createdAt);
+        ReflectionTestUtils.setField(season, "activatedAt", createdAt);
         ReflectionTestUtils.setField(season, "recapCreatedAt", recapCreatedAt);
         return season;
     }

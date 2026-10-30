@@ -1,5 +1,7 @@
 package com.nidus.twinly.map.service;
 
+import com.nidus.twinly.season.domain.SeasonScope;
+import org.junit.jupiter.api.BeforeEach;
 import com.nidus.twinly.activity.domain.SceneType;
 import com.nidus.twinly.activity.entity.ScenePartner;
 import com.nidus.twinly.activity.repository.ScenePartnerRepository;
@@ -33,6 +35,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.LongStream;
 
+import static org.mockito.Mockito.lenient;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -73,6 +76,12 @@ class MapServiceUnitTest {
     private final LocalDateTime now = KstTimes.now();
     private final LocalDate today = now.toLocalDate();
 
+    @BeforeEach
+    void setUpSeasonStartDate() {
+        lenient().when(currentSeasonReader.startDateOf(any())).thenReturn(LocalDate.EPOCH);
+        lenient().when(currentSeasonReader.scopeOf(any())).thenReturn(SeasonScope.UNBOUNDED);
+    }
+
     @Test
     @DisplayName("후보가 없으면 빈 목록과 KST serverNow 를 돌려주고, 후보 조회는 오늘 0시 이전 참여·24시간 범위 조건으로 위임한다")
     void twins_without_candidates_returns_empty() {
@@ -99,7 +108,7 @@ class MapServiceUnitTest {
         assertThat(fromDate.getValue()).isEqualTo(endsAfter.getValue().toLocalDate().minusDays(1));
 
         // then: 후보가 없으니 더 조회하지 않는다
-        then(relationshipRepository).should(never()).findAllPartnerFirstUpdatesByUserId(any());
+        then(relationshipRepository).should(never()).findAllPartnerFirstUpdatesByUserId(any(), any(), any());
         then(sceneRepository).should(never()).findAllRoutesByUserIdInAndEndsAfter(anyList(), any(), any(), any());
     }
 
@@ -250,7 +259,7 @@ class MapServiceUnitTest {
     }
 
     private void givenPartners(Partner... partners) {
-        given(relationshipRepository.findAllPartnerFirstUpdatesByUserId(ME)).willReturn(List.of(partners));
+        given(relationshipRepository.findAllPartnerFirstUpdatesByUserId(eq(ME), any(), any())).willReturn(List.of(partners));
     }
 
     private void givenRoutes(List<SceneRouteProjection> routes) {

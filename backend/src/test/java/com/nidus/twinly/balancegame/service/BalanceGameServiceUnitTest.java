@@ -1,5 +1,7 @@
 package com.nidus.twinly.balancegame.service;
 
+import org.junit.jupiter.api.BeforeEach;
+import com.nidus.twinly.season.domain.SeasonScope;
 import com.nidus.twinly.balancegame.domain.BalanceGameSchedule;
 import com.nidus.twinly.balancegame.domain.BalanceGameStatus;
 import com.nidus.twinly.balancegame.dto.command.BalanceGameAnswerCommand;
@@ -45,6 +47,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.LongStream;
 
+import static org.mockito.Mockito.lenient;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -103,6 +106,11 @@ class BalanceGameServiceUnitTest {
     BalanceGameService balanceGameService;
 
     // ---------------------------------------------------------------- 이번 회차 조회
+
+    @BeforeEach
+    void setUpSeasonScope() {
+        lenient().when(currentSeasonReader.scopeOf(any())).thenReturn(SeasonScope.UNBOUNDED);
+    }
 
     @Test
     @DisplayName("이번 회차(KST 12시·18시 출제)를 모두가 공유하도록 만들고, 이 트윈에게 아직 안 답했으면 내 답을 기다린다")
@@ -210,7 +218,7 @@ class BalanceGameServiceUnitTest {
     void current_without_relationship_throws() {
         // given: 보이는 관계 기록이 없는 상대
         given(userRepository.findById(PARTNER)).willReturn(Optional.of(user(PARTNER)));
-        given(relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(eq(ME), eq(PARTNER), any(LocalDateTime.class)))
+        given(relationshipRepository.findLatestInSeasonByUserIdAndPartnerUserId(eq(ME), eq(PARTNER), any(), any(), any(LocalDateTime.class)))
                 .willReturn(Optional.empty());
 
         // when & then
@@ -225,7 +233,7 @@ class BalanceGameServiceUnitTest {
     void current_blocked_by_partner_throws() {
         // given
         given(userRepository.findById(PARTNER)).willReturn(Optional.of(user(PARTNER)));
-        given(relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(eq(ME), eq(PARTNER), any(LocalDateTime.class)))
+        given(relationshipRepository.findLatestInSeasonByUserIdAndPartnerUserId(eq(ME), eq(PARTNER), any(), any(), any(LocalDateTime.class)))
                 .willReturn(Optional.of(BeanUtils.instantiateClass(Relationship.class)));
         given(blockRepository.existsByUserIdAndBlockedUserId(ME, PARTNER)).willReturn(false);
         given(blockRepository.existsByUserIdAndBlockedUserId(PARTNER, ME)).willReturn(true);
@@ -333,7 +341,7 @@ class BalanceGameServiceUnitTest {
         // given: 열린 회차, 관계 기록이 없는 상대
         given(balanceGameRoundRepository.findByIdForUpdate(ROUND_ID)).willReturn(Optional.of(round(thisRound())));
         given(userRepository.findById(PARTNER)).willReturn(Optional.of(user(PARTNER)));
-        given(relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(eq(ME), eq(PARTNER), any(LocalDateTime.class)))
+        given(relationshipRepository.findLatestInSeasonByUserIdAndPartnerUserId(eq(ME), eq(PARTNER), any(), any(), any(LocalDateTime.class)))
                 .willReturn(Optional.empty());
 
         // when & then
@@ -480,7 +488,7 @@ class BalanceGameServiceUnitTest {
     void history_blocked_by_partner_throws() {
         // given: 관계는 있지만 트윈이 나를 차단했다
         given(userRepository.findById(PARTNER)).willReturn(Optional.of(user(PARTNER)));
-        given(relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(eq(ME), eq(PARTNER), any(LocalDateTime.class)))
+        given(relationshipRepository.findLatestInSeasonByUserIdAndPartnerUserId(eq(ME), eq(PARTNER), any(), any(), any(LocalDateTime.class)))
                 .willReturn(Optional.of(BeanUtils.instantiateClass(Relationship.class)));
         given(blockRepository.existsByUserIdAndBlockedUserId(ME, PARTNER)).willReturn(false);
         given(blockRepository.existsByUserIdAndBlockedUserId(PARTNER, ME)).willReturn(true);
@@ -511,7 +519,7 @@ class BalanceGameServiceUnitTest {
 
     private void givenVisiblePartner() {
         given(userRepository.findById(PARTNER)).willReturn(Optional.of(user(PARTNER)));
-        given(relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(eq(ME), eq(PARTNER), any(LocalDateTime.class)))
+        given(relationshipRepository.findLatestInSeasonByUserIdAndPartnerUserId(eq(ME), eq(PARTNER), any(), any(), any(LocalDateTime.class)))
                 .willReturn(Optional.of(BeanUtils.instantiateClass(Relationship.class)));
     }
 

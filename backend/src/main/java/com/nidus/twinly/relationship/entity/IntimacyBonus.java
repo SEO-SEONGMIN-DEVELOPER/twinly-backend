@@ -29,13 +29,20 @@ public class IntimacyBonus {
 
     private Instant createdAt;
 
+    private Long seasonId;
+
     public static IntimacyBonus create(Long userId1, Long userId2, int amount) {
+        return create(userId1, userId2, amount, null);
+    }
+
+    public static IntimacyBonus create(Long userId1, Long userId2, int amount, Long seasonId) {
         IntimacyBonus bonus = new IntimacyBonus();
 
         bonus.userAId = Math.min(userId1, userId2);
         bonus.userBId = Math.max(userId1, userId2);
         bonus.amount = amount;
         bonus.createdAt = Instant.now();
+        bonus.seasonId = seasonId;
 
         return bonus;
     }

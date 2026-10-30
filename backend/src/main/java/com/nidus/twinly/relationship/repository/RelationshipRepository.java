@@ -13,7 +13,12 @@ import java.util.Optional;
 
 public interface RelationshipRepository extends JpaRepository<Relationship, Long> {
 
-    boolean existsByUserId(Long userId);
+    @Query("""
+            SELECT COUNT(r) > 0 FROM Relationship r
+            WHERE r.userId = :userId
+              AND (r.seasonId = :seasonId OR (r.seasonId IS NULL AND r.date >= :seasonStartDate))
+            """)
+    boolean existsInSeasonByUserId(@Param("userId") Long userId, @Param("seasonId") Long seasonId, @Param("seasonStartDate") LocalDate seasonStartDate);
 
     @Query(value = """
         SELECT r.*
@@ -30,15 +35,58 @@ public interface RelationshipRepository extends JpaRepository<Relationship, Long
         SELECT r.*
         FROM relationships r
         WHERE r.user_id = :userId AND r.partner_user_id = :partnerUserId AND r.date < :date
+          AND (r.season_id = :seasonId OR (r.season_id IS NULL AND r.date >= :seasonStartDate))
         ORDER BY r.date DESC, r.update_time DESC
         LIMIT 1
         """, nativeQuery = true)
     Optional<Relationship> findLatestByUserIdAndPartnerUserIdBeforeDate(@Param("userId") Long userId,
                                                                        @Param("partnerUserId") Long partnerUserId,
-                                                                       @Param("date") LocalDate date);
+                                                                       @Param("date") LocalDate date,
+                                                                       @Param("seasonId") Long seasonId, @Param("seasonStartDate") LocalDate seasonStartDate);
 
     @Query(value = """
-            SELECT id, user_id, date, version, partner_user_id, intimacy, partner_model, update_time, intimacy_as_of, created_at
+        SELECT r.*
+        FROM relationships r
+        WHERE r.user_id = :userId AND r.partner_user_id = :partnerUserId AND r.update_time <= :now
+          AND (r.season_id = :seasonId OR (r.season_id IS NULL AND r.date >= :seasonStartDate))
+        ORDER BY r.date DESC, r.update_time DESC
+        LIMIT 1
+        """, nativeQuery = true)
+    Optional<Relationship> findLatestInSeasonByUserIdAndPartnerUserId(@Param("userId") Long userId,
+                                                                      @Param("partnerUserId") Long partnerUserId,
+                                                                      @Param("seasonId") Long seasonId, @Param("seasonStartDate") LocalDate seasonStartDate,
+                                                                      @Param("now") LocalDateTime now);
+
+    @Query(value = """
+            SELECT id, user_id, date, version, partner_user_id, intimacy, partner_model, update_time, intimacy_as_of, created_at, season_id
+            FROM (
+                SELECT r.*,
+                       ROW_NUMBER() OVER (PARTITION BY r.partner_user_id ORDER BY r.date DESC, r.update_time DESC) AS row_num
+                FROM relationships r
+                WHERE r.user_id = :userId AND r.partner_user_id IN (:partnerUserIds) AND r.update_time <= :now
+                  AND (r.season_id = :seasonId OR (r.season_id IS NULL AND r.date >= :seasonStartDate))
+            ) latest
+            WHERE latest.row_num = 1
+            """, nativeQuery = true)
+    List<Relationship> findLatestInSeasonByUserIdAndPartnerUserIdIn(@Param("userId") Long userId,
+                                                                    @Param("partnerUserIds") List<Long> partnerUserIds,
+                                                                    @Param("seasonId") Long seasonId, @Param("seasonStartDate") LocalDate seasonStartDate,
+                                                                    @Param("now") LocalDateTime now);
+
+    @Query(value = """
+            SELECT r.*
+            FROM relationships r
+            WHERE r.user_id = :userId AND r.partner_user_id = :partnerUserId AND r.update_time <= :now
+              AND (r.season_id = :seasonId OR (r.season_id IS NULL AND r.date >= :seasonStartDate))
+            ORDER BY r.date ASC, r.update_time ASC
+            """, nativeQuery = true)
+    List<Relationship> findAllInSeasonByUserIdAndPartnerUserId(@Param("userId") Long userId,
+                                                               @Param("partnerUserId") Long partnerUserId,
+                                                               @Param("seasonId") Long seasonId, @Param("seasonStartDate") LocalDate seasonStartDate,
+                                                               @Param("now") LocalDateTime now);
+
+    @Query(value = """
+            SELECT id, user_id, date, version, partner_user_id, intimacy, partner_model, update_time, intimacy_as_of, created_at, season_id
             FROM (
                 SELECT r.*,
                        ROW_NUMBER() OVER (PARTITION BY r.partner_user_id ORDER BY r.date DESC, r.update_time DESC) AS row_num
@@ -58,17 +106,20 @@ public interface RelationshipRepository extends JpaRepository<Relationship, Long
                        ROW_NUMBER() OVER (PARTITION BY r.partner_user_id ORDER BY r.date DESC, r.update_time DESC) AS row_num
                 FROM relationships r
                 WHERE r.user_id = :userId AND r.date < :date
+                  AND (r.season_id = :seasonId OR (r.season_id IS NULL AND r.date >= :seasonStartDate))
             ) latest
             WHERE latest.row_num = 1
             """, nativeQuery = true)
-    List<Relationship> findLatestBeforeDateByUserId(@Param("userId") Long userId, @Param("date") LocalDate date);
+    List<Relationship> findLatestBeforeDateByUserId(@Param("userId") Long userId,
+                                                    @Param("date") LocalDate date,
+                                                    @Param("seasonId") Long seasonId, @Param("seasonStartDate") LocalDate seasonStartDate);
 
     @Query(value = """
             SELECT DISTINCT r.partner_user_id
             FROM relationships r
             JOIN users u ON u.id = r.partner_user_id AND u.withdrawal_requested_at IS NULL AND u.deleted_at IS NULL
             WHERE r.user_id = :userId
-              AND r.update_time >= :since
+              AND (r.season_id = :seasonId OR (r.season_id IS NULL AND r.date >= :seasonStartDate))
               AND r.update_time <= :now
               AND (:cursor IS NULL OR r.partner_user_id > :cursor)
               AND NOT EXISTS (
@@ -83,7 +134,7 @@ public interface RelationshipRepository extends JpaRepository<Relationship, Long
     List<Long> findPartnerUserIdsByUserId(@Param("userId") Long userId,
                                           @Param("cursor") Long cursor,
                                           @Param("limit") Integer limit,
-                                          @Param("since") LocalDateTime since,
+                                          @Param("seasonId") Long seasonId, @Param("seasonStartDate") LocalDate seasonStartDate,
                                           @Param("now") LocalDateTime now);
 
     @Query(value = """
@@ -98,6 +149,7 @@ public interface RelationshipRepository extends JpaRepository<Relationship, Long
                   JOIN users p ON p.id = r.partner_user_id AND p.withdrawal_requested_at IS NULL AND p.deleted_at IS NULL
                   WHERE r.user_id = u.id
                     AND r.update_time <= :now
+                    AND (r.season_id = :seasonId OR (r.season_id IS NULL AND r.date >= :seasonStartDate))
                     AND NOT EXISTS (
                         SELECT 1
                         FROM blocks b
@@ -112,9 +164,15 @@ public interface RelationshipRepository extends JpaRepository<Relationship, Long
                     )
               )
             """, nativeQuery = true)
-    List<Long> findUserIdsWithVisiblePartner(@Param("now") LocalDateTime now);
+    List<Long> findUserIdsWithVisiblePartner(@Param("seasonId") Long seasonId, @Param("seasonStartDate") LocalDate seasonStartDate, @Param("now") LocalDateTime now);
 
-    List<Relationship> findAllByUserIdAndPartnerUserIdAndUpdateTimeLessThanEqualOrderByDateAscUpdateTimeAsc(Long userId, Long partnerUserId, LocalDateTime now);
+    @Modifying
+    @Query("UPDATE Relationship r SET r.seasonId = :seasonId WHERE r.seasonId IS NULL AND r.date >= :from AND r.date < :to")
+    void fillSeasonId(@Param("seasonId") Long seasonId, @Param("from") LocalDate from, @Param("to") LocalDate to);
+
+    @Modifying
+    @Query("UPDATE Relationship r SET r.seasonId = NULL WHERE r.seasonId = :seasonId")
+    void clearSeasonId(@Param("seasonId") Long seasonId);
 
     @Modifying
     @Query("DELETE FROM Relationship r WHERE r.userId IN :userIds")
@@ -142,9 +200,12 @@ public interface RelationshipRepository extends JpaRepository<Relationship, Long
             SELECT r.partnerUserId AS partnerUserId, MIN(r.updateTime) AS firstUpdateTime
             FROM Relationship r
             WHERE r.userId = :userId
+              AND (r.seasonId = :seasonId OR (r.seasonId IS NULL AND r.date >= :seasonStartDate))
             GROUP BY r.partnerUserId
             """)
-    List<PartnerFirstUpdateProjection> findAllPartnerFirstUpdatesByUserId(@Param("userId") Long userId);
+    List<PartnerFirstUpdateProjection> findAllPartnerFirstUpdatesByUserId(@Param("userId") Long userId,
+                                                                          @Param("seasonId") Long seasonId,
+                                                                          @Param("seasonStartDate") LocalDate seasonStartDate);
 
     interface PartnerFirstUpdateProjection {
         Long getPartnerUserId();

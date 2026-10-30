@@ -8,6 +8,7 @@ import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.people.repository.EncounterRepository;
 import com.nidus.twinly.relationship.entity.Relationship;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
+import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.season.repository.SeasonParticipationRepository;
 import com.nidus.twinly.season.repository.SeasonParticipationRepository.StarterCandidateProjection;
 import com.nidus.twinly.user.entity.User;
@@ -43,13 +44,16 @@ public class StarterRelationshipWriter {
     private final SeasonParticipationRepository seasonParticipationRepository;
     private final RelationshipRepository relationshipRepository;
     private final EncounterRepository encounterRepository;
+    private final CurrentSeasonReader currentSeasonReader;
 
     @Transactional
     public void connect(Long userId, Long seasonId, Instant participatedAt) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
-        if (user.getPoolNumber() == null || relationshipRepository.existsByUserId(userId)) {
+        LocalDate participatedDate = KstTimes.toLocalDateTime(participatedAt).toLocalDate();
+        if (user.getPoolNumber() == null
+                || relationshipRepository.existsInSeasonByUserId(userId, seasonId, currentSeasonReader.startDateOf(participatedDate))) {
             return;
         }
 
@@ -66,8 +70,8 @@ public class StarterRelationshipWriter {
 
         relationshipRepository.saveAll(partnerUserIds.stream()
                 .flatMap(partnerUserId -> Stream.of(
-                        starter(userId, partnerUserId, date, updateTime, participatedAt),
-                        starter(partnerUserId, userId, date, updateTime, participatedAt)))
+                        starter(userId, partnerUserId, date, updateTime, participatedAt, seasonId),
+                        starter(partnerUserId, userId, date, updateTime, participatedAt, seasonId)))
                 .toList());
 
         partnerUserIds.forEach(partnerUserId -> encounterRepository.upsert(
@@ -91,7 +95,7 @@ public class StarterRelationshipWriter {
                 .toList();
     }
 
-    private Relationship starter(Long userId, Long partnerUserId, LocalDate date, LocalDateTime updateTime, Instant intimacyAsOf) {
-        return Relationship.create(userId, date, STARTER_VERSION, partnerUserId, STARTER_INTIMACY, STARTER_PARTNER_MODEL, updateTime, intimacyAsOf);
+    private Relationship starter(Long userId, Long partnerUserId, LocalDate date, LocalDateTime updateTime, Instant intimacyAsOf, Long seasonId) {
+        return Relationship.create(userId, date, STARTER_VERSION, partnerUserId, STARTER_INTIMACY, STARTER_PARTNER_MODEL, updateTime, intimacyAsOf, seasonId);
     }
 }

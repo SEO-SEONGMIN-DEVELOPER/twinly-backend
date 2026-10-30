@@ -68,7 +68,8 @@ public class MapService {
             return new MapTwinsResult(now, List.of());
         }
 
-        List<PartnerFirstUpdateProjection> partners = relationshipRepository.findAllPartnerFirstUpdatesByUserId(userId);
+        List<PartnerFirstUpdateProjection> partners = relationshipRepository.findAllPartnerFirstUpdatesByUserId(
+                userId, currentSeasonReader.scopeOf(today).seasonId(), currentSeasonReader.scopeOf(today).startDate());
         Set<Long> partnerUserIds = partners.stream()
                 .map(PartnerFirstUpdateProjection::getPartnerUserId)
                 .collect(Collectors.toSet());

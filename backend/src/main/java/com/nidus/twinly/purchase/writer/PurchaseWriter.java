@@ -1,6 +1,9 @@
 package com.nidus.twinly.purchase.writer;
 
+import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.purchase.client.RevenueCatEntitlement;
+import com.nidus.twinly.purchase.domain.PoolAllocator;
+import com.nidus.twinly.purchase.domain.PoolAssignment;
 import com.nidus.twinly.purchase.entity.PoolCounter;
 import com.nidus.twinly.purchase.entity.RevenueCatEvent;
 import com.nidus.twinly.purchase.entity.UserEntitlement;
@@ -8,14 +11,19 @@ import com.nidus.twinly.purchase.repository.PoolCounterRepository;
 import com.nidus.twinly.purchase.repository.RevenueCatEventRepository;
 import com.nidus.twinly.purchase.repository.UserEntitlementRepository;
 import com.nidus.twinly.user.repository.UserRepository;
+import com.nidus.twinly.user.repository.UserRepository.PoolCandidateProjection;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Random;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -86,5 +94,35 @@ public class PurchaseWriter {
         }
 
         counter.increase();
+    }
+
+    @Transactional
+    public List<PoolAssignment> reassignPools(List<Long> userIds) {
+        PoolCounter counter = poolCounterRepository.findWithLockById(PoolCounter.SINGLETON_ID)
+                .orElseThrow(() -> new IllegalStateException("pool_counter 행이 없습니다."));
+
+        List<PoolCandidateProjection> candidates = userIds.isEmpty() ? List.of() : userRepository.findPoolCandidatesByIdIn(userIds);
+        if (candidates.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Long, Gender> genderByUserId = candidates.stream()
+                .collect(HashMap::new, (map, candidate) -> map.put(candidate.getId(), candidate.getGender()), HashMap::putAll);
+        List<Long> ordered = PoolAllocator.order(
+                candidates.stream().filter(candidate -> candidate.getGender() == Gender.MALE).map(PoolCandidateProjection::getId).toList(),
+                candidates.stream().filter(candidate -> candidate.getGender() != Gender.MALE).map(PoolCandidateProjection::getId).toList(),
+                new Random());
+        Map<Integer, List<Long>> userIdsByPoolNumber = new LinkedHashMap<>();
+        for (int index = 0; index < ordered.size(); index++) {
+            userIdsByPoolNumber.computeIfAbsent(PoolCounter.poolNumberAt(index), key -> new ArrayList<>()).add(ordered.get(index));
+        }
+
+        userRepository.clearNonSeedPoolNumbers();
+        userIdsByPoolNumber.forEach((poolNumber, members) -> userRepository.updatePoolNumber(members, poolNumber));
+        counter.resetTo(ordered.size());
+
+        return userIdsByPoolNumber.entrySet().stream()
+                .map(entry -> PoolAssignment.of(entry.getKey(), entry.getValue().stream().map(genderByUserId::get).toList()))
+                .toList();
     }
 }

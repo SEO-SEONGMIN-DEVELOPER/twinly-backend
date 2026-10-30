@@ -2,6 +2,7 @@ package com.nidus.twinly.season.service;
 
 import com.nidus.twinly.block.repository.BlockRepository;
 import com.nidus.twinly.common.aws.cloudfront.CloudFrontService;
+import com.nidus.twinly.common.logging.InfoLog;
 import com.nidus.twinly.common.photo.PhotoType;
 import com.nidus.twinly.common.photo.ProfilePhotoInfo;
 import com.nidus.twinly.common.web.BusinessException;
@@ -21,16 +22,20 @@ import com.nidus.twinly.season.dto.result.SeasonLatestRecapPlaceResult;
 import com.nidus.twinly.season.dto.result.SeasonLatestRecapResult;
 import com.nidus.twinly.season.dto.result.SeasonLatestRecapTogetherResult;
 import com.nidus.twinly.season.dto.result.SeasonParticipationResult;
+import com.nidus.twinly.season.dto.result.SeasonPoolReassignResult;
 import com.nidus.twinly.season.entity.Season;
 import com.nidus.twinly.season.entity.SeasonParticipation;
 import com.nidus.twinly.season.entity.SeasonRecap;
 import com.nidus.twinly.season.event.SeasonChangedEvent;
+import com.nidus.twinly.purchase.domain.PoolAssignment;
 import com.nidus.twinly.purchase.service.PurchaseService;
+import com.nidus.twinly.purchase.writer.PurchaseWriter;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.season.repository.SeasonParticipationRepository;
 import com.nidus.twinly.season.repository.SeasonRecapRepository;
 import com.nidus.twinly.season.repository.SeasonRepository;
 import com.nidus.twinly.season.writer.SeasonParticipationWriter;
+import com.nidus.twinly.season.writer.SeasonRowLinker;
 import com.nidus.twinly.legal.domain.PolicyKind;
 import com.nidus.twinly.legal.reader.ConsentReader;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
@@ -39,6 +44,7 @@ import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.PhotoRepository;
 import com.nidus.twinly.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -55,6 +61,9 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static com.nidus.twinly.common.logging.LogField.field;
+
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -63,9 +72,11 @@ public class SeasonService {
     private final CurrentSeasonReader currentSeasonReader;
     private final SeasonParticipationRepository seasonParticipationRepository;
     private final SeasonRepository seasonRepository;
+    private final SeasonRowLinker seasonRowLinker;
     private final SeasonParticipationWriter seasonParticipationWriter;
     private final ApplicationEventPublisher eventPublisher;
     private final PurchaseService purchaseService;
+    private final PurchaseWriter purchaseWriter;
     private final EntitlementReader entitlementReader;
     private final ConsentReader consentReader;
     private final UserRepository userRepository;
@@ -81,15 +92,45 @@ public class SeasonService {
             throw new BusinessException(ErrorCode.INVALID_SEASON_PERIOD);
         }
 
+        seasonRepository.findFirstByIsActiveFalseAndActivatedAtIsNullOrderByStartedAtAsc().ifPresent(reserved -> {
+            seasonRowLinker.unlink(reserved);
+            seasonRepository.delete(reserved);
+        });
         seasonRepository.findAllByIsActiveTrue().forEach(Season::deactivate);
 
         Season season = seasonRepository.save(Season.create(command.startedAt(), command.endedAt()));
 
-        seasonParticipationWriter.participateAllEligible(season.getId());
-
-        eventPublisher.publishEvent(new SeasonChangedEvent(season.getId()));
+        finishActivation(season);
 
         return new SeasonChangeResult(season.getId(), season.getStartedAt(), season.getEndedAt());
+    }
+
+    @Transactional
+    public void activateReserved(Season reserved, Instant now) {
+        seasonRepository.findAllByIsActiveTrue().forEach(Season::deactivate);
+
+        reserved.activate(now);
+
+        finishActivation(reserved);
+    }
+
+    private void finishActivation(Season season) {
+        seasonParticipationWriter.participateAllEligible(season.getId());
+
+        seasonRowLinker.link(season);
+
+        eventPublisher.publishEvent(new SeasonChangedEvent(season.getId()));
+    }
+
+    @Transactional
+    public SeasonPoolReassignResult reassignPools() {
+        List<PoolAssignment> assignments = purchaseWriter.reassignPools(seasonParticipationWriter.eligibleUserIds());
+
+        SeasonPoolReassignResult result = SeasonPoolReassignResult.from(assignments);
+
+        InfoLog.log(log, "시즌 풀을 다시 배정했습니다.", field("assignedCount", result.assignedCount()), field("poolCount", result.pools().size()));
+
+        return result;
     }
 
     @Transactional(propagation = Propagation.SUPPORTS)

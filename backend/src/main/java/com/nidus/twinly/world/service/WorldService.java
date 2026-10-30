@@ -153,7 +153,8 @@ public class WorldService {
 
     private Map<Long, WorldActorProfile> profiles(User viewer, Set<Long> userIds, LocalDate date) {
         LocalDateTime roundStart = date.atTime(ROUND_START);
-        Set<Long> relationshipUserIds = relationshipRepository.findAllPartnerFirstUpdatesByUserId(viewer.getId()).stream()
+        Set<Long> relationshipUserIds = relationshipRepository.findAllPartnerFirstUpdatesByUserId(
+                        viewer.getId(), currentSeasonReader.scopeOf(date).seasonId(), currentSeasonReader.scopeOf(date).startDate()).stream()
                 .filter(partner -> partner.getFirstUpdateTime().isBefore(roundStart))
                 .map(PartnerFirstUpdateProjection::getPartnerUserId)
                 .collect(Collectors.toSet());

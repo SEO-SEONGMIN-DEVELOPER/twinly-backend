@@ -1,5 +1,8 @@
 package com.nidus.twinly.relationship.writer;
 
+import java.time.LocalDate;
+import com.nidus.twinly.season.reader.CurrentSeasonReader;
+import org.junit.jupiter.api.BeforeEach;
 import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.people.repository.EncounterRepository;
@@ -23,6 +26,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
@@ -40,6 +45,9 @@ class StarterRelationshipWriterUnitTest {
     private static final Instant PARTICIPATED_AT = Instant.parse("2026-10-29T03:00:00Z");
 
     @Mock
+    CurrentSeasonReader currentSeasonReader;
+
+    @Mock
     UserRepository userRepository;
 
     @Mock
@@ -54,12 +62,17 @@ class StarterRelationshipWriterUnitTest {
     @InjectMocks
     StarterRelationshipWriter starterRelationshipWriter;
 
+    @BeforeEach
+    void setUpSeasonStartDate() {
+        lenient().when(currentSeasonReader.startDateOf(any())).thenReturn(LocalDate.EPOCH);
+    }
+
     @Test
     @DisplayName("이성 후보가 충분하면 이성 2명과 양방향 0점 관계를 참가 전날 날짜로 만들고 encounter 를 남긴다")
     void connect_picks_two_opposite_gender_and_saves_both_directions() {
         // given: 남자 유저, 같은 풀에 여자 후보 3명과 남자 후보 2명
         givenUser(Gender.MALE, POOL_NUMBER);
-        given(relationshipRepository.existsByUserId(USER_ID)).willReturn(false);
+        given(relationshipRepository.existsInSeasonByUserId(eq(USER_ID), any(), any())).willReturn(false);
         given(seasonParticipationRepository.findAllStarterCandidates(USER_ID, SEASON_ID, POOL_NUMBER)).willReturn(List.of(
                 candidate(21L, Gender.FEMALE), candidate(22L, Gender.FEMALE), candidate(23L, Gender.FEMALE),
                 candidate(31L, Gender.MALE), candidate(32L, Gender.MALE)));
@@ -96,7 +109,7 @@ class StarterRelationshipWriterUnitTest {
     void connect_fills_with_same_gender_when_opposite_is_short() {
         // given: 남자 유저, 같은 풀에 여자 후보 1명과 남자 후보 2명
         givenUser(Gender.MALE, POOL_NUMBER);
-        given(relationshipRepository.existsByUserId(USER_ID)).willReturn(false);
+        given(relationshipRepository.existsInSeasonByUserId(eq(USER_ID), any(), any())).willReturn(false);
         given(seasonParticipationRepository.findAllStarterCandidates(USER_ID, SEASON_ID, POOL_NUMBER)).willReturn(List.of(
                 candidate(21L, Gender.FEMALE), candidate(31L, Gender.MALE), candidate(32L, Gender.MALE)));
 
@@ -117,7 +130,7 @@ class StarterRelationshipWriterUnitTest {
     void connect_uses_same_gender_when_no_opposite() {
         // given: 여자 유저, 같은 풀에 여자 후보 3명뿐
         givenUser(Gender.FEMALE, POOL_NUMBER);
-        given(relationshipRepository.existsByUserId(USER_ID)).willReturn(false);
+        given(relationshipRepository.existsInSeasonByUserId(eq(USER_ID), any(), any())).willReturn(false);
         given(seasonParticipationRepository.findAllStarterCandidates(USER_ID, SEASON_ID, POOL_NUMBER)).willReturn(List.of(
                 candidate(21L, Gender.FEMALE), candidate(22L, Gender.FEMALE), candidate(23L, Gender.FEMALE)));
 
@@ -133,7 +146,7 @@ class StarterRelationshipWriterUnitTest {
     void connect_skips_when_user_already_has_relationship() {
         // given: 이전 시즌 등으로 인연이 이미 있는 유저
         givenUser(Gender.MALE, POOL_NUMBER);
-        given(relationshipRepository.existsByUserId(USER_ID)).willReturn(true);
+        given(relationshipRepository.existsInSeasonByUserId(eq(USER_ID), any(), any())).willReturn(true);
 
         // when: 시작 인연 연결
         starterRelationshipWriter.connect(USER_ID, SEASON_ID, PARTICIPATED_AT);
@@ -163,7 +176,7 @@ class StarterRelationshipWriterUnitTest {
     void connect_skips_when_no_candidates() {
         // given: 같은 풀에 연결할 후보가 없음
         givenUser(Gender.MALE, POOL_NUMBER);
-        given(relationshipRepository.existsByUserId(USER_ID)).willReturn(false);
+        given(relationshipRepository.existsInSeasonByUserId(eq(USER_ID), any(), any())).willReturn(false);
         given(seasonParticipationRepository.findAllStarterCandidates(USER_ID, SEASON_ID, POOL_NUMBER)).willReturn(List.of());
 
         // when: 시작 인연 연결

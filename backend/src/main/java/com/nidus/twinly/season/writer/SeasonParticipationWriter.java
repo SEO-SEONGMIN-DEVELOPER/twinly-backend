@@ -68,14 +68,19 @@ public class SeasonParticipationWriter {
 
     @Transactional
     public void participateAllEligible(Long seasonId) {
-        List<Long> eligibleUserIds = consentReader.filterAgreedAllRequired(entitlementReader.userIdsWithSimulationAccess(), PolicyKind.PARALLEL_ENTRY);
-        List<Long> userIds = eligibleUserIds.isEmpty()
-                ? eligibleUserIds
-                : userRepository.findIdsByIdInAndSchoolVerificationStatus(eligibleUserIds, SchoolVerificationStatus.APPROVED);
+        List<Long> userIds = eligibleUserIds();
 
         userIds.forEach(userId -> seasonParticipationRepository.upsert(userId, seasonId));
 
         InfoLog.log(log, "시즌 전환에 따라 결제·필수 약관 동의 유저를 자동 참가시켰습니다.", field("seasonId", seasonId), field("count", userIds.size()));
+    }
+
+    public List<Long> eligibleUserIds() {
+        List<Long> agreedUserIds = consentReader.filterAgreedAllRequired(entitlementReader.userIdsWithSimulationAccess(), PolicyKind.PARALLEL_ENTRY);
+
+        return agreedUserIds.isEmpty()
+                ? agreedUserIds
+                : userRepository.findIdsByIdInAndSchoolVerificationStatus(agreedUserIds, SchoolVerificationStatus.APPROVED);
     }
 
     private boolean isSchoolVerificationApproved(Long userId) {

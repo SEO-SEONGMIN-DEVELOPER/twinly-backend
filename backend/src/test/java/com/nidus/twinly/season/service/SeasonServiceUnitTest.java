@@ -27,6 +27,7 @@ import com.nidus.twinly.season.repository.SeasonParticipationRepository;
 import com.nidus.twinly.season.writer.SeasonParticipationWriter;
 import com.nidus.twinly.purchase.service.PurchaseService;
 import com.nidus.twinly.season.repository.SeasonRepository;
+import com.nidus.twinly.season.writer.SeasonRowLinker;
 import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.UserRepository;
@@ -70,6 +71,9 @@ class SeasonServiceUnitTest {
 
     @Mock
     SeasonRepository seasonRepository;
+
+    @Mock
+    SeasonRowLinker seasonRowLinker;
 
     @Mock
     SeasonParticipationWriter seasonParticipationWriter;

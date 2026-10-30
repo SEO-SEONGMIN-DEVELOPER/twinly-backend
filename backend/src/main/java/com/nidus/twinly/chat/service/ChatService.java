@@ -226,7 +226,7 @@ public class ChatService {
                 photoRepository.findAllByUserIdInAndType(partnerIds, PhotoType.PROFILE).stream()
                         .collect(Collectors.toMap(Photo::getUserId, Function.identity())),
 
-                intimacyReader.readAll(userId, partnerIds, KstTimes.now()),
+                intimacyReader.readAllLatest(userId, partnerIds, KstTimes.now()),
 
                 chatRepository.findLatestByRoomIdIn(visibleRoomIds).stream()
                         .collect(Collectors.toMap(Chat::getRoomId, Function.identity())),
@@ -356,7 +356,7 @@ public class ChatService {
                 : photoRepository.findByUserIdAndType(partnerId, PhotoType.PROFILE)
                         .orElse(null);
 
-        Intimacy intimacy = intimacyReader.read(userId, partnerId, KstTimes.now());
+        Intimacy intimacy = intimacyReader.readLatest(userId, partnerId, KstTimes.now());
 
         Set<DisclosureField> agreedFields = partner.isWithdrawn() ? Set.of()
                 : disclosureAgreementRepository.findAllByUserId(partnerId).stream()

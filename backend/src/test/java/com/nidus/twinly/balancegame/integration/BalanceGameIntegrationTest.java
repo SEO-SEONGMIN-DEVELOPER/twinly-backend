@@ -192,6 +192,29 @@ class BalanceGameIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("이전 시즌 관계만 있는 상대는 게임 조회와 답변 모두 404 RELATIONSHIP_NOT_FOUND 다")
+    void answer_to_previous_season_partner_is_rejected() throws Exception {
+        // given: 시즌 시작 전 회차의 관계만 있는 상대
+        User previous = saveUser();
+        LocalDate beforeSeason = KstTimes.today().minusDays(60);
+        relationshipRepository.save(Relationship.create(me.getId(), beforeSeason, "v1", previous.getId(), 40, "model",
+                beforeSeason.atTime(12, 0), null));
+        String round = body(current(me, partner).andExpect(status().isOk()));
+
+        // when & then: 답변은 막히고 답이 남지 않는다
+        answer(me, JsonPath.read(round, "$.roundId"), partner, JsonPath.read(round, "$.question.options[0].id")).andExpect(status().isOk());
+        answer(me, JsonPath.read(round, "$.roundId"), previous, JsonPath.read(round, "$.question.options[0].id"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RELATIONSHIP_NOT_FOUND"));
+        assertThat(balanceGameAnswerRepository.count()).isEqualTo(1);
+
+        // when & then: 조회도 인연이 없는 상대처럼 막힌다
+        current(me, previous)
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RELATIONSHIP_NOT_FOUND"));
+    }
+
+    @Test
     @DisplayName("같은 트윈에게 다시 답하면 409 지만, 다른 트윈에게는 답할 수 있다. 없는 회차면 404 다")
     void rejects_second_answer_to_same_partner_only() throws Exception {
         // given: 트윈에게 이미 답했다
@@ -407,9 +430,9 @@ class BalanceGameIntegrationTest extends AbstractIntegrationTest {
     private void knowEachOther(User user1, User user2) {
         LocalDate yesterday = KstTimes.today().minusDays(1);
         relationshipRepository.save(Relationship.create(user1.getId(), yesterday, "v1", user2.getId(), 40, "model",
-                yesterday.atTime(23, 0), null));
+                yesterday.atTime(23, 0), null, season.getId()));
         relationshipRepository.save(Relationship.create(user2.getId(), yesterday, "v1", user1.getId(), 40, "model",
-                yesterday.atTime(23, 0), null));
+                yesterday.atTime(23, 0), null, season.getId()));
     }
 
     private List<Integer> bonusesBetween(User user1, User user2) {

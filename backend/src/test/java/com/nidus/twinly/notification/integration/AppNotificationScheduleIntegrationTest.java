@@ -1,5 +1,7 @@
 package com.nidus.twinly.notification.integration;
 
+import com.nidus.twinly.season.entity.Season;
+import com.nidus.twinly.season.repository.SeasonRepository;
 import com.nidus.twinly.activity.entity.Scene;
 import com.nidus.twinly.activity.entity.ScenePartner;
 import com.nidus.twinly.activity.repository.ScenePartnerRepository;
@@ -32,6 +34,9 @@ class AppNotificationScheduleIntegrationTest extends AbstractIntegrationTest {
     private static final String EXPECTED_UTC = "2026-09-14 11:10:00";
     private static final String FRIEND = AppNotificationScheduleType.FRIEND.name();
     private static final String FIRST_MEETING = AppNotificationScheduleType.FIRST_MEETING.name();
+
+    @Autowired
+    SeasonRepository seasonRepository;
 
     @Autowired
     AppNotificationScheduleRepository appNotificationScheduleRepository;
@@ -170,10 +175,53 @@ class AppNotificationScheduleIntegrationTest extends AbstractIntegrationTest {
 
         // when: 기준 날짜 이전에 대화한 상대 조회
         List<Long> alreadyMet = scenePartnerRepository.findPartnerUserIdsWithDialogueBeforeDate(
-                userId, List.of(talkedBefore, actedBefore, talksToday), DATE);
+                userId, List.of(talkedBefore, actedBefore, talksToday), DATE, null, LocalDate.EPOCH);
 
         // then: 마주치기만 한 상대와 오늘 처음 대화하는 상대는 아직 첫 만남 대상이다
         assertThat(alreadyMet).containsExactly(talkedBefore);
+    }
+
+    @Test
+    @DisplayName("이전 대화 조회는 시즌 시작일 전의 대화를 세지 않아 새 시즌에 다시 첫 만남이 된다")
+    void findPartnerUserIdsWithDialogueBeforeDate_ignores_previous_season() {
+        // given: 시즌 시작 전날 대화한 상대
+        Long partner = saveUser().getId();
+        saveScene(Scene.createDialogue(userId, DATE.minusDays(1), "v1", "카페", null,
+                DATE.minusDays(1).atTime(11, 0), DATE.minusDays(1).atTime(12, 0), "[]"), partner);
+        entityManager.flush();
+
+        // when: 기준 날짜가 시즌 시작일인 회차의 이전 대화 조회
+        List<Long> alreadyMet = scenePartnerRepository.findPartnerUserIdsWithDialogueBeforeDate(
+                userId, List.of(partner), DATE, null, DATE);
+
+        // then: 이전 시즌 대화는 세지 않는다
+        assertThat(alreadyMet).isEmpty();
+    }
+
+    @Test
+    @DisplayName("이전 대화 조회는 시즌 id 가 같은 대화만 세고, 전날 회차라도 같은 시즌이면 센다")
+    void findPartnerUserIdsWithDialogueBeforeDate_uses_season_id() {
+        // given: 시즌 1·2 대화 상대
+        Long previousSeasonPartner = saveUser().getId();
+        Long sameSeasonPartner = saveUser().getId();
+        Scene previous = Scene.createDialogue(userId, DATE.minusDays(2), "v1", "카페", null,
+                DATE.minusDays(2).atTime(11, 0), DATE.minusDays(2).atTime(12, 0), "[]");
+        Scene same = Scene.createDialogue(userId, DATE.minusDays(1), "v1", "카페", null,
+                DATE.minusDays(1).atTime(11, 0), DATE.minusDays(1).atTime(12, 0), "[]");
+        Season first = seasonRepository.save(Season.create(java.time.Instant.parse("2026-01-01T00:00:00Z"), java.time.Instant.parse("2026-02-01T00:00:00Z")));
+        Season second = seasonRepository.save(Season.create(java.time.Instant.parse("2026-02-01T00:00:00Z"), java.time.Instant.parse("2027-02-01T00:00:00Z")));
+        previous.assignSeason(first.getId());
+        same.assignSeason(second.getId());
+        saveScene(previous, previousSeasonPartner);
+        saveScene(same, sameSeasonPartner);
+        entityManager.flush();
+
+        // when
+        List<Long> alreadyMet = scenePartnerRepository.findPartnerUserIdsWithDialogueBeforeDate(
+                userId, List.of(previousSeasonPartner, sameSeasonPartner), DATE, second.getId(), DATE);
+
+        // then
+        assertThat(alreadyMet).containsExactly(sameSeasonPartner);
     }
 
     private void saveScene(Scene scene, Long withUserId) {

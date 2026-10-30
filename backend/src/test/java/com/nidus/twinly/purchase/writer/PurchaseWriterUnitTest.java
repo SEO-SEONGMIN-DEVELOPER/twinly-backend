@@ -234,14 +234,14 @@ class PurchaseWriterUnitTest {
     }
 
     @Test
-    @DisplayName("한 풀에 100명이 차면 다음 유저부터 다음 풀을 배정한다")
-    void assignPool_moves_to_next_pool_every_100_users() {
-        // given: 99명까지는 풀 13, 100명이 배정된 뒤의 유저는 풀 14
+    @DisplayName("한 풀에 80명이 차면 다음 유저부터 다음 풀을 배정한다")
+    void assignPool_moves_to_next_pool_every_80_users() {
+        // given: 79명까지는 풀 13, 80명이 배정된 뒤의 유저는 풀 14
         given(poolCounterRepository.findWithLockById(PoolCounter.SINGLETON_ID))
-                .willReturn(Optional.of(counter(99)), Optional.of(counter(100)));
+                .willReturn(Optional.of(counter(79)), Optional.of(counter(80)));
         given(userRepository.assignPoolNumber(anyLong(), anyInt())).willReturn(1);
 
-        // when: 100번째, 101번째 유저 배정
+        // when: 80번째, 81번째 유저 배정
         purchaseWriter.assignPool(100L);
         purchaseWriter.assignPool(101L);
 
@@ -274,6 +274,22 @@ class PurchaseWriterUnitTest {
         // when & then
         assertThatThrownBy(() -> purchaseWriter.assignPool(USER_ID))
                 .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    @DisplayName("재배정 대상이 없으면 기존 풀 번호와 카운터를 건드리지 않는다")
+    void reassignPools_without_candidates_changes_nothing() {
+        // given: 카운터가 30 인 상태에서 대상 유저가 없음
+        PoolCounter counter = counter(30);
+        given(poolCounterRepository.findWithLockById(PoolCounter.SINGLETON_ID)).willReturn(Optional.of(counter));
+
+        // when: 재배정
+        var assignments = purchaseWriter.reassignPools(List.of());
+
+        // then: 아무것도 바뀌지 않는다
+        assertThat(assignments).isEmpty();
+        then(userRepository).should(never()).clearNonSeedPoolNumbers();
+        assertThat(counter.getAssignedCount()).isEqualTo(30);
     }
 
     private PoolCounter counter(int assignedCount) {

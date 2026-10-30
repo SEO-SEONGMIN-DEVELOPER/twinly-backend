@@ -1,11 +1,14 @@
 package com.nidus.twinly.relationship.reader;
 
+import com.nidus.twinly.season.domain.SeasonScope;
 import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.relationship.domain.Intimacy;
 import com.nidus.twinly.relationship.entity.IntimacyBonus;
 import com.nidus.twinly.relationship.entity.Relationship;
 import com.nidus.twinly.relationship.repository.IntimacyBonusRepository;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
+import com.nidus.twinly.season.entity.Season;
+import com.nidus.twinly.season.repository.SeasonRepository;
 import com.nidus.twinly.support.AbstractIntegrationTest;
 import com.nidus.twinly.user.entity.User;
 import org.junit.jupiter.api.DisplayName;
@@ -34,6 +37,9 @@ class IntimacyReaderIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     IntimacyBonusRepository intimacyBonusRepository;
+
+    @Autowired
+    SeasonRepository seasonRepository;
 
     @Test
     @DisplayName("기준 시각 이후에 얻은 게임 점수만 시뮬레이션 친밀도에 더하고, 게임 몫은 지금까지 얻은 게임 점수 전부다")
@@ -191,7 +197,7 @@ class IntimacyReaderIntegrationTest extends AbstractIntegrationTest {
         saveBonus(me, partner, 5, kst(2026, 10, 1, 12));
 
         // when: 10/1 15시에 10/1 을 다시 시뮬레이션하려고 시작값 조회
-        Map<Long, Integer> intimacies = intimacyReader.readForSimulation(me.getId(), LocalDate.of(2026, 10, 1), kst(2026, 10, 1, 15));
+        Map<Long, Integer> intimacies = intimacyReader.readForSimulation(me.getId(), LocalDate.of(2026, 10, 1), SeasonScope.UNBOUNDED, kst(2026, 10, 1, 15));
 
         // then: 10/1 v1 의 50 이 아니라 9/30 의 30 에서 출발해 그 뒤 게임 점수를 더한다
         assertThat(intimacies).containsExactlyEntriesOf(Map.of(partner.getId(), 38));
@@ -210,7 +216,7 @@ class IntimacyReaderIntegrationTest extends AbstractIntegrationTest {
         saveBonus(me, partner, 2, Instant.parse("2026-10-01T10:00:00Z"));
 
         // when: 마지막 기록의 다음 날을 시뮬레이션하려고 시작값 조회
-        Map<Long, Integer> intimacies = intimacyReader.readForSimulation(me.getId(), later.toLocalDate().plusDays(1), Instant.now());
+        Map<Long, Integer> intimacies = intimacyReader.readForSimulation(me.getId(), later.toLocalDate().plusDays(1), SeasonScope.UNBOUNDED, Instant.now());
 
         // then: 화면 기준 38 + 2 = 40 이 아니라, AI 가 마지막으로 낸 40 에 퀴즈 점수를 더한 42 에서 출발한다
         assertThat(intimacies).containsExactlyEntriesOf(Map.of(partner.getId(), 42));
@@ -227,7 +233,7 @@ class IntimacyReaderIntegrationTest extends AbstractIntegrationTest {
         saveBonus(me, partner, 4, Instant.parse("2026-10-01T10:00:01Z"));
 
         // when: 10시 정각 기준 시작값 조회
-        Map<Long, Integer> intimacies = intimacyReader.readForSimulation(me.getId(), LocalDate.of(2026, 10, 1),
+        Map<Long, Integer> intimacies = intimacyReader.readForSimulation(me.getId(), LocalDate.of(2026, 10, 1), SeasonScope.UNBOUNDED,
                 Instant.parse("2026-10-01T10:00:00Z"));
 
         // then: 30 + 2. 10시 1초 점수는 결과가 돌아온 뒤 기준 시각 이후 점수로 더해진다
@@ -245,14 +251,119 @@ class IntimacyReaderIntegrationTest extends AbstractIntegrationTest {
         saveRelationshipOn(me, second, LocalDate.of(2026, 10, 1), 0, AS_OF);
 
         // when: 10/1 시뮬레이션 시작값 조회
-        Map<Long, Integer> intimacies = intimacyReader.readForSimulation(me.getId(), LocalDate.of(2026, 10, 1), Instant.now());
+        Map<Long, Integer> intimacies = intimacyReader.readForSimulation(me.getId(), LocalDate.of(2026, 10, 1), SeasonScope.UNBOUNDED, Instant.now());
 
         // then: 둘째 상대는 처음 만나는 사이라 빠진다
         assertThat(intimacies).containsExactlyEntriesOf(Map.of(first.getId(), 30));
     }
 
-    private void saveRelationshipOn(User user, User partner, LocalDate date, int intimacy, Instant intimacyAsOf) {
-        relationshipRepository.save(Relationship.create(user.getId(), date, "v1", partner.getId(), intimacy, "model",
+    @Test
+    @DisplayName("다음 시즌 회차를 만들 때는 이전 시즌 친밀도를 돌려주지 않고, 그 시즌 행만 이어진다")
+    void readForSimulation_is_separated_by_season_id() {
+        // given: 시즌 1 의 10-31 회차 77
+        Season october = seasonRepository.save(Season.create(kst(2026, 10, 1, 0), kst(2026, 11, 1, 0)));
+        Season november = seasonRepository.save(Season.reserve(kst(2026, 11, 1, 0), kst(2026, 12, 1, 0)));
+        User me = saveUser();
+        User partner = saveUser();
+        saveRelationshipInSeason(me, partner, LocalDate.of(2026, 10, 31), 77, october.getId());
+        SeasonScope scope = new SeasonScope(november.getId(), LocalDate.of(2026, 11, 1));
+
+        // when & then: 11-01 회차를 만들 때는 비어 있다
+        assertThat(intimacyReader.readForSimulation(me.getId(), LocalDate.of(2026, 11, 1), scope, Instant.now())).isEmpty();
+
+        // when & then: 11-02 회차를 만들 때는 11-01 회차 값만 이어진다
+        saveRelationshipInSeason(me, partner, LocalDate.of(2026, 11, 1), 10, november.getId());
+        assertThat(intimacyReader.readForSimulation(me.getId(), LocalDate.of(2026, 11, 2), scope, Instant.now()))
+                .containsEntry(partner.getId(), 10);
+    }
+
+    @Test
+    @DisplayName("전날 날짜로 저장된 시작 인연도 시즌 id 가 같으면 그 시즌 친밀도에 포함한다")
+    void readForSimulation_includes_starter_saved_with_previous_date() {
+        // given: 11-01 에 참가해 date 가 10-31 이고 11월 시즌 id 인 시작 인연
+        Season november = seasonRepository.save(Season.reserve(kst(2026, 11, 1, 0), kst(2026, 12, 1, 0)));
+        User me = saveUser();
+        User partner = saveUser();
+        saveRelationshipInSeason(me, partner, LocalDate.of(2026, 10, 31), 0, november.getId());
+
+        // when & then
+        assertThat(intimacyReader.readForSimulation(me.getId(), LocalDate.of(2026, 11, 1),
+                new SeasonScope(november.getId(), LocalDate.of(2026, 11, 1)), Instant.now()))
+                .containsEntry(partner.getId(), 0);
+    }
+
+    @Test
+    @DisplayName("시즌 id 가 없는 행은 회차 날짜로 시즌을 판단한다")
+    void readForSimulation_uses_date_for_rows_without_season_id() {
+        // given: 시즌 id 없이 저장된 10-31·11-01 회차
+        User me = saveUser();
+        User partner = saveUser();
+        saveRelationshipOn(me, partner, LocalDate.of(2026, 10, 31), 77, null);
+        SeasonScope scope = new SeasonScope(null, LocalDate.of(2026, 11, 1));
+
+        // when & then: 11-01 회차는 비고, 11-02 회차는 11-01 값만 읽는다
+        assertThat(intimacyReader.readForSimulation(me.getId(), LocalDate.of(2026, 11, 1), scope, Instant.now())).isEmpty();
+        saveRelationshipOn(me, partner, LocalDate.of(2026, 11, 1), 10, null);
+        assertThat(intimacyReader.readForSimulation(me.getId(), LocalDate.of(2026, 11, 2), scope, Instant.now()))
+                .containsEntry(partner.getId(), 10);
+    }
+
+    @Test
+    @DisplayName("다른 시즌의 게임 점수는 친밀도에 더하지 않는다")
+    void read_counts_bonuses_only_of_same_season_id() {
+        // given: 9월 시즌 행, 8월·9월 시즌 점수
+        Season august = seasonRepository.save(Season.create(kst(2026, 8, 1, 0), kst(2026, 9, 1, 0)));
+        Season september = seasonRepository.save(Season.create(kst(2026, 9, 1, 0), kst(2027, 1, 1, 0)));
+        User me = saveUser();
+        User partner = saveUser();
+        saveRelationshipInSeason(me, partner, LocalDate.of(2026, 9, 2), 10, september.getId());
+        saveBonusInSeason(me, partner, 10, kst(2026, 8, 31, 12), august.getId());
+        saveBonusInSeason(me, partner, 10, kst(2026, 9, 2, 12), september.getId());
+
+        // when: 현재 시즌 기준 조회
+        Intimacy intimacy = intimacyReader.read(me.getId(), partner.getId(), KstTimes.now());
+
+        // then: 9월 점수만 더해진다
+        assertThat(intimacy.value()).isEqualTo(20);
+        assertThat(intimacy.game()).isEqualTo(10);
+    }
+
+    @Test
+    @DisplayName("이전 시즌 행의 최신값은 그 시즌 점수만 더하고, 현재 시즌 조회에는 나오지 않는다")
+    void readLatest_keeps_previous_season_value() {
+        // given: 8월 시즌 행, 8월·9월 시즌 점수, 현재는 9월 시즌
+        Season august = seasonRepository.save(Season.create(kst(2026, 8, 1, 0), kst(2026, 9, 1, 0)));
+        Season september = seasonRepository.save(Season.create(kst(2026, 9, 1, 0), kst(2027, 1, 1, 0)));
+        User me = saveUser();
+        User partner = saveUser();
+        saveRelationshipInSeason(me, partner, LocalDate.of(2026, 8, 30), 30, august.getId());
+        saveBonusInSeason(me, partner, 10, kst(2026, 8, 31, 12), august.getId());
+        saveBonusInSeason(me, partner, 10, kst(2026, 9, 2, 12), september.getId());
+
+        // when
+        Intimacy latest = intimacyReader.readLatest(me.getId(), partner.getId(), KstTimes.now());
+
+        // then
+        assertThat(latest.value()).isEqualTo(40);
+        assertThat(latest.game()).isEqualTo(10);
+        assertThat(intimacyReader.read(me.getId(), partner.getId(), KstTimes.now())).isEqualTo(Intimacy.ZERO);
+        assertThat(intimacyReader.readAll(me.getId(), List.of(partner.getId()), KstTimes.now())).isEmpty();
+    }
+
+    private void saveRelationshipInSeason(User user, User partner, LocalDate date, int intimacy, Long seasonId) {
+        relationshipRepository.saveAndFlush(Relationship.create(user.getId(), date, "v1", partner.getId(), intimacy, "model",
+                date.atTime(12, 0), null, seasonId));
+    }
+
+    private void saveBonusInSeason(User user1, User user2, int amount, Instant createdAt, Long seasonId) {
+        IntimacyBonus bonus = IntimacyBonus.create(user1.getId(), user2.getId(), amount, seasonId);
+        ReflectionTestUtils.setField(bonus, "createdAt", createdAt);
+        intimacyBonusRepository.saveAndFlush(bonus);
+    }
+
+
+    private Relationship saveRelationshipOn(User user, User partner, LocalDate date, int intimacy, Instant intimacyAsOf) {
+        return relationshipRepository.save(Relationship.create(user.getId(), date, "v1", partner.getId(), intimacy, "model",
                 date.atTime(23, 0), intimacyAsOf));
     }
 
