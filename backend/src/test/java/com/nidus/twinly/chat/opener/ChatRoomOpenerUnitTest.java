@@ -1,6 +1,7 @@
 package com.nidus.twinly.chat.opener;
 
 import com.nidus.twinly.chat.entity.ChatRoom;
+import com.nidus.twinly.chat.entity.ChatRoomParticipation;
 import com.nidus.twinly.chat.event.ChatChangedEvent;
 import com.nidus.twinly.chat.repository.ChatRoomParticipationRepository;
 import com.nidus.twinly.chat.repository.ChatRoomRepository;
@@ -20,8 +21,10 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.util.List;
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
@@ -96,7 +99,8 @@ class ChatRoomOpenerUnitTest {
     @Test
     @DisplayName("이미 채팅방이 있으면 match 피드를 중복으로 남기지 않는다")
     void openIfEligible_existing_room_writes_nothing() {
-        // given: 해당 매칭의 채팅방이 이미 존재
+        // given: 현재 시즌 매칭의 채팅방이 이미 존재
+        given(currentSeasonReader.read()).willReturn(season());
         given(matchRepository.findByUserAIdAndUserBId(ME, PARTNER)).willReturn(Optional.of(match()));
         given(chatRoomRepository.findByMatchId(MATCH_ID)).willReturn(Optional.of(room()));
 
@@ -108,8 +112,59 @@ class ChatRoomOpenerUnitTest {
         then(appNotificationFeedWriter).should(never()).writeMatch(anyLong(), anyLong(), anyLong());
     }
 
+    @Test
+    @DisplayName("이전 시즌에 열린 방이 둘 다 입장 전이면 현재 시즌으로 옮기고 match 피드를 다시 남긴다")
+    void open_moves_unentered_previous_season_room_to_current_season() {
+        // given: 이전 시즌 매칭의 방이 있고 상대가 아직 입장 전
+        Match previousMatch = match(CURRENT_SEASON_ID - 1);
+        given(currentSeasonReader.read()).willReturn(season());
+        given(matchRepository.findByUserAIdAndUserBId(ME, PARTNER)).willReturn(Optional.of(previousMatch));
+        given(chatRoomRepository.findByMatchId(MATCH_ID)).willReturn(Optional.of(room()));
+        given(chatRoomParticipationRepository.findAllByRoomId(ROOM_ID))
+                .willReturn(List.of(entered(ME), ChatRoomParticipation.create(ROOM_ID, PARTNER)));
+
+        // when: 채팅방 개설 시도
+        chatRoomOpener.open(ME, PARTNER);
+
+        // then: 새 방 없이 매칭을 현재 시즌으로 옮기고 피드·목록 갱신 이벤트를 남김
+        assertThat(previousMatch.getSeasonId()).isEqualTo(CURRENT_SEASON_ID);
+        then(chatRoomRepository).should(never()).save(any());
+        then(appNotificationFeedWriter).should().writeMatch(ROOM_ID, ME, PARTNER);
+        then(eventPublisher).should().publishEvent(any(ChatChangedEvent.class));
+    }
+
+    @Test
+    @DisplayName("이전 시즌에 열린 방이 둘 다 입장했으면 시즌을 옮기지 않고 아무것도 남기지 않는다")
+    void open_keeps_entered_previous_season_room() {
+        // given: 이전 시즌 매칭의 방에 둘 다 입장함
+        Long previousSeasonId = CURRENT_SEASON_ID - 1;
+        Match previousMatch = match(previousSeasonId);
+        given(currentSeasonReader.read()).willReturn(season());
+        given(matchRepository.findByUserAIdAndUserBId(ME, PARTNER)).willReturn(Optional.of(previousMatch));
+        given(chatRoomRepository.findByMatchId(MATCH_ID)).willReturn(Optional.of(room()));
+        given(chatRoomParticipationRepository.findAllByRoomId(ROOM_ID)).willReturn(List.of(entered(ME), entered(PARTNER)));
+
+        // when: 채팅방 개설 시도
+        chatRoomOpener.open(ME, PARTNER);
+
+        // then: 시즌·피드·이벤트 모두 그대로
+        assertThat(previousMatch.getSeasonId()).isEqualTo(previousSeasonId);
+        then(appNotificationFeedWriter).should(never()).writeMatch(anyLong(), anyLong(), anyLong());
+        then(eventPublisher).should(never()).publishEvent(any());
+    }
+
+    private ChatRoomParticipation entered(Long userId) {
+        ChatRoomParticipation participation = ChatRoomParticipation.create(ROOM_ID, userId);
+        participation.agree();
+        return participation;
+    }
+
     private Match match() {
-        Match match = Match.create(ME, PARTNER, CURRENT_SEASON_ID);
+        return match(CURRENT_SEASON_ID);
+    }
+
+    private Match match(Long seasonId) {
+        Match match = Match.create(ME, PARTNER, seasonId);
         ReflectionTestUtils.setField(match, "id", MATCH_ID);
         return match;
     }
