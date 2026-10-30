@@ -103,6 +103,8 @@ import static org.mockito.Mockito.never;
 class PeopleServiceUnitTest {
 
     private static final Long ME = 1L;
+    private static final Long CURRENT_SEASON_ID = 3L;
+    private static final Instant SEASON_STARTED_AT = Instant.parse("2026-10-31T15:00:00Z");
 
     @Mock
     UserRepository userRepository;
@@ -170,7 +172,8 @@ class PeopleServiceUnitTest {
     @DisplayName("사람 목록은 사진·친밀도·씬 수·채팅방·즐겨찾기를 파트너별로 결합해 반환한다")
     void people_merges_all_sources() {
         // given: 파트너 2명(10,20) 중 10만 사진·매칭/채팅방·씬·즐겨찾기가 있는 상태
-        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), any(LocalDateTime.class)))
+        givenCurrentSeason(CURRENT_SEASON_ID);
+        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .willReturn(List.of(10L, 20L));
         given(userRepository.findAllById(List.of(10L, 20L)))
                 .willReturn(List.of(user(10L, "길동"), user(20L, "철수")));
@@ -222,7 +225,8 @@ class PeopleServiceUnitTest {
     @DisplayName("limit보다 한 건 더 조회되면 초과분을 잘라내고 마지막 파트너 id를 nextCursor로 돌려준다")
     void people_hasMore_boundary() {
         // given: limit 2에 대해 3건이 조회된 상태(다음 페이지 존재)
-        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(3), any(LocalDateTime.class)))
+        givenCurrentSeason(CURRENT_SEASON_ID);
+        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(3), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .willReturn(List.of(10L, 20L, 30L));
         given(userRepository.findAllById(List.of(10L, 20L)))
                 .willReturn(List.of(user(10L, "길동"), user(20L, "철수")));
@@ -240,7 +244,8 @@ class PeopleServiceUnitTest {
     @DisplayName("사람 목록은 현재 회차 친밀도 퀴즈에서 나와 상대가 답한 상태를 파트너별로 담는다")
     void people_includes_intimacy_quiz_status() {
         // given: 현재 회차(id 3)에서 10은 둘 다 같은 답, 20은 나만 답, 30은 상대만 답, 40은 아무도 안 답한 상태
-        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), any(LocalDateTime.class)))
+        givenCurrentSeason(CURRENT_SEASON_ID);
+        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .willReturn(List.of(10L, 20L, 30L, 40L));
         given(userRepository.findAllById(List.of(10L, 20L, 30L, 40L)))
                 .willReturn(List.of(user(10L, "길동"), user(20L, "철수"), user(30L, "영희"), user(40L, "민수")));
@@ -263,7 +268,8 @@ class PeopleServiceUnitTest {
     @DisplayName("현재 회차가 아직 만들어지지 않았으면 둘 다 안 답한 것으로 내리고 답변은 조회하지 않는다")
     void people_intimacy_quiz_status_without_round() {
         // given: 파트너 1명, 현재 회차 행이 아직 없는 상태
-        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), any(LocalDateTime.class)))
+        givenCurrentSeason(CURRENT_SEASON_ID);
+        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .willReturn(List.of(10L));
         given(userRepository.findAllById(List.of(10L))).willReturn(List.of(user(10L, "길동")));
         given(balanceGameRoundRepository.findByStartsAt(any(Instant.class))).willReturn(Optional.empty());
@@ -280,7 +286,8 @@ class PeopleServiceUnitTest {
     @DisplayName("현재 회차는 조회 시각의 KST 기준 회차 시작 시각으로 찾는다")
     void people_intimacy_quiz_round_is_current_kst_round() {
         // given: 파트너 1명
-        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), any(LocalDateTime.class)))
+        givenCurrentSeason(CURRENT_SEASON_ID);
+        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .willReturn(List.of(10L));
         given(userRepository.findAllById(List.of(10L))).willReturn(List.of(user(10L, "길동")));
         Instant before = BalanceGameSchedule.roundStartOf(KstTimes.now());
@@ -299,7 +306,8 @@ class PeopleServiceUnitTest {
     @DisplayName("나를 차단한 파트너는 퀴즈를 할 수 없어 상태가 null 이다")
     void people_intimacy_quiz_status_null_for_blocking_partner() {
         // given: 30은 나를 차단한 상태
-        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), any(LocalDateTime.class)))
+        givenCurrentSeason(CURRENT_SEASON_ID);
+        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .willReturn(List.of(10L, 30L));
         given(userRepository.findAllById(List.of(10L, 30L)))
                 .willReturn(List.of(user(10L, "길동"), user(30L, "영희")));
@@ -318,7 +326,8 @@ class PeopleServiceUnitTest {
     @DisplayName("관계된 파트너가 없으면 빈 목록을 반환하고 부가 정보를 조회하지 않는다")
     void people_empty_short_circuits() {
         // given: 관계된 파트너가 하나도 없는 상태
-        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), any(LocalDateTime.class)))
+        givenCurrentSeason(CURRENT_SEASON_ID);
+        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .willReturn(List.of());
 
         // when: 사람 목록 조회
@@ -340,7 +349,8 @@ class PeopleServiceUnitTest {
     @DisplayName("사람 목록은 호출 시점의 KST 현재 시각을 기준으로 관계 기록을 조회한다")
     void people_queries_with_current_kst_time() {
         // given: 관계된 파트너가 없는 상태에서 조회 전후의 KST 시각
-        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), any(LocalDateTime.class)))
+        givenCurrentSeason(CURRENT_SEASON_ID);
+        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .willReturn(List.of());
         LocalDateTime before = KstTimes.now();
 
@@ -350,8 +360,24 @@ class PeopleServiceUnitTest {
 
         // then: 조회 기준 시각은 호출 전후의 KST 시각 사이다 (UTC 로 넘기면 9시간 어긋나 범위를 벗어난다)
         ArgumentCaptor<LocalDateTime> captor = ArgumentCaptor.forClass(LocalDateTime.class);
-        then(relationshipRepository).should().findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), captor.capture());
+        then(relationshipRepository).should().findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), any(LocalDateTime.class), captor.capture());
         assertThat(captor.getValue()).isBetween(before, after);
+    }
+
+    @Test
+    @DisplayName("사람 목록은 현재 시즌 시작 시각(KST) 이후에 갱신된 관계만 조회한다")
+    void people_queries_since_current_season_started_at_in_kst() {
+        // given: 현재 시즌이 KST 2026-11-01 00:00 에 시작했고 관계된 파트너가 없는 상태
+        givenCurrentSeason(CURRENT_SEASON_ID);
+        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .willReturn(List.of());
+
+        // when: 사람 목록 조회
+        peopleService.people(ME, null, null);
+
+        // then: 조회 하한은 시즌 시작 시각을 KST 벽시계로 바꾼 값이다
+        then(relationshipRepository).should().findPartnerUserIdsByUserId(
+                eq(ME), isNull(), eq(51), eq(LocalDateTime.of(2026, 11, 1, 0, 0)), any(LocalDateTime.class));
     }
 
     // ----------------------------------------------------------------- profile()
@@ -1280,6 +1306,7 @@ class PeopleServiceUnitTest {
     private void givenCurrentSeason(Long seasonId) {
         Season season = newInstance(Season.class);
         ReflectionTestUtils.setField(season, "id", seasonId);
+        ReflectionTestUtils.setField(season, "startedAt", SEASON_STARTED_AT);
         given(currentSeasonReader.read()).willReturn(season);
     }
 

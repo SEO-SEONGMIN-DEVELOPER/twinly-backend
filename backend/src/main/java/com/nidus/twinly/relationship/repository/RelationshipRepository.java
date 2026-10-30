@@ -68,6 +68,7 @@ public interface RelationshipRepository extends JpaRepository<Relationship, Long
             FROM relationships r
             JOIN users u ON u.id = r.partner_user_id AND u.withdrawal_requested_at IS NULL AND u.deleted_at IS NULL
             WHERE r.user_id = :userId
+              AND r.update_time >= :since
               AND r.update_time <= :now
               AND (:cursor IS NULL OR r.partner_user_id > :cursor)
               AND NOT EXISTS (
@@ -82,6 +83,7 @@ public interface RelationshipRepository extends JpaRepository<Relationship, Long
     List<Long> findPartnerUserIdsByUserId(@Param("userId") Long userId,
                                           @Param("cursor") Long cursor,
                                           @Param("limit") Integer limit,
+                                          @Param("since") LocalDateTime since,
                                           @Param("now") LocalDateTime now);
 
     @Query(value = """

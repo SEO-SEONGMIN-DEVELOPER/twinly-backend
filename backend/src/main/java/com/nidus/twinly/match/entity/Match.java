@@ -39,4 +39,8 @@ public class Match {
 
         return match;
     }
+
+    public void moveToSeason(Long seasonId) {
+        this.seasonId = seasonId;
+    }
 }
