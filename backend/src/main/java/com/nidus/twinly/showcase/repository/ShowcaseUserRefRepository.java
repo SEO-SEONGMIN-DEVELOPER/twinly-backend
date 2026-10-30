@@ -15,4 +15,8 @@ public interface ShowcaseUserRefRepository extends JpaRepository<ShowcaseUserRef
     @Modifying
     @Query("DELETE FROM ShowcaseUserRef r WHERE r.showcaseId = :showcaseId")
     void deleteAllByShowcaseId(@Param("showcaseId") Long showcaseId);
+
+    @Modifying
+    @Query("DELETE FROM ShowcaseUserRef r WHERE r.showcaseId IN (SELECT s.id FROM Showcase s WHERE s.targetUserId IN :userIds)")
+    void deleteAllByShowcaseTargetUserIdIn(@Param("userIds") List<Long> userIds);
 }

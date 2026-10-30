@@ -28,7 +28,10 @@ import com.nidus.twinly.people.repository.EncounterRepository;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
 import com.nidus.twinly.season.entity.Season;
 import com.nidus.twinly.season.repository.SeasonRepository;
+import com.nidus.twinly.showcase.entity.Showcase;
+import com.nidus.twinly.showcase.entity.ShowcaseUserRef;
 import com.nidus.twinly.showcase.repository.ShowcaseRepository;
+import com.nidus.twinly.showcase.repository.ShowcaseUserRefRepository;
 import com.nidus.twinly.support.AbstractIntegrationTest;
 import com.nidus.twinly.user.entity.User;
 import jakarta.persistence.EntityManager;
@@ -53,6 +56,7 @@ class ScenarioCleanerIntegrationTest extends AbstractIntegrationTest {
     @Autowired QuestionRepository questionRepository;
     @Autowired RelationshipRepository relationshipRepository;
     @Autowired ShowcaseRepository showcaseRepository;
+    @Autowired ShowcaseUserRefRepository showcaseUserRefRepository;
     @Autowired AppNotificationFeedRepository appNotificationFeedRepository;
     @Autowired AppNotificationScheduleRepository appNotificationScheduleRepository;
     @Autowired ChatRoomParticipationRepository chatRoomParticipationRepository;
@@ -73,7 +77,7 @@ class ScenarioCleanerIntegrationTest extends AbstractIntegrationTest {
     void setUp() {
         // given: 운영 프로필 전용 빈이라 테스트 프로필에서는 실제 리포지토리로 직접 조립한다
         scenarioCleaner = new ScenarioCleaner(scenePartnerRepository, sceneRepository, questionPartnerRepository,
-                questionRepository, relationshipRepository, showcaseRepository, appNotificationFeedRepository,
+                questionRepository, relationshipRepository, showcaseRepository, showcaseUserRefRepository, appNotificationFeedRepository,
                 appNotificationScheduleRepository, chatRoomParticipationRepository, chatRepository, chatRoomRepository,
                 matchRepository, chatRoomOpeningRepository, encounterPreferenceRepository, encounterRepository);
         season = seasonRepository.save(Season.create(Instant.now().minus(Duration.ofDays(1)), Instant.now().plus(Duration.ofDays(30))));
@@ -141,6 +145,30 @@ class ScenarioCleanerIntegrationTest extends AbstractIntegrationTest {
         // then: 시나리오를 다시 채울 쇼케이스 유저의 예약만 사라진다
         assertThat(appNotificationScheduleRepository.findById(showcaseSchedule.getId())).isEmpty();
         assertThat(appNotificationScheduleRepository.findById(realUserSchedule.getId())).isPresent();
+    }
+
+    @Test
+    @DisplayName("쇼케이스 대상의 둘러보기에 사람 번호가 매겨져 있어도 번호와 둘러보기를 함께 지운다")
+    void clear_deletes_showcase_user_refs_before_showcases() {
+        // given: 실제 사용자가 쇼케이스 유저를 대상으로 연 둘러보기와, 그 안에서 매겨진 사람 번호
+        User showcase = saveUser();
+        User partner = saveUser();
+        User viewer = saveUser();
+        Showcase opened = showcaseRepository.save(Showcase.create(viewer.getId(), showcase.getId(), LocalDate.of(2026, 10, 30)));
+        showcaseUserRefRepository.saveAll(List.of(
+                ShowcaseUserRef.create(opened.getId(), showcase.getId(), 1L),
+                ShowcaseUserRef.create(opened.getId(), partner.getId(), 2L)));
+        entityManager.flush();
+        entityManager.clear();
+
+        // when: 쇼케이스 유저 정리
+        scenarioCleaner.clear(List.of(showcase.getId()));
+        entityManager.flush();
+        entityManager.clear();
+
+        // then: FK 로 묶인 사람 번호가 먼저 지워져 둘러보기까지 함께 사라진다
+        assertThat(showcaseUserRefRepository.findAllByShowcaseId(opened.getId())).isEmpty();
+        assertThat(showcaseRepository.findById(opened.getId())).isEmpty();
     }
 
     private PairData createPairData(User user, User partner) {

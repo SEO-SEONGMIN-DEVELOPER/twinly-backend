@@ -16,6 +16,7 @@ import com.nidus.twinly.people.repository.EncounterPreferenceRepository;
 import com.nidus.twinly.people.repository.EncounterRepository;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
 import com.nidus.twinly.showcase.repository.ShowcaseRepository;
+import com.nidus.twinly.showcase.repository.ShowcaseUserRefRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
@@ -34,6 +35,7 @@ public class ScenarioCleaner {
     private final QuestionRepository questionRepository;
     private final RelationshipRepository relationshipRepository;
     private final ShowcaseRepository showcaseRepository;
+    private final ShowcaseUserRefRepository showcaseUserRefRepository;
     private final AppNotificationFeedRepository appNotificationFeedRepository;
     private final AppNotificationScheduleRepository appNotificationScheduleRepository;
     private final ChatRoomParticipationRepository chatRoomParticipationRepository;
@@ -55,6 +57,7 @@ public class ScenarioCleaner {
         questionPartnerRepository.deleteAllByQuestionUserIdIn(userIds);
         questionRepository.deleteAllByUserIdIn(userIds);
         relationshipRepository.deleteAllByUserIdIn(userIds);
+        showcaseUserRefRepository.deleteAllByShowcaseTargetUserIdIn(userIds);
         showcaseRepository.deleteAllByTargetUserIdIn(userIds);
         appNotificationFeedRepository.deleteAllByUserIdInAndType(userIds, AppNotificationFeedType.FRIEND);
         appNotificationScheduleRepository.deleteAllByUserIdIn(userIds);

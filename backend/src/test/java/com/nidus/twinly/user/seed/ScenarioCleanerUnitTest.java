@@ -16,6 +16,7 @@ import com.nidus.twinly.people.repository.EncounterPreferenceRepository;
 import com.nidus.twinly.people.repository.EncounterRepository;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
 import com.nidus.twinly.showcase.repository.ShowcaseRepository;
+import com.nidus.twinly.showcase.repository.ShowcaseUserRefRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -49,6 +50,9 @@ class ScenarioCleanerUnitTest {
 
     @Mock
     ShowcaseRepository showcaseRepository;
+
+    @Mock
+    ShowcaseUserRefRepository showcaseUserRefRepository;
 
     @Mock
     AppNotificationFeedRepository appNotificationFeedRepository;
@@ -89,9 +93,9 @@ class ScenarioCleanerUnitTest {
         // when: 정리 실행
         scenarioCleaner.clear(userIds);
 
-        // then: FK 자식(partner)이 먼저, 부모가 나중에 지워지고 친구 알림 피드와 알림 예약까지 함께 지운다
+        // then: FK 자식(partner·사람 번호)이 먼저, 부모가 나중에 지워지고 친구 알림 피드와 알림 예약까지 함께 지운다
         InOrder inOrder = inOrder(scenePartnerRepository, sceneRepository, questionPartnerRepository, questionRepository,
-                relationshipRepository, showcaseRepository, appNotificationFeedRepository, appNotificationScheduleRepository,
+                relationshipRepository, showcaseUserRefRepository, showcaseRepository, appNotificationFeedRepository, appNotificationScheduleRepository,
                 chatRoomParticipationRepository, chatRepository, chatRoomRepository, matchRepository, chatRoomOpeningRepository,
                 encounterPreferenceRepository, encounterRepository);
         inOrder.verify(scenePartnerRepository).deleteAllBySceneUserIdIn(userIds);
@@ -99,6 +103,7 @@ class ScenarioCleanerUnitTest {
         inOrder.verify(questionPartnerRepository).deleteAllByQuestionUserIdIn(userIds);
         inOrder.verify(questionRepository).deleteAllByUserIdIn(userIds);
         inOrder.verify(relationshipRepository).deleteAllByUserIdIn(userIds);
+        inOrder.verify(showcaseUserRefRepository).deleteAllByShowcaseTargetUserIdIn(userIds);
         inOrder.verify(showcaseRepository).deleteAllByTargetUserIdIn(userIds);
         inOrder.verify(appNotificationFeedRepository).deleteAllByUserIdInAndType(userIds, AppNotificationFeedType.FRIEND);
         inOrder.verify(appNotificationScheduleRepository).deleteAllByUserIdIn(userIds);
@@ -122,7 +127,7 @@ class ScenarioCleanerUnitTest {
 
         // then: 어떤 삭제도 일어나지 않는다
         verifyNoInteractions(scenePartnerRepository, sceneRepository, questionPartnerRepository, questionRepository,
-                relationshipRepository, showcaseRepository, appNotificationFeedRepository, appNotificationScheduleRepository,
+                relationshipRepository, showcaseUserRefRepository, showcaseRepository, appNotificationFeedRepository, appNotificationScheduleRepository,
                 chatRoomParticipationRepository, chatRepository, chatRoomRepository, matchRepository, chatRoomOpeningRepository,
                 encounterPreferenceRepository, encounterRepository);
     }
