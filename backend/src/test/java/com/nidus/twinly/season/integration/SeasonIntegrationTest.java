@@ -3,6 +3,10 @@ package com.nidus.twinly.season.integration;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.time.KstTimes;
+import com.nidus.twinly.me.service.MeService;
+import com.nidus.twinly.notification.domain.AppNotificationScheduleType;
+import com.nidus.twinly.notification.entity.AppNotificationSchedule;
+import com.nidus.twinly.notification.repository.AppNotificationScheduleRepository;
 import com.nidus.twinly.people.repository.EncounterRepository;
 import com.nidus.twinly.purchase.client.RevenueCatClient;
 import com.nidus.twinly.relationship.entity.Relationship;
@@ -64,6 +68,12 @@ class SeasonIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     IntimacyReader intimacyReader;
+
+    @Autowired
+    MeService meService;
+
+    @Autowired
+    AppNotificationScheduleRepository appNotificationScheduleRepository;
 
     // 참여 API 가 RevenueCat 과 먼저 동기화하므로 실제 호출을 막는다.
     @MockitoBean
@@ -130,7 +140,7 @@ class SeasonIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("시즌 첫 참여: 같은 풀 이성 참가자 2명과 양방향 0점 인연이 생기고 인연탭·페르소나 친밀도에 바로 잡힌다")
+    @DisplayName("시즌 첫 참여: 같은 풀 이성 2명과 0점 인연이 생기되 인연탭엔 1명만 바로, 나머지는 다음 날 보이고 페르소나엔 둘 다 실린다")
     void participateIn_connects_starter_relationships_end_to_end() throws Exception {
         // given: 풀 13의 남자 신규 유저, 같은 풀에 참가 중인 여자 2명·남자 1명, 다른 풀의 여자 1명
         Instant now = Instant.now();
@@ -148,24 +158,54 @@ class SeasonIntegrationTest extends AbstractIntegrationTest {
                         .header("Authorization", bearer(user.getId())))
                 .andExpect(status().isOk());
 
-        // then: 같은 풀 여자 2명과만 양쪽 방향 인연 행이 생긴다
+        // then: 지금은 같은 풀 여자 중 1명만 양쪽 방향으로 보인다
         entityManager.clear();
         LocalDateTime kstNow = KstTimes.now();
-        assertThat(relationshipRepository.findLatestUntilByUserIdAndPartnerUserIdIn(
-                user.getId(), List.of(femaleA.getId(), femaleB.getId(), male.getId(), otherPoolFemale.getId()), kstNow))
+        List<Long> candidateUserIds = List.of(femaleA.getId(), femaleB.getId(), male.getId(), otherPoolFemale.getId());
+        List<Relationship> revealed = relationshipRepository.findLatestUntilByUserIdAndPartnerUserIdIn(user.getId(), candidateUserIds, kstNow);
+        assertThat(revealed).hasSize(1);
+        assertThat(revealed.getFirst().getIntimacy()).isZero();
+        Long firstPartnerUserId = revealed.getFirst().getPartnerUserId();
+        assertThat(firstPartnerUserId).isIn(femaleA.getId(), femaleB.getId());
+        Long secondPartnerUserId = firstPartnerUserId.equals(femaleA.getId()) ? femaleB.getId() : femaleA.getId();
+        assertThat(relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(firstPartnerUserId, user.getId(), kstNow)).isPresent();
+        assertThat(relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(secondPartnerUserId, user.getId(), kstNow)).isEmpty();
+
+        // then: 하루가 지나면 나머지 1명도 양쪽 방향으로 보인다
+        LocalDateTime nextDay = kstNow.plusDays(1);
+        assertThat(relationshipRepository.findLatestUntilByUserIdAndPartnerUserIdIn(user.getId(), candidateUserIds, nextDay))
                 .extracting(Relationship::getPartnerUserId, Relationship::getIntimacy)
                 .containsExactlyInAnyOrder(tuple(femaleA.getId(), 0), tuple(femaleB.getId(), 0));
-        assertThat(relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(femaleA.getId(), user.getId(), kstNow)).isPresent();
-        assertThat(relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(femaleB.getId(), user.getId(), kstNow)).isPresent();
+        assertThat(relationshipRepository.findLatestUntilByUserIdAndPartnerUserId(secondPartnerUserId, user.getId(), nextDay)).isPresent();
         assertThat(encounterRepository.findByUserAIdAndUserBId(
-                Math.min(user.getId(), femaleA.getId()), Math.max(user.getId(), femaleA.getId()))).isPresent();
+                Math.min(user.getId(), secondPartnerUserId), Math.max(user.getId(), secondPartnerUserId))).isPresent();
 
-        // then: 기존 유저 인연탭에 신규 유저가 친밀도 0으로 보인다
+        // then: 기존 유저 인연탭에 먼저 공개된 쪽만 신규 유저가 친밀도 0으로 보인다
         mockMvc.perform(get("/api/v1/people")
-                        .header("Authorization", bearer(femaleA.getId())))
+                        .header("Authorization", bearer(firstPartnerUserId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.people[0].userId").value(String.valueOf(user.getId())))
                 .andExpect(jsonPath("$.people[0].intimacy").value(0));
+        mockMvc.perform(get("/api/v1/people")
+                        .header("Authorization", bearer(secondPartnerUserId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.people").isEmpty());
+
+        // then: 신규 유저의 프로필 만난 사람 수도 공개된 1명만 센다
+        assertThat(meService.profile(user.getId()).encounteredPeopleCount()).isEqualTo(1);
+
+        // then: 양쪽 푸시 예약이 공개 시각대로 들어가, 지금은 먼저 공개된 쪽만 발송 대상이고 하루 뒤 나머지도 대상이 된다
+        Instant afterParticipation = Instant.now();
+        assertThat(appNotificationScheduleRepository.findAllBySentAtIsNullAndScheduledAtLessThanEqualOrderByScheduledAtAsc(afterParticipation))
+                .extracting(AppNotificationSchedule::getUserId, AppNotificationSchedule::getPartnerUserId, AppNotificationSchedule::getType)
+                .containsExactlyInAnyOrder(
+                        tuple(user.getId(), firstPartnerUserId, AppNotificationScheduleType.STARTER_REVEAL),
+                        tuple(firstPartnerUserId, user.getId(), AppNotificationScheduleType.STARTER_REVEAL));
+        assertThat(appNotificationScheduleRepository.findAllBySentAtIsNullAndScheduledAtLessThanEqualOrderByScheduledAtAsc(afterParticipation.plus(Duration.ofDays(1))))
+                .extracting(AppNotificationSchedule::getUserId, AppNotificationSchedule::getPartnerUserId)
+                .containsExactlyInAnyOrder(
+                        tuple(user.getId(), firstPartnerUserId), tuple(firstPartnerUserId, user.getId()),
+                        tuple(user.getId(), secondPartnerUserId), tuple(secondPartnerUserId, user.getId()));
 
         // then: 선생성 첫날 페르소나에도 두 상대가 친밀도 0으로 실린다
         assertThat(intimacyReader.readForSimulation(user.getId(), KstTimes.today(), currentSeasonReader.scopeOf(KstTimes.today()), Instant.now()))

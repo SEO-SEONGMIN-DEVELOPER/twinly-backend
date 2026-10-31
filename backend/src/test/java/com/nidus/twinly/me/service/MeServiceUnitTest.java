@@ -13,6 +13,7 @@ import com.nidus.twinly.common.crypto.BlindIndexHasher;
 import com.nidus.twinly.common.feedback.FeedbackOption;
 import com.nidus.twinly.common.feedback.FeedbackOptionLoader;
 import com.nidus.twinly.common.feedback.FeedbackType;
+import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.common.persona.PersonalityType;
 import com.nidus.twinly.common.persona.PersonalityTypeCalculator;
@@ -1302,6 +1303,25 @@ class MeServiceUnitTest {
     }
 
     @Test
+    @DisplayName("아직 공개 시각이 되지 않은 인연은 만난 사람 수에서 빠진다")
+    void myProfile_excludes_partner_not_revealed_yet() {
+        // given: 이미 공개된 인연 1명과 다음 날 공개될 시작 인연 1명
+        User user = user();
+        ReflectionTestUtils.setField(user, "id", ME);
+        given(userRepository.findById(ME)).willReturn(Optional.of(user));
+        given(relationshipRepository.findAllPartnerFirstUpdatesByUserId(eq(ME), any(), any())).willReturn(List.of(
+                partnerUpdate(10L), partnerUpdate(20L, KstTimes.now().plusDays(1))));
+        given(intimacyReader.readAll(eq(ME), eq(List.of(10L)), any(LocalDateTime.class)))
+                .willReturn(Map.of(10L, new Intimacy(0, 0)));
+
+        // when: 내 프로필 조회
+        MeProfileResult result = meService.profile(ME);
+
+        // then: 공개된 1명만 센다
+        assertThat(result.encounteredPeopleCount()).isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("SUMMARY 요소가 없는 기존 유저는 차원별 첫 문장 3개를 이어 붙인 요약으로 대체한다")
     void myProfile_without_summary_falls_back_to_trait_join() {
         // given: AI 채팅 요약이 생기기 전에 가입한 유저라 SUMMARY 요소가 없음
@@ -2177,6 +2197,10 @@ class MeServiceUnitTest {
     }
 
     private RelationshipRepository.PartnerFirstUpdateProjection partnerUpdate(Long partnerUserId) {
+        return partnerUpdate(partnerUserId, LocalDateTime.of(2026, 10, 1, 12, 0));
+    }
+
+    private RelationshipRepository.PartnerFirstUpdateProjection partnerUpdate(Long partnerUserId, LocalDateTime firstUpdateTime) {
         return new RelationshipRepository.PartnerFirstUpdateProjection() {
             @Override
             public Long getPartnerUserId() {
@@ -2185,7 +2209,7 @@ class MeServiceUnitTest {
 
             @Override
             public LocalDateTime getFirstUpdateTime() {
-                return LocalDateTime.of(2026, 10, 1, 12, 0);
+                return firstUpdateTime;
             }
         };
     }

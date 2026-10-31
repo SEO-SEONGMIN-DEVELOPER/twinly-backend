@@ -153,6 +153,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Objects;
@@ -699,7 +700,9 @@ public class MeService {
                 ));
 
         SeasonScope seasonScope = currentSeasonReader.scopeOf(KstTimes.today());
+        LocalDateTime now = KstTimes.now();
         List<Long> partnerUserIds = relationshipRepository.findAllPartnerFirstUpdatesByUserId(userId, seasonScope.seasonId(), seasonScope.startDate()).stream()
+                .filter(partner -> !partner.getFirstUpdateTime().isAfter(now))
                 .map(RelationshipRepository.PartnerFirstUpdateProjection::getPartnerUserId)
                 .toList();
 

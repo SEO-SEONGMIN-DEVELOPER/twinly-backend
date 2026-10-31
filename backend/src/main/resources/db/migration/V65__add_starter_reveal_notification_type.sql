@@ -1,0 +1,2 @@
+ALTER TABLE app_notification_schedules
+    MODIFY COLUMN type ENUM ('FRIEND','FIRST_MEETING','STARTER_REVEAL') NOT NULL;
