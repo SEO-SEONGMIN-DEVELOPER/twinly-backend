@@ -5,6 +5,8 @@ import com.nidus.twinly.common.logging.InfoLog;
 import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
+import com.nidus.twinly.notification.domain.AppNotificationScheduleType;
+import com.nidus.twinly.notification.repository.AppNotificationScheduleRepository;
 import com.nidus.twinly.people.repository.EncounterRepository;
 import com.nidus.twinly.relationship.entity.Relationship;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
@@ -18,14 +20,15 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static com.nidus.twinly.common.logging.LogField.field;
@@ -36,7 +39,7 @@ import static com.nidus.twinly.common.logging.LogField.field;
 public class StarterRelationshipWriter {
 
     private static final int STARTER_COUNT = 2;
-    private static final String STARTER_VERSION = "starter";
+    private static final Duration STARTER_REVEAL_INTERVAL = Duration.ofDays(1);
     private static final int STARTER_INTIMACY = 0;
     private static final String STARTER_PARTNER_MODEL = "아직 알게된 점이 없습니다.";
 
@@ -44,6 +47,7 @@ public class StarterRelationshipWriter {
     private final SeasonParticipationRepository seasonParticipationRepository;
     private final RelationshipRepository relationshipRepository;
     private final EncounterRepository encounterRepository;
+    private final AppNotificationScheduleRepository appNotificationScheduleRepository;
     private final CurrentSeasonReader currentSeasonReader;
 
     @Transactional
@@ -65,14 +69,24 @@ public class StarterRelationshipWriter {
             return;
         }
 
-        LocalDateTime updateTime = KstTimes.toLocalDateTime(participatedAt);
-        LocalDate date = updateTime.toLocalDate().minusDays(1);
+        LocalDate date = participatedDate.minusDays(1);
 
-        relationshipRepository.saveAll(partnerUserIds.stream()
-                .flatMap(partnerUserId -> Stream.of(
-                        starter(userId, partnerUserId, date, updateTime, participatedAt, seasonId),
-                        starter(partnerUserId, userId, date, updateTime, participatedAt, seasonId)))
-                .toList());
+        List<Relationship> starters = IntStream.range(0, partnerUserIds.size())
+                .boxed()
+                .flatMap(index -> {
+                    Long partnerUserId = partnerUserIds.get(index);
+                    Instant revealedAt = participatedAt.plus(STARTER_REVEAL_INTERVAL.multipliedBy(index));
+
+                    return Stream.of(
+                            starter(userId, partnerUserId, date, revealedAt, seasonId),
+                            starter(partnerUserId, userId, date, revealedAt, seasonId));
+                })
+                .toList();
+
+        relationshipRepository.saveAll(starters);
+
+        starters.forEach(starter -> appNotificationScheduleRepository.insertIfAbsent(
+                starter.getUserId(), starter.getPartnerUserId(), AppNotificationScheduleType.STARTER_REVEAL.name(), starter.getDate(), starter.getIntimacyAsOf()));
 
         partnerUserIds.forEach(partnerUserId -> encounterRepository.upsert(
                 Math.min(userId, partnerUserId), Math.max(userId, partnerUserId)));
@@ -95,7 +109,7 @@ public class StarterRelationshipWriter {
                 .toList();
     }
 
-    private Relationship starter(Long userId, Long partnerUserId, LocalDate date, LocalDateTime updateTime, Instant intimacyAsOf, Long seasonId) {
-        return Relationship.create(userId, date, STARTER_VERSION, partnerUserId, STARTER_INTIMACY, STARTER_PARTNER_MODEL, updateTime, intimacyAsOf, seasonId);
+    private Relationship starter(Long userId, Long partnerUserId, LocalDate date, Instant revealedAt, Long seasonId) {
+        return Relationship.create(userId, date, Relationship.STARTER_VERSION, partnerUserId, STARTER_INTIMACY, STARTER_PARTNER_MODEL, KstTimes.toLocalDateTime(revealedAt), revealedAt, seasonId);
     }
 }

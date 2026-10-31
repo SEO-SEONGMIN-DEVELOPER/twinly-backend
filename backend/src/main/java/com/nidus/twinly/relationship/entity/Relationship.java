@@ -17,6 +17,8 @@ import java.time.LocalDateTime;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Relationship {
 
+    public static final String STARTER_VERSION = "starter";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -62,5 +64,9 @@ public class Relationship {
         relationship.seasonId = seasonId;
 
         return relationship;
+    }
+
+    public boolean isStarter() {
+        return STARTER_VERSION.equals(version);
     }
 }

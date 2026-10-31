@@ -5,6 +5,7 @@ import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import org.junit.jupiter.api.BeforeEach;
 import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.time.KstTimes;
+import com.nidus.twinly.notification.repository.AppNotificationScheduleRepository;
 import com.nidus.twinly.people.repository.EncounterRepository;
 import com.nidus.twinly.relationship.entity.Relationship;
 import com.nidus.twinly.relationship.repository.RelationshipRepository;
@@ -22,6 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.BeanUtils;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -59,6 +61,9 @@ class StarterRelationshipWriterUnitTest {
     @Mock
     EncounterRepository encounterRepository;
 
+    @Mock
+    AppNotificationScheduleRepository appNotificationScheduleRepository;
+
     @InjectMocks
     StarterRelationshipWriter starterRelationshipWriter;
 
@@ -68,8 +73,8 @@ class StarterRelationshipWriterUnitTest {
     }
 
     @Test
-    @DisplayName("이성 후보가 충분하면 이성 2명과 양방향 0점 관계를 참가 전날 날짜로 만들고 encounter 를 남긴다")
-    void connect_picks_two_opposite_gender_and_saves_both_directions() {
+    @DisplayName("이성 후보가 충분하면 이성 2명과 양방향 0점 관계를 만들되 1명은 참가 시각, 1명은 다음 날 같은 시각에 공개한다")
+    void connect_picks_two_opposite_gender_and_reveals_one_per_day() {
         // given: 남자 유저, 같은 풀에 여자 후보 3명과 남자 후보 2명
         givenUser(Gender.MALE, POOL_NUMBER);
         given(relationshipRepository.existsInSeasonByUserId(eq(USER_ID), any(), any())).willReturn(false);
@@ -80,7 +85,7 @@ class StarterRelationshipWriterUnitTest {
         // when: 시작 인연 연결
         starterRelationshipWriter.connect(USER_ID, SEASON_ID, PARTICIPATED_AT);
 
-        // then: 여자 후보 중 2명과 양방향 4행이 저장되고, 모두 친밀도 0·참가 전날·참가 시각 기준이다
+        // then: 여자 후보 중 2명과 양방향 4행이 저장되고, 모두 친밀도 0·참가 전날이다
         List<Relationship> saved = capturedRelationships();
         assertThat(saved).hasSize(4);
         List<Long> partnerUserIds = saved.stream()
@@ -97,15 +102,30 @@ class StarterRelationshipWriterUnitTest {
             assertThat(relationship.getIntimacy()).isZero();
             assertThat(relationship.getVersion()).isEqualTo("starter");
             assertThat(relationship.getDate()).isEqualTo(KstTimes.toLocalDateTime(PARTICIPATED_AT).toLocalDate().minusDays(1));
-            assertThat(relationship.getUpdateTime()).isEqualTo(KstTimes.toLocalDateTime(PARTICIPATED_AT));
-            assertThat(relationship.getIntimacyAsOf()).isEqualTo(PARTICIPATED_AT);
         });
+
+        // then: 첫 번째 상대는 참가 시각, 두 번째 상대는 24시간 뒤가 양쪽 행의 공개 시각이다
+        Instant nextDay = PARTICIPATED_AT.plus(Duration.ofDays(1));
+        assertThat(saved)
+                .extracting(Relationship::getUserId, Relationship::getPartnerUserId, Relationship::getUpdateTime, Relationship::getIntimacyAsOf)
+                .containsExactlyInAnyOrder(
+                        tuple(USER_ID, partnerUserIds.get(0), KstTimes.toLocalDateTime(PARTICIPATED_AT), PARTICIPATED_AT),
+                        tuple(partnerUserIds.get(0), USER_ID, KstTimes.toLocalDateTime(PARTICIPATED_AT), PARTICIPATED_AT),
+                        tuple(USER_ID, partnerUserIds.get(1), KstTimes.toLocalDateTime(nextDay), nextDay),
+                        tuple(partnerUserIds.get(1), USER_ID, KstTimes.toLocalDateTime(nextDay), nextDay));
         partnerUserIds.forEach(partnerUserId ->
                 then(encounterRepository).should().upsert(Math.min(USER_ID, partnerUserId), Math.max(USER_ID, partnerUserId)));
+
+        // then: 양쪽 모두에게 공개 시각에 맞춰 푸시 예약이 들어간다
+        LocalDate date = KstTimes.toLocalDateTime(PARTICIPATED_AT).toLocalDate().minusDays(1);
+        then(appNotificationScheduleRepository).should().insertIfAbsent(USER_ID, partnerUserIds.get(0), "STARTER_REVEAL", date, PARTICIPATED_AT);
+        then(appNotificationScheduleRepository).should().insertIfAbsent(partnerUserIds.get(0), USER_ID, "STARTER_REVEAL", date, PARTICIPATED_AT);
+        then(appNotificationScheduleRepository).should().insertIfAbsent(USER_ID, partnerUserIds.get(1), "STARTER_REVEAL", date, nextDay);
+        then(appNotificationScheduleRepository).should().insertIfAbsent(partnerUserIds.get(1), USER_ID, "STARTER_REVEAL", date, nextDay);
     }
 
     @Test
-    @DisplayName("이성 후보가 1명뿐이면 그 1명과 동성 1명을 연결한다")
+    @DisplayName("이성 후보가 1명뿐이면 그 1명을 바로 공개하고 동성 1명을 다음 날 공개한다")
     void connect_fills_with_same_gender_when_opposite_is_short() {
         // given: 남자 유저, 같은 풀에 여자 후보 1명과 남자 후보 2명
         givenUser(Gender.MALE, POOL_NUMBER);
@@ -116,13 +136,33 @@ class StarterRelationshipWriterUnitTest {
         // when: 시작 인연 연결
         starterRelationshipWriter.connect(USER_ID, SEASON_ID, PARTICIPATED_AT);
 
-        // then: 여자 1명은 반드시 들어가고 나머지 1명은 남자 후보 중에서 채워진다
-        List<Long> partnerUserIds = capturedRelationships().stream()
+        // then: 여자 1명이 먼저 공개되고 나머지 1명은 남자 후보 중에서 채워져 다음 날 공개된다
+        List<Relationship> mine = capturedRelationships().stream()
                 .filter(relationship -> relationship.getUserId().equals(USER_ID))
-                .map(Relationship::getPartnerUserId)
                 .toList();
-        assertThat(partnerUserIds).hasSize(2).contains(21L);
-        assertThat(partnerUserIds).filteredOn(id -> !id.equals(21L)).singleElement().isIn(31L, 32L);
+        assertThat(mine).hasSize(2);
+        assertThat(mine.get(0).getPartnerUserId()).isEqualTo(21L);
+        assertThat(mine.get(0).getUpdateTime()).isEqualTo(KstTimes.toLocalDateTime(PARTICIPATED_AT));
+        assertThat(mine.get(1).getPartnerUserId()).isIn(31L, 32L);
+        assertThat(mine.get(1).getUpdateTime()).isEqualTo(KstTimes.toLocalDateTime(PARTICIPATED_AT).plusDays(1));
+    }
+
+    @Test
+    @DisplayName("후보가 1명뿐이면 그 1명만 참가 시각에 공개한다")
+    void connect_reveals_only_one_when_single_candidate() {
+        // given: 같은 풀에 후보가 1명뿐
+        givenUser(Gender.MALE, POOL_NUMBER);
+        given(relationshipRepository.existsInSeasonByUserId(eq(USER_ID), any(), any())).willReturn(false);
+        given(seasonParticipationRepository.findAllStarterCandidates(USER_ID, SEASON_ID, POOL_NUMBER)).willReturn(List.of(
+                candidate(21L, Gender.FEMALE)));
+
+        // when: 시작 인연 연결
+        starterRelationshipWriter.connect(USER_ID, SEASON_ID, PARTICIPATED_AT);
+
+        // then: 양방향 2행이 모두 참가 시각이다
+        assertThat(capturedRelationships())
+                .hasSize(2)
+                .allSatisfy(relationship -> assertThat(relationship.getUpdateTime()).isEqualTo(KstTimes.toLocalDateTime(PARTICIPATED_AT)));
     }
 
     @Test
@@ -182,9 +222,10 @@ class StarterRelationshipWriterUnitTest {
         // when: 시작 인연 연결
         starterRelationshipWriter.connect(USER_ID, SEASON_ID, PARTICIPATED_AT);
 
-        // then: 저장·encounter 없음
+        // then: 저장·encounter·푸시 예약 없음
         then(relationshipRepository).should(never()).saveAll(any());
         then(encounterRepository).should(never()).upsert(anyLong(), anyLong());
+        then(appNotificationScheduleRepository).should(never()).insertIfAbsent(any(), any(), any(), any(), any());
     }
 
     @SuppressWarnings("unchecked")
