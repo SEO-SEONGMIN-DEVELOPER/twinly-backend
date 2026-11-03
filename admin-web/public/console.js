@@ -258,6 +258,10 @@
 
       body.innerHTML = `<div class="dashboard-grid">
         <article class="card revenue-card count-card">
+          <div class="revenue-label">선착순 무료</div>
+          <div class="revenue-value num">${num(d.subscribers.earlyGrant)}<small>명</small></div>
+        </article>
+        <article class="card revenue-card count-card">
           <div class="revenue-label">무료 체험</div>
           <div class="revenue-value num">${num(d.subscribers.trial)}<small>명</small></div>
         </article>
