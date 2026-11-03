@@ -19,7 +19,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class BalanceGameQuestionLoader {
 
-    private static final String RESOURCE_PATH = "balancegame/balance_game_v1.json";
+    private static final String RESOURCE_PATH = "balancegame/balance_game_v2.json";
     private static final int OPTION_COUNT = 2;
 
     private final ObjectMapper objectMapper;
