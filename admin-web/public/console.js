@@ -257,9 +257,17 @@
       const maxCount = schools[0]?.memberCount || 1;
 
       body.innerHTML = `<div class="dashboard-grid">
+        <article class="card revenue-card count-card">
+          <div class="revenue-label">무료 체험</div>
+          <div class="revenue-value num">${num(d.subscribers.trial)}<small>명</small></div>
+        </article>
+        <article class="card revenue-card count-card">
+          <div class="revenue-label">유료 구독</div>
+          <div class="revenue-value num">${num(d.subscribers.paid)}<small>명</small></div>
+        </article>
         <article class="card revenue-card">
           <div class="revenue-label">매출</div>
-          <div class="revenue-value num">${num(subs.total * MONTHLY_PRICE)}<small>원</small></div>
+          <div class="revenue-value num">${num(d.subscribers.paid * MONTHLY_PRICE)}<small>원</small></div>
         </article>
         ${earlyGrantCard(d.earlyGrantSlots)}
         <div class="kpis">
