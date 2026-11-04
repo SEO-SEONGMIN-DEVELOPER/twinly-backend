@@ -27,7 +27,11 @@ public record AdminUsageResult(
             AdminGenderCountResult parallelRelationUsers,
             AdminGenderCountResult chatRoomOpenedUsers,
             AdminGenderCountResult chatRoomEnteredUsers,
-            AdminGenderCountResult peopleFavoriteUsers
+            AdminGenderCountResult peopleFavoriteUsers,
+            AdminGenderCountResult members,
+            AdminGenderCountResult subscribers,
+            AdminGenderCountResult seasonParticipants,
+            AdminGenderCountResult everSeasonParticipants
     ) {
     }
 

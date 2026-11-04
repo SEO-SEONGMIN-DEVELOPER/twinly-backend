@@ -745,6 +745,36 @@ class AdminConsoleIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("기능 이용 현황 일별 통계: 날짜별 비율 분모로 그날까지 가입·시즌 참가한 회원을 세고, 그날 전에 탈퇴한 회원은 뺀다")
+    void usage_dailyEligibleUsers() throws Exception {
+        // given: 오늘 참가한 남성, 5일 전 참가하고 2일 전 탈퇴 신청한 여성
+        JsonNode before = body(mockMvc.perform(admin(get("/admin/usage"))));
+        User man = saveMember("분모남", Gender.MALE, "분모대학교", "b1@bunmo.ac.kr");
+        User woman = saveMember("분모여", Gender.FEMALE, "분모대학교", "b2@bunmo.ac.kr");
+        flushAndClear();
+        participate(man);
+        participate(woman);
+        jdbcTemplate.update("UPDATE season_participations SET participated_in_at = UTC_TIMESTAMP(6) - INTERVAL 5 DAY WHERE user_id = ?", woman.getId());
+        jdbcTemplate.update("UPDATE users SET withdrawal_requested_at = UTC_TIMESTAMP(6) - INTERVAL 2 DAY WHERE id = ?", woman.getId());
+
+        // when
+        JsonNode after = body(mockMvc.perform(admin(get("/admin/usage"))).andExpect(status().isOk()));
+
+        // then: 남성은 오늘만, 여성은 탈퇴 전 날짜에만 탈퇴 포함 분모로 센다
+        assertThat(delta(before, after, "/daily/29/members/male")).isEqualTo(1);
+        assertThat(delta(before, after, "/daily/28/members/male")).isZero();
+        assertThat(delta(before, after, "/daily/29/subscribers/male")).isEqualTo(1);
+        assertThat(delta(before, after, "/daily/29/seasonParticipants/male")).isEqualTo(1);
+        assertThat(delta(before, after, "/daily/28/seasonParticipants/male")).isZero();
+        assertThat(delta(before, after, "/daily/29/everSeasonParticipants/male")).isEqualTo(1);
+        assertThat(delta(before, after, "/daily/26/subscribers/female")).isZero();
+        assertThat(delta(before, after, "/daily/26/seasonParticipants/female")).isEqualTo(1);
+        assertThat(delta(before, after, "/daily/26/everSeasonParticipants/female")).isEqualTo(1);
+        assertThat(delta(before, after, "/daily/29/seasonParticipants/female")).isZero();
+        assertThat(delta(before, after, "/daily/29/everSeasonParticipants/female")).isZero();
+    }
+
+    @Test
     @DisplayName("공지 수신 대상 수: 지정한 ID 중 활성 가입자만 센다")
     void noticeRecipientCount() throws Exception {
         // given
