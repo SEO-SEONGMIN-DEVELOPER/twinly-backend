@@ -22,6 +22,8 @@ import com.nidus.twinly.world.entity.WorldTrack;
 import com.nidus.twinly.world.reader.WorldTrackSlice;
 import com.nidus.twinly.world.reader.WorldTrackWindowReader;
 import com.nidus.twinly.world.repository.WorldTrackRepository;
+import com.nidus.twinly.twinlook.entity.TwinLook;
+import com.nidus.twinly.twinlook.repository.TwinLookRepository;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,6 +32,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.BeanUtils;
 import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -89,6 +92,9 @@ class WorldServiceUnitTest {
 
     @Mock
     WorldTrackWindowReader worldTrackWindowReader;
+
+    @Mock
+    TwinLookRepository twinLookRepository;
 
     // 합치기와 이름·시각 붙이기는 진짜 구현이 돌아야 응답 모양을 검증할 수 있다.
     @Spy
@@ -211,6 +217,31 @@ class WorldServiceUnitTest {
         assertThat(result.actors()).extracting(actor -> actor.get("ref").asString()).containsExactlyInAnyOrder("user:12", "extra:S1");
     }
 
+    @Test
+    @DisplayName("모습을 저장한 사람에게만 look 을 붙이고, 인연 없는 사람에게도 붙이며, 탈퇴자는 저장돼 있어도 붙이지 않는다")
+    void sectors_adds_look_to_saved_users_except_withdrawn() {
+        // given: 나(12)·인연 없는 사람(31)·탈퇴자(35)는 모습을 저장했고, 32는 저장하지 않았다
+        User me = user(ME, POOL_NUMBER);
+        User withdrawn = user(35L, POOL_NUMBER);
+        withdrawn.requestWithdrawal(Duration.ofDays(15));
+        givenParticipant(me);
+        givenTrack(WorldTrack.PUBLIC_VIEWER_USER_ID, PUBLIC_BODY, slice("sha256:aa", 12, 31, 32, 35));
+        givenTrack(ME, null, null);
+        given(userRepository.findAllById(any())).willReturn(List.of(me, user(31L, POOL_NUMBER), user(32L, POOL_NUMBER), withdrawn));
+        given(twinLookRepository.findAllByUserIdIn(any())).willReturn(List.of(
+                twinLook(ME, 9, 4, 11, 1), twinLook(31L, 2, 8, 3, 5), twinLook(35L, 1, 1, 1, 1)));
+
+        // when: 건물 화면 조회
+        WorldSectorsResult result = worldService.sectors(ME, SECTOR_CODE, DATE, FROM, TO);
+
+        // then: 나와 인연 없는 사람은 look 네 칸, 저장 안 한 사람과 탈퇴자는 칸 자체가 없다
+        assertThat(result.actors().get(0).get("look").toString()).isEqualTo("{\"hair\":9,\"hairColor\":4,\"outfit\":11,\"outfitColor\":1}");
+        assertThat(result.actors().get(1).get("displayName").asString()).isEqualTo("누군가의 트윈");
+        assertThat(result.actors().get(1).get("look").get("hairColor").asInt()).isEqualTo(8);
+        assertThat(result.actors().get(2).has("look")).isFalse();
+        assertThat(result.actors().get(3).has("look")).isFalse();
+    }
+
     private void givenParticipant(User viewer) {
         given(currentSeasonReader.read()).willReturn(season());
         given(seasonParticipationRepository.findByUserIdAndSeasonId(ME, 1L)).willReturn(Optional.of(mock(SeasonParticipation.class)));
@@ -294,5 +325,15 @@ class WorldServiceUnitTest {
         ReflectionTestUtils.setField(user, "id", id);
         ReflectionTestUtils.setField(user, "poolNumber", poolNumber);
         return user;
+    }
+
+    private static TwinLook twinLook(Long userId, int hair, int hairColor, int outfit, int outfitColor) {
+        TwinLook twinLook = BeanUtils.instantiateClass(TwinLook.class);
+        ReflectionTestUtils.setField(twinLook, "userId", userId);
+        ReflectionTestUtils.setField(twinLook, "hair", hair);
+        ReflectionTestUtils.setField(twinLook, "hairColor", hairColor);
+        ReflectionTestUtils.setField(twinLook, "outfit", outfit);
+        ReflectionTestUtils.setField(twinLook, "outfitColor", outfitColor);
+        return twinLook;
     }
 }

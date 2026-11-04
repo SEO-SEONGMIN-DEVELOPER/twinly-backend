@@ -423,7 +423,8 @@ public class ShowcaseService {
 
         return new WorldActorProfile(
                 nameByUserId.getOrDefault(userId, WorldService.ANONYMOUS_DISPLAY_NAME),
-                WorldService.isWithdrawn(user) ? null : WorldService.genderOf(user)
+                WorldService.isWithdrawn(user) ? null : WorldService.genderOf(user),
+                null
         );
     }
 
