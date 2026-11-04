@@ -1083,31 +1083,35 @@
   };
 
   const USAGE_DAILY = {
-    balanceGame: [['balanceGameUsers', '답한 회원']],
-    hesitation: [['hesitationAnswerUsers', '답한 회원']],
-    parallelRelation: [['parallelRelationUsers', '결과를 받은 회원']],
-    chatRoom: [['chatRoomOpenedUsers', '열린 채팅방'], ['chatRoomEnteredUsers', '입장한 채팅방']],
-    peopleFavorite: [['peopleFavoriteUsers', '즐겨찾기한 회원']]
+    balanceGame: [['balanceGameUsers', '답한 회원', 'subscribers']],
+    hesitation: [['hesitationAnswerUsers', '답한 회원', 'subscribers']],
+    parallelRelation: [['parallelRelationUsers', '결과를 받은 회원', 'members']],
+    chatRoom: [['chatRoomOpenedUsers', '열린 채팅방', 'seasonParticipants'], ['chatRoomEnteredUsers', '입장한 채팅방', 'seasonParticipants']],
+    peopleFavorite: [['peopleFavoriteUsers', '즐겨찾기한 회원', 'everSeasonParticipants']]
   };
   const USAGE_DAILY_UNIT = { chatRoomOpenedUsers: '채팅방이 열린 회원', chatRoomEnteredUsers: '입장한 회원' };
+  const USAGE_DAILY_BASE = { members: '가입자', subscribers: '시즌 참가자', seasonParticipants: '시즌 참가자', everSeasonParticipants: '시즌 참가 경험자' };
 
   function renderUsageDaily(el, daily, series, state) {
-    const [key] = series[state.series];
+    const [key, , baseKey] = series[state.series];
     const unit = USAGE_DAILY_UNIT[key] || series[state.series][1];
-    const value = day => day[key][state.gender];
-    const max = Math.max(1, ...daily.map(value));
+    const part = day => day[key][state.gender];
+    const base = day => day[baseKey][state.gender];
+    const value = day => Number(pct(part(day), base(day)));
+    const peak = Math.max(0, ...daily.map(value));
+    const max = peak || 1;
     const cls = { total: '', male: 'm', female: 'f' }[state.gender];
     const dayLabel = date => `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`;
     el.innerHTML = `<div class="usage-daily-head">
-        <div class="section-label">일별 사용 현황 <span class="hint">최근 30일 · 한국 시간 기준</span></div>
+        <div class="section-label">일별 사용 비율 <span class="hint">최근 30일 · 한국 시간 기준 · 그날 ${USAGE_DAILY_BASE[baseKey]} 대비</span></div>
         <div class="usage-daily-ctl">
           ${series.length > 1 ? `<div class="chips" data-ctl="series">${series.map(([, label], i) => `<button class="chip" type="button" data-v="${i}" aria-pressed="${i === state.series}">${label}</button>`).join('')}</div>` : ''}
           <div class="chips" data-ctl="gender">${DAILY_GENDER.map(([k, l]) => `<button class="chip" type="button" data-v="${k}" aria-pressed="${k === state.gender}">${l}</button>`).join('')}</div>
         </div>
       </div>
-      <div class="daily-legend num"><span><i class="daily-sw usage ${cls}"></i>${unit} 하루 평균 <b>${num(Math.round(daily.reduce((sum, day) => sum + value(day), 0) / Math.max(1, daily.length)))}명</b></span><span>하루 최대 <b>${num(Math.max(0, ...daily.map(value)))}명</b></span></div>
+      <div class="daily-legend num"><span><i class="daily-sw usage ${cls}"></i>${unit} 하루 평균 <b>${(daily.reduce((sum, day) => sum + value(day), 0) / Math.max(1, daily.length)).toFixed(1)}%</b></span><span>하루 최대 <b>${peak.toFixed(1)}%</b></span></div>
       <div class="daily-chart usage-chart">
-        <div class="daily-axis num"><span>${num(max)}</span><span>${num(Math.round(max / 2))}</span><span>0</span></div>
+        <div class="daily-axis num"><span>${max.toFixed(1)}%</span><span>${(max / 2).toFixed(1)}%</span><span>0%</span></div>
         <div class="daily-bars">${daily.map((day, i) => `<div class="daily-col" data-i="${i}"><div class="daily-stack" style="height:${value(day) / max * 100}%">${value(day) ? `<span class="usage ${cls}" style="flex:1"></span>` : ''}</div>
             <span class="daily-x num">${i % 5 === 4 || i === daily.length - 1 ? dayLabel(day.date) : ''}</span></div>`).join('')}</div>
         <div class="daily-tip" hidden></div>
@@ -1118,7 +1122,7 @@
       const col = event.target.closest('.daily-col');
       if (!col) return;
       const day = daily[Number(col.dataset.i)];
-      tip.innerHTML = `<b class="num">${Number(day.date.slice(5, 7))}월 ${Number(day.date.slice(8, 10))}일</b><span><i class="daily-sw usage ${cls}"></i>${unit}<em class="num">${num(value(day))}명</em></span>`;
+      tip.innerHTML = `<b class="num">${Number(day.date.slice(5, 7))}월 ${Number(day.date.slice(8, 10))}일</b><span><i class="daily-sw usage ${cls}"></i>${unit}<em class="num">${value(day).toFixed(1)}%</em></span><span>${USAGE_DAILY_BASE[baseKey]} 중<em class="num">${num(part(day))} / ${num(base(day))}명</em></span>`;
       tip.hidden = false;
       const chart = el.querySelector('.daily-chart').getBoundingClientRect();
       const rect = col.getBoundingClientRect();
