@@ -161,9 +161,12 @@ class AdminConsoleIntegrationTest extends AbstractIntegrationTest {
         assertThat(dashboard.at("/members/total").asLong()).isEqualTo(baseMembers + 4);
         assertThat(delta(before, dashboard, "/subscribers/count/total")).isEqualTo(3);
         assertThat(delta(before, dashboard, "/subscribers/count/male")).isEqualTo(2);
-        assertThat(delta(before, dashboard, "/subscribers/paid")).isEqualTo(1);
-        assertThat(delta(before, dashboard, "/subscribers/trial")).isEqualTo(1);
-        assertThat(delta(before, dashboard, "/subscribers/earlyGrant")).isEqualTo(1);
+        assertThat(delta(before, dashboard, "/subscribers/paid/total")).isEqualTo(1);
+        assertThat(delta(before, dashboard, "/subscribers/paid/male")).isEqualTo(1);
+        assertThat(delta(before, dashboard, "/subscribers/trial/total")).isEqualTo(1);
+        assertThat(delta(before, dashboard, "/subscribers/trial/female")).isEqualTo(1);
+        assertThat(delta(before, dashboard, "/subscribers/earlyGrant/total")).isEqualTo(1);
+        assertThat(delta(before, dashboard, "/subscribers/earlyGrant/male")).isEqualTo(1);
         assertThat(dashboard.at("/withdrawn/completed").asLong()).isGreaterThanOrEqualTo(1);
         assertThat(dashboard.at("/withdrawn/pending").asLong()).isGreaterThanOrEqualTo(1);
         assertThat(schoolCount(dashboard, "가나대학교")).isEqualTo(2);

@@ -257,23 +257,10 @@
       const maxCount = schools[0]?.memberCount || 1;
 
       body.innerHTML = `<div class="dashboard-grid">
-        <article class="card revenue-card count-card">
-          <div class="revenue-label">선착순 무료</div>
-          <div class="revenue-value num">${num(d.subscribers.earlyGrant)}<small>명</small></div>
-        </article>
-        <article class="card revenue-card count-card">
-          <div class="revenue-label">무료 체험</div>
-          <div class="revenue-value num">${num(d.subscribers.trial)}<small>명</small></div>
-        </article>
-        <article class="card revenue-card count-card">
-          <div class="revenue-label">유료 구독</div>
-          <div class="revenue-value num">${num(d.subscribers.paid)}<small>명</small></div>
-        </article>
         <article class="card revenue-card">
           <div class="revenue-label">매출</div>
-          <div class="revenue-value num">${num(d.subscribers.paid * MONTHLY_PRICE)}<small>원</small></div>
+          <div class="revenue-value num">${num(d.subscribers.paid.total * MONTHLY_PRICE)}<small>원</small></div>
         </article>
-        ${earlyGrantCard(d.earlyGrantSlots)}
         <div class="kpis">
           <article class="card kpi wide">
             <div class="kpi-label">가입자 수</div>
@@ -285,8 +272,11 @@
             <div class="kpi-label">시즌 참가자 수 <span class="card-sub">현재 시즌</span></div>
             <div class="kpi-value num">${num(subs.total)}<small>명</small></div>
             ${genderSummary(subs)}
-            <div class="rates num"><span class="rate">가입자 대비 참가율<b>${pct(subs.total, members.total)}%</b></span><span class="rate">유료 구독<b>${num(d.subscribers.paid)}</b></span><span class="rate">무료 체험<b>${num(d.subscribers.trial)}</b></span><span class="rate">선착순 무료<b>${num(d.subscribers.earlyGrant)}</b></span></div>
+            <div class="rates num"><span class="rate">가입자 대비 참가율<b>${pct(subs.total, members.total)}%</b></span><span class="rate">유료 구독<b>${num(d.subscribers.paid.total)}</b></span><span class="rate">무료 체험<b>${num(d.subscribers.trial.total)}</b></span><span class="rate">선착순 무료<b>${num(d.subscribers.earlyGrant.total)}</b></span></div>
           </article>
+          ${kindCard('선착순 무료', d.subscribers.earlyGrant)}
+          ${kindCard('무료 체험', d.subscribers.trial)}
+          ${kindCard('유료 구독', d.subscribers.paid)}
         </div>
         <article class="card daily-card" id="daily-card"></article>
         ${ageCard(d.birthYears, d.unknownBirthYearMembers)}
@@ -324,18 +314,11 @@
 
 
   const MONTHLY_PRICE = 5500;
-  function earlyGrantCard(slots) {
-    const ended = Date.now() >= Date.parse(slots.endsAt);
-    const lastDay = fmtDate(new Date(Date.parse(slots.endsAt) - 1).toISOString());
-    const side = (label, cls, remaining) => `<div class="grant-side">
-        <div class="grant-head"><span><i class="sw ${cls}"></i>${label}</span><span class="num"><b>${num(remaining)}</b>자리 남음</span></div>
-        <div class="grant-track"><span class="${cls}" style="width:${pct(remaining, slots.limitPerGender)}%"></span></div>
-        <span class="hint num">${num(slots.limitPerGender - remaining)} / ${num(slots.limitPerGender)}명 배정</span></div>`;
-    return `<article class="card grant-card">
-      <div class="card-head"><h2>선착순 무료 혜택 남은 자리</h2>${ended ? pill('종료', 'idle') : `<span class="card-sub num">${lastDay}까지 가입한 회원에게 배정</span>`}</div>
-      <div class="grant-sides">${side('남성', 'm', slots.maleRemaining)}${side('여성', 'f', slots.femaleRemaining)}</div>
+  const kindCard = (label, count) => `<article class="card kpi">
+      <div class="kpi-label">${label}</div>
+      <div class="kpi-value num">${num(count.total)}<small>명</small></div>
+      ${genderSummary(count)}
     </article>`;
-  }
   const DAILY_SERIES = [
     ['signups', '가입', 'signup'],
     ['subscriptions', '시즌 참가', 'subscribe'],

@@ -10,7 +10,7 @@ import java.util.List;
 public record AdminDashboardResponse(
         @Schema(description = "가입자. 시드·탈퇴 신청·탈퇴 회원 제외")
         AdminGenderCountResponse members,
-        @Schema(description = "시즌 참가자. 현재 시즌에 참가한 가입자. paid·trial·earlyGrant 는 그중 이용권 종류별 수이고, 이용권이 만료된 참가자는 어느 종류에도 들지 않는다")
+        @Schema(description = "시즌 참가자. 현재 시즌에 참가한 가입자. paid·trial·earlyGrant 는 그중 이용권 종류별 남녀 수이고, 이용권이 만료된 참가자는 어느 종류에도 들지 않는다")
         Subscribers subscribers,
         @Schema(description = "탈퇴자. 탈퇴 완료 + 탈퇴 유예, 시드 제외")
         Withdrawn withdrawn,
@@ -29,7 +29,9 @@ public record AdminDashboardResponse(
         return new AdminDashboardResponse(
                 AdminGenderCountResponse.from(result.members()),
                 new Subscribers(AdminGenderCountResponse.from(result.subscribers()),
-                        result.paidSubscribers(), result.trialSubscribers(), result.earlyGrantSubscribers()),
+                        AdminGenderCountResponse.from(result.paidSubscribers()),
+                        AdminGenderCountResponse.from(result.trialSubscribers()),
+                        AdminGenderCountResponse.from(result.earlyGrantSubscribers())),
                 new Withdrawn(AdminGenderCountResponse.from(result.withdrawn()),
                         result.withdrawalCompleted(), result.withdrawalPending()),
                 result.organizations().stream()
@@ -56,9 +58,9 @@ public record AdminDashboardResponse(
 
     public record Subscribers(
             AdminGenderCountResponse count,
-            Long paid,
-            Long trial,
-            Long earlyGrant
+            AdminGenderCountResponse paid,
+            AdminGenderCountResponse trial,
+            AdminGenderCountResponse earlyGrant
     ) {
     }
 
