@@ -209,6 +209,7 @@ class PeopleServiceUnitTest {
         assertThat(result.people()).hasSize(2);
         assertThat(result.people().get(0).userId()).isEqualTo(10L);
         assertThat(result.people().get(0).userName()).isEqualTo("길동");
+        assertThat(result.people().get(0).gender()).isEqualTo(Gender.MALE);
         assertThat(result.people().get(0).profilePhoto().photoUrl()).isEqualTo("https://cdn.example.com/signed10");
         assertThat(result.people().get(0).profilePhoto().position())
                 .isEqualTo(new PhotoPosInfo(new PhotoPosInfo.StartPos(10, 20), 100, 200));
@@ -247,6 +248,26 @@ class PeopleServiceUnitTest {
         assertThat(result.people()).extracting(PeopleItemResult::userId).containsExactly(10L, 20L);
         assertThat(result.page().hasMore()).isTrue();
         assertThat(result.page().nextCursor()).isEqualTo(20L);
+    }
+
+    @Test
+    @DisplayName("사람 목록의 성별은 탈퇴한 파트너만 null 로 가린다")
+    void people_gender_null_for_withdrawn_partner() {
+        // given: 10은 활동 중, 20은 탈퇴 후에도 성별이 남아 있는 파트너
+        givenCurrentSeason(CURRENT_SEASON_ID);
+        given(relationshipRepository.findPartnerUserIdsByUserId(eq(ME), isNull(), eq(51), isNull(), any(LocalDate.class), any(LocalDateTime.class)))
+                .willReturn(List.of(10L, 20L));
+        User withdrawn = user(20L, "철수");
+        ReflectionTestUtils.setField(withdrawn, "deletedAt", Instant.now());
+        given(userRepository.findAllById(List.of(10L, 20L)))
+                .willReturn(List.of(user(10L, "길동"), withdrawn));
+
+        // when: 사람 목록 조회
+        PeopleResult result = peopleService.people(ME, null, null);
+
+        // then: 활동 중인 파트너는 성별이 내려가고 탈퇴한 파트너는 null 이다
+        assertThat(result.people()).extracting(PeopleItemResult::gender)
+                .containsExactly(Gender.MALE, null);
     }
 
     @Test

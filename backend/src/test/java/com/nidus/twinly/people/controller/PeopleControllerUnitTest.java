@@ -52,8 +52,10 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 
+import static org.hamcrest.Matchers.hasKey;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
@@ -102,6 +104,7 @@ class PeopleControllerUnitTest {
                         List.of(new PeopleItemResult(
                                 42L,
                                 "길동",
+                                Gender.FEMALE,
                                 new ProfilePhotoInfo("profile/42/key", "https://cdn.example.com/signed",
                                         new PhotoPosInfo(new PhotoPosInfo.StartPos(10, 20), 100, 200)),
                                 55,
@@ -123,6 +126,7 @@ class PeopleControllerUnitTest {
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.people[0].userId").value("42"))
                 .andExpect(jsonPath("$.people[0].userName").value("길동"))
+                .andExpect(jsonPath("$.people[0].gender").value("female"))
                 .andExpect(jsonPath("$.people[0].profilePhoto.key").value("profile/42/key"))
                 .andExpect(jsonPath("$.people[0].profilePhoto.photoUrl").value("https://cdn.example.com/signed"))
                 .andExpect(jsonPath("$.people[0].profilePhoto.position.startPos.x").value(10))
@@ -145,6 +149,29 @@ class PeopleControllerUnitTest {
                 .andExpect(jsonPath("$.page.nextCursor").value("42"))
                 .andExpect(jsonPath("$.page.hasMore").value(true));
         then(peopleService).should().people(1L, null, null);
+    }
+
+    @Test
+    @DisplayName("사람 목록의 성별이 null 이면 gender 키를 빼지 않고 null 로 직렬화한다")
+    void people_null_gender_is_serialized_as_null() throws Exception {
+        // given: 서비스가 성별이 null 인(탈퇴한) 사람 1명을 반환
+        given(peopleService.people(1L, null, null))
+                .willReturn(new PeopleResult(
+                        List.of(new PeopleItemResult(
+                                42L, "길동", null, null, 0, 0,
+                                RelationshipType.ACQUAINTANCE, RelationshipSpecificType.fromIntimacy(0),
+                                0, null, false, null)),
+                        PeopleThresholdResult.of(),
+                        new PeoplePageResult(null, false)));
+
+        // when: 인증 상태로 사람 목록 조회 API 호출
+        var result = mockMvc.perform(get("/api/v1/people")
+                .header("Authorization", "Bearer access-token"));
+
+        // then: 200 반환 + gender 키가 남아 있고 값은 null (앱은 키가 없으면 성별 필터를 숨긴다)
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.people[0]", hasKey("gender")))
+                .andExpect(jsonPath("$.people[0].gender").value(nullValue()));
     }
 
     @Test

@@ -166,6 +166,7 @@ public class PeopleService {
                     return new PeopleItemResult(
                             partnerUserId,
                             user.displayNickname(),
+                            user.isWithdrawn() ? null : user.getGender(),
                             profilePhotoByPartnerUserId.get(partnerUserId),
                             intimacy.value(),
                             intimacy.game(),
