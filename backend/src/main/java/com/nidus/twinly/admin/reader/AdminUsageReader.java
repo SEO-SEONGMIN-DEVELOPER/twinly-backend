@@ -148,6 +148,45 @@ public class AdminUsageReader {
             GROUP BY e.kind, e.day, e.gender
             """.formatted(AdminSql.ACTIVE_USER, ROOMS_WITHOUT_SEED);
 
+    private static final String NOT_WITHDRAWN_BEFORE_DAY = """
+            u.is_seed = FALSE
+              AND (u.withdrawal_requested_at IS NULL OR u.withdrawal_requested_at >= d.starts_at)
+              AND (u.deleted_at IS NULL OR u.deleted_at >= d.starts_at)""";
+
+    private static final String DAILY_ELIGIBLE_USERS = """
+            WITH RECURSIVE days (day, starts_at, ends_at) AS (
+                SELECT CAST(:firstDay AS DATE), CAST(:from AS DATETIME(6)), CAST(:from AS DATETIME(6)) + INTERVAL 1 DAY
+                UNION ALL
+                SELECT day + INTERVAL 1 DAY, ends_at, ends_at + INTERVAL 1 DAY FROM days WHERE day < :lastDay
+            )
+            SELECT e.kind, e.day, e.gender, COUNT(*) AS cnt
+            FROM (SELECT 'MEMBERS' AS kind, d.day, u.id AS user_id, u.gender
+                  FROM days d
+                  JOIN users u ON u.created_at < d.ends_at
+                  WHERE %1$s
+                  UNION ALL
+                  SELECT DISTINCT 'SUBSCRIBERS', d.day, u.id, u.gender
+                  FROM days d
+                  JOIN seasons s ON s.started_at < d.ends_at AND s.ended_at > d.starts_at
+                  JOIN season_participations sp ON sp.season_id = s.id AND sp.participated_in_at < d.ends_at
+                  JOIN users u ON u.id = sp.user_id
+                  WHERE %1$s
+                  UNION ALL
+                  SELECT DISTINCT 'SEASON_PARTICIPANTS', d.day, u.id, u.gender
+                  FROM days d
+                  JOIN seasons s ON s.started_at < d.ends_at AND s.ended_at > d.starts_at
+                  JOIN season_participations sp ON sp.season_id = s.id AND sp.participated_in_at < d.ends_at
+                  JOIN users u ON u.id = sp.user_id
+                  WHERE %2$s
+                  UNION ALL
+                  SELECT DISTINCT 'EVER_SEASON_PARTICIPANTS', d.day, u.id, u.gender
+                  FROM days d
+                  JOIN season_participations sp ON sp.participated_in_at < d.ends_at
+                  JOIN users u ON u.id = sp.user_id
+                  WHERE %2$s) e
+            GROUP BY e.kind, e.day, e.gender
+            """.formatted(AdminSql.ACTIVE_USER, NOT_WITHDRAWN_BEFORE_DAY);
+
     private static final int DAILY_DAYS = 30;
 
     private final NamedParameterJdbcTemplate jdbcTemplate;
@@ -201,7 +240,23 @@ public class AdminUsageReader {
         LocalDateTime from = LocalDateTime.ofInstant(first.atStartOfDay(KstTimes.ZONE).toInstant(), ZoneOffset.UTC);
         Map<LocalDate, Map<String, Map<Gender, Long>>> countsByDay = new TreeMap<>();
 
-        jdbcTemplate.query(DAILY_USERS, Map.of("from", from), rs -> {
+        collectDaily(DAILY_USERS, Map.of("from", from), countsByDay);
+        collectDaily(DAILY_ELIGIBLE_USERS, Map.of("from", from, "firstDay", first, "lastDay", today), countsByDay);
+
+        return first.datesUntil(today.plusDays(1))
+                .map(day -> {
+                    Map<String, Map<Gender, Long>> counts = countsByDay.getOrDefault(day, Map.of());
+                    Function<String, AdminGenderCountResult> count = kind -> AdminGenderCountResult.from(counts.getOrDefault(kind, Map.of()));
+                    return new AdminUsageResult.Daily(day, count.apply("BALANCE_GAME"), count.apply("HESITATION"),
+                            count.apply("PARALLEL_RELATION"), count.apply("CHAT_OPENED"), count.apply("CHAT_ENTERED"),
+                            count.apply("PEOPLE_FAVORITE"), count.apply("MEMBERS"), count.apply("SUBSCRIBERS"),
+                            count.apply("SEASON_PARTICIPANTS"), count.apply("EVER_SEASON_PARTICIPANTS"));
+                })
+                .toList();
+    }
+
+    private void collectDaily(String sql, Map<String, ?> params, Map<LocalDate, Map<String, Map<Gender, Long>>> countsByDay) {
+        jdbcTemplate.query(sql, params, rs -> {
             Gender gender = gender(rs.getString("gender"));
             if (gender == null) {
                 return;
@@ -210,16 +265,6 @@ public class AdminUsageReader {
                     .computeIfAbsent(rs.getString("kind"), kind -> new EnumMap<>(Gender.class))
                     .merge(gender, rs.getLong("cnt"), Long::sum);
         });
-
-        return first.datesUntil(today.plusDays(1))
-                .map(day -> {
-                    Map<String, Map<Gender, Long>> counts = countsByDay.getOrDefault(day, Map.of());
-                    Function<String, AdminGenderCountResult> count = kind -> AdminGenderCountResult.from(counts.getOrDefault(kind, Map.of()));
-                    return new AdminUsageResult.Daily(day, count.apply("BALANCE_GAME"), count.apply("HESITATION"),
-                            count.apply("PARALLEL_RELATION"), count.apply("CHAT_OPENED"), count.apply("CHAT_ENTERED"),
-                            count.apply("PEOPLE_FAVORITE"));
-                })
-                .toList();
     }
 
     private Map<Gender, Long> countByGender(String sql) {

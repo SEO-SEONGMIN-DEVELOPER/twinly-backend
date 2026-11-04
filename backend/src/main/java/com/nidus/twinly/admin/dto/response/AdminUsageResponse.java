@@ -16,7 +16,7 @@ public record AdminUsageResponse(
         ParallelRelation parallelRelation,
         ChatRoom chatRoom,
         PeopleFavorite peopleFavorite,
-        @Schema(description = "최근 30일(KST, 오늘 포함) 날짜별로 그날 각 기능을 쓴 회원 수. 하루에 여러 번 써도 한 번 센다. 회원 범위는 각 기능의 누적 집계와 같다. 오래된 날부터")
+        @Schema(description = "최근 30일(KST, 오늘 포함) 날짜별로 그날 각 기능을 쓴 회원 수와 비율의 분모가 되는 그날 이용 가능 회원 수. 하루에 여러 번 써도 한 번 센다. 회원 범위는 각 기능의 누적 집계와 같다. 오래된 날부터")
         List<Daily> daily
 ) {
 
@@ -44,7 +44,11 @@ public record AdminUsageResponse(
                                 AdminGenderCountResponse.from(day.parallelRelationUsers()),
                                 AdminGenderCountResponse.from(day.chatRoomOpenedUsers()),
                                 AdminGenderCountResponse.from(day.chatRoomEnteredUsers()),
-                                AdminGenderCountResponse.from(day.peopleFavoriteUsers())))
+                                AdminGenderCountResponse.from(day.peopleFavoriteUsers()),
+                                AdminGenderCountResponse.from(day.members()),
+                                AdminGenderCountResponse.from(day.subscribers()),
+                                AdminGenderCountResponse.from(day.seasonParticipants()),
+                                AdminGenderCountResponse.from(day.everSeasonParticipants())))
                         .toList()
         );
     }
@@ -104,7 +108,15 @@ public record AdminUsageResponse(
             @Schema(description = "그날 채팅방에 입장한 회원. 시드 회원이 있는 방 제외")
             AdminGenderCountResponse chatRoomEnteredUsers,
             @Schema(description = "그날 인연 탭에서 처음 즐겨찾기한 상대가 생긴 회원. 해제했다 다시 누른 것은 세지 않는다")
-            AdminGenderCountResponse peopleFavoriteUsers
+            AdminGenderCountResponse peopleFavoriteUsers,
+            @Schema(description = "그날까지 가입한 회원. 평행우주 관계 비율의 분모. 회원 범위는 가입자 집계와 같다")
+            AdminGenderCountResponse members,
+            @Schema(description = "그날 진행 중인 시즌에 그날까지 참가한 회원. 밸런스 게임·망설임 질문 비율의 분모. 회원 범위는 시즌 참가자 집계와 같다")
+            AdminGenderCountResponse subscribers,
+            @Schema(description = "그날 진행 중인 시즌에 그날까지 참가한 회원. 채팅방 비율의 분모. 그날 전에 탈퇴(유예 포함)한 회원과 시드는 빼고, 그 뒤에 탈퇴한 회원은 센다")
+            AdminGenderCountResponse seasonParticipants,
+            @Schema(description = "그날까지 시즌에 한 번이라도 참가한 회원. 인연 탭 즐겨찾기 비율의 분모. 그날 전에 탈퇴(유예 포함)한 회원과 시드는 빼고, 그 뒤에 탈퇴한 회원은 센다")
+            AdminGenderCountResponse everSeasonParticipants
     ) {
     }
 
