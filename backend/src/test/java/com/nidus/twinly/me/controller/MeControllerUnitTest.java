@@ -84,11 +84,14 @@ import com.nidus.twinly.user.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import com.nidus.twinly.common.security.SecurityConfig;
 import org.springframework.context.annotation.Import;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
+import org.springframework.test.json.JsonCompareMode;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -106,6 +109,9 @@ import java.util.Map;
 import com.nidus.twinly.me.dto.command.MeSchoolVerificationStudentIdPresignCommand;
 import com.nidus.twinly.me.dto.command.MeSchoolVerificationStudentIdSubmitCommand;
 import com.nidus.twinly.me.dto.result.MeSchoolVerificationStudentIdPresignResult;
+import com.nidus.twinly.me.dto.command.MeSaveTwinLookCommand;
+import com.nidus.twinly.me.dto.result.MeTwinLookPartResult;
+import com.nidus.twinly.me.dto.result.MeTwinLookResult;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
@@ -2240,5 +2246,93 @@ class MeControllerUnitTest {
         // then: 422 + 오류 코드
         result.andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.code").value("INTERESTS_NOT_SAVED"));
+    }
+
+    @Test
+    @DisplayName("트윈 꾸미기 조회 시 저장된 모습을 look 칸에 정수 네 개로 내려준다")
+    void twinLook_returns_saved_look() throws Exception {
+        // given: 저장된 모습이 있다
+        given(meService.twinLook(ME)).willReturn(new MeTwinLookResult(new MeTwinLookPartResult(9, 4, 11, 1)));
+
+        // when: 조회
+        var result = mockMvc.perform(get("/api/v1/me/twin-look")
+                .header("Authorization", BEARER));
+
+        // then: 200 + look 네 칸
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.look.hair").value(9))
+                .andExpect(jsonPath("$.look.hairColor").value(4))
+                .andExpect(jsonPath("$.look.outfit").value(11))
+                .andExpect(jsonPath("$.look.outfitColor").value(1));
+    }
+
+    @Test
+    @DisplayName("트윈 꾸미기를 저장한 적이 없으면 404 가 아니라 200 과 look: null 을 내려준다")
+    void twinLook_without_saved_look_returns_null() throws Exception {
+        // given: 저장된 모습이 없다
+        given(meService.twinLook(ME)).willReturn(new MeTwinLookResult(null));
+
+        // when: 조회
+        var result = mockMvc.perform(get("/api/v1/me/twin-look")
+                .header("Authorization", BEARER));
+
+        // then: 200 + look 칸은 있되 null
+        result.andExpect(status().isOk())
+                .andExpect(content().json("""
+                        {"look":null}
+                        """, JsonCompareMode.STRICT));
+    }
+
+    @Test
+    @DisplayName("트윈 꾸미기 저장 시 본문 없는 200 을 반환하고 네 값을 그대로 서비스에 넘긴다")
+    void saveTwinLook_success() throws Exception {
+        // when: 네 칸을 모두 담아 저장
+        var result = mockMvc.perform(put("/api/v1/me/twin-look")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"hair":9,"hairColor":4,"outfit":11,"outfitColor":1}
+                        """));
+
+        // then: 200 + 빈 본문 + 서비스에 그대로 위임
+        result.andExpect(status().isOk())
+                .andExpect(content().string(""));
+        then(meService).should().saveTwinLook(ME, new MeSaveTwinLookCommand(9, 4, 11, 1));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "{\"hairColor\":4,\"outfit\":11,\"outfitColor\":1}",
+            "{\"hair\":null,\"hairColor\":4,\"outfit\":11,\"outfitColor\":1}",
+            "{\"hair\":0,\"hairColor\":4,\"outfit\":11,\"outfitColor\":1}",
+            "{\"hair\":9,\"hairColor\":4,\"outfit\":11,\"outfitColor\":100}"
+    })
+    @DisplayName("트윈 꾸미기 저장 시 칸이 빠지거나 null 이거나 1부터 99까지를 벗어나면 400 INVALID_REQUEST 이고 서비스를 호출하지 않는다")
+    void saveTwinLook_invalid_body_returns_400(String body) throws Exception {
+        // when: 규칙을 어긴 본문으로 저장
+        var result = mockMvc.perform(put("/api/v1/me/twin-look")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body));
+
+        // then: 400 INVALID_REQUEST + 서비스 호출 없음
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        then(meService).should(never()).saveTwinLook(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("트윈 꾸미기 저장 시 인증 헤더가 없으면 401 이고 서비스를 호출하지 않는다")
+    void saveTwinLook_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 저장
+        var result = mockMvc.perform(put("/api/v1/me/twin-look")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"hair":9,"hairColor":4,"outfit":11,"outfitColor":1}
+                        """));
+
+        // then: 401 + 서비스 호출 없음
+        result.andExpect(status().isUnauthorized());
+        then(meService).should(never()).saveTwinLook(anyLong(), any());
     }
 }

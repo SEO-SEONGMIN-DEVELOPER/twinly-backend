@@ -1,5 +1,6 @@
 package com.nidus.twinly.world.service;
 
+import com.nidus.twinly.twinlook.domain.TwinLookView;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.ArrayNode;
@@ -17,6 +18,7 @@ public class WorldTrackPublisher {
     private static final String REF = "ref";
     private static final String DISPLAY_NAME = "displayName";
     private static final String GENDER = "gender";
+    private static final String LOOK = "look";
     private static final String SEGMENTS = "segments";
     private static final String MEMBERS = "members";
     private static final String OWNER = "owner";
@@ -34,6 +36,7 @@ public class WorldTrackPublisher {
                 WorldActorProfile profile = profileByUserRef.apply(ref);
                 actor.put(DISPLAY_NAME, profile.displayName());
                 actor.put(GENDER, profile.gender());
+                putLook(actor, profile.look());
             }
             renameField(actor, REF, userRefMapper);
             actor.path(SEGMENTS).forEach(segment -> toKstPeriod((ObjectNode) segment));
@@ -53,6 +56,18 @@ public class WorldTrackPublisher {
             renameField((ObjectNode) change, BY, userRefMapper);
             toKst((ObjectNode) change, AT);
         }));
+    }
+
+    private void putLook(ObjectNode actor, TwinLookView look) {
+        if (look == null) {
+            return;
+        }
+
+        actor.putObject(LOOK)
+                .put("hair", look.hair())
+                .put("hairColor", look.hairColor())
+                .put("outfit", look.outfit())
+                .put("outfitColor", look.outfitColor());
     }
 
     private void periods(List<ObjectNode> nodes, String refField, UnaryOperator<String> userRefMapper) {

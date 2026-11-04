@@ -59,6 +59,7 @@ import com.nidus.twinly.me.dto.command.MeSchoolVerificationStudentIdSubmitComman
 import com.nidus.twinly.me.dto.command.MeSendFeedbackCommand;
 import com.nidus.twinly.me.dto.command.MeSubmitTendencyAnswerCommand;
 import com.nidus.twinly.me.dto.command.MeSurveyAnswerCommand;
+import com.nidus.twinly.me.dto.command.MeSaveTwinLookCommand;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsBalanceGameTargetResult;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsChatTargetResult;
 import com.nidus.twinly.me.dto.result.MeAppNotificationsFeedsItemResult;
@@ -76,6 +77,8 @@ import com.nidus.twinly.me.dto.result.MeFeedbackOptionsResult;
 import com.nidus.twinly.me.dto.result.MeHesitationsResult;
 import com.nidus.twinly.me.dto.result.MePersonalityTypePartResult;
 import com.nidus.twinly.me.dto.result.MePersonalityTypeResult;
+import com.nidus.twinly.me.dto.result.MeTwinLookPartResult;
+import com.nidus.twinly.me.dto.result.MeTwinLookResult;
 import com.nidus.twinly.me.dto.result.MePushNotificationsResult;
 import com.nidus.twinly.me.dto.result.MePushNotificationsSettingsResult;
 import com.nidus.twinly.me.dto.result.MeProfileEditViewResult;
@@ -87,6 +90,7 @@ import com.nidus.twinly.me.dto.result.MeProfileVisibilitySettingsResult;
 import com.nidus.twinly.me.dto.result.MePurchasesResult;
 import com.nidus.twinly.me.dto.result.MeSchoolVerificationStudentIdPresignResult;
 import com.nidus.twinly.me.dto.result.MeStatusPersonaResult;
+import com.nidus.twinly.twinlook.repository.TwinLookRepository;
 import com.nidus.twinly.twinupdate.service.TwinUpdateReader;
 import com.nidus.twinly.twinupdate.service.TwinUpdateService;
 import com.nidus.twinly.me.dto.result.MeAiChatMessageResult;
@@ -208,6 +212,7 @@ public class MeService {
     private final UserTendencyAnswerRepository userTendencyAnswerRepository;
     private final UserFeedbackRepository userFeedbackRepository;
     private final UserFeedbackOptionRepository userFeedbackOptionRepository;
+    private final TwinLookRepository twinLookRepository;
 
     private final PolicyCatalog policyCatalog;
     private final PolicyUrlResolver policyUrlResolver;
@@ -920,5 +925,14 @@ public class MeService {
     @Transactional
     public MeCompleteTwinUpdateResult completeTwinUpdate(Long userId, MeCompleteTwinUpdateCommand command) {
         return twinUpdateService.complete(userId, command);
+    }
+
+    public MeTwinLookResult twinLook(Long userId) {
+        return new MeTwinLookResult(twinLookRepository.findByUserId(userId).map(MeTwinLookPartResult::from).orElse(null));
+    }
+
+    @Transactional
+    public void saveTwinLook(Long userId, MeSaveTwinLookCommand command) {
+        twinLookRepository.upsert(userId, command.hair(), command.hairColor(), command.outfit(), command.outfitColor());
     }
 }

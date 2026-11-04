@@ -12,6 +12,7 @@ import com.nidus.twinly.support.AbstractIntegrationTest;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.world.entity.WorldTrack;
 import com.nidus.twinly.world.repository.WorldTrackRepository;
+import com.nidus.twinly.twinlook.repository.TwinLookRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,6 +41,35 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class WorldIntegrationTest extends AbstractIntegrationTest {
 
     private static final int POOL_NUMBER = 7;
+    @Test
+    @DisplayName("모습을 저장한 사람은 인연이 없어도 look 네 칸이 붙고, 저장하지 않은 사람·탈퇴 유예 중인 사람에게는 look 칸이 없다")
+    void sector_adds_saved_look_except_withdrawn() throws Exception {
+        // given: 나와 인연 없는 사람·탈퇴 유예 중인 사람은 모습을 저장했고, 한 사람은 저장하지 않았다
+        User stranger = userInPool();
+        User plain = userInPool();
+        User withdrawn = userInPool();
+        withdrawn.requestWithdrawal(Duration.ofDays(15));
+        userRepository.save(withdrawn);
+        twinLookRepository.upsert(me.getId(), 9, 4, 11, 1);
+        twinLookRepository.upsert(stranger.getId(), 2, 8, 3, 5);
+        twinLookRepository.upsert(withdrawn.getId(), 1, 1, 1, 1);
+        saveTrack(WorldTrack.PUBLIC_VIEWER_USER_ID, trackWithActors("sha256:aa",
+                me.getId(), stranger.getId(), plain.getId(), withdrawn.getId()));
+        flushAndClear();
+
+        // when & then: 규칙대로 look 칸이 붙는다
+        sector(FROM, TO)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.actors[0].look.hair").value(9))
+                .andExpect(jsonPath("$.actors[0].look.hairColor").value(4))
+                .andExpect(jsonPath("$.actors[0].look.outfit").value(11))
+                .andExpect(jsonPath("$.actors[0].look.outfitColor").value(1))
+                .andExpect(jsonPath("$.actors[1].displayName").value(ANONYMOUS))
+                .andExpect(jsonPath("$.actors[1].look.hairColor").value(8))
+                .andExpect(jsonPath("$.actors[2].look").doesNotExist())
+                .andExpect(jsonPath("$.actors[3].look").doesNotExist());
+    }
+
     private static final LocalDate DATE = LocalDate.of(2026, 10, 16);
     private static final String SECTOR_CODE = "S034";
     private static final long CURRENT_SEASON_ID = 1L;
@@ -63,6 +93,9 @@ class WorldIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     SceneRepository sceneRepository;
+
+    @Autowired
+    TwinLookRepository twinLookRepository;
 
     @PersistenceContext
     EntityManager entityManager;

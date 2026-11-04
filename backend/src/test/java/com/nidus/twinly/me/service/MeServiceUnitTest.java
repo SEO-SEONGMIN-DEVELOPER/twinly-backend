@@ -154,6 +154,10 @@ import com.nidus.twinly.me.dto.result.MeSchoolVerificationStudentIdPresignResult
 import com.nidus.twinly.me.dto.command.MeSchoolVerificationStudentIdSubmitCommand;
 import com.nidus.twinly.me.dto.command.MeSchoolVerificationStudentIdPresignCommand;
 import com.nidus.twinly.schoolverification.service.StudentIdSubmissionService;
+import com.nidus.twinly.me.dto.command.MeSaveTwinLookCommand;
+import com.nidus.twinly.me.dto.result.MeTwinLookResult;
+import com.nidus.twinly.twinlook.entity.TwinLook;
+import com.nidus.twinly.twinlook.repository.TwinLookRepository;
 
 import static org.mockito.Mockito.lenient;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -281,6 +285,9 @@ class MeServiceUnitTest {
 
     @Mock
     ApplicationEventPublisher eventPublisher;
+
+    @Mock
+    TwinLookRepository twinLookRepository;
 
     @InjectMocks
     MeService meService;
@@ -2212,5 +2219,55 @@ class MeServiceUnitTest {
                 return firstUpdateTime;
             }
         };
+    }
+
+    @Test
+    @DisplayName("트윈 꾸미기 조회 시 저장된 모습이 있으면 네 값을 그대로 담는다")
+    void twinLook_returns_saved_look() {
+        // given: 저장된 모습
+        given(twinLookRepository.findByUserId(1L)).willReturn(Optional.of(twinLook(1L, 9, 4, 11, 1)));
+
+        // when: 조회
+        MeTwinLookResult result = meService.twinLook(1L);
+
+        // then: 네 값 그대로
+        assertThat(result.look().hair()).isEqualTo(9);
+        assertThat(result.look().hairColor()).isEqualTo(4);
+        assertThat(result.look().outfit()).isEqualTo(11);
+        assertThat(result.look().outfitColor()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("트윈 꾸미기 조회 시 저장한 적이 없으면 예외 없이 look 이 null 이다")
+    void twinLook_without_saved_look_returns_null() {
+        // given: 저장된 모습 없음
+        given(twinLookRepository.findByUserId(1L)).willReturn(Optional.empty());
+
+        // when: 조회
+        MeTwinLookResult result = meService.twinLook(1L);
+
+        // then: look 은 null
+        assertThat(result.look()).isNull();
+    }
+
+    @Test
+    @DisplayName("트윈 꾸미기 저장은 처음이든 덮어쓰기든 upsert 한 번으로 위임한다")
+    void saveTwinLook_delegates_to_upsert() {
+        // when: 저장
+        meService.saveTwinLook(1L, new MeSaveTwinLookCommand(9, 4, 11, 1));
+
+        // then: 조회 없이 upsert 한 번
+        then(twinLookRepository).should().upsert(1L, 9, 4, 11, 1);
+        then(twinLookRepository).should(never()).findByUserId(any());
+    }
+
+    private static TwinLook twinLook(Long userId, int hair, int hairColor, int outfit, int outfitColor) {
+        TwinLook twinLook = BeanUtils.instantiateClass(TwinLook.class);
+        ReflectionTestUtils.setField(twinLook, "userId", userId);
+        ReflectionTestUtils.setField(twinLook, "hair", hair);
+        ReflectionTestUtils.setField(twinLook, "hairColor", hairColor);
+        ReflectionTestUtils.setField(twinLook, "outfit", outfit);
+        ReflectionTestUtils.setField(twinLook, "outfitColor", outfitColor);
+        return twinLook;
     }
 }

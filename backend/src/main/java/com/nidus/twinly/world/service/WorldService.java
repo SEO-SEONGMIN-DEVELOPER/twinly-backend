@@ -12,6 +12,9 @@ import com.nidus.twinly.relationship.repository.RelationshipRepository;
 import com.nidus.twinly.relationship.repository.RelationshipRepository.PartnerFirstUpdateProjection;
 import com.nidus.twinly.season.reader.CurrentSeasonReader;
 import com.nidus.twinly.season.repository.SeasonParticipationRepository;
+import com.nidus.twinly.twinlook.domain.TwinLookView;
+import com.nidus.twinly.twinlook.entity.TwinLook;
+import com.nidus.twinly.twinlook.repository.TwinLookRepository;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.user.repository.UserRepository;
 import com.nidus.twinly.world.domain.TrackWindow;
@@ -61,6 +64,7 @@ public class WorldService {
     private final RelationshipRepository relationshipRepository;
     private final BlockRepository blockRepository;
     private final SceneRepository sceneRepository;
+    private final TwinLookRepository twinLookRepository;
     private final WorldTrackWindowReader worldTrackWindowReader;
     private final WorldTrackMerger worldTrackMerger;
     private final WorldTrackPublisher worldTrackPublisher;
@@ -124,7 +128,7 @@ public class WorldService {
     }
 
     public static WorldActorProfile anonymousProfile() {
-        return new WorldActorProfile(ANONYMOUS_DISPLAY_NAME, null);
+        return new WorldActorProfile(ANONYMOUS_DISPLAY_NAME, null, null);
     }
 
     public static boolean isWithdrawn(User user) {
@@ -163,11 +167,14 @@ public class WorldService {
         blockRepository.findAllByUserId(viewer.getId()).stream().map(Block::getBlockedUserId).forEach(blockedUserIds::add);
         blockRepository.findAllByUserIdInAndBlockedUserId(List.copyOf(userIds), viewer.getId()).stream().map(Block::getUserId).forEach(blockedUserIds::add);
 
+        Map<Long, TwinLookView> lookByUserId = twinLookRepository.findAllByUserIdIn(userIds).stream()
+                .collect(Collectors.toMap(TwinLook::getUserId, TwinLookView::from, (a, b) -> a));
+
         return userRepository.findAllById(userIds).stream()
-                .collect(Collectors.toMap(User::getId, user -> profile(user, viewer, relationshipUserIds, blockedUserIds), (a, b) -> a));
+                .collect(Collectors.toMap(User::getId, user -> profile(user, viewer, relationshipUserIds, blockedUserIds, lookByUserId), (a, b) -> a));
     }
 
-    private WorldActorProfile profile(User user, User viewer, Set<Long> relationshipUserIds, Set<Long> blockedUserIds) {
+    private WorldActorProfile profile(User user, User viewer, Set<Long> relationshipUserIds, Set<Long> blockedUserIds, Map<Long, TwinLookView> lookByUserId) {
         if (isWithdrawn(user)) {
             return anonymousProfile();
         }
@@ -177,7 +184,7 @@ public class WorldService {
         String nickname = user.displayNickname();
         String displayName = named && nickname != null && !nickname.isBlank() ? nickname : ANONYMOUS_DISPLAY_NAME;
 
-        return new WorldActorProfile(displayName, genderOf(user));
+        return new WorldActorProfile(displayName, genderOf(user), lookByUserId.get(user.getId()));
     }
 
     private Set<String> speakerExtraRefs(Long userId, LocalDate date) {

@@ -18,6 +18,7 @@ import com.nidus.twinly.support.AbstractIntegrationTest;
 import com.nidus.twinly.user.entity.User;
 import com.nidus.twinly.world.entity.WorldTrack;
 import com.nidus.twinly.world.repository.WorldTrackRepository;
+import com.nidus.twinly.twinlook.repository.TwinLookRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.junit.jupiter.api.BeforeEach;
@@ -74,6 +75,9 @@ class ShowcaseIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     ShowcaseUserRefRepository showcaseUserRefRepository;
+
+    @Autowired
+    TwinLookRepository twinLookRepository;
 
     @PersistenceContext
     EntityManager entityManager;
@@ -437,6 +441,35 @@ class ShowcaseIntegrationTest extends AbstractIntegrationTest {
 
         // then: 둘러보기 행이 하나도 생기지 않았다
         assertThat(showcaseRepository.findAll()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("둘러보기 건물 화면에는 대상·동행자·바깥 트윈이 모습을 저장했어도 look 칸을 넣지 않는다")
+    void showcase_sector_never_adds_look() throws Exception {
+        // given: 대상·동행자·바깥 트윈이 함께 있는 공용 트랙, 세 사람 모두 모습을 저장했다
+        setUpWorld();
+        saveWorldTrack(WorldTrack.PUBLIC_VIEWER_USER_ID, """
+                {"poolNumber": "7", "date": "%1$s", "sectorCode": "S034", "layoutVersion": "sha256:aa", "viewerUserId": null,
+                 "actors": [
+                   {"ref": "user:%2$d", "segments": [{"start": "%1$sT13:00:00", "end": "%1$sT13:30:00"}]},
+                   {"ref": "user:%3$d", "segments": [{"start": "%1$sT13:00:00", "end": "%1$sT13:30:00"}]},
+                   {"ref": "user:%4$d", "segments": [{"start": "%1$sT13:00:00", "end": "%1$sT13:30:00"}]}
+                 ],
+                 "talks": [], "gestures": [], "objects": [], "events": [], "items": []}
+                """.formatted(today, target.getId(), partner.getId(), outsider.getId()));
+        twinLookRepository.upsert(target.getId(), 9, 4, 11, 1);
+        twinLookRepository.upsert(partner.getId(), 2, 8, 3, 5);
+        twinLookRepository.upsert(outsider.getId(), 1, 1, 1, 1);
+        flushAndClear();
+        mockMvc.perform(get("/api/v2/showcases/today").header("Authorization", bearer(viewer.getId())))
+                .andExpect(status().isOk());
+
+        // when: 둘러보기 건물 화면 조회
+        String body = todaySector(today).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+
+        // then: 세 사람 모두 나오지만 look 칸은 어디에도 없다
+        assertThat(JsonPath.<List<String>>read(body, "$.actors[*].ref")).hasSize(3);
+        assertThat(body).doesNotContain("\"look\"");
     }
 
     private String todayShowcaseId(User viewer) throws Exception {

@@ -24,6 +24,7 @@ import com.nidus.twinly.relationship.repository.RelationshipRepository;
 import com.nidus.twinly.season.entity.Season;
 import com.nidus.twinly.season.repository.SeasonRepository;
 import com.nidus.twinly.support.AbstractIntegrationTest;
+import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.photo.PhotoType;
 import com.nidus.twinly.user.entity.Photo;
 import com.nidus.twinly.user.entity.User;
@@ -132,6 +133,31 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.threshold.bestFriend").value(70))
                 .andExpect(jsonPath("$.page.hasMore").value(false))
                 .andExpect(jsonPath("$.page.nextCursor").isEmpty());
+    }
+
+    @Test
+    @DisplayName("사람 목록 조회: DB에 저장된 파트너 성별을 항목마다 male·female 로 내려준다")
+    void people_includes_partner_gender_end_to_end() throws Exception {
+        // given: 남자 파트너 1명, 여자 파트너 1명과의 관계를 실제 DB에 저장
+        User me = saveUser();
+        User male = saveUser();
+        User female = saveUser();
+        ReflectionTestUtils.setField(female, "gender", Gender.FEMALE);
+        userRepository.save(female);
+        saveRelationship(me.getId(), male.getId(), DAY_2, 40, "{}");
+        saveRelationship(me.getId(), female.getId(), DAY_2, 40, "{}");
+
+        // when: 나의 실제 액세스 토큰으로 사람 목록 조회 API 호출
+        var result = mockMvc.perform(get("/api/v1/people")
+                .header("Authorization", bearer(me.getId())));
+
+        // then: 200 + 파트너 id 오름차순으로 각자의 성별이 소문자 값으로 내려온다
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.people.length()").value(2))
+                .andExpect(jsonPath("$.people[0].userId").value(male.getId().toString()))
+                .andExpect(jsonPath("$.people[0].gender").value("male"))
+                .andExpect(jsonPath("$.people[1].userId").value(female.getId().toString()))
+                .andExpect(jsonPath("$.people[1].gender").value("female"));
     }
 
     @Test

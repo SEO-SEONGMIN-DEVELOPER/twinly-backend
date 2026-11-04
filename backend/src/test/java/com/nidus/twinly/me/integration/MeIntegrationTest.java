@@ -99,6 +99,9 @@ import com.nidus.twinly.common.survey.SurveyQuestion;
 import com.nidus.twinly.common.tendency.TendencyLoader;
 import com.nidus.twinly.common.tendency.TendencyOption;
 import com.nidus.twinly.common.tendency.TendencyQuestion;
+import com.nidus.twinly.twinlook.entity.TwinLook;
+import com.nidus.twinly.twinlook.repository.TwinLookRepository;
+import com.nidus.twinly.user.service.WithdrawnUserChunkDeletionService;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
@@ -121,12 +124,116 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 class MeIntegrationTest extends AbstractIntegrationTest {
 
     /** MeService가 오늘 날짜를 판정할 때 쓰는 타임존과 동일해야 한다. */
+    @Test
+    @DisplayName("트윈 꾸미기: 저장한 적 없으면 look null, 저장하면 행이 생기고, 다시 저장하면 같은 행을 덮어쓰며 조회는 마지막 값을 준다")
+    void twinLook_save_overwrite_and_read() throws Exception {
+        // given: 실제 유저
+        User user = saveUser();
+
+        // when & then: 저장 전 조회는 200 과 look: null
+        mockMvc.perform(get("/api/v1/me/twin-look").header("Authorization", bearer(user.getId())))
+                .andExpect(status().isOk())
+                .andExpect(content().json("""
+                        {"look":null}
+                        """));
+
+        // when: 처음 저장 후 같은 사람이 다른 값으로 다시 저장
+        mockMvc.perform(put("/api/v1/me/twin-look")
+                        .header("Authorization", bearer(user.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"hair":9,"hairColor":4,"outfit":11,"outfitColor":1}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(content().string(""));
+        flushAndClear();
+        mockMvc.perform(put("/api/v1/me/twin-look")
+                        .header("Authorization", bearer(user.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"hair":2,"hairColor":8,"outfit":3,"outfitColor":99}
+                                """))
+                .andExpect(status().isOk());
+        flushAndClear();
+
+        // then: 행은 하나뿐이고 마지막 값으로 바뀌어 있다
+        List<TwinLook> looks = twinLookRepository.findAll().stream().filter(look -> look.getUserId().equals(user.getId())).toList();
+        assertThat(looks).hasSize(1);
+        assertThat(looks.get(0).getHair()).isEqualTo(2);
+        assertThat(looks.get(0).getOutfitColor()).isEqualTo(99);
+
+        // when & then: 조회는 마지막 값을 준다
+        mockMvc.perform(get("/api/v1/me/twin-look").header("Authorization", bearer(user.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.look.hair").value(2))
+                .andExpect(jsonPath("$.look.hairColor").value(8))
+                .andExpect(jsonPath("$.look.outfit").value(3))
+                .andExpect(jsonPath("$.look.outfitColor").value(99));
+    }
+
+    @Test
+    @DisplayName("트윈 꾸미기 저장: 범위를 벗어나면 400 INVALID_REQUEST, 인증이 없으면 401 이고 둘 다 행을 만들지 않는다")
+    void saveTwinLook_rejects_invalid_and_unauthenticated() throws Exception {
+        // given: 실제 유저
+        User user = saveUser();
+
+        // when & then: 범위 밖 값은 400
+        mockMvc.perform(put("/api/v1/me/twin-look")
+                        .header("Authorization", bearer(user.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"hair":100,"hairColor":4,"outfit":11,"outfitColor":1}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+
+        // when & then: 인증 없으면 401
+        mockMvc.perform(put("/api/v1/me/twin-look")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"hair":9,"hairColor":4,"outfit":11,"outfitColor":1}
+                                """))
+                .andExpect(status().isUnauthorized());
+
+        // then: 행이 없다
+        assertThat(twinLookRepository.findByUserId(user.getId())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("트윈 꾸미기: 탈퇴 신청만 한 동안은 남아 있고, 최종 파기 때 그 사람의 모습만 지운다")
+    void twinLook_deleted_only_on_final_withdrawal_deletion() throws Exception {
+        // given: 탈퇴할 사람과 남을 사람이 모습을 저장했고, 한 사람은 탈퇴 유예 15일
+        User leaving = saveUser();
+        User staying = saveUser();
+        twinLookRepository.upsert(leaving.getId(), 9, 4, 11, 1);
+        twinLookRepository.upsert(staying.getId(), 2, 8, 3, 5);
+        leaving = userRepository.findById(leaving.getId()).orElseThrow();
+        leaving.requestWithdrawal(Duration.ofDays(15));
+        flushAndClear();
+
+        // when: 유예가 끝나기 전 파기 실행
+        withdrawnUserChunkDeletionService.deleteChunk(Instant.now(), 500);
+        flushAndClear();
+
+        // then: 유예 중이라 남아 있다
+        assertThat(twinLookRepository.findByUserId(leaving.getId())).isPresent();
+
+        // when: 유예가 끝난 뒤 파기 실행
+        withdrawnUserChunkDeletionService.deleteChunk(Instant.now().plus(Duration.ofDays(16)), 500);
+        flushAndClear();
+
+        // then: 탈퇴한 사람의 모습만 지워진다
+        assertThat(twinLookRepository.findByUserId(leaving.getId())).isEmpty();
+        assertThat(twinLookRepository.findByUserId(staying.getId())).isPresent();
+    }
+
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final Instant TWIN_COMPLETED_LONG_AGO = Instant.now().minus(Duration.ofDays(30)).truncatedTo(ChronoUnit.MICROS);
 
@@ -217,6 +324,12 @@ class MeIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     ObjectMapper objectMapper;
+
+    @Autowired
+    TwinLookRepository twinLookRepository;
+
+    @Autowired
+    WithdrawnUserChunkDeletionService withdrawnUserChunkDeletionService;
 
     /**
      * V2 마이그레이션이 넣는 운영 정책명 6건을 비운다.

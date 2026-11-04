@@ -14,6 +14,7 @@ import com.nidus.twinly.me.dto.command.MeStartTwinUpdateCommand;
 import com.nidus.twinly.me.dto.command.MeStartTwinUpdateAiChatCommand;
 import com.nidus.twinly.me.dto.command.MeSendTwinUpdateAiChatMessageCommand;
 import com.nidus.twinly.me.dto.command.MeSaveTwinUpdateInterestsCommand;
+import com.nidus.twinly.me.dto.command.MeSaveTwinLookCommand;
 import com.nidus.twinly.me.dto.command.MeCompleteTwinUpdateCommand;
 import com.nidus.twinly.me.dto.command.MeAppNotificationsReadAllCommand;
 import com.nidus.twinly.me.dto.command.MeChangeProfileNicknameCommand;
@@ -40,6 +41,7 @@ import com.nidus.twinly.me.dto.request.MeStartTwinUpdateRequest;
 import com.nidus.twinly.me.dto.request.MeStartTwinUpdateAiChatRequest;
 import com.nidus.twinly.me.dto.request.MeSendTwinUpdateAiChatMessageRequest;
 import com.nidus.twinly.me.dto.request.MeSaveTwinUpdateInterestsRequest;
+import com.nidus.twinly.me.dto.request.MeSaveTwinLookRequest;
 import com.nidus.twinly.me.dto.request.MeCompleteTwinUpdateRequest;
 import com.nidus.twinly.me.dto.request.MeAppNotificationsReadAllRequest;
 import com.nidus.twinly.me.dto.request.MeChangeProfileNicknameRequest;
@@ -80,6 +82,7 @@ import com.nidus.twinly.me.dto.response.MeSchoolVerificationStudentIdPresignResp
 import com.nidus.twinly.me.dto.response.MeStatusResponse;
 import com.nidus.twinly.me.dto.response.MeSurveyQuestionResponse;
 import com.nidus.twinly.me.dto.response.MeTendencyQuestionsResponse;
+import com.nidus.twinly.me.dto.response.MeTwinLookResponse;
 import com.nidus.twinly.me.dto.response.MeWithdrawResponse;
 import com.nidus.twinly.me.service.MeService;
 import com.nidus.twinly.notification.domain.AppNotificationFeedType;
@@ -511,5 +514,19 @@ public class MeController {
     public MeCompleteTwinUpdateResponse completeTwinUpdate(@AuthenticationPrincipal UserInfo userInfo,
                                                            @Valid @RequestBody MeCompleteTwinUpdateRequest request) {
         return MeCompleteTwinUpdateResponse.from(meService.completeTwinUpdate(userInfo.id(), MeCompleteTwinUpdateCommand.from(request)));
+    }
+
+    @Operation(summary = "트윈 꾸미기 조회")
+    @GetMapping("/api/v1/me/twin-look")
+    public MeTwinLookResponse twinLook(@AuthenticationPrincipal UserInfo userInfo) {
+        return MeTwinLookResponse.from(meService.twinLook(userInfo.id()));
+    }
+
+    @Operation(summary = "트윈 꾸미기 저장")
+    @ApiResponse(responseCode = "400", description = "INVALID_REQUEST")
+    @PutMapping("/api/v1/me/twin-look")
+    public void saveTwinLook(@AuthenticationPrincipal UserInfo userInfo,
+                             @Valid @RequestBody MeSaveTwinLookRequest request) {
+        meService.saveTwinLook(userInfo.id(), MeSaveTwinLookCommand.from(request));
     }
 }
