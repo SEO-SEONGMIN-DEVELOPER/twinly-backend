@@ -7,9 +7,9 @@ import java.util.List;
 public record AdminDashboardResult(
         AdminGenderCountResult members,
         AdminGenderCountResult subscribers,
-        long paidSubscribers,
-        long trialSubscribers,
-        long earlyGrantSubscribers,
+        AdminGenderCountResult paidSubscribers,
+        AdminGenderCountResult trialSubscribers,
+        AdminGenderCountResult earlyGrantSubscribers,
         AdminGenderCountResult withdrawn,
         long withdrawalCompleted,
         long withdrawalPending,

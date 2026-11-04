@@ -115,9 +115,9 @@ public class AdminDashboardReader {
         return new AdminDashboardResult(
                 AdminGenderCountResult.from(countByGender(MEMBER_COUNTS)),
                 AdminGenderCountResult.from(byGender(subscribers)),
-                sumOfKind(subscribers, SubscriptionKind.PAID.name()),
-                sumOfKind(subscribers, SubscriptionKind.TRIAL.name()),
-                sumOfKind(subscribers, SubscriptionKind.EARLY_GRANT.name()),
+                AdminGenderCountResult.from(byGender(ofKind(subscribers, SubscriptionKind.PAID.name()))),
+                AdminGenderCountResult.from(byGender(ofKind(subscribers, SubscriptionKind.TRIAL.name()))),
+                AdminGenderCountResult.from(byGender(ofKind(subscribers, SubscriptionKind.EARLY_GRANT.name()))),
                 AdminGenderCountResult.from(byGender(withdrawn)),
                 sumOfKind(withdrawn, "COMPLETED"),
                 sumOfKind(withdrawn, "PENDING"),
@@ -239,6 +239,12 @@ public class AdminDashboardReader {
                 .forEach(count -> result.merge(count.gender(), count.count(), Long::sum));
 
         return result;
+    }
+
+    private List<GenderKindCount> ofKind(List<GenderKindCount> counts, String kind) {
+        return counts.stream()
+                .filter(count -> kind.equals(count.kind()))
+                .toList();
     }
 
     private long sumOfKind(List<GenderKindCount> counts, String kind) {
