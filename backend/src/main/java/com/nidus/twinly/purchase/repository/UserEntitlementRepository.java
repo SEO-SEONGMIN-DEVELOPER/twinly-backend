@@ -7,10 +7,13 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 public interface UserEntitlementRepository extends JpaRepository<UserEntitlement, Long> {
 
     List<UserEntitlement> findAllByUserId(Long userId);
+
+    Optional<UserEntitlement> findByUserIdAndEntitlement(Long userId, String entitlement);
 
     List<UserEntitlement> findAllByUserIdInAndEntitlement(List<Long> userIds, String entitlement);
 

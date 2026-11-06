@@ -1,6 +1,9 @@
 package com.nidus.twinly.purchase.writer;
 
+import com.nidus.twinly.common.domain.Gender;
+import com.nidus.twinly.organization.domain.OrganizationType;
 import com.nidus.twinly.purchase.client.RevenueCatEntitlement;
+import com.nidus.twinly.purchase.domain.PoolAssignment;
 import com.nidus.twinly.purchase.entity.PoolCounter;
 import com.nidus.twinly.purchase.entity.RevenueCatEvent;
 import com.nidus.twinly.purchase.entity.UserEntitlement;
@@ -8,6 +11,7 @@ import com.nidus.twinly.purchase.repository.PoolCounterRepository;
 import com.nidus.twinly.purchase.repository.RevenueCatEventRepository;
 import com.nidus.twinly.purchase.repository.UserEntitlementRepository;
 import com.nidus.twinly.user.repository.UserRepository;
+import com.nidus.twinly.user.repository.UserRepository.PoolCandidateProjection;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,6 +32,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
@@ -220,9 +226,10 @@ class PurchaseWriterUnitTest {
     @Test
     @DisplayName("새로 배정되는 첫 유저는 풀 13 을 받고 카운터를 1 올린다")
     void assignPool_assigns_first_pool_13() {
-        // given: 풀 12 이후로 아직 아무도 배정되지 않음
-        PoolCounter counter = counter(0);
-        given(poolCounterRepository.findWithLockById(PoolCounter.SINGLETON_ID)).willReturn(Optional.of(counter));
+        // given: 풀 12 이후로 아직 아무도 배정되지 않은 학생 카운터
+        PoolCounter counter = schoolCounter(0);
+        given(userRepository.findOrganizationTypeById(USER_ID)).willReturn(Optional.of(OrganizationType.SCHOOL));
+        given(poolCounterRepository.findWithLockByOrganizationType(OrganizationType.SCHOOL)).willReturn(Optional.of(counter));
         given(userRepository.assignPoolNumber(USER_ID, 13)).willReturn(1);
 
         // when: 배정
@@ -234,11 +241,30 @@ class PurchaseWriterUnitTest {
     }
 
     @Test
+    @DisplayName("직장인은 직장인 카운터에서 풀 100001 부터 배정받고 학생 카운터는 건드리지 않는다")
+    void assignPool_assigns_company_member_from_company_counter() {
+        // given: 아직 아무도 배정되지 않은 직장인 카운터
+        PoolCounter counter = companyCounter(0);
+        given(userRepository.findOrganizationTypeById(USER_ID)).willReturn(Optional.of(OrganizationType.COMPANY));
+        given(poolCounterRepository.findWithLockByOrganizationType(OrganizationType.COMPANY)).willReturn(Optional.of(counter));
+        given(userRepository.assignPoolNumber(USER_ID, 100001)).willReturn(1);
+
+        // when: 배정
+        purchaseWriter.assignPool(USER_ID);
+
+        // then: 풀 100001 로 갱신되고, 학생 카운터는 조회조차 하지 않는다
+        then(userRepository).should().assignPoolNumber(USER_ID, 100001);
+        then(poolCounterRepository).should(never()).findWithLockByOrganizationType(OrganizationType.SCHOOL);
+        assertThat(counter.getAssignedCount()).isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("한 풀에 80명이 차면 다음 유저부터 다음 풀을 배정한다")
     void assignPool_moves_to_next_pool_every_80_users() {
         // given: 79명까지는 풀 13, 80명이 배정된 뒤의 유저는 풀 14
-        given(poolCounterRepository.findWithLockById(PoolCounter.SINGLETON_ID))
-                .willReturn(Optional.of(counter(79)), Optional.of(counter(80)));
+        given(userRepository.findOrganizationTypeById(anyLong())).willReturn(Optional.of(OrganizationType.SCHOOL));
+        given(poolCounterRepository.findWithLockByOrganizationType(OrganizationType.SCHOOL))
+                .willReturn(Optional.of(schoolCounter(79)), Optional.of(schoolCounter(80)));
         given(userRepository.assignPoolNumber(anyLong(), anyInt())).willReturn(1);
 
         // when: 80번째, 81번째 유저 배정
@@ -254,8 +280,9 @@ class PurchaseWriterUnitTest {
     @DisplayName("이미 풀이 있는 유저는 갱신되지 않고 카운터도 그대로다")
     void assignPool_keeps_counter_when_already_assigned() {
         // given: 조건부 갱신이 0건
-        PoolCounter counter = counter(50);
-        given(poolCounterRepository.findWithLockById(PoolCounter.SINGLETON_ID)).willReturn(Optional.of(counter));
+        PoolCounter counter = schoolCounter(50);
+        given(userRepository.findOrganizationTypeById(USER_ID)).willReturn(Optional.of(OrganizationType.SCHOOL));
+        given(poolCounterRepository.findWithLockByOrganizationType(OrganizationType.SCHOOL)).willReturn(Optional.of(counter));
         given(userRepository.assignPoolNumber(USER_ID, 13)).willReturn(0);
 
         // when: 배정
@@ -269,7 +296,8 @@ class PurchaseWriterUnitTest {
     @DisplayName("카운터 행이 없으면 예외를 던진다")
     void assignPool_throws_when_counter_missing() {
         // given: 카운터 행 없음
-        given(poolCounterRepository.findWithLockById(PoolCounter.SINGLETON_ID)).willReturn(Optional.empty());
+        given(userRepository.findOrganizationTypeById(USER_ID)).willReturn(Optional.of(OrganizationType.SCHOOL));
+        given(poolCounterRepository.findWithLockByOrganizationType(OrganizationType.SCHOOL)).willReturn(Optional.empty());
 
         // when & then
         assertThatThrownBy(() -> purchaseWriter.assignPool(USER_ID))
@@ -277,11 +305,23 @@ class PurchaseWriterUnitTest {
     }
 
     @Test
+    @DisplayName("풀을 배정할 회원이 없으면 예외를 던지고 카운터를 잠그지 않는다")
+    void assignPool_throws_when_user_missing() {
+        // given: 회원 없음
+        given(userRepository.findOrganizationTypeById(USER_ID)).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> purchaseWriter.assignPool(USER_ID))
+                .isInstanceOf(IllegalStateException.class);
+        then(poolCounterRepository).should(never()).findWithLockByOrganizationType(any());
+    }
+
+    @Test
     @DisplayName("재배정 대상이 없으면 기존 풀 번호와 카운터를 건드리지 않는다")
     void reassignPools_without_candidates_changes_nothing() {
         // given: 카운터가 30 인 상태에서 대상 유저가 없음
-        PoolCounter counter = counter(30);
-        given(poolCounterRepository.findWithLockById(PoolCounter.SINGLETON_ID)).willReturn(Optional.of(counter));
+        PoolCounter counter = schoolCounter(30);
+        given(poolCounterRepository.findAllWithLockByOrderByIdAsc()).willReturn(List.of(counter, companyCounter(0)));
 
         // when: 재배정
         var assignments = purchaseWriter.reassignPools(List.of());
@@ -292,10 +332,63 @@ class PurchaseWriterUnitTest {
         assertThat(counter.getAssignedCount()).isEqualTo(30);
     }
 
-    private PoolCounter counter(int assignedCount) {
+    @Test
+    @DisplayName("재배정은 학생과 직장인을 섞지 않고 각자의 카운터 번호 범위로 나눠 배정한다")
+    void reassignPools_separates_school_and_company_members() {
+        // given: 학생 2명, 직장인 1명
+        PoolCounter school = schoolCounter(30);
+        PoolCounter company = companyCounter(7);
+        given(poolCounterRepository.findAllWithLockByOrderByIdAsc()).willReturn(List.of(school, company));
+        given(userRepository.findPoolCandidatesByIdIn(List.of(1L, 2L, 3L))).willReturn(List.of(
+                poolCandidate(1L, Gender.MALE, OrganizationType.SCHOOL),
+                poolCandidate(2L, Gender.FEMALE, OrganizationType.SCHOOL),
+                poolCandidate(3L, Gender.FEMALE, OrganizationType.COMPANY)));
+
+        // when: 재배정
+        var assignments = purchaseWriter.reassignPools(List.of(1L, 2L, 3L));
+
+        // then: 학생은 풀 13, 직장인은 풀 100001 로 따로 갱신되고 카운터도 각자 인원으로 맞춰진다
+        then(userRepository).should().clearNonSeedPoolNumbers();
+        then(userRepository).should().updatePoolNumber(argThat(ids -> ids.size() == 2 && ids.containsAll(List.of(1L, 2L))), eq(13));
+        then(userRepository).should().updatePoolNumber(List.of(3L), 100001);
+        assertThat(school.getAssignedCount()).isEqualTo(2);
+        assertThat(company.getAssignedCount()).isEqualTo(1);
+        assertThat(assignments).extracting(PoolAssignment::poolNumber).containsExactly(13, 100001);
+    }
+
+    private PoolCounter schoolCounter(int assignedCount) {
+        return counter(1, OrganizationType.SCHOOL, 13, assignedCount);
+    }
+
+    private PoolCounter companyCounter(int assignedCount) {
+        return counter(2, OrganizationType.COMPANY, 100001, assignedCount);
+    }
+
+    private PoolCounter counter(int id, OrganizationType organizationType, int firstPoolNumber, int assignedCount) {
         PoolCounter counter = BeanUtils.instantiateClass(PoolCounter.class);
-        ReflectionTestUtils.setField(counter, "id", PoolCounter.SINGLETON_ID);
+        ReflectionTestUtils.setField(counter, "id", id);
+        ReflectionTestUtils.setField(counter, "organizationType", organizationType);
+        ReflectionTestUtils.setField(counter, "firstPoolNumber", firstPoolNumber);
         ReflectionTestUtils.setField(counter, "assignedCount", assignedCount);
         return counter;
+    }
+
+    private PoolCandidateProjection poolCandidate(Long id, Gender gender, OrganizationType organizationType) {
+        return new PoolCandidateProjection() {
+            @Override
+            public Long getId() {
+                return id;
+            }
+
+            @Override
+            public Gender getGender() {
+                return gender;
+            }
+
+            @Override
+            public OrganizationType getOrganizationType() {
+                return organizationType;
+            }
+        };
     }
 }

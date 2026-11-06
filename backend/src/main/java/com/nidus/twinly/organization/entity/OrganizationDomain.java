@@ -21,4 +21,11 @@ public class OrganizationDomain {
 
     @Column(length = 255)
     private String domain;
+
+    public static OrganizationDomain create(Long organizationId, String domain) {
+        OrganizationDomain organizationDomain = new OrganizationDomain();
+        organizationDomain.organizationId = organizationId;
+        organizationDomain.domain = domain;
+        return organizationDomain;
+    }
 }

@@ -22,6 +22,28 @@ public record RevenueCatSubscriberBody(
                 .toList();
     }
 
+    public RevenueCatSubscriptions subscriptionsIn(RevenueCatEnvironment environment, String entitlementName) {
+        if (subscriber == null) {
+            return new RevenueCatSubscriptions(null, List.of());
+        }
+
+        return new RevenueCatSubscriptions(
+                entitlementExpiresAt(environment, entitlementName),
+                subscriber.subscriptions() == null ? List.of() : subscriber.subscriptions().entrySet().stream()
+                        .filter(entry -> entry.getValue().expiresDate() != null)
+                        .filter(entry -> entry.getValue().isPromotional() || entry.getValue().isSandbox() == null || environment.accepts(entry.getValue().environment()))
+                        .map(entry -> entry.getValue().toSubscription(entry.getKey()))
+                        .toList());
+    }
+
+    private Instant entitlementExpiresAt(RevenueCatEnvironment environment, String entitlementName) {
+        return entitlementsIn(environment).stream()
+                .filter(entitlement -> entitlement.entitlement().equals(entitlementName))
+                .map(RevenueCatEntitlement::expiresAt)
+                .findFirst()
+                .orElse(null);
+    }
+
     private RevenueCatEntitlement toEntitlement(String name, Entitlement entitlement) {
         Purchase purchase = subscriber.purchaseOf(entitlement.productIdentifier());
 
@@ -84,7 +106,17 @@ public record RevenueCatSubscriberBody(
             Boolean isSandbox,
             String store,
             @JsonProperty("period_type")
-            String periodType
+            String periodType,
+            @JsonProperty("purchase_date")
+            Instant purchaseDate,
+            @JsonProperty("expires_date")
+            Instant expiresDate,
+            @JsonProperty("unsubscribe_detected_at")
+            Instant unsubscribeDetectedAt,
+            @JsonProperty("billing_issues_detected_at")
+            Instant billingIssuesDetectedAt,
+            @JsonProperty("grace_period_expires_date")
+            Instant gracePeriodExpiresDate
     ) {
 
         private static final String PROMOTIONAL_STORE = "promotional";
@@ -95,6 +127,18 @@ public record RevenueCatSubscriberBody(
 
         RevenueCatEnvironment environment() {
             return isSandbox ? RevenueCatEnvironment.SANDBOX : RevenueCatEnvironment.PRODUCTION;
+        }
+
+        RevenueCatSubscription toSubscription(String productId) {
+            return new RevenueCatSubscription(
+                    productId,
+                    store,
+                    periodType,
+                    purchaseDate,
+                    expiresDate,
+                    unsubscribeDetectedAt,
+                    billingIssuesDetectedAt,
+                    gracePeriodExpiresDate);
         }
     }
 }

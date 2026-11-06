@@ -43,6 +43,9 @@ import java.util.UUID;
 import com.nidus.twinly.common.survey.SurveyLoader;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import com.nidus.twinly.app.store.AppFeatureFlagStore;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.junit.jupiter.api.AfterEach;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.greaterThan;
@@ -60,6 +63,20 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 class OnboardingIntegrationTest extends AbstractIntegrationTest {
+
+    private static final String COMPANY_SIGNUP_KEY = "app:feature:company-signup";
+
+    @Autowired
+    AppFeatureFlagStore appFeatureFlagStore;
+
+    @Autowired
+    StringRedisTemplate redisTemplate;
+
+    @AfterEach
+    void turnOffCompanySignup() {
+        appFeatureFlagStore.saveCompanySignupEnabled(false);
+        redisTemplate.delete(COMPANY_SIGNUP_KEY);
+    }
 
     @Autowired
     AnonSessionRepository anonSessionRepository;
@@ -846,6 +863,85 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
         assertThat(anonSessionAgreementRepository.findAllByAnonSessionIdAndRevokedAtIsNull(session.getId())).hasSize(1);
     }
 
+    @Test
+    @DisplayName("회사명 입력: 처음 보는 회사 도메인을 인증한 익명 세션에 공백을 정리한 회사명이 저장되고, 학과 목록은 공통 학과가 내려온다")
+    void companyName_for_unregistered_company_end_to_end() throws Exception {
+        appFeatureFlagStore.saveCompanySignupEnabled(true);
+        // given: 어느 기관에도 등록되지 않은 회사 도메인으로 이메일 인증을 마친 익명 세션
+        AnonSession session = saveAnonSession();
+        saveVerifiedEmailSession(session.getId(), "worker@twinly-company.co.kr");
+        flushAndClear();
+
+        // when: 회사명 입력
+        mockMvc.perform(put("/api/v1/onboarding/company-name")
+                        .header("Authorization", anonBearer(session))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"companyName":"  트윈리   컴퍼니 "}
+                                """))
+                .andExpect(status().isOk());
+
+        // then: 익명 세션의 소속으로 정리된 이름이 저장되고, 회사는 아직 등록되지 않는다 (가입 때 등록)
+        flushAndClear();
+        assertThat(anonSessionRepository.findById(session.getId()).orElseThrow().getOrganization()).isEqualTo("트윈리 컴퍼니");
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM organization_domains WHERE domain = ?", Integer.class, "twinly-company.co.kr")).isZero();
+
+        // then: 학과가 없는 회사라 공통 학과 목록이 내려온다
+        mockMvc.perform(get("/api/v1/onboarding/affiliations")
+                        .header("Authorization", anonBearer(session)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.affiliations.length()").value(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM common_affiliations", Integer.class)));
+    }
+
+    @Test
+    @DisplayName("회사명 입력: 학교 이메일을 인증한 익명 세션이면 422 COMPANY_NAME_NOT_REQUIRED 이고 학교는 그대로다")
+    void companyName_for_school_email_returns_422() throws Exception {
+        // given: 학교 이메일로 인증을 마치고 학교가 기록된 익명 세션
+        saveOrganization("소마대학교", "nidus.ac.kr");
+        AnonSession session = saveAnonSession();
+        session.changeOrganization("소마대학교");
+        anonSessionRepository.save(session);
+        saveVerifiedEmailSession(session.getId(), "student@nidus.ac.kr");
+        flushAndClear();
+
+        // when: 회사명 입력
+        mockMvc.perform(put("/api/v1/onboarding/company-name")
+                        .header("Authorization", anonBearer(session))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"companyName":"트윈리컴퍼니"}
+                                """))
+                // then: 422 + 학교는 바뀌지 않는다
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("COMPANY_NAME_NOT_REQUIRED"));
+        flushAndClear();
+        assertThat(anonSessionRepository.findById(session.getId()).orElseThrow().getOrganization()).isEqualTo("소마대학교");
+    }
+
+    @Test
+    @DisplayName("회사명 입력: 인증 헤더가 없으면 401을 반환한다")
+    void companyName_without_auth_returns_401() throws Exception {
+        // when & then: 인증 없이 호출하면 401
+        mockMvc.perform(put("/api/v1/onboarding/company-name")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"companyName":"트윈리컴퍼니"}
+                                """))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("기관 목록: 학교만 내려오고 가입하며 등록된 회사는 섞이지 않는다")
+    void organizations_excludes_companies() throws Exception {
+        // given: 같은 이름 규칙을 피한 회사 1곳이 등록돼 있음
+        jdbcTemplate.update("INSERT INTO organizations (name, type) VALUES (?, 'COMPANY')", "트윈리컴퍼니");
+
+        // when & then: 학생증 인증용 학교 목록에 회사는 없다
+        mockMvc.perform(get("/api/v1/onboarding/organizations"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.organizations[?(@.name == '트윈리컴퍼니')]").isEmpty());
+    }
+
     /** 실제 익명 세션을 DB에 저장한다. (인증 리졸버가 토큰으로 조회한다) */
     private AnonSession saveAnonSession() {
         return anonSessionRepository.save(AnonSession.create(UUID.randomUUID(), Instant.now().plus(Duration.ofDays(1))));
@@ -867,8 +963,8 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
 
     /** 학교와 이메일 도메인을 직접 insert하고 organizations.id를 반환한다. (운영에서도 마이그레이션 SQL로 주입되는 카탈로그 데이터) */
     private Long saveOrganization(String name, String... domains) {
-        jdbcTemplate.update("INSERT INTO organizations (name) VALUES (?)", name);
-        Long organizationId = jdbcTemplate.queryForObject("SELECT id FROM organizations WHERE name = ?", Long.class, name);
+        jdbcTemplate.update("INSERT INTO organizations (name, type) VALUES (?, 'SCHOOL')", name);
+        Long organizationId = jdbcTemplate.queryForObject("SELECT id FROM organizations WHERE type = 'SCHOOL' AND name = ?", Long.class, name);
 
         for (String domain : domains) {
             jdbcTemplate.update("INSERT INTO organization_domains (organization_id, domain) VALUES (?, ?)", organizationId, domain);

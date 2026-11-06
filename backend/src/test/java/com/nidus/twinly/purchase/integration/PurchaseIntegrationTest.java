@@ -5,7 +5,6 @@ import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.purchase.client.RevenueCatClient;
 import com.nidus.twinly.simulation.client.SimulationPreloadClient;
 import com.nidus.twinly.purchase.client.RevenueCatEntitlement;
-import com.nidus.twinly.purchase.entity.PoolCounter;
 import com.nidus.twinly.purchase.entity.UserEntitlement;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.purchase.entity.RevenueCatEvent;
@@ -43,6 +42,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class PurchaseIntegrationTest extends AbstractIntegrationTest {
 
     private static final String WEBHOOK_SECRET = "Bearer test-revenue-cat-webhook-secret";
+    private static final int SCHOOL_POOL_COUNTER_ID = 1;
+    private static final int COMPANY_POOL_COUNTER_ID = 2;
 
     @Autowired
     UserEntitlementRepository userEntitlementRepository;
@@ -174,7 +175,7 @@ class PurchaseIntegrationTest extends AbstractIntegrationTest {
         seasonRepository.save(Season.create(now.minus(Duration.ofDays(30)), now.plus(Duration.ofDays(30))));
         User first = saveUser();
         User second = saveUser();
-        int assignedBefore = poolCounterRepository.findById(PoolCounter.SINGLETON_ID).orElseThrow().getAssignedCount();
+        int assignedBefore = poolCounterRepository.findById(SCHOOL_POOL_COUNTER_ID).orElseThrow().getAssignedCount();
         given(revenueCatClient.entitlements(anyString()))
                 .willReturn(List.of(new RevenueCatEntitlement(
                         EntitlementReader.SIMULATION_ACCESS, now.plus(Duration.ofDays(30)))));
@@ -196,7 +197,37 @@ class PurchaseIntegrationTest extends AbstractIntegrationTest {
         entityManager.clear();
         assertThat(userRepository.findById(first.getId()).orElseThrow().getPoolNumber()).isEqualTo(13);
         assertThat(userRepository.findById(second.getId()).orElseThrow().getPoolNumber()).isEqualTo(13);
-        assertThat(poolCounterRepository.findById(PoolCounter.SINGLETON_ID).orElseThrow().getAssignedCount()).isEqualTo(assignedBefore + 2);
+        assertThat(poolCounterRepository.findById(SCHOOL_POOL_COUNTER_ID).orElseThrow().getAssignedCount()).isEqualTo(assignedBefore + 2);
+    }
+
+    @Test
+    @DisplayName("결제 반영: 직장인은 학생 카운터가 아닌 직장인 카운터에서 100001번 풀을 받는다")
+    void webhook_with_simulation_access_assigns_company_pool() throws Exception {
+        // given: 진행 중인 시즌에서 직장인 1명이 결제
+        Instant now = Instant.now();
+        seasonRepository.save(Season.create(now.minus(Duration.ofDays(30)), now.plus(Duration.ofDays(30))));
+        User worker = saveUser();
+        worker.joinAsCompanyMember();
+        userRepository.saveAndFlush(worker);
+        int schoolBefore = poolCounterRepository.findById(SCHOOL_POOL_COUNTER_ID).orElseThrow().getAssignedCount();
+        int companyBefore = poolCounterRepository.findById(COMPANY_POOL_COUNTER_ID).orElseThrow().getAssignedCount();
+        given(revenueCatClient.entitlements(anyString()))
+                .willReturn(List.of(new RevenueCatEntitlement(
+                        EntitlementReader.SIMULATION_ACCESS, now.plus(Duration.ofDays(30)))));
+
+        // when: 구매 웹훅
+        mockMvc.perform(post("/webhook/v1/revenue-cat")
+                        .header("Authorization", WEBHOOK_SECRET)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload("INITIAL_PURCHASE", worker)))
+                .andExpect(status().isOk());
+
+        // then: 직장인 풀 100001 이 배정되고, 직장인 카운터만 1 오른다
+        entityManager.flush();
+        entityManager.clear();
+        assertThat(userRepository.findById(worker.getId()).orElseThrow().getPoolNumber()).isEqualTo(100001);
+        assertThat(poolCounterRepository.findById(COMPANY_POOL_COUNTER_ID).orElseThrow().getAssignedCount()).isEqualTo(companyBefore + 1);
+        assertThat(poolCounterRepository.findById(SCHOOL_POOL_COUNTER_ID).orElseThrow().getAssignedCount()).isEqualTo(schoolBefore);
     }
 
     @Test

@@ -157,7 +157,7 @@ public class OnboardingController {
         return OnboardingOrganizationsResponse.from(onboardingService.organizations());
     }
 
-    @Operation(summary = "부서 목록 조회", description = "학교 이메일을 인증했거나 학생증을 제출한 학교의 학과를 준다.")
+    @Operation(summary = "부서 목록 조회", description = "학교 이메일을 인증했거나 학생증을 제출한 학교의 학과를 준다. 학과 목록이 없는 학교와 회사는 공통 학과를 준다.")
     @ApiResponses({
             @ApiResponse(responseCode = "422", description = "EMAIL_VERIFICATION_NOT_COMPLETED, EMAIL_DOMAIN_NOT_SUPPORTED, ORGANIZATION_NOT_FOUND")
     })
@@ -171,5 +171,13 @@ public class OnboardingController {
     public void affiliation(@AuthenticationPrincipal AnonSessionSnapshot anonSessionSnapshot,
                             @Valid @RequestBody OnboardingAffiliationRequest request) {
         onboardingService.affiliation(anonSessionSnapshot, OnboardingAffiliationCommand.from(request));
+    }
+
+    @Operation(summary = "회사명 입력", description = "처음 보는 회사 도메인을 인증했을 때 회사명을 받는다. 이미 등록된 회사면 입력값 대신 등록된 이름을 쓴다.")
+    @ApiResponse(responseCode = "422", description = "EMAIL_VERIFICATION_NOT_COMPLETED, EMAIL_DOMAIN_NOT_SUPPORTED, COMPANY_NAME_NOT_REQUIRED, INVALID_COMPANY_NAME")
+    @PutMapping("/api/v1/onboarding/company-name")
+    public void companyName(@AuthenticationPrincipal AnonSessionSnapshot anonSessionSnapshot,
+                            @Valid @RequestBody OnboardingCompanyNameRequest request) {
+        onboardingService.companyName(anonSessionSnapshot, OnboardingCompanyNameCommand.from(request));
     }
 }

@@ -21,6 +21,7 @@ import com.nidus.twinly.auth.dto.command.AuthSmsVerifyCommand;
 import com.nidus.twinly.auth.dto.result.AuthEmailSendResult;
 import com.nidus.twinly.auth.dto.result.AuthIdentityPrepareResult;
 import com.nidus.twinly.auth.dto.result.AuthEmailVerifyResult;
+import com.nidus.twinly.auth.dto.result.AuthOnboardingEmailVerifyResult;
 import com.nidus.twinly.auth.dto.result.AuthOnboardingStudentIdPresignResult;
 import com.nidus.twinly.auth.dto.result.AuthSmsSendResult;
 import com.nidus.twinly.auth.dto.result.AuthSmsVerifyResult;
@@ -93,6 +94,8 @@ import com.nidus.twinly.common.presign.PhotoPresignResult;
 import com.nidus.twinly.schoolverification.domain.SchoolVerificationStatus;
 import com.nidus.twinly.schoolverification.domain.SchoolVerificationMethod;
 import com.nidus.twinly.schoolverification.entity.AnonSessionStudentIdSubmission;
+import com.nidus.twinly.organization.domain.EmailOrganization;
+import com.nidus.twinly.organization.domain.OrganizationType;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -324,7 +327,7 @@ class AuthServiceUnitTest {
 
         AnonSession anonSession = AnonSession.create(SNAPSHOT.token(), Instant.now().plusSeconds(3600));
         given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(anonSession));
-        given(organizationCatalog.findByEmail(EMAIL)).willReturn(organization("트윈리대학교"));
+        given(organizationCatalog.resolveEmail(EMAIL)).willReturn(EmailOrganization.registered("nidus.ac.kr", organization("트윈리대학교")));
 
         // when: 올바른 토큰·코드로 인증 확인
         authService.onboardingEmailVerify(SNAPSHOT, new AuthEmailVerifyCommand(session.getVerificationToken(), "123456"));
@@ -1177,6 +1180,7 @@ class AuthServiceUnitTest {
         givenVerifiedIdentityAndEmail();
         AnonSession anonSession = onboardedAnonSession();
         given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(anonSession));
+        given(organizationCatalog.resolveEmail(EMAIL)).willReturn(EmailOrganization.registered("test.com", organization("트윈리대학교")));
         given(policyCatalog.loadRequiredPolicyIds(PolicyKind.ONBOARDING)).willReturn(Set.of(REQUIRED_POLICY_ID));
         given(anonSessionAgreementRepository.findAllByAnonSessionId(ANON_SESSION_ID))
                 .willReturn(List.of(agreement(REQUIRED_POLICY_ID)));
@@ -1210,6 +1214,8 @@ class AuthServiceUnitTest {
         assertThat(created.getGivenName()).isEqualTo("길동");
         assertThat(created.getNickname()).isEqualTo("nick");
         assertThat(created.getEmail()).isEqualTo(EMAIL);
+        assertThat(created.getOrganizationType()).isEqualTo(OrganizationType.SCHOOL);
+        assertThat(created.getAffiliationNumber()).isEqualTo("20250001");
 
         // then: 익명 세션과 두 인증 저장소가 모두 정리되고 인증 이력 2건(IDENTITY/EMAIL)이 남음
         then(anonSessionRepository).should().delete(anonSession);
@@ -1495,6 +1501,138 @@ class AuthServiceUnitTest {
 
     // ---------- 헬퍼 ----------
 
+    @Test
+    @DisplayName("온보딩 이메일 인증 확인: 처음 보는 회사 도메인이면 회사명을 비워 두고 회사명 입력이 필요하다고 알린다")
+    void onboardingEmailVerify_unregistered_company_requires_company_name() {
+        // given: 유효한 EMAIL 인증 세션과, 어느 기관에도 등록되지 않은 회사 도메인. 익명 세션에는 이전에 고른 학교가 남아 있음
+        AnonSessionVerificationSession session = AnonSessionVerificationSession.create(
+                VerificationType.EMAIL, ANON_SESSION_ID, EMAIL, "123456", Instant.now().plusSeconds(60));
+        given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.EMAIL))
+                .willReturn(Optional.of(session));
+        AnonSession anonSession = AnonSession.create(SNAPSHOT.token(), Instant.now().plusSeconds(3600));
+        anonSession.changeOrganization("트윈리대학교");
+        given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(anonSession));
+        given(organizationCatalog.resolveEmail(EMAIL)).willReturn(EmailOrganization.unregisteredCompany("test.com"));
+
+        // when: 인증 확인
+        AuthOnboardingEmailVerifyResult result = authService.onboardingEmailVerify(SNAPSHOT, new AuthEmailVerifyCommand(session.getVerificationToken(), "123456"));
+
+        // then: 회사 종류와 null 회사명을 돌려주고, 남아 있던 학교는 지워 회사명을 새로 받게 한다
+        assertThat(result).isEqualTo(new AuthOnboardingEmailVerifyResult(OrganizationType.COMPANY, null));
+        assertThat(anonSession.getOrganization()).isNull();
+        then(studentIdSubmissionService).should().discardAnonSubmission(ANON_SESSION_ID);
+    }
+
+    @Test
+    @DisplayName("회원가입: 처음 보는 회사 도메인이면 입력한 회사명으로 회사를 등록하고, 직장인으로 가입시키며 학번은 저장하지 않는다")
+    void signup_company_member_registers_new_company() {
+        // given: 처음 보는 회사 도메인을 인증하고 회사명을 입력한 익명 세션 (학번은 입력하지 않음)
+        givenSignupReady();
+        AnonSession anonSession = onboardedAnonSession();
+        anonSession.changeOrganization("트윈리컴퍼니");
+        anonSession.changeAffiliationNumber(null);
+        given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(anonSession));
+        given(organizationCatalog.resolveEmail(EMAIL)).willReturn(EmailOrganization.unregisteredCompany("test.com"));
+        given(organizationCatalog.registerCompany("test.com", "트윈리컴퍼니")).willReturn(companyOrganization("트윈리컴퍼니"));
+        given(policyCatalog.loadRequiredPolicyIds(PolicyKind.ONBOARDING)).willReturn(Set.of(REQUIRED_POLICY_ID));
+        given(anonSessionAgreementRepository.findAllByAnonSessionId(ANON_SESSION_ID)).willReturn(List.of(agreement(REQUIRED_POLICY_ID)));
+
+        // when: 회원가입
+        authService.signup(SNAPSHOT);
+
+        // then: 도메인과 입력 회사명으로 회사를 등록하고, 직장인·학번 없음으로 저장한다
+        then(organizationCatalog).should().registerCompany("test.com", "트윈리컴퍼니");
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        then(userRepository).should().save(userCaptor.capture());
+        User created = userCaptor.getValue();
+        assertThat(created.getOrganizationType()).isEqualTo(OrganizationType.COMPANY);
+        assertThat(created.getOrganization()).isEqualTo("트윈리컴퍼니");
+        assertThat(created.getOrganizationHash()).isEqualTo("hash:트윈리컴퍼니");
+        assertThat(created.getAffiliationNumber()).isNull();
+        assertThat(created.getAffiliationNumberHash()).isNull();
+    }
+
+    @Test
+    @DisplayName("회원가입: 직장인이 학번을 입력해 두었어도 학번은 저장하지 않는다")
+    void signup_company_member_drops_affiliation_number() {
+        // given: 이미 등록된 회사 도메인을 인증한 익명 세션에 학번이 남아 있음
+        givenSignupReady();
+        given(organizationCatalog.resolveEmail(EMAIL)).willReturn(EmailOrganization.registered("test.com", companyOrganization("트윈리컴퍼니")));
+        given(policyCatalog.loadRequiredPolicyIds(PolicyKind.ONBOARDING)).willReturn(Set.of(REQUIRED_POLICY_ID));
+        given(anonSessionAgreementRepository.findAllByAnonSessionId(ANON_SESSION_ID)).willReturn(List.of(agreement(REQUIRED_POLICY_ID)));
+
+        // when: 회원가입
+        authService.signup(SNAPSHOT);
+
+        // then: 등록된 회사 이름으로 저장되고 학번과 해시는 비며, 회사는 새로 등록하지 않는다
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        then(userRepository).should().save(userCaptor.capture());
+        User created = userCaptor.getValue();
+        assertThat(created.getOrganizationType()).isEqualTo(OrganizationType.COMPANY);
+        assertThat(created.getOrganization()).isEqualTo("트윈리컴퍼니");
+        assertThat(created.getAffiliationNumber()).isNull();
+        assertThat(created.getAffiliationNumberHash()).isNull();
+        then(organizationCatalog).should(never()).registerCompany(any(), any());
+    }
+
+    @Test
+    @DisplayName("회원가입: 회사명을 입력하기 전에 다른 사람이 같은 도메인을 등록했으면 등록된 회사 이름으로 가입한다")
+    void signup_company_member_uses_registered_name_when_domain_registered_meanwhile() {
+        // given: 인증 당시엔 처음 보는 도메인이라 회사명이 비어 있었지만, 지금은 등록된 회사가 있음
+        givenSignupReady();
+        AnonSession anonSession = onboardedAnonSession();
+        anonSession.changeOrganization(null);
+        given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(anonSession));
+        given(organizationCatalog.resolveEmail(EMAIL)).willReturn(EmailOrganization.registered("test.com", companyOrganization("먼저등록된회사")));
+        given(policyCatalog.loadRequiredPolicyIds(PolicyKind.ONBOARDING)).willReturn(Set.of(REQUIRED_POLICY_ID));
+        given(anonSessionAgreementRepository.findAllByAnonSessionId(ANON_SESSION_ID)).willReturn(List.of(agreement(REQUIRED_POLICY_ID)));
+
+        // when: 회원가입
+        authService.signup(SNAPSHOT);
+
+        // then: 비어 있던 회사명 대신 등록된 이름을 쓴다
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        then(userRepository).should().save(userCaptor.capture());
+        assertThat(userCaptor.getValue().getOrganization()).isEqualTo("먼저등록된회사");
+    }
+
+    @Test
+    @DisplayName("회원가입: 처음 보는 회사 도메인인데 회사명을 입력하지 않았으면 PROFILE_NOT_COMPLETED 이고 회사를 등록하지 않는다")
+    void signup_unregistered_company_without_name_throws() {
+        // given: 처음 보는 회사 도메인을 인증했지만 회사명이 비어 있는 익명 세션
+        givenVerifiedIdentityAndEmail();
+        AnonSession anonSession = onboardedAnonSession();
+        anonSession.changeOrganization(null);
+        given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(anonSession));
+        given(organizationCatalog.resolveEmail(EMAIL)).willReturn(EmailOrganization.unregisteredCompany("test.com"));
+
+        // when & then: 422 로 실패하고 회사·유저 모두 만들지 않는다
+        assertThatThrownBy(() -> authService.signup(SNAPSHOT))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PROFILE_NOT_COMPLETED);
+        then(organizationCatalog).should(never()).registerCompany(any(), any());
+        then(userRepository).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("회원가입: 학생이 학번을 입력하지 않았으면 PROFILE_NOT_COMPLETED 예외가 발생한다")
+    void signup_school_member_without_affiliation_number_throws() {
+        // given: 학교 이메일을 인증했지만 학번이 비어 있는 익명 세션
+        givenVerifiedIdentityAndEmail();
+        AnonSession anonSession = onboardedAnonSession();
+        anonSession.changeAffiliationNumber(null);
+        given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(anonSession));
+        given(organizationCatalog.resolveEmail(EMAIL)).willReturn(EmailOrganization.registered("test.com", organization("트윈리대학교")));
+
+        // when & then: 학생은 학번이 계속 필수다
+        assertThatThrownBy(() -> authService.signup(SNAPSHOT))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PROFILE_NOT_COMPLETED);
+        then(userRepository).should(never()).save(any());
+    }
+
     private void givenVerifiedIdentityAndEmail() {
         AnonSessionVerificationSession emailSession = AnonSessionVerificationSession.create(
                 VerificationType.EMAIL, ANON_SESSION_ID, EMAIL, "654321", Instant.now().plusSeconds(60));
@@ -1594,9 +1732,17 @@ class AuthServiceUnitTest {
         return anonSession;
     }
 
+    private Organization companyOrganization(String name) {
+        Organization organization = BeanUtils.instantiateClass(Organization.class);
+        ReflectionTestUtils.setField(organization, "name", name);
+        ReflectionTestUtils.setField(organization, "type", OrganizationType.COMPANY);
+        return organization;
+    }
+
     private Organization organization(String name) {
         Organization organization = BeanUtils.instantiateClass(Organization.class);
         ReflectionTestUtils.setField(organization, "name", name);
+        ReflectionTestUtils.setField(organization, "type", OrganizationType.SCHOOL);
         return organization;
     }
 

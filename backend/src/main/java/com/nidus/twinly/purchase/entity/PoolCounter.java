@@ -1,7 +1,10 @@
 package com.nidus.twinly.purchase.entity;
 
+import com.nidus.twinly.organization.domain.OrganizationType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
@@ -14,18 +17,22 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class PoolCounter {
 
-    public static final int SINGLETON_ID = 1;
-    public static final int FIRST_POOL_NUMBER = 13;
     public static final int POOL_SIZE = 80;
 
     @Id
     @Column(columnDefinition = "TINYINT")
     private Integer id;
 
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private OrganizationType organizationType;
+
+    private int firstPoolNumber;
+
     private int assignedCount;
 
-    public static int poolNumberAt(int index) {
-        return FIRST_POOL_NUMBER + index / POOL_SIZE;
+    public int poolNumberAt(int index) {
+        return firstPoolNumber + index / POOL_SIZE;
     }
 
     public int nextPoolNumber() {

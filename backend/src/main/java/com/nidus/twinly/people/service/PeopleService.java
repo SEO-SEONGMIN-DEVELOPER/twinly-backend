@@ -140,7 +140,7 @@ public class PeopleService {
                 .filter(room -> room.getClosedAt() == null)
                 .collect(Collectors.toMap(ChatRoom::getMatchId, ChatRoom::getId));
 
-        Map<Long, Integer> sceneCountByPartnerUserId = scenePartnerRepository.countScenesByUserIdAndPartnerUserIdIn(userId, partnerUserIds, now).stream()
+        Map<Long, Integer> sceneCountByPartnerUserId = scenePartnerRepository.countScenesByUserIdAndPartnerUserIdIn(userId, partnerUserIds, seasonScope.seasonId(), seasonScope.startDate(), now).stream()
                 .collect(Collectors.toMap(ScenePartnerRepository.SceneCountProjection::getPartnerUserId, projection -> projection.getCount().intValue()));
 
         List<Encounter> encounters = encounterRepository.findAllByUserIdAndPartnerUserIdIn(userId, partnerUserIds);

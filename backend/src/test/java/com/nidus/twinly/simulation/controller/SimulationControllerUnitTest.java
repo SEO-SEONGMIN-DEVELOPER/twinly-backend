@@ -19,6 +19,7 @@ import com.nidus.twinly.user.service.UserService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import com.nidus.twinly.common.security.SecurityConfig;
+import com.nidus.twinly.organization.domain.OrganizationType;
 import org.mockito.ArgumentCaptor;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
@@ -79,7 +80,7 @@ class SimulationControllerUnitTest {
         personaElements.put(PersonaDimension.CONFLICT_STYLE, List.of("직접 말하기보다 시간을 둔다"));
         personaElements.put(PersonaDimension.INTEREST, List.of("등산", "재즈"));
         given(simulationService.persona(USER_ID, DATE)).willReturn(new SimulationPersonaResult(
-                USER_ID, "서", "성민", "성민이", Gender.MALE, "성균관대학교", "컴퓨터공학과", LocalDate.of(1999, 3, 21), personaElements, 3,
+                USER_ID, "서", "성민", "성민이", Gender.MALE, "성균관대학교", OrganizationType.SCHOOL, "컴퓨터공학과", LocalDate.of(1999, 3, 21), personaElements, 3,
                 LocalDateTime.of(2026, 10, 3, 10, 30, 0), List.of(new SimulationPersonaIntimacyResult(34L, 46)),
                 List.of(new SimulationPersonaHesitationAnswersItemResult(LocalDate.of(2026, 10, 1), "주말에 뭐 할까?", List.of("집에서 쉰다", "밖에 나간다"), "집에서 쉰다"))));
 
@@ -94,6 +95,7 @@ class SimulationControllerUnitTest {
                 .andExpect(jsonPath("$.nickname", is("성민이")))
                 .andExpect(jsonPath("$.gender", is("male")))
                 .andExpect(jsonPath("$.organization", is("성균관대학교")))
+                .andExpect(jsonPath("$.organizationType", is("school")))
                 .andExpect(jsonPath("$.affiliation", is("컴퓨터공학과")))
                 .andExpect(jsonPath("$.birthDate", is("1999-03-21")))
                 .andExpect(jsonPath("$.personaElements.openness", hasSize(1)))
@@ -142,7 +144,7 @@ class SimulationControllerUnitTest {
     void persona_without_elements_returns_empty_object() throws Exception {
         // given: 성향이 하나도 없는 유저의 페르소나 조회 결과
         given(simulationService.persona(USER_ID, DATE)).willReturn(new SimulationPersonaResult(
-                USER_ID, "서", "성민", "성민이", Gender.MALE, "성균관대학교", "컴퓨터공학과", LocalDate.of(1999, 3, 21), Map.of(), 1,
+                USER_ID, "서", "성민", "성민이", Gender.MALE, "성균관대학교", OrganizationType.SCHOOL, "컴퓨터공학과", LocalDate.of(1999, 3, 21), Map.of(), 1,
                 LocalDateTime.of(2026, 10, 3, 10, 30, 0), List.of(), List.of()));
 
         // when: 페르소나 조회 API 호출

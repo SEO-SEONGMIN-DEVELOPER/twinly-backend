@@ -122,6 +122,39 @@ class AppFeatureFlagStoreUnitTest {
         assertThat(store.dotWorldEnabled()).isTrue();
     }
 
+    @Test
+    @DisplayName("직장인 가입 스위치는 Redis에 값이 없으면 꺼짐이고 true면 켜짐이다")
+    void companySignupEnabled_readsOwnKey() {
+        // given: 처음에는 값이 없고, 그 뒤 켜진 상태
+        given(valueOperations.get(AppFeatureFlagStore.COMPANY_SIGNUP_KEY)).willReturn(null, "true");
+
+        // when & then: 값이 없으면 꺼짐, 캐시가 지나 다시 읽으면 켜짐
+        assertThat(store.companySignupEnabled()).isFalse();
+        clock.advance(CACHE_TTL);
+        assertThat(store.companySignupEnabled()).isTrue();
+    }
+
+    @Test
+    @DisplayName("두 스위치는 캐시를 따로 쓰므로 한쪽을 읽거나 바꿔도 다른 쪽 값에 섞이지 않는다")
+    void flags_are_cached_independently() {
+        // given: 도트 세계는 켜짐, 직장인 가입은 꺼짐
+        given(valueOperations.get(AppFeatureFlagStore.DOT_WORLD_KEY)).willReturn("true");
+        given(valueOperations.get(AppFeatureFlagStore.COMPANY_SIGNUP_KEY)).willReturn("false", "true");
+
+        // when: 둘 다 읽은 뒤 직장인 가입만 켠다
+        boolean dotWorld = store.dotWorldEnabled();
+        boolean companyBefore = store.companySignupEnabled();
+        store.saveCompanySignupEnabled(true);
+
+        // then: 각자 값이 유지되고, 직장인 가입만 바로 새 값을 읽으며 도트 세계는 캐시를 그대로 쓴다
+        assertThat(dotWorld).isTrue();
+        assertThat(companyBefore).isFalse();
+        assertThat(store.companySignupEnabled()).isTrue();
+        assertThat(store.dotWorldEnabled()).isTrue();
+        then(valueOperations).should().set(AppFeatureFlagStore.COMPANY_SIGNUP_KEY, "true");
+        then(valueOperations).should(times(1)).get(AppFeatureFlagStore.DOT_WORLD_KEY);
+    }
+
     private static final class MutableClock extends Clock {
 
         private Instant instant;

@@ -1,5 +1,6 @@
 package com.nidus.twinly.organization.repository;
 
+import com.nidus.twinly.organization.domain.OrganizationType;
 import com.nidus.twinly.organization.entity.Organization;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -10,5 +11,7 @@ public interface OrganizationRepository extends JpaRepository<Organization, Long
 
     List<Organization> findAllByOrderByNameAsc();
 
-    Optional<Organization> findByName(String name);
+    List<Organization> findAllByTypeOrderByNameAsc(OrganizationType type);
+
+    Optional<Organization> findByTypeAndName(OrganizationType type, String name);
 }

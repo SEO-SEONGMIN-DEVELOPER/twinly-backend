@@ -41,7 +41,8 @@ import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.onboarding.repository.SurveyAnswerRepository;
-import com.nidus.twinly.organization.entity.Organization;
+import com.nidus.twinly.organization.domain.EmailOrganization;
+import com.nidus.twinly.organization.domain.OrganizationType;
 import com.nidus.twinly.organization.service.OrganizationCatalog;
 import com.nidus.twinly.purchase.writer.EarlySignupGrantWriter;
 import com.nidus.twinly.schoolverification.service.StudentIdSubmissionService;
@@ -134,17 +135,20 @@ public class AuthService {
     }
 
     @Transactional
-    public void onboardingEmailVerify(AnonSessionSnapshot anonSessionSnapshot, AuthEmailVerifyCommand command) {
+    public AuthOnboardingEmailVerifyResult onboardingEmailVerify(AnonSessionSnapshot anonSessionSnapshot, AuthEmailVerifyCommand command) {
         Long anonSessionId = anonSessionSnapshot.id();
 
         AnonSessionVerificationSession session = verifyAnonSession(anonSessionId, command, VerificationType.EMAIL);
-        Organization organization = organizationCatalog.findByEmail(session.getContact());
+        EmailOrganization emailOrganization = organizationCatalog.resolveEmail(session.getContact());
+        String organizationName = emailOrganization.isUnregisteredCompany() ? null : emailOrganization.organization().getName();
 
         AnonSession anonSession = anonSessionRepository.findById(anonSessionId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_ANON_SESSION));
 
-        anonSession.changeOrganization(organization.getName());
+        anonSession.changeOrganization(organizationName);
         studentIdSubmissionService.discardAnonSubmission(anonSessionId);
+
+        return new AuthOnboardingEmailVerifyResult(emailOrganization.type(), organizationName);
     }
 
     @Transactional
@@ -349,7 +353,14 @@ public class AuthService {
         AnonSession anonSession = anonSessionRepository.findById(anonSessionId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SIGNUP_SESSION_NOT_FOUND));
 
-        requireProfileCompleted(anonSession);
+        EmailOrganization emailOrganization = emailSession != null ? organizationCatalog.resolveEmail(emailSession.getContact()) : null;
+        OrganizationType organizationType = emailOrganization != null ? emailOrganization.type() : OrganizationType.SCHOOL;
+
+        String organization = emailOrganization == null || emailOrganization.isUnregisteredCompany()
+                ? anonSession.getOrganization()
+                : emailOrganization.organization().getName();
+
+        requireProfileCompleted(anonSession, organization, organizationType);
 
         List<AnonSessionAgreement> anonSessionAgreements = anonSessionAgreementRepository.findAllByAnonSessionId(anonSessionId);
 
@@ -375,11 +386,17 @@ public class AuthService {
             InfoLog.log(log, "다른 본인이 가입하며 기존 계정의 이메일을 해제했습니다.", field("anonSessionId", anonSessionId));
         }
 
+        if (emailOrganization != null && emailOrganization.isUnregisteredCompany()) {
+            organization = organizationCatalog.registerCompany(emailOrganization.domain(), organization).getName();
+        }
+
+        String affiliationNumber = organizationType == OrganizationType.COMPANY ? null : anonSession.getAffiliationNumber();
+
         String familyNameHash = blindIndexHasher.hash(anonSession.getFamilyName());
         String givenNameHash = blindIndexHasher.hash(anonSession.getGivenName());
-        String organizationHash = blindIndexHasher.hash(anonSession.getOrganization());
+        String organizationHash = blindIndexHasher.hash(organization);
         String affiliationHash = blindIndexHasher.hash(anonSession.getAffiliation());
-        String affiliationNumberHash = blindIndexHasher.hash(anonSession.getAffiliationNumber());
+        String affiliationNumberHash = affiliationNumber == null ? null : blindIndexHasher.hash(affiliationNumber);
         String birthDateHash = blindIndexHasher.hash(identityVerification.getBirthDate());
 
         User user = saveSignupUser(
@@ -388,9 +405,9 @@ public class AuthService {
                         anonSession.getFamilyName(), familyNameHash,
                         anonSession.getGivenName(), givenNameHash,
                         identityVerification.getGender(),
-                        anonSession.getOrganization(), organizationHash,
+                        organization, organizationHash,
                         anonSession.getAffiliation(), affiliationHash,
-                        anonSession.getAffiliationNumber(), affiliationNumberHash,
+                        affiliationNumber, affiliationNumberHash,
                         identityVerification.getBirthDate(), birthDateHash,
                         phoneNumber, phoneNumberHash,
                         email, emailHash,
@@ -398,6 +415,10 @@ public class AuthService {
                         identityVerification.getNationalInfo(), identityVerification.getMobileCarrier()
                 )
         );
+
+        if (organizationType == OrganizationType.COMPANY) {
+            user.joinAsCompanyMember();
+        }
 
         if (emailSession == null) {
             user.startStudentIdVerification();
@@ -552,13 +573,13 @@ public class AuthService {
         }
     }
 
-    private void requireProfileCompleted(AnonSession anonSession) {
+    private void requireProfileCompleted(AnonSession anonSession, String organization, OrganizationType organizationType) {
         if (anonSession.getNickname() == null
                 || anonSession.getFamilyName() == null
                 || anonSession.getGivenName() == null
-                || anonSession.getOrganization() == null
+                || organization == null
                 || anonSession.getAffiliation() == null
-                || anonSession.getAffiliationNumber() == null) {
+                || (organizationType == OrganizationType.SCHOOL && anonSession.getAffiliationNumber() == null)) {
             throw new BusinessException(ErrorCode.PROFILE_NOT_COMPLETED);
         }
     }

@@ -1,6 +1,7 @@
 package com.nidus.twinly.app.controller;
 
 import com.nidus.twinly.anon.service.AnonService;
+import com.nidus.twinly.app.dto.command.CompanySignupFlagUpdateCommand;
 import com.nidus.twinly.app.dto.command.DotWorldFlagUpdateCommand;
 import com.nidus.twinly.app.service.AppFeatureFlagService;
 import com.nidus.twinly.common.security.SecurityConfig;
@@ -43,18 +44,20 @@ class AppFeatureFlagAdminControllerUnitTest {
     AnonService anonService;
 
     @Test
-    @DisplayName("스위치 조회 시 200과 도트 세계 스위치 값을 반환한다")
+    @DisplayName("스위치 조회 시 200과 도트 세계·직장인 가입 스위치 값을 반환한다")
     void featureFlags_success() throws Exception {
-        // given: 도트 세계가 켜진 상태
+        // given: 도트 세계는 켜지고 직장인 가입은 꺼진 상태
         given(appFeatureFlagService.dotWorldEnabled()).willReturn(true);
+        given(appFeatureFlagService.companySignupEnabled()).willReturn(false);
 
         // when: 관리자 토큰으로 조회
         var result = mockMvc.perform(get("/admin/app/feature-flags")
                 .header(ADMIN_TOKEN_HEADER, ADMIN_TOKEN));
 
-        // then: 200 반환 + 켜짐 값이 담긴다
+        // then: 200 반환 + 두 스위치 값이 각각 담긴다
         result.andExpect(status().isOk())
-                .andExpect(jsonPath("$.dotWorldEnabled").value(true));
+                .andExpect(jsonPath("$.dotWorldEnabled").value(true))
+                .andExpect(jsonPath("$.companySignupEnabled").value(false));
     }
 
     @Test
@@ -100,5 +103,50 @@ class AppFeatureFlagAdminControllerUnitTest {
         // then: 401 반환 + 서비스는 호출되지 않는다
         result.andExpect(status().isUnauthorized());
         then(appFeatureFlagService).should(never()).updateDotWorld(any());
+    }
+
+    @Test
+    @DisplayName("직장인 가입 스위치 변경 성공 시 200을 반환하고 본문 값으로 서비스를 호출한다")
+    void updateCompanySignup_success() throws Exception {
+        // when: 관리자 토큰으로 켜기 요청
+        var result = mockMvc.perform(put("/admin/app/feature-flags/company-signup")
+                .header(ADMIN_TOKEN_HEADER, ADMIN_TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"enabled": true}
+                        """));
+
+        // then: 200 반환 + 본문 값이 커맨드로 전달된다
+        result.andExpect(status().isOk());
+        then(appFeatureFlagService).should().updateCompanySignup(new CompanySignupFlagUpdateCommand(true));
+    }
+
+    @Test
+    @DisplayName("직장인 가입 스위치 변경 시 enabled가 없으면 400을 반환하고 서비스를 호출하지 않는다")
+    void updateCompanySignup_withoutEnabled_returns_400() throws Exception {
+        // when: 필수 필드 enabled를 뺀 요청
+        var result = mockMvc.perform(put("/admin/app/feature-flags/company-signup")
+                .header(ADMIN_TOKEN_HEADER, ADMIN_TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"));
+
+        // then: 400 반환 + 서비스는 호출되지 않는다
+        result.andExpect(status().isBadRequest());
+        then(appFeatureFlagService).should(never()).updateCompanySignup(any());
+    }
+
+    @Test
+    @DisplayName("직장인 가입 스위치 변경 시 관리자 토큰이 없으면 401을 반환하고 서비스를 호출하지 않는다")
+    void updateCompanySignup_withoutAdminToken_returns_401() throws Exception {
+        // when: 관리자 토큰 없이 변경 요청
+        var result = mockMvc.perform(put("/admin/app/feature-flags/company-signup")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"enabled": true}
+                        """));
+
+        // then: 401 반환 + 서비스는 호출되지 않는다
+        result.andExpect(status().isUnauthorized());
+        then(appFeatureFlagService).should(never()).updateCompanySignup(any());
     }
 }

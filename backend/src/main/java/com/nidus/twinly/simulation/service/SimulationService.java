@@ -500,6 +500,7 @@ public class SimulationService {
                 user.getNickname(),
                 user.getGender(),
                 user.getOrganization(),
+                user.getOrganizationType(),
                 user.getAffiliation(),
                 birthDate(user),
                 personaElements,

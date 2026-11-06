@@ -1,6 +1,7 @@
 package com.nidus.twinly.legal.reader;
 
 import com.nidus.twinly.legal.domain.PolicyKind;
+import com.nidus.twinly.legal.domain.RequiredPolicies;
 import com.nidus.twinly.legal.entity.Agreement;
 import com.nidus.twinly.legal.repository.AgreementRepository;
 import com.nidus.twinly.legal.service.PolicyCatalog;
@@ -41,7 +42,7 @@ class ConsentReaderUnitTest {
     @DisplayName("필수 약관 최신 버전에 모두 동의했으면 true 를 반환한다")
     void hasAgreedAllRequired_true_when_all_latest_agreed() {
         // given: 필수 최신 버전 20번에 동의한 상태
-        given(policyCatalog.loadRequiredPolicyIds(PolicyKind.PARALLEL_ENTRY)).willReturn(Set.of(20L));
+        given(policyCatalog.loadRequiredPolicies(PolicyKind.PARALLEL_ENTRY)).willReturn(new RequiredPolicies(List.of(Set.of(20L))));
         given(agreementRepository.findAllByUserIdAndRevokedAtIsNull(USER_ID)).willReturn(List.of(Agreement.create(USER_ID, 20L, Instant.now())));
 
         // when & then
@@ -52,7 +53,7 @@ class ConsentReaderUnitTest {
     @DisplayName("구버전에만 동의했으면 false 를 반환한다")
     void hasAgreedAllRequired_false_when_only_old_version_agreed() {
         // given: 필수 최신 버전은 20번인데 구버전 10번에만 동의한 상태
-        given(policyCatalog.loadRequiredPolicyIds(PolicyKind.PARALLEL_ENTRY)).willReturn(Set.of(20L));
+        given(policyCatalog.loadRequiredPolicies(PolicyKind.PARALLEL_ENTRY)).willReturn(new RequiredPolicies(List.of(Set.of(20L))));
         given(agreementRepository.findAllByUserIdAndRevokedAtIsNull(USER_ID)).willReturn(List.of(Agreement.create(USER_ID, 10L, Instant.now())));
 
         // when & then: 약관이 개정되면 다시 동의해야 입장할 수 있다
@@ -60,10 +61,21 @@ class ConsentReaderUnitTest {
     }
 
     @Test
+    @DisplayName("최소 버전 이상이면 최신 버전이 아니어도 true 를 반환한다")
+    void hasAgreedAllRequired_true_when_agreed_minimum_version() {
+        // given: 최소 버전 10번부터 최신 20번까지 인정하는 필수 약관에, 10번에만 동의한 상태
+        given(policyCatalog.loadRequiredPolicies(PolicyKind.PARALLEL_ENTRY)).willReturn(new RequiredPolicies(List.of(Set.of(10L, 20L))));
+        given(agreementRepository.findAllByUserIdAndRevokedAtIsNull(USER_ID)).willReturn(List.of(Agreement.create(USER_ID, 10L, Instant.now())));
+
+        // when & then: 개정이 학생 쪽 항목을 바꾸지 않으면 기존 동의로 계속 입장한다
+        assertThat(consentReader.hasAgreedAllRequired(USER_ID, PolicyKind.PARALLEL_ENTRY)).isTrue();
+    }
+
+    @Test
     @DisplayName("필수 약관이 하나도 없으면 동의 기록이 없어도 true 를 반환한다")
     void hasAgreedAllRequired_true_when_no_required_policy() {
         // given: 평행우주 입장 필수 약관이 없음
-        given(policyCatalog.loadRequiredPolicyIds(PolicyKind.PARALLEL_ENTRY)).willReturn(Set.of());
+        given(policyCatalog.loadRequiredPolicies(PolicyKind.PARALLEL_ENTRY)).willReturn(new RequiredPolicies(List.of()));
         given(agreementRepository.findAllByUserIdAndRevokedAtIsNull(USER_ID)).willReturn(List.of());
 
         // when & then
@@ -74,7 +86,7 @@ class ConsentReaderUnitTest {
     @DisplayName("여러 유저 중 필수 약관 최신 버전에 모두 동의한 유저만 순서대로 남긴다")
     void filterAgreedAllRequired_keeps_only_fully_agreed_users() {
         // given: 필수 약관 20·21번. 1번은 둘 다, 2번은 20번만, 3번은 동의 없음
-        given(policyCatalog.loadRequiredPolicyIds(PolicyKind.PARALLEL_ENTRY)).willReturn(Set.of(20L, 21L));
+        given(policyCatalog.loadRequiredPolicies(PolicyKind.PARALLEL_ENTRY)).willReturn(new RequiredPolicies(List.of(Set.of(20L), Set.of(21L))));
         given(agreementRepository.findAllByUserIdInAndRevokedAtIsNull(List.of(1L, 2L, 3L))).willReturn(List.of(
                 Agreement.create(1L, 20L, Instant.now()),
                 Agreement.create(1L, 21L, Instant.now()),

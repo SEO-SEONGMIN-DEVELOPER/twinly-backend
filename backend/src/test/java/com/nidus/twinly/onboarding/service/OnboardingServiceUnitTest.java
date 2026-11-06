@@ -35,6 +35,7 @@ import com.nidus.twinly.legal.service.PolicyCatalog;
 import com.nidus.twinly.legal.service.PolicyCatalog.PolicyKey;
 import com.nidus.twinly.onboarding.dto.command.OnboardingAffiliationCommand;
 import com.nidus.twinly.onboarding.dto.command.OnboardingAffiliationNumberCommand;
+import com.nidus.twinly.onboarding.dto.command.OnboardingCompanyNameCommand;
 import com.nidus.twinly.onboarding.dto.command.OnboardingNameCommand;
 import com.nidus.twinly.onboarding.dto.command.OnboardingGrantConsentsCommand;
 import com.nidus.twinly.onboarding.dto.command.OnboardingGrantConsentsItemCommand;
@@ -70,6 +71,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 import com.nidus.twinly.common.domain.MobileCarrier;
 import com.nidus.twinly.common.domain.NationalInfo;
+import com.nidus.twinly.organization.domain.EmailOrganization;
+import com.nidus.twinly.organization.domain.OrganizationType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -343,7 +346,7 @@ class OnboardingServiceUnitTest {
     @DisplayName("학교 목록 조회는 저장된 학교의 이름과 이메일 도메인을 그대로 반환한다")
     void organizations_returns_name_and_domains() {
         // given: 가입 가능한 학교 1곳이 도메인 2개로 등록되어 있음
-        given(organizationRepository.findAllByOrderByNameAsc()).willReturn(List.of(organization(1L, "트윈리대학교")));
+        given(organizationRepository.findAllByTypeOrderByNameAsc(OrganizationType.SCHOOL)).willReturn(List.of(organization(1L, "트윈리대학교")));
         given(organizationDomainRepository.findAll())
                 .willReturn(List.of(organizationDomain(1L, "nidus.ac.kr"), organizationDomain(1L, "grad.nidus.ac.kr")));
 
@@ -361,7 +364,7 @@ class OnboardingServiceUnitTest {
         // given: 이메일 인증이 끝난 세션과, 그 도메인에 해당하는 학교의 학과 2개
         given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.EMAIL))
                 .willReturn(Optional.of(verifiedEmailSession("student@nidus.ac.kr")));
-        given(organizationCatalog.findByEmail("student@nidus.ac.kr")).willReturn(organization(1L, "트윈리대학교"));
+        given(organizationCatalog.resolveEmail("student@nidus.ac.kr")).willReturn(EmailOrganization.registered("nidus.ac.kr", organization(1L, "트윈리대학교")));
         given(organizationAffiliationRepository.findAllByOrganizationIdOrderByNameAsc(1L))
                 .willReturn(List.of(organizationAffiliation("경영학과"), organizationAffiliation("컴퓨터공학과")));
 
@@ -379,7 +382,7 @@ class OnboardingServiceUnitTest {
         // given: 이메일 인증이 끝난 세션과, 학과가 하나도 등록되지 않은 학교, 그리고 공통 학과 2개
         given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.EMAIL))
                 .willReturn(Optional.of(verifiedEmailSession("student@nidus.ac.kr")));
-        given(organizationCatalog.findByEmail("student@nidus.ac.kr")).willReturn(organization(1L, "트윈리대학교"));
+        given(organizationCatalog.resolveEmail("student@nidus.ac.kr")).willReturn(EmailOrganization.registered("nidus.ac.kr", organization(1L, "트윈리대학교")));
         given(organizationAffiliationRepository.findAllByOrganizationIdOrderByNameAsc(1L)).willReturn(List.of());
         given(commonAffiliationRepository.findAllByOrderByNameAsc())
                 .willReturn(List.of(commonAffiliation("경영학과"), commonAffiliation("심리학과")));
@@ -434,10 +437,119 @@ class OnboardingServiceUnitTest {
                 .isEqualTo(ErrorCode.INVALID_ANON_SESSION);
     }
 
+    @Test
+    @DisplayName("처음 보는 회사 도메인을 인증했으면 학과가 없는 회사로 보고 공통 학과 목록을 반환한다")
+    void affiliations_for_unregistered_company_returns_common_affiliations() {
+        // given: 등록되지 않은 회사 도메인으로 이메일 인증이 끝난 세션
+        given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.EMAIL))
+                .willReturn(Optional.of(verifiedEmailSession("worker@twinly-company.com")));
+        given(organizationCatalog.resolveEmail("worker@twinly-company.com")).willReturn(EmailOrganization.unregisteredCompany("twinly-company.com"));
+        given(commonAffiliationRepository.findAllByOrderByNameAsc())
+                .willReturn(List.of(commonAffiliation("경영학과"), commonAffiliation("심리학과")));
+
+        // when: 학과 목록 조회
+        OnboardingAffiliationsResult result = onboardingService.affiliations(ANON_SESSION);
+
+        // then: 기관 학과는 조회하지 않고 공통 학과를 그대로 준다
+        assertThat(result.affiliations()).containsExactly("경영학과", "심리학과");
+        then(organizationAffiliationRepository).should(never()).findAllByOrganizationIdOrderByNameAsc(any());
+    }
+
+    @Test
+    @DisplayName("회사명 입력: 처음 보는 회사 도메인이면 공백을 정리한 입력값을 익명 세션의 소속으로 저장한다")
+    void companyName_for_unregistered_company_saves_normalized_name() {
+        // given: 등록되지 않은 회사 도메인으로 이메일 인증이 끝난 세션
+        AnonSession anonSession = AnonSession.create(UUID.randomUUID(), Instant.now().plusSeconds(3600));
+        given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.EMAIL))
+                .willReturn(Optional.of(verifiedEmailSession("worker@twinly-company.com")));
+        given(organizationCatalog.resolveEmail("worker@twinly-company.com")).willReturn(EmailOrganization.unregisteredCompany("twinly-company.com"));
+        given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(anonSession));
+
+        // when: 앞뒤 공백과 연속 공백이 섞인 회사명 입력
+        onboardingService.companyName(ANON_SESSION, new OnboardingCompanyNameCommand("  트윈리   컴퍼니 "));
+
+        // then: 공백 하나로 정리된 이름이 저장된다
+        assertThat(anonSession.getOrganization()).isEqualTo("트윈리 컴퍼니");
+    }
+
+    @Test
+    @DisplayName("회사명 입력: 이미 등록된 회사 도메인이면 입력값 대신 등록된 회사 이름을 저장한다")
+    void companyName_for_registered_company_keeps_registered_name() {
+        // given: 이미 등록된 회사 도메인으로 이메일 인증이 끝난 세션
+        AnonSession anonSession = AnonSession.create(UUID.randomUUID(), Instant.now().plusSeconds(3600));
+        given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.EMAIL))
+                .willReturn(Optional.of(verifiedEmailSession("worker@twinly-company.com")));
+        given(organizationCatalog.resolveEmail("worker@twinly-company.com"))
+                .willReturn(EmailOrganization.registered("twinly-company.com", companyOrganization(2L, "트윈리컴퍼니")));
+        given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(anonSession));
+
+        // when: 다른 이름으로 회사명 입력
+        onboardingService.companyName(ANON_SESSION, new OnboardingCompanyNameCommand("삼성전자"));
+
+        // then: 먼저 등록된 이름이 우선이다 (이름 선점·사칭 방지)
+        assertThat(anonSession.getOrganization()).isEqualTo("트윈리컴퍼니");
+    }
+
+    @Test
+    @DisplayName("회사명 입력: 학교 이메일을 인증했으면 COMPANY_NAME_NOT_REQUIRED 예외가 발생하고 소속을 바꾸지 않는다")
+    void companyName_for_school_email_throws() {
+        // given: 학교 도메인으로 이메일 인증이 끝난 세션
+        given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.EMAIL))
+                .willReturn(Optional.of(verifiedEmailSession("student@nidus.ac.kr")));
+        given(organizationCatalog.resolveEmail("student@nidus.ac.kr")).willReturn(EmailOrganization.registered("nidus.ac.kr", organization(1L, "트윈리대학교")));
+
+        // when & then: 학교 이름은 도메인으로만 정해진다
+        assertThatThrownBy(() -> onboardingService.companyName(ANON_SESSION, new OnboardingCompanyNameCommand("트윈리컴퍼니")))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.COMPANY_NAME_NOT_REQUIRED);
+        then(anonSessionRepository).should(never()).findById(any());
+    }
+
+    @Test
+    @DisplayName("회사명 입력: 이메일 인증이 끝나지 않았으면 EMAIL_VERIFICATION_NOT_COMPLETED 예외가 발생한다")
+    void companyName_without_verified_email_throws() {
+        // given: 이메일 인증 세션이 없음
+        given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.EMAIL))
+                .willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> onboardingService.companyName(ANON_SESSION, new OnboardingCompanyNameCommand("트윈리컴퍼니")))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.EMAIL_VERIFICATION_NOT_COMPLETED);
+        then(organizationCatalog).should(never()).resolveEmail(any());
+    }
+
+    @Test
+    @DisplayName("회사명 입력: 정리한 회사명이 50자를 넘으면 INVALID_COMPANY_NAME 예외가 발생한다")
+    void companyName_too_long_throws() {
+        // given: 처음 보는 회사 도메인으로 이메일 인증이 끝난 세션
+        given(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(ANON_SESSION_ID, VerificationType.EMAIL))
+                .willReturn(Optional.of(verifiedEmailSession("worker@twinly-company.com")));
+        given(organizationCatalog.resolveEmail("worker@twinly-company.com")).willReturn(EmailOrganization.unregisteredCompany("twinly-company.com"));
+
+        // when & then: 51자 회사명은 거부된다
+        assertThatThrownBy(() -> onboardingService.companyName(ANON_SESSION, new OnboardingCompanyNameCommand("가".repeat(51))))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_COMPANY_NAME);
+        then(anonSessionRepository).should(never()).findById(any());
+    }
+
+    private Organization companyOrganization(Long id, String name) {
+        Organization organization = BeanUtils.instantiateClass(Organization.class);
+        ReflectionTestUtils.setField(organization, "id", id);
+        ReflectionTestUtils.setField(organization, "name", name);
+        ReflectionTestUtils.setField(organization, "type", OrganizationType.COMPANY);
+        return organization;
+    }
+
     private Organization organization(Long id, String name) {
         Organization organization = BeanUtils.instantiateClass(Organization.class);
         ReflectionTestUtils.setField(organization, "id", id);
         ReflectionTestUtils.setField(organization, "name", name);
+        ReflectionTestUtils.setField(organization, "type", OrganizationType.SCHOOL);
         return organization;
     }
 

@@ -1,6 +1,7 @@
 package com.nidus.twinly.purchase.writer;
 
 import com.nidus.twinly.common.domain.Gender;
+import com.nidus.twinly.organization.domain.OrganizationType;
 import com.nidus.twinly.purchase.client.RevenueCatEntitlement;
 import com.nidus.twinly.purchase.domain.PoolAllocator;
 import com.nidus.twinly.purchase.domain.PoolAssignment;
@@ -87,8 +88,10 @@ public class PurchaseWriter {
 
     @Transactional
     public void assignPool(Long userId) {
-        PoolCounter counter = poolCounterRepository.findWithLockById(PoolCounter.SINGLETON_ID)
-                .orElseThrow(() -> new IllegalStateException("pool_counter 행이 없습니다."));
+        OrganizationType organizationType = userRepository.findOrganizationTypeById(userId)
+                .orElseThrow(() -> new IllegalStateException("풀을 배정할 회원이 없습니다. userId=" + userId));
+        PoolCounter counter = poolCounterRepository.findWithLockByOrganizationType(organizationType)
+                .orElseThrow(() -> new IllegalStateException("pool_counter 행이 없습니다. organizationType=" + organizationType));
 
         if (userRepository.assignPoolNumber(userId, counter.nextPoolNumber()) == 0) {
             return;
@@ -109,8 +112,10 @@ public class PurchaseWriter {
 
     @Transactional
     public List<PoolAssignment> reassignPools(List<Long> userIds) {
-        PoolCounter counter = poolCounterRepository.findWithLockById(PoolCounter.SINGLETON_ID)
-                .orElseThrow(() -> new IllegalStateException("pool_counter 행이 없습니다."));
+        List<PoolCounter> counters = poolCounterRepository.findAllWithLockByOrderByIdAsc();
+        if (counters.isEmpty()) {
+            throw new IllegalStateException("pool_counter 행이 없습니다.");
+        }
 
         List<PoolCandidateProjection> candidates = userIds.isEmpty() ? List.of() : userRepository.findPoolCandidatesByIdIn(userIds);
         if (candidates.isEmpty()) {
@@ -119,18 +124,25 @@ public class PurchaseWriter {
 
         Map<Long, Gender> genderByUserId = candidates.stream()
                 .collect(HashMap::new, (map, candidate) -> map.put(candidate.getId(), candidate.getGender()), HashMap::putAll);
-        List<Long> ordered = PoolAllocator.order(
-                candidates.stream().filter(candidate -> candidate.getGender() == Gender.MALE).map(PoolCandidateProjection::getId).toList(),
-                candidates.stream().filter(candidate -> candidate.getGender() != Gender.MALE).map(PoolCandidateProjection::getId).toList(),
-                new Random());
+        Map<OrganizationType, List<PoolCandidateProjection>> candidatesByType = candidates.stream()
+                .collect(Collectors.groupingBy(PoolCandidateProjection::getOrganizationType));
         Map<Integer, List<Long>> userIdsByPoolNumber = new LinkedHashMap<>();
-        for (int index = 0; index < ordered.size(); index++) {
-            userIdsByPoolNumber.computeIfAbsent(PoolCounter.poolNumberAt(index), key -> new ArrayList<>()).add(ordered.get(index));
+        Random random = new Random();
+
+        for (PoolCounter counter : counters) {
+            List<PoolCandidateProjection> typed = candidatesByType.getOrDefault(counter.getOrganizationType(), List.of());
+            List<Long> ordered = PoolAllocator.order(
+                    typed.stream().filter(candidate -> candidate.getGender() == Gender.MALE).map(PoolCandidateProjection::getId).toList(),
+                    typed.stream().filter(candidate -> candidate.getGender() != Gender.MALE).map(PoolCandidateProjection::getId).toList(),
+                    random);
+            for (int index = 0; index < ordered.size(); index++) {
+                userIdsByPoolNumber.computeIfAbsent(counter.poolNumberAt(index), key -> new ArrayList<>()).add(ordered.get(index));
+            }
+            counter.resetTo(ordered.size());
         }
 
         userRepository.clearNonSeedPoolNumbers();
         userIdsByPoolNumber.forEach((poolNumber, members) -> userRepository.updatePoolNumber(members, poolNumber));
-        counter.resetTo(ordered.size());
 
         return userIdsByPoolNumber.entrySet().stream()
                 .map(entry -> PoolAssignment.of(entry.getKey(), entry.getValue().stream().map(genderByUserId::get).toList()))

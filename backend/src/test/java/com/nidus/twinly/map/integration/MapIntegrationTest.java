@@ -159,6 +159,33 @@ class MapIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("회원 구분 격리: 학생에게는 직장인 트윈이, 직장인에게는 학생 트윈이 지도에 나오지 않는다")
+    void twins_excludes_other_organization_type_end_to_end() throws Exception {
+        // given: 범위 안 장면이 있는 학생 참여자와 직장인 참여자
+        User student = saveParticipantBeforeToday();
+        User worker = saveParticipantBeforeToday();
+        worker.joinAsCompanyMember();
+        userRepository.saveAndFlush(worker);
+        saveAction(student, now.minusHours(1), now, "P0012");
+        saveAction(worker, now.minusHours(1), now, "P0012");
+
+        // when & then: 학생인 나에게는 학생만 보인다
+        mockMvc.perform(get("/api/v1/map/twins")
+                        .header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.twins[*].userId", containsInAnyOrder(student.getId().toString())));
+
+        // when & then: 직장인 참여자에게는 직장인만 보인다 (자기 자신은 빠지므로 다른 직장인 한 명을 더 둔다)
+        User otherWorker = saveParticipantBeforeToday();
+        otherWorker.joinAsCompanyMember();
+        userRepository.saveAndFlush(otherWorker);
+        mockMvc.perform(get("/api/v1/map/twins")
+                        .header("Authorization", bearer(otherWorker.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.twins[*].userId", containsInAnyOrder(worker.getId().toString())));
+    }
+
+    @Test
     @DisplayName("보여 줄 트윈이 없으면 200 과 빈 twins 를 반환한다")
     void twins_empty_end_to_end() throws Exception {
         // when: 다른 참여자가 없는 상태로 조회

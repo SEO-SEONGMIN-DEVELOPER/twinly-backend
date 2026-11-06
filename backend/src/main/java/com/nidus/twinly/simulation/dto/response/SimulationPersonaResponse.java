@@ -2,6 +2,7 @@ package com.nidus.twinly.simulation.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.nidus.twinly.common.domain.Gender;
+import com.nidus.twinly.organization.domain.OrganizationType;
 import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.simulation.dto.result.SimulationPersonaResult;
 
@@ -18,6 +19,7 @@ public record SimulationPersonaResponse(
         String nickname,
         Gender gender,
         String organization,
+        OrganizationType organizationType,
         String affiliation,
         LocalDate birthDate,
         Map<PersonaDimension, List<String>> personaElements,
@@ -35,6 +37,7 @@ public record SimulationPersonaResponse(
                 result.nickname(),
                 result.gender(),
                 result.organization(),
+                result.organizationType(),
                 result.affiliation(),
                 result.birthDate(),
                 result.personaElements(),

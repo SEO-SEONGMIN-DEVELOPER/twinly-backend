@@ -25,6 +25,7 @@ public class RevenueCatClient {
     private static final String BASE_URL = "https://api.revenuecat.com/v1";
     private static final String BEARER_PREFIX = "Bearer ";
     private static final int CONCURRENT_REQUEST_CODE = 7638;
+    private static final char PLAY_BASE_PLAN_SEPARATOR = ':';
 
     private final JsonMapper jsonMapper;
     private final RestClient restClient;
@@ -46,10 +47,33 @@ public class RevenueCatClient {
     }
 
     public List<RevenueCatEntitlement> entitlements(String appUserId) {
-        RevenueCatSubscriberBody body;
+        RevenueCatSubscriberBody body = subscriber(appUserId);
 
+        return body == null ? List.of() : body.entitlementsIn(environment);
+    }
+
+    public RevenueCatSubscriptions subscriptions(String appUserId, String entitlement) {
+        RevenueCatSubscriberBody body = subscriber(appUserId);
+
+        return body == null ? new RevenueCatSubscriptions(null, List.of()) : body.subscriptionsIn(environment, entitlement);
+    }
+
+    public void defer(String appUserId, String productId, Instant expiresAt) {
         try {
-            body = restClient.get()
+            restClient.post()
+                    .uri("/subscribers/{appUserId}/subscriptions/{productId}/defer", appUserId, playSubscriptionId(productId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(Map.of("expiry_time_ms", expiresAt.toEpochMilli()))
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (RestClientException e) {
+            throw new BusinessException(ErrorCode.REVENUE_CAT_GRANT_FAILED, e);
+        }
+    }
+
+    private RevenueCatSubscriberBody subscriber(String appUserId) {
+        try {
+            return restClient.get()
                     .uri("/subscribers/{appUserId}", appUserId)
                     .retrieve()
                     .body(RevenueCatSubscriberBody.class);
@@ -58,8 +82,12 @@ public class RevenueCatClient {
         } catch (RestClientException e) {
             throw new BusinessException(ErrorCode.REVENUE_CAT_SYNC_FAILED, e);
         }
+    }
 
-        return body == null ? List.of() : body.entitlementsIn(environment);
+    private String playSubscriptionId(String productId) {
+        int separator = productId.indexOf(PLAY_BASE_PLAN_SEPARATOR);
+
+        return separator < 0 ? productId : productId.substring(0, separator);
     }
 
     public void grantPromotional(String appUserId, String entitlement, Instant expiresAt) {

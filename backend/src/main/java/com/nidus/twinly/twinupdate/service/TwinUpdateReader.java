@@ -68,13 +68,16 @@ public class TwinUpdateReader {
     }
 
     public boolean isTwinCompleted(User user) {
-        int answeredCount = (int) userSurveyAnswerRepository.findAllByUserId(user.getId()).stream()
+        return isSurveyAndInterestsCompleted(user.getId()) && user.getAiChatCompletedAt() != null;
+    }
+
+    public boolean isSurveyAndInterestsCompleted(Long userId) {
+        int answeredCount = (int) userSurveyAnswerRepository.findAllByUserId(userId).stream()
                 .filter(answer -> surveyLoader.getQuestion(answer.getQuestionId()) != null)
                 .count();
 
         return answeredCount == surveyLoader.getAllQuestions().size()
-                && personaElementRepository.existsByUserIdAndDimension(user.getId(), PersonaDimension.INTEREST)
-                && user.getAiChatCompletedAt() != null;
+                && personaElementRepository.existsByUserIdAndDimension(userId, PersonaDimension.INTEREST);
     }
 
     public Instant nextUpdatableAt(User user) {

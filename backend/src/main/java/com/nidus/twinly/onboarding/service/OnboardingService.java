@@ -37,6 +37,8 @@ import com.nidus.twinly.onboarding.dto.result.OnboardingProfilePhotoCommitResult
 import com.nidus.twinly.onboarding.dto.result.OnboardingProfilePhotoPresignResult;
 import com.nidus.twinly.onboarding.repository.SurveyAnswerRepository;
 import com.nidus.twinly.organization.entity.CommonAffiliation;
+import com.nidus.twinly.organization.domain.EmailOrganization;
+import com.nidus.twinly.organization.domain.OrganizationType;
 import com.nidus.twinly.organization.entity.Organization;
 import com.nidus.twinly.organization.entity.OrganizationAffiliation;
 import com.nidus.twinly.organization.entity.OrganizationDomain;
@@ -68,6 +70,7 @@ public class OnboardingService {
 
     private static final Pattern AFFILIATION_NUMBER_PATTERN = Pattern.compile("^(?=.{1,50}$)[0-9]+(?:[-_][0-9]+)?$");
     private static final Pattern WHITESPACE_PATTERN = Pattern.compile("\\s+");
+    private static final int COMPANY_NAME_MAX_LENGTH = 50;
 
     private final PresignService presignService;
     private final PhotoCommitService photoCommitService;
@@ -137,6 +140,35 @@ public class OnboardingService {
         }
 
         return trimmed;
+    }
+
+    @Transactional
+    public void companyName(AnonSessionSnapshot anonSessionSnapshot, OnboardingCompanyNameCommand command) {
+        Long anonSessionId = anonSessionSnapshot.id();
+        String verifiedEmail = verifiedEmail(anonSessionId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.EMAIL_VERIFICATION_NOT_COMPLETED));
+        EmailOrganization emailOrganization = organizationCatalog.resolveEmail(verifiedEmail);
+
+        if (emailOrganization.type() != OrganizationType.COMPANY) {
+            throw new BusinessException(ErrorCode.COMPANY_NAME_NOT_REQUIRED);
+        }
+
+        String companyName = validateCompanyName(command.companyName());
+
+        AnonSession anonSession = anonSessionRepository.findById(anonSessionId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_ANON_SESSION));
+
+        anonSession.changeOrganization(emailOrganization.isUnregisteredCompany() ? companyName : emailOrganization.organization().getName());
+    }
+
+    private String validateCompanyName(String companyName) {
+        String normalized = WHITESPACE_PATTERN.matcher(companyName.trim()).replaceAll(" ");
+
+        if (normalized.isEmpty() || normalized.length() > COMPANY_NAME_MAX_LENGTH) {
+            throw new BusinessException(ErrorCode.INVALID_COMPANY_NAME, "회사명은 1자 이상 " + COMPANY_NAME_MAX_LENGTH + "자 이하여야 합니다: " + normalized);
+        }
+
+        return normalized;
     }
 
     public List<SurveyQuestion> surveyQuestions() {
@@ -315,7 +347,7 @@ public class OnboardingService {
                         Collectors.mapping(OrganizationDomain::getDomain, Collectors.toList())
                 ));
 
-        List<OnboardingOrganizationsItemResult> organizations = organizationRepository.findAllByOrderByNameAsc().stream()
+        List<OnboardingOrganizationsItemResult> organizations = organizationRepository.findAllByTypeOrderByNameAsc(OrganizationType.SCHOOL).stream()
                 .map(organization -> new OnboardingOrganizationsItemResult(
                         organization.getName(),
                         domainsByOrganizationId.getOrDefault(organization.getId(), List.of())
@@ -326,11 +358,11 @@ public class OnboardingService {
     }
 
     public OnboardingAffiliationsResult affiliations(AnonSessionSnapshot anonSessionSnapshot) {
-        Organization organization = verifiedOrganization(anonSessionSnapshot.id());
-
-        List<String> affiliations = organizationAffiliationRepository.findAllByOrganizationIdOrderByNameAsc(organization.getId()).stream()
-                .map(OrganizationAffiliation::getName)
-                .toList();
+        List<String> affiliations = verifiedOrganization(anonSessionSnapshot.id())
+                .map(organization -> organizationAffiliationRepository.findAllByOrganizationIdOrderByNameAsc(organization.getId()).stream()
+                        .map(OrganizationAffiliation::getName)
+                        .toList())
+                .orElse(List.of());
 
         if (affiliations.isEmpty()) {
             affiliations = commonAffiliationRepository.findAllByOrderByNameAsc().stream()
@@ -349,17 +381,21 @@ public class OnboardingService {
         anonSession.changeAffiliation(command.affiliation().trim());
     }
 
-    private Organization verifiedOrganization(Long anonSessionId) {
-        Optional<String> verifiedEmail = anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(anonSessionId, VerificationType.EMAIL)
-                .filter(session -> session.getVerifiedAt() != null)
-                .map(AnonSessionVerificationSession::getContact);
+    private Optional<Organization> verifiedOrganization(Long anonSessionId) {
+        Optional<String> verifiedEmail = verifiedEmail(anonSessionId);
 
         if (verifiedEmail.isPresent()) {
-            return organizationCatalog.findByEmail(verifiedEmail.get());
+            return Optional.ofNullable(organizationCatalog.resolveEmail(verifiedEmail.get()).organization());
         }
 
-        return anonSessionStudentIdSubmissionRepository.findByAnonSessionIdAndReplacedAtIsNull(anonSessionId)
-                .map(submission -> organizationCatalog.findByName(submission.getOrganization()))
-                .orElseThrow(() -> new BusinessException(ErrorCode.EMAIL_VERIFICATION_NOT_COMPLETED));
+        return Optional.of(anonSessionStudentIdSubmissionRepository.findByAnonSessionIdAndReplacedAtIsNull(anonSessionId)
+                .map(submission -> organizationCatalog.findSchoolByName(submission.getOrganization()))
+                .orElseThrow(() -> new BusinessException(ErrorCode.EMAIL_VERIFICATION_NOT_COMPLETED)));
+    }
+
+    private Optional<String> verifiedEmail(Long anonSessionId) {
+        return anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(anonSessionId, VerificationType.EMAIL)
+                .filter(session -> session.getVerifiedAt() != null)
+                .map(AnonSessionVerificationSession::getContact);
     }
 }

@@ -54,6 +54,8 @@ public enum ErrorCode {
     NICKNAME_ALREADY_USED(HttpStatus.CONFLICT, "이미 사용 중인 닉네임입니다."),
     INVALID_NICKNAME(HttpStatus.UNPROCESSABLE_CONTENT, "사용할 수 없는 닉네임입니다."),
     INVALID_AFFILIATION_NUMBER(HttpStatus.UNPROCESSABLE_CONTENT, "사용할 수 없는 학번입니다."),
+    INVALID_COMPANY_NAME(HttpStatus.UNPROCESSABLE_CONTENT, "사용할 수 없는 회사명입니다."),
+    COMPANY_NAME_NOT_REQUIRED(HttpStatus.UNPROCESSABLE_CONTENT, "회사 이메일을 인증한 경우에만 회사명을 입력할 수 있습니다."),
     SURVEY_QUESTION_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 질문입니다."),
     SURVEY_ANSWERS_INCOMPLETE(HttpStatus.UNPROCESSABLE_CONTENT, "응답하지 않은 설문 문항이 있습니다."),
     TENDENCY_QUESTION_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 성향 문항입니다."),
@@ -141,6 +143,12 @@ public enum ErrorCode {
     OWN_PARALLEL_RELATION_CODE(HttpStatus.UNPROCESSABLE_CONTENT, "본인이 발급한 코드입니다."),
     PERSONA_NOT_FOUND(HttpStatus.UNPROCESSABLE_CONTENT, "페르소나가 아직 만들어지지 않은 유저입니다."),
 
+    // 친구 초대
+    INVITE_CODE_ALREADY_REGISTERED(HttpStatus.CONFLICT, "이미 다른 초대 코드를 등록했습니다."),
+    INVITE_CODE_NOT_ELIGIBLE(HttpStatus.CONFLICT, "초대 코드를 등록할 수 없는 계정입니다."),
+    INVITE_REWARD_NOT_PENDING(HttpStatus.CONFLICT, "받을 수 있는 애플 오퍼가 없습니다."),
+    INVITE_REWARD_APPLE_OFFER_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "애플 오퍼를 지금 발급할 수 없습니다."),
+
     // 하루 관람
     SHOWCASE_TARGET_NOT_FOUND(HttpStatus.NOT_FOUND, "오늘 관람할 수 있는 대상이 없습니다."),
 
@@ -166,6 +174,7 @@ public enum ErrorCode {
     REVENUE_CAT_SYNC_FAILED(HttpStatus.BAD_GATEWAY, "구매 상태 동기화에 실패했습니다."),
     REVENUE_CAT_SYNC_CONFLICT(HttpStatus.CONFLICT, "같은 유저의 구매 상태를 다른 요청이 동기화하고 있습니다."),
     REVENUE_CAT_GRANT_FAILED(HttpStatus.BAD_GATEWAY, "권한 부여에 실패했습니다."),
+    APP_STORE_REQUEST_FAILED(HttpStatus.BAD_GATEWAY, "App Store 조회에 실패했습니다."),
     STUDENT_ID_PHOTO_DELETE_FAILED(HttpStatus.BAD_GATEWAY, "학생증 사진 삭제에 실패했습니다."),
     ANON_SESSION_CLEANUP_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "만료된 익명 세션 정리에 실패했습니다."),
     IDENTITY_VERIFICATION_FAILED(HttpStatus.BAD_GATEWAY, "본인인증 조회에 실패했습니다."),

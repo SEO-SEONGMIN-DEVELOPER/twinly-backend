@@ -1,6 +1,7 @@
 package com.nidus.twinly.legal.reader;
 
 import com.nidus.twinly.legal.domain.PolicyKind;
+import com.nidus.twinly.legal.domain.RequiredPolicies;
 import com.nidus.twinly.legal.entity.Agreement;
 import com.nidus.twinly.legal.repository.AgreementRepository;
 import com.nidus.twinly.legal.repository.PolicyRepository.PolicySummary;
@@ -26,7 +27,7 @@ public class ConsentReader {
                 .map(Agreement::getPolicyId)
                 .collect(Collectors.toSet());
 
-        return agreedPolicyIds.containsAll(policyCatalog.loadRequiredPolicyIds(kind));
+        return policyCatalog.loadRequiredPolicies(kind).isSatisfiedBy(agreedPolicyIds);
     }
 
     public List<Long> filterAgreedAllRequired(List<Long> userIds, PolicyKind kind) {
@@ -34,13 +35,13 @@ public class ConsentReader {
             return List.of();
         }
 
-        Set<Long> requiredPolicyIds = policyCatalog.loadRequiredPolicyIds(kind);
+        RequiredPolicies requiredPolicies = policyCatalog.loadRequiredPolicies(kind);
 
         Map<Long, Set<Long>> agreedPolicyIdsByUserId = agreementRepository.findAllByUserIdInAndRevokedAtIsNull(userIds).stream()
                 .collect(Collectors.groupingBy(Agreement::getUserId, Collectors.mapping(Agreement::getPolicyId, Collectors.toSet())));
 
         return userIds.stream()
-                .filter(userId -> agreedPolicyIdsByUserId.getOrDefault(userId, Set.of()).containsAll(requiredPolicyIds))
+                .filter(userId -> requiredPolicies.isSatisfiedBy(agreedPolicyIdsByUserId.getOrDefault(userId, Set.of())))
                 .toList();
     }
 

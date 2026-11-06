@@ -12,6 +12,8 @@ import com.nidus.twinly.auth.dto.command.AuthSmsVerifyCommand;
 import com.nidus.twinly.auth.dto.result.AuthEmailSendResult;
 import com.nidus.twinly.auth.dto.result.AuthIdentityPrepareResult;
 import com.nidus.twinly.auth.dto.result.AuthEmailVerifyResult;
+import com.nidus.twinly.auth.dto.result.AuthOnboardingEmailVerifyResult;
+import com.nidus.twinly.organization.domain.OrganizationType;
 import com.nidus.twinly.auth.dto.result.AuthSmsSendResult;
 import com.nidus.twinly.auth.dto.result.AuthSmsVerifyResult;
 import com.nidus.twinly.auth.dto.result.AuthTokenResult;
@@ -40,6 +42,7 @@ import com.nidus.twinly.auth.dto.command.AuthOnboardingStudentIdSubmitCommand;
 import com.nidus.twinly.auth.dto.result.AuthOnboardingStudentIdPresignResult;
 import com.nidus.twinly.common.presign.RequiredHeaders;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
@@ -165,9 +168,13 @@ class AuthControllerUnitTest {
     }
 
     @Test
-    @DisplayName("온보딩 이메일 인증 확인 성공 시 200을 반환하고 익명 세션·커맨드로 서비스를 호출한다")
+    @DisplayName("온보딩 이메일 인증 확인 v1 성공 시 본문 없는 200을 반환하고 익명 세션·커맨드로 서비스를 호출한다")
     void onboardingEmailVerify_success() throws Exception {
-        // when: 인증 토큰과 코드를 담아 온보딩 이메일 인증 확인 API 호출
+        // given: 서비스가 회사 도메인이라고 판정해도 v1 은 결과를 내보내지 않는다
+        given(authService.onboardingEmailVerify(any(), any()))
+                .willReturn(new AuthOnboardingEmailVerifyResult(OrganizationType.COMPANY, null));
+
+        // when: 인증 토큰과 코드를 담아 v1 온보딩 이메일 인증 확인 API 호출
         var result = mockMvc.perform(post("/api/v1/auth/onboarding/email/verify")
                 .header("Authorization", "Bearer " + ANON_TOKEN)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -175,10 +182,49 @@ class AuthControllerUnitTest {
                         {"emailVerificationToken":"%s","code":"123456"}
                         """.formatted(VERIFICATION_TOKEN)));
 
-        // then: 200 반환 + 익명 세션 스냅샷·커맨드로 서비스에 위임
-        result.andExpect(status().isOk());
+        // then: 본문이 비어 있어야 한다 (기존 앱은 본문이 오면 계약 위반으로 실패한다)
+        result.andExpect(status().isOk())
+                .andExpect(content().string(""));
         then(authService).should().onboardingEmailVerify(
                 ANON_SESSION, new AuthEmailVerifyCommand(VERIFICATION_TOKEN, "123456"));
+    }
+
+    @Test
+    @DisplayName("온보딩 이메일 인증 확인 v2 성공 시 200과 기관 종류·회사명을 반환하고 익명 세션·커맨드로 서비스를 호출한다")
+    void onboardingEmailVerifyV2_success() throws Exception {
+        // given: 서비스가 처음 보는 회사 도메인이라고 판정
+        given(authService.onboardingEmailVerify(any(), any()))
+                .willReturn(new AuthOnboardingEmailVerifyResult(OrganizationType.COMPANY, null));
+
+        // when: v2 경로로 같은 요청
+        var result = mockMvc.perform(post("/api/v2/auth/onboarding/email/verify")
+                .header("Authorization", "Bearer " + ANON_TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"emailVerificationToken":"%s","code":"123456"}
+                        """.formatted(VERIFICATION_TOKEN)));
+
+        // then: 기관 종류와 null 회사명이 그대로 직렬화되고, 익명 세션 스냅샷·커맨드로 서비스에 위임
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.organizationType").value("company"))
+                .andExpect(jsonPath("$.organizationName").value(nullValue()));
+        then(authService).should().onboardingEmailVerify(
+                ANON_SESSION, new AuthEmailVerifyCommand(VERIFICATION_TOKEN, "123456"));
+    }
+
+    @Test
+    @DisplayName("온보딩 이메일 인증 확인 v2 에 익명 세션이 없으면 401을 반환하고 서비스를 호출하지 않는다")
+    void onboardingEmailVerifyV2_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 v2 호출
+        var result = mockMvc.perform(post("/api/v2/auth/onboarding/email/verify")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"emailVerificationToken":"%s","code":"123456"}
+                        """.formatted(VERIFICATION_TOKEN)));
+
+        // then: 401 반환 + 서비스는 호출되지 않는다
+        result.andExpect(status().isUnauthorized());
+        then(authService).should(never()).onboardingEmailVerify(any(), any());
     }
 
     @Test

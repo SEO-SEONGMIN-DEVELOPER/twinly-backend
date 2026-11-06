@@ -36,6 +36,7 @@ public interface SeasonParticipationRepository extends JpaRepository<SeasonParti
             WHERE p.season_id = :seasonId
               AND p.user_id <> :userId
               AND u.is_seed = FALSE
+              AND u.organization_type = (SELECT me.organization_type FROM users me WHERE me.id = :userId)
               AND p.participated_in_at < :participatedBefore
               AND EXISTS (
                   SELECT 1 FROM scenes s
@@ -69,6 +70,7 @@ public interface SeasonParticipationRepository extends JpaRepository<SeasonParti
               AND p.userId <> :userId
               AND p.participatedInAt < :participatedBefore
               AND u.isSeed = FALSE
+              AND u.organizationType = (SELECT me.organizationType FROM User me WHERE me.id = :userId)
               AND u.withdrawalRequestedAt IS NULL
               AND u.deletedAt IS NULL
               AND NOT EXISTS (

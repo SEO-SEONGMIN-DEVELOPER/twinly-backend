@@ -28,6 +28,9 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import org.springframework.context.ApplicationEventPublisher;
+import com.nidus.twinly.purchase.event.RevenueCatWebhookSyncedEvent;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -70,6 +73,9 @@ class PurchaseServiceUnitTest {
     @Mock
     SeasonParticipationWriter seasonParticipationWriter;
 
+    @Mock
+    ApplicationEventPublisher eventPublisher;
+
     PurchaseService purchaseService;
 
     @BeforeEach
@@ -78,7 +84,7 @@ class PurchaseServiceUnitTest {
                 Duration.ofSeconds(3), Duration.ofSeconds(5), Duration.ofSeconds(30));
         purchaseService = new PurchaseService(
                 properties, revenueCatClient, userRepository, purchaseWriter, entitlementReader,
-                seasonParticipationWriter);
+                seasonParticipationWriter, eventPublisher);
     }
 
     @Test
@@ -97,6 +103,21 @@ class PurchaseServiceUnitTest {
 
         // then: 조회한 권한 목록 그대로 교체 위임
         then(purchaseWriter).should().replaceEntitlements(eq(USER_ID), eq(entitlements), any());
+    }
+
+    @Test
+    @DisplayName("웹훅으로 동기화한 유저마다 동기화 완료 이벤트를 발행한다")
+    void receiveWebhook_publishes_synced_event() {
+        // given: 우리 유저이고 RevenueCat 이 권한 목록을 돌려줌
+        given(userRepository.findByRevenueCatUserId(REVENUE_CAT_USER_ID)).willReturn(Optional.of(user()));
+        given(revenueCatClient.entitlements(APP_USER_ID)).willReturn(List.of());
+        given(purchaseWriter.beginEvent(anyString(), anyString(), any(), any(), any())).willReturn(true);
+
+        // when: SANDBOX 이벤트 수신
+        purchaseService.receiveWebhook(command("RENEWAL", "SANDBOX", List.of(APP_USER_ID)));
+
+        // then: 해당 유저 id 로 동기화 완료 이벤트 발행
+        then(eventPublisher).should().publishEvent(new RevenueCatWebhookSyncedEvent(USER_ID));
     }
 
     @Test
@@ -120,7 +141,7 @@ class PurchaseServiceUnitTest {
                 new RevenueCatProperties("secret", "sk_test", RevenueCatEnvironment.PRODUCTION,
                         Duration.ofSeconds(3), Duration.ofSeconds(5), Duration.ofSeconds(30)),
                 revenueCatClient, userRepository, purchaseWriter, entitlementReader,
-                seasonParticipationWriter);
+                seasonParticipationWriter, eventPublisher);
         given(userRepository.findByRevenueCatUserId(REVENUE_CAT_USER_ID)).willReturn(Optional.of(user()));
         given(revenueCatClient.entitlements(APP_USER_ID)).willReturn(List.of());
         given(purchaseWriter.beginEvent(anyString(), anyString(), any(), any(), any())).willReturn(true);

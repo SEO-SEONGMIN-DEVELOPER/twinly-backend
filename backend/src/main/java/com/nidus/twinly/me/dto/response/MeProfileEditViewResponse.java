@@ -14,6 +14,7 @@ public record MeProfileEditViewResponse(
         String familyName,
         String givenName,
         String affiliation,
+        @Schema(nullable = true)
         String affiliationNumber,
         String birthDate,
         @Schema(nullable = true)

@@ -1,6 +1,8 @@
 package com.nidus.twinly.legal.service;
 
+import com.nidus.twinly.legal.config.LegalProperties;
 import com.nidus.twinly.legal.domain.PolicyKind;
+import com.nidus.twinly.legal.domain.RequiredPolicies;
 import com.nidus.twinly.legal.entity.PolicyName;
 import com.nidus.twinly.legal.repository.PolicyNameRepository;
 import com.nidus.twinly.legal.repository.PolicyRepository;
@@ -26,6 +28,7 @@ public class PolicyCatalog {
 
     private final PolicyRepository policyRepository;
     private final PolicyNameRepository policyNameRepository;
+    private final LegalProperties legalProperties;
 
     private static boolean isEffective(PolicySummary policy, Instant now) {
         return policy.getEffectiveAt() != null && !policy.getEffectiveAt().isAfter(now);
@@ -49,6 +52,43 @@ public class PolicyCatalog {
 
         return loadLatestByPolicyNameId(policyNameIds).values().stream()
                 .filter(policy -> Boolean.TRUE.equals(policy.getIsRequired()))
+                .map(PolicySummary::getId)
+                .collect(Collectors.toSet());
+    }
+
+    public RequiredPolicies loadRequiredPolicies(PolicyKind kind) {
+        Map<Long, String> identifierByPolicyNameId = policyNameRepository.findAllByKindAndIsDeprecatedFalseOrderByIdAsc(kind).stream()
+                .filter(policyName -> Boolean.TRUE.equals(policyName.getRequiresAgreement()))
+                .collect(Collectors.toMap(PolicyName::getId, PolicyName::getIdentifier));
+
+        Instant now = Instant.now();
+        Map<Long, List<PolicySummary>> versionsByPolicyNameId = policyRepository.findAllProjectedByPolicyNameIdIn(List.copyOf(identifierByPolicyNameId.keySet())).stream()
+                .filter(policy -> isEffective(policy, now))
+                .collect(Collectors.groupingBy(PolicySummary::getPolicyNameId));
+
+        List<Set<Long>> acceptedPolicyIdGroups = versionsByPolicyNameId.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(entry -> acceptedPolicyIds(identifierByPolicyNameId.get(entry.getKey()), entry.getValue()))
+                .filter(group -> !group.isEmpty())
+                .toList();
+
+        return new RequiredPolicies(acceptedPolicyIdGroups);
+    }
+
+    private Set<Long> acceptedPolicyIds(String identifier, List<PolicySummary> versions) {
+        PolicySummary latest = versions.stream().max(BY_EFFECTIVE_AT_THEN_ID).orElseThrow();
+        if (!Boolean.TRUE.equals(latest.getIsRequired())) {
+            return Set.of();
+        }
+
+        String minimumVersion = legalProperties.minimumVersions().get(identifier);
+        PolicySummary minimum = versions.stream()
+                .filter(policy -> policy.getVersion().equals(minimumVersion))
+                .findFirst()
+                .orElse(latest);
+
+        return versions.stream()
+                .filter(policy -> BY_EFFECTIVE_AT_THEN_ID.compare(policy, minimum) >= 0)
                 .map(PolicySummary::getId)
                 .collect(Collectors.toSet());
     }

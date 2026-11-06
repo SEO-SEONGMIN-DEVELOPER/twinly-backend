@@ -28,6 +28,7 @@ public class SecurityConfig {
     private static final String[] ANON_SESSION_PATHS = {
             "/api/v1/onboarding/**",
             "/api/v1/auth/onboarding/**",
+            "/api/v2/auth/onboarding/**",
             "/api/v1/auth/signup"
     };
 
