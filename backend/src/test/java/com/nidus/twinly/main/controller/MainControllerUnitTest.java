@@ -1,6 +1,7 @@
 package com.nidus.twinly.main.controller;
 
 import com.nidus.twinly.anon.service.AnonService;
+import com.nidus.twinly.main.dto.result.MainTabInviteRewardResult;
 import com.nidus.twinly.main.dto.result.MainTabLatestRecapResult;
 import com.nidus.twinly.main.dto.result.MainTabResult;
 import com.nidus.twinly.main.dto.result.MainTabSeasonResult;
@@ -61,7 +62,8 @@ class MainControllerUnitTest {
                 3,
                 5,
                 null,
-                true
+                true,
+                null
         ));
 
         // when: 인증 상태로 메인 탭 조회 API 호출
@@ -77,7 +79,8 @@ class MainControllerUnitTest {
                 .andExpect(jsonPath("$.unreadChatRoomCount").value(3))
                 .andExpect(jsonPath("$.unreadNotificationCount").value(5))
                 .andExpect(jsonPath("$.latestRecap").value(nullValue()))
-                .andExpect(jsonPath("$.dotWorldEnabled").value(true));
+                .andExpect(jsonPath("$.dotWorldEnabled").value(true))
+                .andExpect(jsonPath("$.inviteReward").value(nullValue()));
 
         // then: 인증 유저 id로 서비스에 위임
         then(mainService).should().mainTab(1L);
@@ -92,7 +95,8 @@ class MainControllerUnitTest {
                 0,
                 1,
                 new MainTabLatestRecapResult(7L, Instant.parse("2026-10-31T15:03:12Z")),
-                false
+                false,
+                null
         ));
 
         // when: 인증 상태로 메인 탭 조회 API 호출
@@ -104,6 +108,28 @@ class MainControllerUnitTest {
                 .andExpect(jsonPath("$.latestRecap.seasonId").value("7"))
                 .andExpect(jsonPath("$.latestRecap.createdAt").isString())
                 .andExpect(jsonPath("$.dotWorldEnabled").value(false));
+    }
+
+    @Test
+    @DisplayName("애플 오퍼를 기다리는 보상이 있으면 inviteReward 에 오퍼 id 를 담는다")
+    void mainTab_with_pending_apple_offer() throws Exception {
+        // given: 서비스가 애플 오퍼 대기 정보를 함께 반환
+        given(mainService.mainTab(1L)).willReturn(new MainTabResult(
+                new MainTabSeasonResult(8L, Instant.parse("2026-11-04T01:00:00Z"), "10%", Instant.parse("2026-11-30T14:59:59Z")),
+                0,
+                0,
+                null,
+                true,
+                new MainTabInviteRewardResult("invite_reward_1m")
+        ));
+
+        // when: 인증 상태로 메인 탭 조회 API 호출
+        var result = mockMvc.perform(get("/api/v1/main")
+                .header("Authorization", "Bearer access-token"));
+
+        // then: inviteReward.appleOfferId 가 그대로 내려감
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.inviteReward.appleOfferId").value("invite_reward_1m"));
     }
 
     @Test

@@ -15,6 +15,12 @@ import com.nidus.twinly.me.dto.command.MeStartTwinUpdateAiChatCommand;
 import com.nidus.twinly.me.dto.command.MeSendTwinUpdateAiChatMessageCommand;
 import com.nidus.twinly.me.dto.command.MeSaveTwinUpdateInterestsCommand;
 import com.nidus.twinly.me.dto.command.MeSaveTwinLookCommand;
+import com.nidus.twinly.me.dto.command.MeAcceptInviteRewardAppleOfferCommand;
+import com.nidus.twinly.me.dto.command.MeRegisterInviteCodeCommand;
+import com.nidus.twinly.me.dto.request.MeAcceptInviteRewardAppleOfferRequest;
+import com.nidus.twinly.me.dto.request.MeRegisterInviteCodeRequest;
+import com.nidus.twinly.me.dto.response.MeInviteRewardResponse;
+import com.nidus.twinly.me.dto.response.MeIssueInviteRewardAppleOfferSignatureResponse;
 import com.nidus.twinly.me.dto.command.MeCompleteTwinUpdateCommand;
 import com.nidus.twinly.me.dto.command.MeAppNotificationsReadAllCommand;
 import com.nidus.twinly.me.dto.command.MeChangeProfileNicknameCommand;
@@ -528,5 +534,42 @@ public class MeController {
     public void saveTwinLook(@AuthenticationPrincipal UserInfo userInfo,
                              @Valid @RequestBody MeSaveTwinLookRequest request) {
         meService.saveTwinLook(userInfo.id(), MeSaveTwinLookCommand.from(request));
+    }
+
+    @Operation(summary = "친구 초대 코드 등록")
+    @ApiResponses({
+            @ApiResponse(responseCode = "404", description = "PARALLEL_RELATION_CODE_NOT_FOUND, USER_NOT_FOUND"),
+            @ApiResponse(responseCode = "409", description = "INVITE_CODE_ALREADY_REGISTERED, INVITE_CODE_NOT_ELIGIBLE"),
+            @ApiResponse(responseCode = "422", description = "OWN_PARALLEL_RELATION_CODE")
+    })
+    @PostMapping("/api/v1/me/invite-code")
+    public void registerInviteCode(@AuthenticationPrincipal UserInfo userInfo,
+                                   @Valid @RequestBody MeRegisterInviteCodeRequest request) {
+        meService.registerInviteCode(userInfo.id(), MeRegisterInviteCodeCommand.from(request));
+    }
+
+    @Operation(summary = "친구 초대 보상 조회")
+    @ApiResponse(responseCode = "404", description = "USER_NOT_FOUND")
+    @GetMapping("/api/v1/me/invite-reward")
+    public MeInviteRewardResponse inviteReward(@AuthenticationPrincipal UserInfo userInfo) {
+        return MeInviteRewardResponse.from(meService.inviteReward(userInfo.id()));
+    }
+
+    @Operation(summary = "친구 초대 보상 애플 오퍼 서명 발급")
+    @ApiResponses({
+            @ApiResponse(responseCode = "409", description = "INVITE_REWARD_NOT_PENDING"),
+            @ApiResponse(responseCode = "503", description = "INVITE_REWARD_APPLE_OFFER_UNAVAILABLE")
+    })
+    @PostMapping("/api/v1/me/invite-reward/apple-offer-signature")
+    public MeIssueInviteRewardAppleOfferSignatureResponse issueInviteRewardAppleOfferSignature(@AuthenticationPrincipal UserInfo userInfo) {
+        return MeIssueInviteRewardAppleOfferSignatureResponse.from(meService.issueInviteRewardAppleOfferSignature(userInfo.id()));
+    }
+
+    @Operation(summary = "친구 초대 보상 애플 오퍼 수락 보고")
+    @ApiResponse(responseCode = "409", description = "INVITE_REWARD_NOT_PENDING")
+    @PostMapping("/api/v1/me/invite-reward/apple-offer")
+    public MeInviteRewardResponse acceptInviteRewardAppleOffer(@AuthenticationPrincipal UserInfo userInfo,
+                                                               @Valid @RequestBody MeAcceptInviteRewardAppleOfferRequest request) {
+        return MeInviteRewardResponse.from(meService.acceptInviteRewardAppleOffer(userInfo.id(), MeAcceptInviteRewardAppleOfferCommand.from(request)));
     }
 }

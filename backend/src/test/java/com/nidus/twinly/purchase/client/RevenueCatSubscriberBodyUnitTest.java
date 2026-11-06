@@ -220,4 +220,49 @@ class RevenueCatSubscriberBodyUnitTest {
         assertThat(entitlement.store()).isEqualTo("play_store");
         assertThat(entitlement.periodType()).isEqualTo("trial");
     }
+
+    @Test
+    @DisplayName("구독 목록은 상태 필드를 함께 읽고, stage 는 실결제 구독을 빼되 무료 지급은 남긴다")
+    void subscriptionsIn_reads_state_and_filters_environment() {
+        // given: Play 실결제 구독(자동 갱신 꺼짐) + 무료 지급
+        RevenueCatSubscriberBody body = read("""
+                {
+                  "subscriber": {
+                    "entitlements": {
+                      "simulation_access": { "expires_date": "2027-01-01T00:00:00Z", "product_identifier": "rc_promo_simulation_access_custom" }
+                    },
+                    "subscriptions": {
+                      "twinly_monthly:monthly": {
+                        "is_sandbox": false, "store": "play_store", "period_type": "normal",
+                        "purchase_date": "2026-10-10T00:00:00Z", "expires_date": "2026-11-10T00:00:00Z",
+                        "unsubscribe_detected_at": "2026-10-20T00:00:00Z", "billing_issues_detected_at": null,
+                        "grace_period_expires_date": null
+                      },
+                      "rc_promo_simulation_access_custom": {
+                        "is_sandbox": false, "store": "promotional", "period_type": "normal",
+                        "purchase_date": "2026-09-30T00:00:00Z", "expires_date": "2027-01-01T00:00:00Z"
+                      }
+                    }
+                  }
+                }
+                """);
+
+        // when: prod·stage 에서 각각 읽음
+        RevenueCatSubscriptions production = body.subscriptionsIn(RevenueCatEnvironment.PRODUCTION, "simulation_access");
+        RevenueCatSubscriptions sandbox = body.subscriptionsIn(RevenueCatEnvironment.SANDBOX, "simulation_access");
+
+        // then: prod 는 두 구독과 상태 필드를 모두 읽음
+        assertThat(production.entitlementExpiresAt()).isEqualTo(Instant.parse("2027-01-01T00:00:00Z"));
+        assertThat(production.subscription("twinly_monthly:monthly")).hasValueSatisfying(subscription -> {
+            assertThat(subscription.isPlayStore()).isTrue();
+            assertThat(subscription.isAutoRenewing()).isFalse();
+            assertThat(subscription.purchasedAt()).isEqualTo(Instant.parse("2026-10-10T00:00:00Z"));
+            assertThat(subscription.expiresAt()).isEqualTo(Instant.parse("2026-11-10T00:00:00Z"));
+        });
+        assertThat(production.latestPromotionalExpiresAt()).contains(Instant.parse("2027-01-01T00:00:00Z"));
+
+        // then: stage 는 실결제 구독을 빼고 무료 지급만 남김
+        assertThat(sandbox.subscriptions()).extracting(RevenueCatSubscription::productId)
+                .containsExactly("rc_promo_simulation_access_custom");
+    }
 }

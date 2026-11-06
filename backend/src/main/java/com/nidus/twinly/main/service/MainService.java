@@ -2,6 +2,8 @@ package com.nidus.twinly.main.service;
 
 import com.nidus.twinly.app.service.AppFeatureFlagService;
 import com.nidus.twinly.chat.repository.ChatRepository;
+import com.nidus.twinly.invite.service.InviteService;
+import com.nidus.twinly.main.dto.result.MainTabInviteRewardResult;
 import com.nidus.twinly.main.dto.result.MainTabLatestRecapResult;
 import com.nidus.twinly.main.dto.result.MainTabResult;
 import com.nidus.twinly.main.dto.result.MainTabSeasonResult;
@@ -26,6 +28,7 @@ public class MainService {
     private final AppNotificationFeedRepository appNotificationFeedRepository;
     private final SeasonRecapRepository seasonRecapRepository;
     private final AppFeatureFlagService appFeatureFlagService;
+    private final InviteService inviteService;
 
     public MainTabResult mainTab(Long userId) {
         Season season = currentSeasonReader.read();
@@ -44,7 +47,10 @@ public class MainService {
                 seasonRecapRepository.findServingByUserId(userId, season.getId())
                         .map(recap -> new MainTabLatestRecapResult(recap.getSeasonId(), recap.getCreatedAt()))
                         .orElse(null),
-                appFeatureFlagService.dotWorldEnabled()
+                appFeatureFlagService.dotWorldEnabled(),
+                inviteService.pendingAppleOfferId(userId)
+                        .map(MainTabInviteRewardResult::new)
+                        .orElse(null)
         );
     }
 }

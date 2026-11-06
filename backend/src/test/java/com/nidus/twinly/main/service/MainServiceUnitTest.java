@@ -2,6 +2,7 @@ package com.nidus.twinly.main.service;
 
 import com.nidus.twinly.app.service.AppFeatureFlagService;
 import com.nidus.twinly.chat.repository.ChatRepository;
+import com.nidus.twinly.invite.service.InviteService;
 import com.nidus.twinly.main.dto.result.MainTabResult;
 import com.nidus.twinly.notification.repository.AppNotificationFeedRepository;
 import com.nidus.twinly.season.entity.Season;
@@ -47,8 +48,36 @@ class MainServiceUnitTest {
     @Mock
     AppFeatureFlagService appFeatureFlagService;
 
+    @Mock
+    InviteService inviteService;
+
     @InjectMocks
     MainService mainService;
+
+    @Test
+    @DisplayName("애플 오퍼를 기다리는 초대 보상이 있으면 inviteReward 에 오퍼 id 를 담고, 없으면 null 이다")
+    void mainTab_includes_pending_apple_offer() {
+        // given: 진행 중인 시즌 + 애플 오퍼 대기
+        Instant now = Instant.now();
+        given(currentSeasonReader.read()).willReturn(
+                season(CURRENT_SEASON_ID, now.minus(Duration.ofDays(1)), now.plus(Duration.ofDays(1))));
+        given(inviteService.pendingAppleOfferId(USER_ID)).willReturn(Optional.of("invite_reward_1m"));
+
+        // when: 메인 탭 조회
+        MainTabResult pending = mainService.mainTab(USER_ID);
+
+        // then: 오퍼 id 가 담김
+        assertThat(pending.inviteReward().appleOfferId()).isEqualTo("invite_reward_1m");
+
+        // given: 오퍼 대기 없음
+        given(inviteService.pendingAppleOfferId(USER_ID)).willReturn(Optional.empty());
+
+        // when: 다시 조회
+        MainTabResult none = mainService.mainTab(USER_ID);
+
+        // then: inviteReward 는 null
+        assertThat(none.inviteReward()).isNull();
+    }
 
     @Test
     @DisplayName("진행 중인 시즌이면 경과 비율을 퍼센트 문자열로 만들고 미읽음 개수를 함께 반환한다")

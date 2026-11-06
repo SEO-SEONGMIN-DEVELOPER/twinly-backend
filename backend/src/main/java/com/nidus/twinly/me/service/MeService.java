@@ -91,6 +91,11 @@ import com.nidus.twinly.me.dto.result.MePurchasesResult;
 import com.nidus.twinly.me.dto.result.MeSchoolVerificationStudentIdPresignResult;
 import com.nidus.twinly.me.dto.result.MeStatusPersonaResult;
 import com.nidus.twinly.twinlook.repository.TwinLookRepository;
+import com.nidus.twinly.invite.service.InviteService;
+import com.nidus.twinly.me.dto.command.MeAcceptInviteRewardAppleOfferCommand;
+import com.nidus.twinly.me.dto.command.MeRegisterInviteCodeCommand;
+import com.nidus.twinly.me.dto.result.MeInviteRewardResult;
+import com.nidus.twinly.me.dto.result.MeIssueInviteRewardAppleOfferSignatureResult;
 import com.nidus.twinly.twinupdate.service.TwinUpdateReader;
 import com.nidus.twinly.twinupdate.service.TwinUpdateService;
 import com.nidus.twinly.me.dto.result.MeAiChatMessageResult;
@@ -213,6 +218,7 @@ public class MeService {
     private final UserFeedbackRepository userFeedbackRepository;
     private final UserFeedbackOptionRepository userFeedbackOptionRepository;
     private final TwinLookRepository twinLookRepository;
+    private final InviteService inviteService;
 
     private final PolicyCatalog policyCatalog;
     private final PolicyUrlResolver policyUrlResolver;
@@ -934,5 +940,24 @@ public class MeService {
     @Transactional
     public void saveTwinLook(Long userId, MeSaveTwinLookCommand command) {
         twinLookRepository.upsert(userId, command.hair(), command.hairColor(), command.outfit(), command.outfitColor());
+    }
+
+    @Transactional
+    public void registerInviteCode(Long userId, MeRegisterInviteCodeCommand command) {
+        inviteService.registerCode(userId, command.code());
+    }
+
+    @Transactional
+    public MeInviteRewardResult inviteReward(Long userId) {
+        return inviteService.inviteReward(userId);
+    }
+
+    public MeIssueInviteRewardAppleOfferSignatureResult issueInviteRewardAppleOfferSignature(Long userId) {
+        return inviteService.issueAppleOfferSignature(userId);
+    }
+
+    @Transactional
+    public MeInviteRewardResult acceptInviteRewardAppleOffer(Long userId, MeAcceptInviteRewardAppleOfferCommand command) {
+        return inviteService.acceptAppleOffer(userId, command.transactionId());
     }
 }

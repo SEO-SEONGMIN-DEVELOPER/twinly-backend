@@ -14,6 +14,8 @@ public interface EarlySignupGrantRepository extends JpaRepository<EarlySignupGra
 
     boolean existsByDiHash(String diHash);
 
+    Optional<EarlySignupGrant> findByUserId(Long userId);
+
     Optional<EarlySignupGrant> findByUserIdAndGrantedAtIsNull(Long userId);
 
     List<EarlySignupGrant> findAllByGrantedAtIsNullAndExpiresAtAfter(Instant now);

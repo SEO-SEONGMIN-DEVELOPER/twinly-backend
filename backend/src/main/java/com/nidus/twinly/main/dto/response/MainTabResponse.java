@@ -9,7 +9,9 @@ public record MainTabResponse(
         Integer unreadNotificationCount,
         @Schema(nullable = true)
         MainTabLatestRecapResponse latestRecap,
-        boolean dotWorldEnabled
+        boolean dotWorldEnabled,
+        @Schema(nullable = true)
+        MainTabInviteRewardResponse inviteReward
 ) {
 
     public static MainTabResponse from(MainTabResult result) {
@@ -18,7 +20,8 @@ public record MainTabResponse(
                 result.unreadChatRoomCount(),
                 result.unreadNotificationCount(),
                 result.latestRecap() != null ? MainTabLatestRecapResponse.from(result.latestRecap()) : null,
-                result.dotWorldEnabled()
+                result.dotWorldEnabled(),
+                result.inviteReward() != null ? MainTabInviteRewardResponse.from(result.inviteReward()) : null
         );
     }
 }

@@ -5,6 +5,7 @@ public record MainTabResult(
         Integer unreadChatRoomCount,
         Integer unreadNotificationCount,
         MainTabLatestRecapResult latestRecap,
-        boolean dotWorldEnabled
+        boolean dotWorldEnabled,
+        MainTabInviteRewardResult inviteReward
 ) {
 }

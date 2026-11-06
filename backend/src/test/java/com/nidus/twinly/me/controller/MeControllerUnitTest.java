@@ -76,6 +76,14 @@ import com.nidus.twinly.me.dto.result.MeTendencyQuestionsOptionResult;
 import com.nidus.twinly.me.dto.result.MeTendencyQuestionsResult;
 import com.nidus.twinly.me.dto.result.MeWithdrawResult;
 import com.nidus.twinly.me.service.MeService;
+import com.nidus.twinly.invite.domain.InviteRewardMethod;
+import com.nidus.twinly.invite.domain.InviteRewardStatus;
+import com.nidus.twinly.invite.domain.PromotionalSource;
+import com.nidus.twinly.me.dto.command.MeAcceptInviteRewardAppleOfferCommand;
+import com.nidus.twinly.me.dto.command.MeRegisterInviteCodeCommand;
+import com.nidus.twinly.me.dto.result.MeInviteRewardResult;
+import com.nidus.twinly.me.dto.result.MeInviteRewardRewardResult;
+import com.nidus.twinly.me.dto.result.MeIssueInviteRewardAppleOfferSignatureResult;
 import com.nidus.twinly.notification.domain.AppNotificationFeedType;
 import com.nidus.twinly.notification.domain.NotificationType;
 import com.nidus.twinly.user.domain.DisclosureField;
@@ -2334,5 +2342,208 @@ class MeControllerUnitTest {
         // then: 401 + 서비스 호출 없음
         result.andExpect(status().isUnauthorized());
         then(meService).should(never()).saveTwinLook(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("초대 코드 등록 시 본문 없는 200 을 반환하고 코드를 그대로 서비스에 넘긴다")
+    void registerInviteCode_success() throws Exception {
+        // when: 친구 코드로 등록
+        var result = mockMvc.perform(post("/api/v1/me/invite-code")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"code":"k7m2qx"}
+                        """));
+
+        // then: 200 + 빈 본문 + 서비스에 그대로 위임
+        result.andExpect(status().isOk())
+                .andExpect(content().string(""));
+        then(meService).should().registerInviteCode(ME, new MeRegisterInviteCodeCommand("k7m2qx"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"{}", "{\"code\":null}", "{\"code\":\" \"}"})
+    @DisplayName("초대 코드 등록 시 코드가 없거나 비어 있으면 400 INVALID_REQUEST 이고 서비스를 호출하지 않는다")
+    void registerInviteCode_invalid_body_returns_400(String body) throws Exception {
+        // when: 코드 없이 등록
+        var result = mockMvc.perform(post("/api/v1/me/invite-code")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body));
+
+        // then: 400 INVALID_REQUEST + 서비스 호출 없음
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        then(meService).should(never()).registerInviteCode(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("초대 코드 등록 시 다른 코드를 이미 등록했으면 409 INVITE_CODE_ALREADY_REGISTERED 로 매핑한다")
+    void registerInviteCode_already_registered_returns_409() throws Exception {
+        // given: 서비스가 이미 다른 코드를 등록했다고 거절
+        willThrow(new BusinessException(ErrorCode.INVITE_CODE_ALREADY_REGISTERED))
+                .given(meService).registerInviteCode(ME, new MeRegisterInviteCodeCommand("K7M2QX"));
+
+        // when: 코드 등록
+        var result = mockMvc.perform(post("/api/v1/me/invite-code")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"code":"K7M2QX"}
+                        """));
+
+        // then: 409 + 오류 코드
+        result.andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INVITE_CODE_ALREADY_REGISTERED"));
+    }
+
+    @Test
+    @DisplayName("초대 코드 등록 시 인증 헤더가 없으면 401 이고 서비스를 호출하지 않는다")
+    void registerInviteCode_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 등록
+        var result = mockMvc.perform(post("/api/v1/me/invite-code")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"code":"K7M2QX"}
+                        """));
+
+        // then: 401 + 서비스 호출 없음
+        result.andExpect(status().isUnauthorized());
+        then(meService).should(never()).registerInviteCode(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("초대 보상 조회 시 진행 상황과 지급된 보상을 camelCase enum 으로 직렬화한다")
+    void inviteReward_success() throws Exception {
+        // given: 성립 5건으로 무료 지급을 받은 상태
+        given(meService.inviteReward(ME)).willReturn(new MeInviteRewardResult(
+                "K7M2QX",
+                "share",
+                false,
+                6,
+                5,
+                5,
+                new MeInviteRewardRewardResult(InviteRewardStatus.GRANTED, null, InviteRewardMethod.PROMOTIONAL, null, Instant.parse("2026-12-04T00:00:00Z")),
+                PromotionalSource.INVITE_REWARD
+        ));
+
+        // when: 보상 조회
+        var result = mockMvc.perform(get("/api/v1/me/invite-reward")
+                .header("Authorization", BEARER));
+
+        // then: 200 + 필드 매핑
+        result.andExpect(status().isOk())
+                .andExpect(content().json("""
+                        {
+                          "code":"K7M2QX",
+                          "shareMessage":"share",
+                          "canRegisterCode":false,
+                          "registeredCount":6,
+                          "completedCount":5,
+                          "goal":5,
+                          "reward":{
+                            "status":"granted",
+                            "waitingReason":null,
+                            "method":"promotional",
+                            "appleOfferId":null,
+                            "endsAt":"2026-12-04T00:00:00Z"
+                          },
+                          "promotionalSource":"inviteReward"
+                        }
+                        """, JsonCompareMode.STRICT));
+    }
+
+    @Test
+    @DisplayName("초대 보상 조회 시 성립 5건 전이면 reward 와 promotionalSource 가 null 이다")
+    void inviteReward_before_goal() throws Exception {
+        // given: 아직 보상 없음
+        given(meService.inviteReward(ME)).willReturn(new MeInviteRewardResult("K7M2QX", "share", true, 2, 1, 5, null, null));
+
+        // when: 보상 조회
+        var result = mockMvc.perform(get("/api/v1/me/invite-reward")
+                .header("Authorization", BEARER));
+
+        // then: reward·promotionalSource 가 null
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.reward").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.promotionalSource").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.canRegisterCode").value(true));
+    }
+
+    @Test
+    @DisplayName("애플 오퍼 서명 발급 시 서명 정보를 그대로 반환한다")
+    void issueInviteRewardAppleOfferSignature_success() throws Exception {
+        // given: 서비스가 서명을 만들어 줌
+        UUID nonce = UUID.fromString("7f3a2c1e-0000-4000-8000-000000000001");
+        UUID token = UUID.fromString("7f3a2c1e-0000-4000-8000-000000000002");
+        given(meService.issueInviteRewardAppleOfferSignature(ME)).willReturn(new MeIssueInviteRewardAppleOfferSignatureResult(
+                "twinly_monthly", "invite_reward_1m", "KEY123", nonce, 1_700_000_000_000L, token, "c2lnbmF0dXJl"));
+
+        // when: 서명 발급
+        var result = mockMvc.perform(post("/api/v1/me/invite-reward/apple-offer-signature")
+                .header("Authorization", BEARER));
+
+        // then: 200 + 서명 정보
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.productId").value("twinly_monthly"))
+                .andExpect(jsonPath("$.offerId").value("invite_reward_1m"))
+                .andExpect(jsonPath("$.keyId").value("KEY123"))
+                .andExpect(jsonPath("$.nonce").value(nonce.toString()))
+                .andExpect(jsonPath("$.timestamp").value(1_700_000_000_000L))
+                .andExpect(jsonPath("$.appAccountToken").value(token.toString()))
+                .andExpect(jsonPath("$.signature").value("c2lnbmF0dXJl"));
+    }
+
+    @Test
+    @DisplayName("애플 오퍼 서명 발급 시 오퍼 대기 상태가 아니면 409 INVITE_REWARD_NOT_PENDING 으로 매핑한다")
+    void issueInviteRewardAppleOfferSignature_not_pending_returns_409() throws Exception {
+        // given: 서비스가 대기 상태가 아니라고 거절
+        given(meService.issueInviteRewardAppleOfferSignature(ME))
+                .willThrow(new BusinessException(ErrorCode.INVITE_REWARD_NOT_PENDING));
+
+        // when: 서명 발급
+        var result = mockMvc.perform(post("/api/v1/me/invite-reward/apple-offer-signature")
+                .header("Authorization", BEARER));
+
+        // then: 409 + 오류 코드
+        result.andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INVITE_REWARD_NOT_PENDING"));
+    }
+
+    @Test
+    @DisplayName("애플 오퍼 수락 보고 시 거래 ID 를 서비스에 넘기고 보상 상태를 반환한다")
+    void acceptInviteRewardAppleOffer_success() throws Exception {
+        // given: 수락 뒤 상태
+        given(meService.acceptInviteRewardAppleOffer(ME, new MeAcceptInviteRewardAppleOfferCommand("2000000123456789")))
+                .willReturn(new MeInviteRewardResult("K7M2QX", "share", false, 5, 5, 5,
+                        new MeInviteRewardRewardResult(InviteRewardStatus.APPLE_OFFER_ACCEPTED, null, null, null, null), null));
+
+        // when: 수락 보고
+        var result = mockMvc.perform(post("/api/v1/me/invite-reward/apple-offer")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"transactionId":"2000000123456789"}
+                        """));
+
+        // then: 200 + appleOfferAccepted
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.reward.status").value("appleOfferAccepted"));
+    }
+
+    @Test
+    @DisplayName("애플 오퍼 수락 보고 시 거래 ID 가 비어 있으면 400 이고 서비스를 호출하지 않는다")
+    void acceptInviteRewardAppleOffer_blank_transaction_returns_400() throws Exception {
+        // when: 빈 거래 ID 로 보고
+        var result = mockMvc.perform(post("/api/v1/me/invite-reward/apple-offer")
+                .header("Authorization", BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"transactionId":""}
+                        """));
+
+        // then: 400 + 서비스 호출 없음
+        result.andExpect(status().isBadRequest());
+        then(meService).should(never()).acceptInviteRewardAppleOffer(anyLong(), any());
     }
 }
