@@ -54,6 +54,8 @@ public enum ErrorCode {
     NICKNAME_ALREADY_USED(HttpStatus.CONFLICT, "이미 사용 중인 닉네임입니다."),
     INVALID_NICKNAME(HttpStatus.UNPROCESSABLE_CONTENT, "사용할 수 없는 닉네임입니다."),
     INVALID_AFFILIATION_NUMBER(HttpStatus.UNPROCESSABLE_CONTENT, "사용할 수 없는 학번입니다."),
+    INVALID_COMPANY_NAME(HttpStatus.UNPROCESSABLE_CONTENT, "사용할 수 없는 회사명입니다."),
+    COMPANY_NAME_NOT_REQUIRED(HttpStatus.UNPROCESSABLE_CONTENT, "회사 이메일을 인증한 경우에만 회사명을 입력할 수 있습니다."),
     SURVEY_QUESTION_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 질문입니다."),
     SURVEY_ANSWERS_INCOMPLETE(HttpStatus.UNPROCESSABLE_CONTENT, "응답하지 않은 설문 문항이 있습니다."),
     TENDENCY_QUESTION_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 성향 문항입니다."),

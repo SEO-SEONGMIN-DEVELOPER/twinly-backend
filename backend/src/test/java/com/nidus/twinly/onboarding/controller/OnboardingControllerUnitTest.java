@@ -16,6 +16,7 @@ import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.onboarding.dto.command.OnboardingAffiliationCommand;
 import com.nidus.twinly.onboarding.dto.command.OnboardingAiChatMessageCommand;
 import com.nidus.twinly.onboarding.dto.command.OnboardingAffiliationNumberCommand;
+import com.nidus.twinly.onboarding.dto.command.OnboardingCompanyNameCommand;
 import com.nidus.twinly.onboarding.dto.command.OnboardingNameCommand;
 import com.nidus.twinly.onboarding.dto.command.OnboardingGrantConsentsCommand;
 import com.nidus.twinly.onboarding.dto.command.OnboardingGrantConsentsItemCommand;
@@ -278,6 +279,63 @@ class OnboardingControllerUnitTest {
         result.andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value(ErrorCode.INVALID_REQUEST.name()));
         then(onboardingService).should(never()).affiliationNumber(any(), any());
+    }
+
+    @Test
+    @DisplayName("회사명 입력 성공 시 200을 반환하고 익명 세션과 요청 값으로 만든 커맨드로 서비스를 호출한다")
+    void companyName_success() throws Exception {
+        // when: 익명 세션 인증 상태로 회사명 입력 API 호출
+        var result = mockMvc.perform(put("/api/v1/onboarding/company-name")
+                .header("Authorization", ANON_BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .characterEncoding("UTF-8")
+                .content("""
+                        {
+                          "companyName": "트윈리컴퍼니"
+                        }
+                        """));
+
+        // then: 200 반환 + 익명 세션 스냅샷과 변환된 커맨드로 서비스에 위임
+        result.andExpect(status().isOk());
+        then(onboardingService).should().companyName(ANON_SESSION, new OnboardingCompanyNameCommand("트윈리컴퍼니"));
+    }
+
+    @Test
+    @DisplayName("회사명 입력에 빈 값이 오면 400을 반환하고 서비스를 호출하지 않는다")
+    void companyName_with_blank_returns_400() throws Exception {
+        // when: 빈 회사명으로 입력 API 호출
+        var result = mockMvc.perform(put("/api/v1/onboarding/company-name")
+                .header("Authorization", ANON_BEARER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .characterEncoding("UTF-8")
+                .content("""
+                        {
+                          "companyName": " "
+                        }
+                        """));
+
+        // then: 400 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(ErrorCode.INVALID_REQUEST.name()));
+        then(onboardingService).should(never()).companyName(any(), any());
+    }
+
+    @Test
+    @DisplayName("회사명 입력에 인증 헤더가 없으면 401을 반환하고 서비스를 호출하지 않는다")
+    void companyName_without_auth_returns_401() throws Exception {
+        // when: 인증 헤더 없이 회사명 입력 API 호출
+        var result = mockMvc.perform(put("/api/v1/onboarding/company-name")
+                .contentType(MediaType.APPLICATION_JSON)
+                .characterEncoding("UTF-8")
+                .content("""
+                        {
+                          "companyName": "트윈리컴퍼니"
+                        }
+                        """));
+
+        // then: 401 반환 + 서비스는 호출되지 않음
+        result.andExpect(status().isUnauthorized());
+        then(onboardingService).should(never()).companyName(any(), any());
     }
 
     @Test

@@ -13,6 +13,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Propagation;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
@@ -85,6 +86,33 @@ class SimulationPersonaHesitationIntegrationTest extends AbstractIntegrationTest
                 .andExpect(jsonPath("$.hesitationAnswers[*].choice", contains("A", "B", "C")))
                 .andExpect(jsonPath("$.hesitationAnswers[0].date", is("2026-10-01")))
                 .andExpect(jsonPath("$.hesitationAnswers[0].options", contains("A", "B", "C")));
+    }
+
+    @Test
+    @DisplayName("직장인 페르소나에는 organizationType 이 company 로, 학생은 school 로 담긴다")
+    void persona_includes_organization_type() throws Exception {
+        // given: 이미 풀이 배정된 학생과 직장인 (카운터를 건드리지 않도록 풀을 미리 둔다)
+        User student = saveUser();
+        User worker = saveUser();
+        worker.joinAsCompanyMember();
+        ReflectionTestUtils.setField(student, "poolNumber", 13);
+        ReflectionTestUtils.setField(worker, "poolNumber", 100001);
+        userRepository.saveAll(List.of(student, worker));
+        grantSimulationAccess(student);
+        grantSimulationAccess(worker);
+
+        // when & then: 학생 페르소나
+        mockMvc.perform(get("/internal/v1/users/{userId}/persona", student.getId().toString())
+                        .param("date", DATE.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.organizationType", is("school")));
+
+        // when & then: 직장인 페르소나는 회사 구분과 직장인 풀 번호가 함께 간다
+        mockMvc.perform(get("/internal/v1/users/{userId}/persona", worker.getId().toString())
+                        .param("date", DATE.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.organizationType", is("company")))
+                .andExpect(jsonPath("$.poolNumber", is(100001)));
     }
 
     private void grantSimulationAccess(User user) {

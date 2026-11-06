@@ -2,10 +2,12 @@ package com.nidus.twinly.user.service;
 
 import com.nidus.twinly.common.jwt.JwtService;
 import com.nidus.twinly.legal.domain.PolicyKind;
+import com.nidus.twinly.legal.domain.RequiredPolicies;
 import com.nidus.twinly.legal.service.PolicyCatalog;
 import com.nidus.twinly.user.dto.result.UsersResult;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.user.repository.UserRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,6 +25,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 class UserServiceUnitTest {
@@ -38,6 +41,11 @@ class UserServiceUnitTest {
 
     @InjectMocks
     UserService userService;
+
+    @BeforeEach
+    void setUp() {
+        lenient().when(policyCatalog.loadRequiredPolicies(PolicyKind.PARALLEL_ENTRY)).thenReturn(new RequiredPolicies(List.of()));
+    }
 
     @Test
     @DisplayName("조회 결과가 limit 이하면 hasMore는 false이고 nextCursor는 null이다")
@@ -98,10 +106,10 @@ class UserServiceUnitTest {
     }
 
     @Test
-    @DisplayName("평행우주 입장 필수 약관의 최신 버전 id와 개수를 조회 조건으로 넘긴다")
+    @DisplayName("평행우주 입장 필수 약관의 인정 버전 id와 약관 개수를 조회 조건으로 넘긴다")
     void users_passes_required_parallel_entry_policies() {
         // given: 평행우주 입장 필수 약관 최신 버전이 2건
-        given(policyCatalog.loadRequiredPolicyIds(PolicyKind.PARALLEL_ENTRY)).willReturn(Set.of(7L, 8L));
+        given(policyCatalog.loadRequiredPolicies(PolicyKind.PARALLEL_ENTRY)).willReturn(new RequiredPolicies(List.of(Set.of(7L), Set.of(8L))));
         given(userRepository.findIdsAfterCursor(isNull(), eq(EntitlementReader.SIMULATION_ACCESS), any(), eq(Set.of(7L, 8L)), eq(2), eq(501)))
                 .willReturn(List.of(1L));
 

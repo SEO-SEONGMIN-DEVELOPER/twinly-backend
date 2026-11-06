@@ -62,7 +62,7 @@ class AuthSendFailureIntegrationTest extends AbstractIntegrationTest {
         anonSessionRepository.deleteAll();
         // 시드가 채워둔 조직·도메인을 지우지 않도록 이 테스트가 만든 것만 좁혀서 지운다
         jdbcTemplate.update("DELETE FROM organization_domains WHERE domain = ?", DOMAIN);
-        jdbcTemplate.update("DELETE FROM organizations WHERE name = ?", ORGANIZATION);
+        jdbcTemplate.update("DELETE FROM organizations WHERE type = 'SCHOOL' AND name = ?", ORGANIZATION);
     }
 
     @Test
@@ -137,9 +137,9 @@ class AuthSendFailureIntegrationTest extends AbstractIntegrationTest {
     }
 
     private void saveOrganization(String name, String domain) {
-        jdbcTemplate.update("INSERT INTO organizations (name) VALUES (?)", name);
+        jdbcTemplate.update("INSERT INTO organizations (name, type) VALUES (?, 'SCHOOL')", name);
         Long organizationId = jdbcTemplate.queryForObject(
-                "SELECT id FROM organizations WHERE name = ?", Long.class, name);
+                "SELECT id FROM organizations WHERE type = 'SCHOOL' AND name = ?", Long.class, name);
         jdbcTemplate.update("INSERT INTO organization_domains (organization_id, domain) VALUES (?, ?)",
                 organizationId, domain);
     }

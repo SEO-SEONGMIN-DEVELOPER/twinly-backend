@@ -90,7 +90,7 @@ class StudentIdSubmissionServiceUnitTest {
         // given: 학교 목록에 있는 학교, 현재 제출 없음, 쓰지 않은 key
         AnonSession anonSession = anonSession();
         given(anonSessionRepository.findWithLockById(ANON_SESSION_ID)).willReturn(Optional.of(anonSession));
-        given(organizationCatalog.findByName(ORGANIZATION)).willReturn(organization());
+        given(organizationCatalog.findSchoolByName(ORGANIZATION)).willReturn(organization());
         given(anonSessionStudentIdSubmissionRepository.findByAnonSessionIdAndReplacedAtIsNull(ANON_SESSION_ID)).willReturn(Optional.empty());
         given(anonSessionStudentIdSubmissionRepository.existsByUploadKey(ANON_KEY)).willReturn(false);
         given(studentIdPhotoStorage.copyToReview(eq(ANON_KEY), any())).willReturn("student-id/review/x");
@@ -117,7 +117,7 @@ class StudentIdSubmissionServiceUnitTest {
         AnonSessionStudentIdSubmission current = AnonSessionStudentIdSubmission.create(UUID.randomUUID(), ANON_SESSION_ID, ORGANIZATION, ANON_KEY, "student-id/review/old");
         UUID submissionId = current.getSubmissionId();
         given(anonSessionRepository.findWithLockById(ANON_SESSION_ID)).willReturn(Optional.of(anonSession()));
-        given(organizationCatalog.findByName(ORGANIZATION)).willReturn(organization());
+        given(organizationCatalog.findSchoolByName(ORGANIZATION)).willReturn(organization());
         given(anonSessionStudentIdSubmissionRepository.findByAnonSessionIdAndReplacedAtIsNull(ANON_SESSION_ID)).willReturn(Optional.of(current));
 
         // when: 같은 요청 재시도
@@ -136,7 +136,7 @@ class StudentIdSubmissionServiceUnitTest {
         // given: 이미 다른 사진으로 제출한 세션
         AnonSessionStudentIdSubmission current = AnonSessionStudentIdSubmission.create(UUID.randomUUID(), ANON_SESSION_ID, ORGANIZATION, "student-id/upload/anon-7/old", "student-id/review/old");
         given(anonSessionRepository.findWithLockById(ANON_SESSION_ID)).willReturn(Optional.of(anonSession()));
-        given(organizationCatalog.findByName(ORGANIZATION)).willReturn(organization());
+        given(organizationCatalog.findSchoolByName(ORGANIZATION)).willReturn(organization());
         given(anonSessionStudentIdSubmissionRepository.findByAnonSessionIdAndReplacedAtIsNull(ANON_SESSION_ID)).willReturn(Optional.of(current));
         given(anonSessionStudentIdSubmissionRepository.existsByUploadKey(ANON_KEY)).willReturn(false);
         given(studentIdPhotoStorage.copyToReview(eq(ANON_KEY), any())).willReturn("student-id/review/new");
@@ -155,7 +155,7 @@ class StudentIdSubmissionServiceUnitTest {
         // given: 이전 제출이 있고 S3 복사가 실패
         AnonSessionStudentIdSubmission current = AnonSessionStudentIdSubmission.create(UUID.randomUUID(), ANON_SESSION_ID, ORGANIZATION, "student-id/upload/anon-7/old", "student-id/review/old");
         given(anonSessionRepository.findWithLockById(ANON_SESSION_ID)).willReturn(Optional.of(anonSession()));
-        given(organizationCatalog.findByName(ORGANIZATION)).willReturn(organization());
+        given(organizationCatalog.findSchoolByName(ORGANIZATION)).willReturn(organization());
         given(anonSessionStudentIdSubmissionRepository.findByAnonSessionIdAndReplacedAtIsNull(ANON_SESSION_ID)).willReturn(Optional.of(current));
         given(anonSessionStudentIdSubmissionRepository.existsByUploadKey(ANON_KEY)).willReturn(false);
         willThrow(new IllegalStateException("S3 down")).given(studentIdPhotoStorage).copyToReview(eq(ANON_KEY), any());
@@ -172,7 +172,7 @@ class StudentIdSubmissionServiceUnitTest {
     void submitForAnonSession_reused_key_throws() {
         // given: 예전에 쓰고 교체된 key
         given(anonSessionRepository.findWithLockById(ANON_SESSION_ID)).willReturn(Optional.of(anonSession()));
-        given(organizationCatalog.findByName(ORGANIZATION)).willReturn(organization());
+        given(organizationCatalog.findSchoolByName(ORGANIZATION)).willReturn(organization());
         given(anonSessionStudentIdSubmissionRepository.findByAnonSessionIdAndReplacedAtIsNull(ANON_SESSION_ID)).willReturn(Optional.empty());
         given(anonSessionStudentIdSubmissionRepository.existsByUploadKey(ANON_KEY)).willReturn(true);
 

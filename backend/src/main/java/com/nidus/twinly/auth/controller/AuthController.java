@@ -40,12 +40,24 @@ public class AuthController {
     @ApiResponses({
             @ApiResponse(responseCode = "404", description = "VERIFICATION_NOT_FOUND"),
             @ApiResponse(responseCode = "410", description = "VERIFICATION_CODE_EXPIRED"),
-            @ApiResponse(responseCode = "422", description = "VERIFICATION_CODE_MISMATCH")
+            @ApiResponse(responseCode = "422", description = "VERIFICATION_CODE_MISMATCH, EMAIL_DOMAIN_NOT_SUPPORTED")
     })
     @PostMapping("/api/v1/auth/onboarding/email/verify")
     public void onboardingEmailVerify(@AuthenticationPrincipal AnonSessionSnapshot anonSessionSnapshot,
                                       @Valid @RequestBody AuthEmailVerifyRequest request) {
         authService.onboardingEmailVerify(anonSessionSnapshot, AuthEmailVerifyCommand.from(request));
+    }
+
+    @Operation(summary = "가입용 이메일 인증번호 검증 v2", description = "organizationType 이 company 이고 organizationName 이 null 이면 처음 보는 회사라 PUT /api/v1/onboarding/company-name 으로 회사명을 받아야 한다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "404", description = "VERIFICATION_NOT_FOUND"),
+            @ApiResponse(responseCode = "410", description = "VERIFICATION_CODE_EXPIRED"),
+            @ApiResponse(responseCode = "422", description = "VERIFICATION_CODE_MISMATCH, EMAIL_DOMAIN_NOT_SUPPORTED")
+    })
+    @PostMapping("/api/v2/auth/onboarding/email/verify")
+    public AuthOnboardingEmailVerifyV2Response onboardingEmailVerifyV2(@AuthenticationPrincipal AnonSessionSnapshot anonSessionSnapshot,
+                                                                       @Valid @RequestBody AuthEmailVerifyRequest request) {
+        return AuthOnboardingEmailVerifyV2Response.from(authService.onboardingEmailVerify(anonSessionSnapshot, AuthEmailVerifyCommand.from(request)));
     }
 
     @Operation(summary = "가입용 본인인증 발급")

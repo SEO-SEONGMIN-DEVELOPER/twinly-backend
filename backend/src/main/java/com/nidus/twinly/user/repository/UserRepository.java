@@ -1,6 +1,7 @@
 package com.nidus.twinly.user.repository;
 
 import com.nidus.twinly.common.domain.Gender;
+import com.nidus.twinly.organization.domain.OrganizationType;
 import com.nidus.twinly.schoolverification.domain.SchoolVerificationStatus;
 import com.nidus.twinly.user.entity.User;
 import jakarta.persistence.LockModeType;
@@ -61,12 +62,15 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("UPDATE User u SET u.purchasesSyncedAt = :syncedAt WHERE u.id = :userId")
     void markPurchasesSynced(@Param("userId") Long userId, @Param("syncedAt") Instant syncedAt);
 
+    @Query("SELECT u.organizationType FROM User u WHERE u.id = :userId")
+    Optional<OrganizationType> findOrganizationTypeById(@Param("userId") Long userId);
+
     @Modifying
     @Query("UPDATE User u SET u.poolNumber = :poolNumber WHERE u.id = :userId AND u.poolNumber IS NULL")
     int assignPoolNumber(@Param("userId") Long userId, @Param("poolNumber") int poolNumber);
 
     @Query("""
-            SELECT u.id AS id, u.gender AS gender
+            SELECT u.id AS id, u.gender AS gender, u.organizationType AS organizationType
             FROM User u
             WHERE u.id IN :ids
               AND u.isSeed = FALSE
@@ -155,8 +159,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
                     AND (e.expires_at IS NULL OR e.expires_at > :now)
               )
               AND :requiredPolicyCount = (
-                  SELECT COUNT(DISTINCT a.policy_id)
+                  SELECT COUNT(DISTINCT po.policy_name_id)
                   FROM agreements a
+                  JOIN policies po ON po.id = a.policy_id
                   WHERE a.user_id = u.id
                     AND a.revoked_at IS NULL
                     AND a.policy_id IN (:requiredPolicyIds)
@@ -179,5 +184,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
     interface PoolCandidateProjection {
         Long getId();
         Gender getGender();
+        OrganizationType getOrganizationType();
     }
 }

@@ -102,6 +102,7 @@ public class AdminMemberService {
         return organizationRepository.findAllByOrderByNameAsc().stream()
                 .map(Organization::getName)
                 .filter(name -> !StringUtils.hasText(keyword) || name.contains(keyword))
+                .distinct()
                 .limit(ORGANIZATION_SUGGESTION_LIMIT)
                 .toList();
     }

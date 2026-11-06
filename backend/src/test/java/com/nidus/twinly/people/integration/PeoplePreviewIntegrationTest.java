@@ -149,6 +149,33 @@ class PeoplePreviewIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("미리보기 조회: 학생과 직장인은 서로의 미리보기 후보에 들어가지 않는다")
+    void previews_excludes_other_organization_type() throws Exception {
+        // given: 학생인 나, 학생 후보 1명, 직장인 후보 2명
+        User me = participant(Gender.MALE, POOL, YESTERDAY);
+        participant(Gender.FEMALE, POOL, YESTERDAY);
+        User worker = participant(Gender.FEMALE, 100001, YESTERDAY);
+        worker.joinAsCompanyMember();
+        userRepository.saveAndFlush(worker);
+        User otherWorker = participant(Gender.MALE, 100001, YESTERDAY);
+        otherWorker.joinAsCompanyMember();
+        userRepository.saveAndFlush(otherWorker);
+
+        // when & then: 학생인 나에게는 학생 1명만
+        mockMvc.perform(get("/api/v1/people/previews")
+                        .header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.previews.length()").value(1));
+
+        // when & then: 직장인에게는 다른 직장인 1명만
+        mockMvc.perform(get("/api/v1/people/previews")
+                        .header("Authorization", bearer(otherWorker.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.previews.length()").value(1))
+                .andExpect(jsonPath("$.previews[0].gender").value("female"));
+    }
+
+    @Test
     @DisplayName("미리보기 조회: 현재 시즌 미참여자도 부를 수 있고, 참여자 중에서 양방향 차단을 빼고 고른다")
     void previews_non_participant_gets_participants() throws Exception {
         // given: 나는 비참여, 후보가 될 참여자 1명, 비참여자 1명, 나와 서로 차단한 참여자 2명

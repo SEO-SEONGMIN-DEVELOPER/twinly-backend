@@ -56,6 +56,12 @@ import java.time.format.DateTimeFormatter;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import com.nidus.twinly.organization.domain.OrganizationType;
+import java.util.List;
+import com.nidus.twinly.app.store.AppFeatureFlagStore;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
@@ -69,8 +75,12 @@ import static org.mockito.Mockito.never;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.hamcrest.Matchers.nullValue;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 
 class AuthIntegrationTest extends AbstractIntegrationTest {
+
+    private static final String COMPANY_SIGNUP_KEY = "app:feature:company-signup";
 
     @Autowired
     AnonSessionRepository anonSessionRepository;
@@ -119,6 +129,23 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    AppFeatureFlagStore appFeatureFlagStore;
+
+    @Autowired
+    StringRedisTemplate redisTemplate;
+
+    @BeforeEach
+    void registerTestDomainAsSchool() {
+        saveOrganization("테스트대학교", "test.com");
+    }
+
+    @AfterEach
+    void turnOffCompanySignup() {
+        appFeatureFlagStore.saveCompanySignupEnabled(false);
+        redisTemplate.delete(COMPANY_SIGNUP_KEY);
+    }
 
     @Test
     @DisplayName("온보딩 이메일 인증번호 발송: 실제 익명 세션 인증을 통과해 인증 세션이 DB에 생성되고 코드가 메일로 나간다")
@@ -689,7 +716,7 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("온보딩 이메일 인증 확인: 올바른 토큰·코드면 verifiedAt이 채워지고 익명 세션에 학교가 기록된다")
+    @DisplayName("온보딩 이메일 인증 확인 v1: 올바른 토큰·코드면 본문 없는 200이고, verifiedAt이 채워지고 익명 세션에 학교가 기록된다")
     void onboarding_email_verify_end_to_end() throws Exception {
         // given: 아직 인증되지 않은 EMAIL 인증 세션과, 그 도메인을 쓰는 학교를 실제 DB에 저장
         UUID anonToken = UUID.randomUUID();
@@ -707,7 +734,8 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
                         .content("""
                                 {"emailVerificationToken":"%s","code":"123456"}
                                 """.formatted(session.getVerificationToken())))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(content().string(""));
 
         // then: DB에 인증 완료 시각이 기록되고, 학교는 사용자 입력이 아니라 인증된 도메인으로 결정됨
         AnonSessionVerificationSession verified = anonSessionVerificationSessionRepository
@@ -927,9 +955,151 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
 
     /** 지정한 전화번호·이메일로 실제 users 행을 만든다 (블라인드 인덱스 해시 포함). */
     /** 가입 가능한 학교와 이메일 도메인을 직접 insert한다. (운영에서도 마이그레이션 SQL로 주입되는 카탈로그 데이터) */
+    @Test
+    @DisplayName("온보딩 이메일 인증번호 발송: 학교 목록에 없어도 개인 메일이 아닌 회사 도메인이면 인증 세션이 생기고 코드가 나간다")
+    void onboarding_email_send_with_company_domain_end_to_end() throws Exception {
+        appFeatureFlagStore.saveCompanySignupEnabled(true);
+        // given: 실제 익명 세션, 외부 메일 발송은 목으로 차단
+        UUID anonToken = UUID.randomUUID();
+        AnonSession anonSession = savedAnonSession(anonToken);
+        willDoNothing().given(sesService).send(anyString(), anyString(), anyString());
+
+        // when: 등록되지 않은 회사 도메인으로 발송 요청
+        mockMvc.perform(post("/api/v1/auth/onboarding/email/send")
+                        .header("Authorization", "Bearer " + anonToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"worker@twinly-company.co.kr"}
+                                """))
+                .andExpect(status().isOk());
+
+        // then: 인증 세션이 만들어지고 메일이 나간다
+        assertThat(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(anonSession.getId(), VerificationType.EMAIL))
+                .get().extracting(AnonSessionVerificationSession::getContact).isEqualTo("worker@twinly-company.co.kr");
+        then(sesService).should().send(eq("worker@twinly-company.co.kr"), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("온보딩 이메일 인증 확인 v2: 처음 보는 회사 도메인이면 company 와 null 회사명을 돌려주고 익명 세션 소속은 비운다")
+    void onboarding_email_verify_with_new_company_end_to_end() throws Exception {
+        appFeatureFlagStore.saveCompanySignupEnabled(true);
+        // given: 등록되지 않은 회사 도메인의 EMAIL 인증 세션
+        UUID anonToken = UUID.randomUUID();
+        AnonSession anonSession = savedAnonSession(anonToken);
+        AnonSessionVerificationSession session = anonSessionVerificationSessionRepository.save(
+                AnonSessionVerificationSession.create(VerificationType.EMAIL, anonSession.getId(),
+                        "worker@twinly-company.co.kr", "123456", Instant.now().plus(Duration.ofMinutes(5))));
+
+        // when: v2 경로로 인증 확인
+        mockMvc.perform(post("/api/v2/auth/onboarding/email/verify")
+                        .header("Authorization", "Bearer " + anonToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"emailVerificationToken":"%s","code":"123456"}
+                                """.formatted(session.getVerificationToken())))
+                // then: 앱이 회사명 입력 화면으로 갈 수 있게 종류와 null 회사명이 내려간다
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.organizationType").value("company"))
+                .andExpect(jsonPath("$.organizationName").value(nullValue()));
+        assertThat(anonSessionRepository.findById(anonSession.getId()).orElseThrow().getOrganization()).isNull();
+    }
+
+    @Test
+    @DisplayName("회원가입(직장인): 처음 보는 회사 도메인이면 입력한 회사명으로 회사가 등록되고, 같은 도메인 두 번째 가입자는 등록된 이름을 쓴다")
+    void signup_company_members_share_registered_company_end_to_end() throws Exception {
+        appFeatureFlagStore.saveCompanySignupEnabled(true);
+        // given: 같은 회사 도메인으로 이메일 인증을 마친 두 익명 세션. 둘 다 학번 없이 다른 회사명을 입력했다
+        UUID firstToken = UUID.randomUUID();
+        AnonSession first = companyAnonSession(firstToken, "company-first", "트윈리컴퍼니");
+        anonSessionIdentityVerificationRepository.save(verifiedIdentity(first.getId(), "01077770001", "ci-company-first"));
+        anonSessionVerificationSessionRepository.save(verifiedAnonSession(first.getId(), VerificationType.EMAIL, "first@twinly-company.co.kr"));
+        agreeRequiredPolicies(first.getId());
+
+        UUID secondToken = UUID.randomUUID();
+        AnonSession second = companyAnonSession(secondToken, "company-second", "다른이름");
+        anonSessionIdentityVerificationRepository.save(verifiedIdentity(second.getId(), "01077770002", "ci-company-second"));
+        anonSessionVerificationSessionRepository.save(verifiedAnonSession(second.getId(), VerificationType.EMAIL, "second@twinly-company.co.kr"));
+        agreeRequiredPolicies(second.getId());
+
+        // when: 두 사람이 차례로 가입
+        mockMvc.perform(post("/api/v1/auth/signup").header("Authorization", "Bearer " + firstToken))
+                .andExpect(status().isCreated());
+        mockMvc.perform(post("/api/v1/auth/signup").header("Authorization", "Bearer " + secondToken))
+                .andExpect(status().isCreated());
+
+        // then: 회사는 도메인 하나에 한 곳만, 첫 가입자가 입력한 이름으로 등록된다
+        assertThat(jdbcTemplate.queryForList("""
+                        SELECT o.name FROM organizations o JOIN organization_domains d ON d.organization_id = o.id
+                        WHERE d.domain = ? AND o.type = 'COMPANY'
+                        """, String.class, "twinly-company.co.kr"))
+                .containsExactly("트윈리컴퍼니");
+
+        // then: 두 사람 모두 직장인·같은 회사명·학번 없음으로 가입된다
+        for (String phone : List.of("01077770001", "01077770002")) {
+            User created = userRepository.findByPhoneNumberHash(blindIndexHasher.hash(phone)).orElseThrow();
+            assertThat(created.getOrganizationType()).isEqualTo(OrganizationType.COMPANY);
+            assertThat(created.getOrganization()).isEqualTo("트윈리컴퍼니");
+            assertThat(created.getAffiliationNumber()).isNull();
+            assertThat(created.getAffiliationNumberHash()).isNull();
+        }
+    }
+
+    @Test
+    @DisplayName("직장인 가입 스위치가 꺼져 있으면 회사 이메일 발송은 예전처럼 422 이고 인증 세션도 메일도 생기지 않는다")
+    void onboarding_email_send_with_company_domain_while_switch_off_returns_422() throws Exception {
+        // given: 직장인 가입이 꺼진 상태(기본값)와 실제 익명 세션
+        UUID anonToken = UUID.randomUUID();
+        AnonSession anonSession = savedAnonSession(anonToken);
+
+        // when: 회사 도메인으로 발송 요청
+        mockMvc.perform(post("/api/v1/auth/onboarding/email/send")
+                        .header("Authorization", "Bearer " + anonToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"worker@twinly-company.co.kr"}
+                                """))
+                // then: 직장인 화면이 없는 예전 앱이 마지막 가입 단계에서 막히지 않도록 첫 단계에서 거절한다
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value(ErrorCode.EMAIL_DOMAIN_NOT_SUPPORTED.name()));
+        assertThat(anonSessionVerificationSessionRepository.findByAnonSessionIdAndType(anonSession.getId(), VerificationType.EMAIL)).isEmpty();
+        then(sesService).should(never()).send(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("회원가입(학생): 등록된 학교 도메인이면 학생으로 가입되고 회사는 등록되지 않는다")
+    void signup_school_member_end_to_end() throws Exception {
+        // given: 등록된 학교 도메인으로 이메일 인증을 마친 익명 세션
+        saveOrganization("트윈리대학교", "nidus.ac.kr");
+        UUID anonToken = UUID.randomUUID();
+        AnonSession anonSession = onboardedAnonSession(anonToken, "school-member");
+        anonSessionIdentityVerificationRepository.save(verifiedIdentity(anonSession.getId(), "01077770003", "ci-school-member"));
+        anonSessionVerificationSessionRepository.save(verifiedAnonSession(anonSession.getId(), VerificationType.EMAIL, "student@nidus.ac.kr"));
+        agreeRequiredPolicies(anonSession.getId());
+
+        // when: 가입
+        mockMvc.perform(post("/api/v1/auth/signup").header("Authorization", "Bearer " + anonToken))
+                .andExpect(status().isCreated());
+
+        // then: 학생·학번 그대로 저장되고 새 회사 행은 없다
+        User created = userRepository.findByPhoneNumberHash(blindIndexHasher.hash("01077770003")).orElseThrow();
+        assertThat(created.getOrganizationType()).isEqualTo(OrganizationType.SCHOOL);
+        assertThat(created.getAffiliationNumber()).isEqualTo("20250001");
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM organizations WHERE type = 'COMPANY'", Integer.class)).isZero();
+    }
+
+    private AnonSession companyAnonSession(UUID anonToken, String nickname, String companyName) {
+        AnonSession anonSession = AnonSession.create(anonToken, Instant.now().plus(Duration.ofDays(1)));
+        anonSession.changeNickname(nickname);
+        anonSession.changeFamilyName("홍");
+        anonSession.changeGivenName("길동");
+        anonSession.changeOrganization(companyName);
+        anonSession.changeAffiliation("경영학과");
+        return anonSessionRepository.save(anonSession);
+    }
+
     private void saveOrganization(String name, String domain) {
-        jdbcTemplate.update("INSERT INTO organizations (name) VALUES (?)", name);
-        Long organizationId = jdbcTemplate.queryForObject("SELECT id FROM organizations WHERE name = ?", Long.class, name);
+        jdbcTemplate.update("INSERT INTO organizations (name, type) VALUES (?, 'SCHOOL')", name);
+        Long organizationId = jdbcTemplate.queryForObject("SELECT id FROM organizations WHERE type = 'SCHOOL' AND name = ?", Long.class, name);
         jdbcTemplate.update("INSERT INTO organization_domains (organization_id, domain) VALUES (?, ?)", organizationId, domain);
     }
 

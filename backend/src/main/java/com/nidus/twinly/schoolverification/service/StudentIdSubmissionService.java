@@ -52,7 +52,7 @@ public class StudentIdSubmissionService {
         AnonSession anonSession = anonSessionRepository.findWithLockById(anonSessionId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_ANON_SESSION));
 
-        Organization organization = organizationCatalog.findByName(organizationName);
+        Organization organization = organizationCatalog.findSchoolByName(organizationName);
 
         AnonSessionStudentIdSubmission current = anonSessionStudentIdSubmissionRepository
                 .findByAnonSessionIdAndReplacedAtIsNull(anonSessionId)

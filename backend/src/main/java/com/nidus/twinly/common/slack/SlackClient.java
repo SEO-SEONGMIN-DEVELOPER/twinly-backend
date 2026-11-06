@@ -45,6 +45,10 @@ public class SlackClient {
         send(studentIdWebhookUri, text);
     }
 
+    public void sendCompanyRegisteredAlert(String text) {
+        send(studentIdWebhookUri, text);
+    }
+
     private void send(URI webhookUri, String text) {
         try {
             restClient.post()

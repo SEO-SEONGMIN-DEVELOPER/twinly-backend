@@ -7,7 +7,6 @@ import com.nidus.twinly.relationship.entity.Relationship;
 import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.time.KstTimes;
 import com.nidus.twinly.common.web.ErrorCode;
-import com.nidus.twinly.purchase.entity.PoolCounter;
 import com.nidus.twinly.purchase.entity.UserEntitlement;
 import com.nidus.twinly.purchase.reader.EntitlementReader;
 import com.nidus.twinly.purchase.repository.PoolCounterRepository;
@@ -47,6 +46,8 @@ class SeasonAdminIntegrationTest extends AbstractIntegrationTest {
 
     private static final String ADMIN_SEASON_PATH = "/admin/season";
     private static final String RESERVATION_PATH = "/admin/season/reservation";
+    private static final int SCHOOL_POOL_COUNTER_ID = 1;
+    private static final int COMPANY_POOL_COUNTER_ID = 2;
 
     @Autowired
     SeasonRepository seasonRepository;
@@ -342,7 +343,43 @@ class SeasonAdminIntegrationTest extends AbstractIntegrationTest {
                 .allSatisfy(user -> assertThat(userRepository.findById(user.getId()).orElseThrow().getPoolNumber()).isEqualTo(13));
         assertThat(userRepository.findById(paidWithoutConsent.getId()).orElseThrow().getPoolNumber()).isNull();
         assertThat(userRepository.findById(seed.getId()).orElseThrow().getPoolNumber()).isEqualTo(3);
-        assertThat(poolCounterRepository.findById(PoolCounter.SINGLETON_ID).orElseThrow().getAssignedCount()).isEqualTo(3);
+        assertThat(poolCounterRepository.findById(SCHOOL_POOL_COUNTER_ID).orElseThrow().getAssignedCount()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("풀 재배정: 학생은 13번부터, 직장인은 100001번부터 따로 배정해 두 회원 구분이 같은 풀에 섞이지 않는다")
+    void reassignPools_separates_school_and_company_members_end_to_end() throws Exception {
+        // given: 활성 시즌과 대상 학생 2명·직장인 2명
+        seasonRepository.save(Season.create(Instant.parse("2026-01-01T00:00:00Z"), Instant.parse("2027-01-01T00:00:00Z")));
+        User student1 = eligibleUser(Gender.MALE, 99);
+        User student2 = eligibleUser(Gender.FEMALE, 99);
+        User worker1 = eligibleUser(Gender.MALE, 99);
+        User worker2 = eligibleUser(Gender.FEMALE, 99);
+        worker1.joinAsCompanyMember();
+        worker2.joinAsCompanyMember();
+        entityManager.flush();
+
+        // when: 재배정
+        var result = mockMvc.perform(post("/admin/season/pools/reassign").header("X-Admin-Token", ADMIN_TOKEN));
+
+        // then: 응답에 학생 풀과 직장인 풀이 따로 담긴다
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.assignedCount").value(4))
+                .andExpect(jsonPath("$.pools[0].poolNumber").value(13))
+                .andExpect(jsonPath("$.pools[0].memberCount").value(2))
+                .andExpect(jsonPath("$.pools[1].poolNumber").value(100001))
+                .andExpect(jsonPath("$.pools[1].memberCount").value(2));
+
+        entityManager.flush();
+        entityManager.clear();
+
+        // then: DB 에서도 회원 구분별 풀에 들어가고, 카운터도 각자 인원으로 맞춰진다
+        assertThat(List.of(student1, student2))
+                .allSatisfy(user -> assertThat(userRepository.findById(user.getId()).orElseThrow().getPoolNumber()).isEqualTo(13));
+        assertThat(List.of(worker1, worker2))
+                .allSatisfy(user -> assertThat(userRepository.findById(user.getId()).orElseThrow().getPoolNumber()).isEqualTo(100001));
+        assertThat(poolCounterRepository.findById(SCHOOL_POOL_COUNTER_ID).orElseThrow().getAssignedCount()).isEqualTo(2);
+        assertThat(poolCounterRepository.findById(COMPANY_POOL_COUNTER_ID).orElseThrow().getAssignedCount()).isEqualTo(2);
     }
 
     @Test
@@ -383,7 +420,7 @@ class SeasonAdminIntegrationTest extends AbstractIntegrationTest {
         // then: 다시 섞이지 않아 나중 유저 번호도 그대로이고, 카운터도 그대로다
         assertThat(userRepository.findById(first.getId()).orElseThrow().getPoolNumber()).isEqualTo(13);
         assertThat(userRepository.findById(second.getId()).orElseThrow().getPoolNumber()).isEqualTo(77);
-        assertThat(poolCounterRepository.findById(PoolCounter.SINGLETON_ID).orElseThrow().getAssignedCount()).isEqualTo(1);
+        assertThat(poolCounterRepository.findById(SCHOOL_POOL_COUNTER_ID).orElseThrow().getAssignedCount()).isEqualTo(1);
     }
 
     @Test

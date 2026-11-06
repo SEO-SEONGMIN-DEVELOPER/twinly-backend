@@ -5,6 +5,7 @@ import com.nidus.twinly.common.crypto.EncryptedStringConverter;
 import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.domain.MobileCarrier;
 import com.nidus.twinly.common.domain.NationalInfo;
+import com.nidus.twinly.organization.domain.OrganizationType;
 import com.nidus.twinly.schoolverification.domain.SchoolVerificationMethod;
 import com.nidus.twinly.schoolverification.domain.SchoolVerificationStatus;
 import jakarta.persistence.*;
@@ -67,6 +68,10 @@ public class User {
 
     @Column(columnDefinition = "TEXT")
     private String organizationHash;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private OrganizationType organizationType = OrganizationType.SCHOOL;
 
     @Convert(converter = EncryptedStringConverter.class)
     @Column(columnDefinition = "TEXT")
@@ -227,6 +232,10 @@ public class User {
 
     public boolean isSchoolVerificationApproved() {
         return schoolVerificationStatus == SchoolVerificationStatus.APPROVED;
+    }
+
+    public void joinAsCompanyMember() {
+        this.organizationType = OrganizationType.COMPANY;
     }
 
     public void startStudentIdVerification() {

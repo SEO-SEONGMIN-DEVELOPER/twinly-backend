@@ -1,6 +1,7 @@
 package com.nidus.twinly.simulation.dto.result;
 
 import com.nidus.twinly.common.domain.Gender;
+import com.nidus.twinly.organization.domain.OrganizationType;
 import com.nidus.twinly.common.persona.PersonaDimension;
 
 import java.time.LocalDate;
@@ -15,6 +16,7 @@ public record SimulationPersonaResult(
         String nickname,
         Gender gender,
         String organization,
+        OrganizationType organizationType,
         String affiliation,
         LocalDate birthDate,
         Map<PersonaDimension, List<String>> personaElements,

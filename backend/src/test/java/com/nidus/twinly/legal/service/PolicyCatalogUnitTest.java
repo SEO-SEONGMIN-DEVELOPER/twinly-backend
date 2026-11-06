@@ -1,6 +1,8 @@
 package com.nidus.twinly.legal.service;
 
+import com.nidus.twinly.legal.config.LegalProperties;
 import com.nidus.twinly.legal.domain.PolicyKind;
+import com.nidus.twinly.legal.domain.RequiredPolicies;
 import com.nidus.twinly.legal.entity.PolicyName;
 import com.nidus.twinly.legal.repository.PolicyRepository.PolicySummary;
 import com.nidus.twinly.support.TestPolicySummary;
@@ -148,6 +150,66 @@ class PolicyCatalogUnitTest {
 
         // then: 고지용 정책은 동의 기록이 생길 수 없으므로 검사 대상에서 빠지고 동의 약관만 남는다
         assertThat(result).containsExactly(101L);
+    }
+
+    @Test
+    @DisplayName("최소 버전이 설정된 필수 약관은 최소 버전부터 최신 버전까지를 모두 인정한다")
+    void loadRequiredPolicies_accepts_from_minimum_version() {
+        // given: 실신원 약관 1.1·1.2·1.3 이 시행 중이고 최소 버전이 1.2
+        PolicyCatalog catalog = catalogWithMinimumVersions(Map.of("thirdPartyRealIdentityDisclosure", "1.2"));
+        givenRealIdentityVersions();
+
+        // when: 평행우주 입장 필수 약관 조회
+        RequiredPolicies result = catalog.loadRequiredPolicies(PolicyKind.PARALLEL_ENTRY);
+
+        // then: 1.1 은 빠지고 1.2·1.3 이 한 묶음으로 인정된다
+        assertThat(result.acceptedPolicyIdGroups()).containsExactly(Set.of(202L, 203L));
+        assertThat(result.count()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("최소 버전이 없거나 설정한 버전이 없으면 최신 버전만 인정한다")
+    void loadRequiredPolicies_without_minimum_accepts_latest_only() {
+        // given: 최소 버전으로 존재하지 않는 9.9 가 설정됨
+        PolicyCatalog catalog = catalogWithMinimumVersions(Map.of("thirdPartyRealIdentityDisclosure", "9.9"));
+        givenRealIdentityVersions();
+
+        // when: 평행우주 입장 필수 약관 조회
+        RequiredPolicies result = catalog.loadRequiredPolicies(PolicyKind.PARALLEL_ENTRY);
+
+        // then: 잘못된 설정으로 입장 조건이 느슨해지지 않고 최신 1.3 만 인정된다
+        assertThat(result.acceptedPolicyIdGroups()).containsExactly(Set.of(203L));
+    }
+
+    @Test
+    @DisplayName("최신 버전이 필수가 아니면 그 약관은 필수 묶음에서 빠진다")
+    void loadRequiredPolicies_excludes_name_whose_latest_is_optional() {
+        // given: 최신 버전이 선택 동의로 바뀐 약관
+        PolicyCatalog catalog = catalogWithMinimumVersions(Map.of());
+        given(policyNameRepository.findAllByKindAndIsDeprecatedFalseOrderByIdAsc(PolicyKind.PARALLEL_ENTRY))
+                .willReturn(List.of(policyName(1L, "thirdPartyRealIdentityDisclosure", true)));
+        given(policyRepository.findAllProjectedByPolicyNameIdIn(List.of(1L))).willReturn(List.of(
+                policy(201L, 1L, "1.1", Instant.parse("2026-09-16T15:00:00Z")),
+                new TestPolicySummary(202L, 1L, "1.2", false, Instant.parse("2026-10-22T15:00:00Z"))));
+
+        // when & then: 필수 약관이 없으므로 누구나 만족한다
+        RequiredPolicies result = catalog.loadRequiredPolicies(PolicyKind.PARALLEL_ENTRY);
+        assertThat(result.count()).isZero();
+        assertThat(result.isSatisfiedBy(List.of())).isTrue();
+    }
+
+    private void givenRealIdentityVersions() {
+        given(policyNameRepository.findAllByKindAndIsDeprecatedFalseOrderByIdAsc(PolicyKind.PARALLEL_ENTRY)).willReturn(List.of(
+                policyName(1L, "thirdPartyRealIdentityDisclosure", true),
+                policyName(2L, "paidServiceRefundPolicy", false)));
+        given(policyRepository.findAllProjectedByPolicyNameIdIn(List.of(1L))).willReturn(List.of(
+                policy(201L, 1L, "1.1", Instant.parse("2026-09-16T15:00:00Z")),
+                policy(202L, 1L, "1.2", Instant.parse("2026-10-22T15:00:00Z")),
+                policy(203L, 1L, "1.3", Instant.parse("2026-11-01T15:00:00Z"))));
+    }
+
+    private PolicyCatalog catalogWithMinimumVersions(Map<String, String> minimumVersions) {
+        return new PolicyCatalog(policyRepository, policyNameRepository, new LegalProperties("https://trytwinly.com", minimumVersions));
     }
 
     private PolicyName policyName(Long id, String identifier, boolean requiresAgreement) {

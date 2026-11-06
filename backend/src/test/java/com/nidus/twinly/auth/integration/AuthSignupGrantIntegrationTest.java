@@ -47,6 +47,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.BeforeEach;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -66,6 +67,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class AuthSignupGrantIntegrationTest extends AbstractIntegrationTest {
+
+    private static final String TEST_SCHOOL = "선착순테스트대학교";
+    private static final String TEST_DOMAIN = "test.com";
 
     private static final String NICKNAME_PREFIX = "grant-signup-";
     private static final int ROUNDS = 3;
@@ -109,9 +113,17 @@ class AuthSignupGrantIntegrationTest extends AbstractIntegrationTest {
     private final List<Long> anonSessionIds = new CopyOnWriteArrayList<>();
     private final List<Long> otherUserIds = new ArrayList<>();
 
+    @BeforeEach
+    void registerTestDomainAsSchool() {
+        // test.com 이메일을 학생 가입으로 다루기 위해 학교 도메인으로 등록한다 (롤백이 없으므로 cleanUp 에서 지운다)
+        jdbcTemplate.update("INSERT INTO organizations (name, type) VALUES (?, 'SCHOOL')", TEST_SCHOOL);
+        Long organizationId = jdbcTemplate.queryForObject("SELECT id FROM organizations WHERE type = 'SCHOOL' AND name = ?", Long.class, TEST_SCHOOL);
+        jdbcTemplate.update("INSERT INTO organization_domains (organization_id, domain) VALUES (?, ?)", organizationId, TEST_DOMAIN);
+    }
+
     @AfterEach
     void cleanUp() {
-        // 롤백이 없으므로 직접 지운다. 순서는 FK 의존의 역방향(부여·인증·약관·토큰 → users), 카운터는 마이그레이션 초기값으로
+        // 롤백이 없으므로 직접 지운다. 순서는 FK 의존의 역방향(부여·인증·약관·토큰 → users, 도메인 → 학교), 카운터는 마이그레이션 초기값으로
         List<Long> userIds = new ArrayList<>(jdbcTemplate.queryForList(
                 "SELECT id FROM users WHERE nickname LIKE ?", Long.class, NICKNAME_PREFIX + "%"));
         userIds.addAll(otherUserIds);
@@ -129,6 +141,8 @@ class AuthSignupGrantIntegrationTest extends AbstractIntegrationTest {
             jdbcTemplate.update("DELETE FROM anon_session_verification_sessions WHERE anon_session_id = ?", anonSessionId);
             jdbcTemplate.update("DELETE FROM anon_sessions WHERE id = ?", anonSessionId);
         }
+        jdbcTemplate.update("DELETE FROM organization_domains WHERE domain = ?", TEST_DOMAIN);
+        jdbcTemplate.update("DELETE FROM organizations WHERE type = 'SCHOOL' AND name = ?", TEST_SCHOOL);
         setAssignedCount(Gender.MALE, 0);
         setAssignedCount(Gender.FEMALE, 0);
 

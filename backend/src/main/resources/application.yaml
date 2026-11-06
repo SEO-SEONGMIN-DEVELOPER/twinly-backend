@@ -160,6 +160,8 @@ anon:
 
 legal:
   base-url: https://trytwinly.com
+  minimum-versions:
+    "[thirdPartyRealIdentityDisclosure]": "1.2"
 
 parallel:
   relation-thresholds:

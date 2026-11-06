@@ -19,7 +19,7 @@ public class AdminBatchCostService {
     public AdminBatchCostResult batchCosts() {
         return AdminBatchCostResult.from(
                 simulationBatchCostClient.fetch(),
-                adminSimulationGroupReader.participantGenderCounts(policyCatalog.loadRequiredPolicyIds(PolicyKind.PARALLEL_ENTRY))
+                adminSimulationGroupReader.participantGenderCounts(policyCatalog.loadRequiredPolicies(PolicyKind.PARALLEL_ENTRY))
         );
     }
 }
