@@ -184,6 +184,30 @@ class PeopleIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("사람 목록 조회: 지난 시즌 인연을 다시 만나면 씬 수는 현재 시즌 씬만 센다")
+    void people_counts_only_current_season_scenes_of_returning_partner() throws Exception {
+        // given: 현재 시즌이 DAY_2 에 시작했고, 같은 상대와 지난 시즌 씬 2개·현재 시즌 씬 1개가 있음
+        seasonRepository.save(Season.create(KstTimes.toInstant(DAY_2.atStartOfDay()), Instant.parse("2027-01-01T00:00:00Z")));
+        User me = saveUser();
+        User partner = saveUser();
+        saveRelationship(me.getId(), partner.getId(), DAY_1, 30, "{}");
+        saveRelationship(me.getId(), partner.getId(), DAY_2, 50, "{}");
+        saveScenePartner(saveScene(me.getId(), DAY_1, "v1", "카페", "카페에서 시간을 보냈다", null).getId(), partner.getId());
+        saveScenePartner(saveScene(me.getId(), DAY_1, "v1", "공원", "공원에서 시간을 보냈다", null).getId(), partner.getId());
+        saveScenePartner(saveScene(me.getId(), DAY_2, "v1", "서점", "서점에서 시간을 보냈다", null).getId(), partner.getId());
+
+        // when: 사람 목록 조회
+        var result = mockMvc.perform(get("/api/v1/people")
+                .header("Authorization", bearer(me.getId())));
+
+        // then: 씬 수에는 현재 시즌 씬 1개만 잡힌다
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.people.length()").value(1))
+                .andExpect(jsonPath("$.people[0].userId").value(partner.getId().toString()))
+                .andExpect(jsonPath("$.people[0].sceneElementCount").value(1));
+    }
+
+    @Test
     @DisplayName("사람 목록 조회: 이전 회차 기록이 시즌 시작 뒤 시각이어도 새 시즌 인연으로 치지 않는다")
     void people_excludes_previous_round_relationship_past_midnight() throws Exception {
         // given: 현재 시즌이 DAY_2 에 시작했고, DAY_1 회차 기록의 시각이 자정을 넘겨 DAY_2 새벽임

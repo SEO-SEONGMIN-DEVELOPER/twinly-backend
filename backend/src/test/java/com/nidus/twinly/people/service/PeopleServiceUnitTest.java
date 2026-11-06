@@ -195,7 +195,7 @@ class PeopleServiceUnitTest {
                 .willReturn(List.of(match(5L, ME, 10L)));
         given(chatRoomRepository.findAllByMatchIdIn(List.of(5L)))
                 .willReturn(List.of(chatRoom(7L, 5L)));
-        given(scenePartnerRepository.countScenesByUserIdAndPartnerUserIdIn(eq(ME), eq(List.of(10L, 20L)), any(LocalDateTime.class)))
+        given(scenePartnerRepository.countScenesByUserIdAndPartnerUserIdIn(eq(ME), eq(List.of(10L, 20L)), isNull(), any(LocalDate.class), any(LocalDateTime.class)))
                 .willReturn(List.of(sceneCount(10L, 3L)));
         given(encounterRepository.findAllByUserIdAndPartnerUserIdIn(ME, List.of(10L, 20L)))
                 .willReturn(List.of(encounter(9L, ME, 10L)));

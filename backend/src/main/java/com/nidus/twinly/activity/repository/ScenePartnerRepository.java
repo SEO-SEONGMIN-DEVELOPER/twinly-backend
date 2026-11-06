@@ -29,11 +29,16 @@ public interface ScenePartnerRepository extends JpaRepository<ScenePartner, Long
             FROM scene_partners sp
             JOIN scenes s 
                 ON s.id = sp.scene_id
-            WHERE s.user_id = :userId AND sp.user_id IN (:partnerUserIds) AND s.ends_at <= :now
+            WHERE s.user_id = :userId
+              AND sp.user_id IN (:partnerUserIds)
+              AND (s.season_id = :seasonId OR (s.season_id IS NULL AND s.date >= :seasonStartDate))
+              AND s.ends_at <= :now
             GROUP BY sp.user_id
             """, nativeQuery = true)
     List<SceneCountProjection> countScenesByUserIdAndPartnerUserIdIn(@Param("userId") Long userId,
                                                                @Param("partnerUserIds") List<Long> partnerUserIds,
+                                                               @Param("seasonId") Long seasonId,
+                                                               @Param("seasonStartDate") LocalDate seasonStartDate,
                                                                @Param("now") LocalDateTime now);
 
     @Query(value = """
