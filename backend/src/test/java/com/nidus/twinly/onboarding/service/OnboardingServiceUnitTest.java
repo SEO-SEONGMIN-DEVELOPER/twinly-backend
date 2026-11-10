@@ -1,6 +1,7 @@
 package com.nidus.twinly.onboarding.service;
 
 import com.nidus.twinly.anon.dto.snapshot.AnonSessionSnapshot;
+import com.nidus.twinly.app.service.AppFeatureFlagService;
 import com.nidus.twinly.anon.entity.AnonSession;
 import com.nidus.twinly.anon.entity.AnonSessionAgreement;
 import com.nidus.twinly.anon.entity.AnonSessionPersonaElement;
@@ -158,6 +159,9 @@ class OnboardingServiceUnitTest {
 
     @Mock
     OrganizationCatalog organizationCatalog;
+
+    @Mock
+    AppFeatureFlagService appFeatureFlagService;
 
     @Mock
     OrganizationRepository organizationRepository;
@@ -356,6 +360,21 @@ class OnboardingServiceUnitTest {
         // then: 앱이 도메인을 자동 입력할 수 있도록 이름과 도메인 전체가 함께 나감
         assertThat(result.organizations()).containsExactly(
                 new OnboardingOrganizationsItemResult("트윈리대학교", List.of("nidus.ac.kr", "grad.nidus.ac.kr")));
+    }
+
+    @Test
+    @DisplayName("학교 목록 조회는 직장인 가입 스위치 값을 그대로 함께 반환한다")
+    void organizations_returns_company_signup_switch() {
+        // given: 등록된 학교 없음 + 직장인 가입 스위치 켜짐
+        given(organizationRepository.findAllByTypeOrderByNameAsc(OrganizationType.SCHOOL)).willReturn(List.of());
+        given(organizationDomainRepository.findAll()).willReturn(List.of());
+        given(appFeatureFlagService.companySignupEnabled()).willReturn(true);
+
+        // when: 학교 목록 조회
+        OnboardingOrganizationsResult result = onboardingService.organizations();
+
+        // then: 앱이 대학생·직장인 선택 단계를 보일 수 있도록 스위치 값이 나감
+        assertThat(result.companySignupEnabled()).isTrue();
     }
 
     @Test

@@ -9,6 +9,7 @@ import com.nidus.twinly.anon.repository.AnonSessionAgreementRepository;
 import com.nidus.twinly.anon.repository.AnonSessionPersonaElementRepository;
 import com.nidus.twinly.anon.repository.AnonSessionPhotoRepository;
 import com.nidus.twinly.anon.repository.AnonSessionRepository;
+import com.nidus.twinly.app.service.AppFeatureFlagService;
 import com.nidus.twinly.auth.entity.AnonSessionIdentityVerification;
 import com.nidus.twinly.auth.entity.AnonSessionVerificationSession;
 import com.nidus.twinly.auth.repository.AnonSessionIdentityVerificationRepository;
@@ -75,6 +76,7 @@ public class OnboardingService {
     private final PresignService presignService;
     private final PhotoCommitService photoCommitService;
     private final OrganizationCatalog organizationCatalog;
+    private final AppFeatureFlagService appFeatureFlagService;
 
     private final AnonSessionRepository anonSessionRepository;
     private final AnonSessionVerificationSessionRepository anonSessionVerificationSessionRepository;
@@ -354,7 +356,7 @@ public class OnboardingService {
                 ))
                 .toList();
 
-        return new OnboardingOrganizationsResult(organizations, List.of());
+        return new OnboardingOrganizationsResult(organizations, List.of(), appFeatureFlagService.companySignupEnabled());
     }
 
     public OnboardingAffiliationsResult affiliations(AnonSessionSnapshot anonSessionSnapshot) {

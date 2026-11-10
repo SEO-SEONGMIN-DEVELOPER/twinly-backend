@@ -1576,6 +1576,50 @@ class AuthServiceUnitTest {
     }
 
     @Test
+    @DisplayName("회원가입: 직장인은 학과를 입력하지 않아도 학과 없이 가입된다")
+    void signup_company_member_without_affiliation() {
+        // given: 등록된 회사 도메인을 인증했고 학과·학번을 입력하지 않은 익명 세션
+        givenSignupReady();
+        AnonSession anonSession = onboardedAnonSession();
+        anonSession.changeAffiliation(null);
+        anonSession.changeAffiliationNumber(null);
+        given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(anonSession));
+        given(organizationCatalog.resolveEmail(EMAIL)).willReturn(EmailOrganization.registered("test.com", companyOrganization("트윈리컴퍼니")));
+        given(policyCatalog.loadRequiredPolicyIds(PolicyKind.ONBOARDING)).willReturn(Set.of(REQUIRED_POLICY_ID));
+        given(anonSessionAgreementRepository.findAllByAnonSessionId(ANON_SESSION_ID)).willReturn(List.of(agreement(REQUIRED_POLICY_ID)));
+
+        // when: 회원가입
+        authService.signup(SNAPSHOT);
+
+        // then: 학과와 해시가 비어 있는 직장인으로 저장된다
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        then(userRepository).should().save(userCaptor.capture());
+        User created = userCaptor.getValue();
+        assertThat(created.getOrganizationType()).isEqualTo(OrganizationType.COMPANY);
+        assertThat(created.getAffiliation()).isNull();
+        assertThat(created.getAffiliationHash()).isNull();
+    }
+
+    @Test
+    @DisplayName("회원가입: 직장인이 학과를 입력해 두었어도 학과는 저장하지 않는다")
+    void signup_company_member_drops_affiliation() {
+        // given: 등록된 회사 도메인을 인증한 익명 세션에 학과가 남아 있음
+        givenSignupReady();
+        given(organizationCatalog.resolveEmail(EMAIL)).willReturn(EmailOrganization.registered("test.com", companyOrganization("트윈리컴퍼니")));
+        given(policyCatalog.loadRequiredPolicyIds(PolicyKind.ONBOARDING)).willReturn(Set.of(REQUIRED_POLICY_ID));
+        given(anonSessionAgreementRepository.findAllByAnonSessionId(ANON_SESSION_ID)).willReturn(List.of(agreement(REQUIRED_POLICY_ID)));
+
+        // when: 회원가입
+        authService.signup(SNAPSHOT);
+
+        // then: 학과와 해시는 비어 있다
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        then(userRepository).should().save(userCaptor.capture());
+        assertThat(userCaptor.getValue().getAffiliation()).isNull();
+        assertThat(userCaptor.getValue().getAffiliationHash()).isNull();
+    }
+
+    @Test
     @DisplayName("회원가입: 회사명을 입력하기 전에 다른 사람이 같은 도메인을 등록했으면 등록된 회사 이름으로 가입한다")
     void signup_company_member_uses_registered_name_when_domain_registered_meanwhile() {
         // given: 인증 당시엔 처음 보는 도메인이라 회사명이 비어 있었지만, 지금은 등록된 회사가 있음
@@ -1626,6 +1670,24 @@ class AuthServiceUnitTest {
         given(organizationCatalog.resolveEmail(EMAIL)).willReturn(EmailOrganization.registered("test.com", organization("트윈리대학교")));
 
         // when & then: 학생은 학번이 계속 필수다
+        assertThatThrownBy(() -> authService.signup(SNAPSHOT))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PROFILE_NOT_COMPLETED);
+        then(userRepository).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("회원가입: 학생이 학과를 입력하지 않았으면 PROFILE_NOT_COMPLETED 예외가 발생한다")
+    void signup_school_member_without_affiliation_throws() {
+        // given: 학교 이메일을 인증했지만 학과가 비어 있는 익명 세션
+        givenVerifiedIdentityAndEmail();
+        AnonSession anonSession = onboardedAnonSession();
+        anonSession.changeAffiliation(null);
+        given(anonSessionRepository.findById(ANON_SESSION_ID)).willReturn(Optional.of(anonSession));
+        given(organizationCatalog.resolveEmail(EMAIL)).willReturn(EmailOrganization.registered("test.com", organization("트윈리대학교")));
+
+        // when & then: 학생은 학과가 계속 필수다
         assertThatThrownBy(() -> authService.signup(SNAPSHOT))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
