@@ -68,6 +68,9 @@
         <mxCell id="api-c" value="" style="sketch=0;outlineConnect=0;gradientColor=none;fillColor=#ED7100;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.ec2;" vertex="1" parent="1">
           <mxGeometry x="745" y="845" width="60" height="60" as="geometry" />
         </mxCell>
+        <mxCell id="int-alb" value="" style="sketch=0;outlineConnect=0;gradientColor=none;fillColor=#8C4FFF;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.application_load_balancer;" vertex="1" parent="1">
+          <mxGeometry x="900" y="845" width="60" height="60" as="geometry" />
+        </mxCell>
 
         <mxCell id="sn-ai-a" value="private subnet — ai" style="html=1;whiteSpace=wrap;container=1;collapsible=0;pointerEvents=0;fillColor=#FFF4EC;strokeColor=#ED7100;dashed=1;verticalAlign=top;align=left;spacingLeft=12;spacingTop=4;fontColor=#B15200;fontSize=12;" vertex="1" parent="1">
           <mxGeometry x="145" y="990" width="360" height="150" as="geometry" />
@@ -176,10 +179,13 @@
             <Array as="points"><mxPoint x="885" y="430" /><mxPoint x="650" y="430" /><mxPoint x="650" y="345" /></Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="e-aic-nat" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#ED7100;strokeWidth=2;endArrow=blockThin;endFill=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="ai-c" target="nat-c">
+        <mxCell id="e-aic-intalb" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#ED7100;strokeWidth=2;endArrow=blockThin;endFill=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="ai-c" target="int-alb">
           <mxGeometry relative="1" as="geometry">
-            <Array as="points"><mxPoint x="910" y="790" /><mxPoint x="885" y="790" /></Array>
+            <Array as="points"><mxPoint x="1000" y="1055" /><mxPoint x="1000" y="875" /></Array>
           </mxGeometry>
+        </mxCell>
+        <mxCell id="e-intalb-apic" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#ED7100;strokeWidth=2;endArrow=blockThin;endFill=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="int-alb" target="api-c">
+          <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="e-apia-rds" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#1A73E8;strokeWidth=2;endArrow=blockThin;endFill=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="api-a" target="rds">
           <mxGeometry relative="1" as="geometry">
@@ -267,6 +273,9 @@
         <mxCell id="lb-api-c" value="API 서버&lt;br&gt;&lt;font color=&quot;#5A6C7D&quot; style=&quot;font-size:11px&quot;&gt;Spring Boot · EC2 t4g&lt;/font&gt;" style="text;html=1;whiteSpace=wrap;align=center;verticalAlign=top;fillColor=#E9F3F3;strokeColor=none;fontSize=12;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="1">
           <mxGeometry x="670" y="907" width="210" height="44" as="geometry" />
         </mxCell>
+        <mxCell id="lb-int-alb" value="내부 전용 ALB&lt;br&gt;&lt;font color=&quot;#5A6C7D&quot; style=&quot;font-size:11px&quot;&gt;AI → /internal (8080)&lt;/font&gt;" style="text;html=1;whiteSpace=wrap;align=center;verticalAlign=top;fillColor=#E9F3F3;strokeColor=none;fontSize=12;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="1">
+          <mxGeometry x="868" y="907" width="124" height="44" as="geometry" />
+        </mxCell>
         <mxCell id="lb-ai-a" value="AI 서버&lt;br&gt;&lt;font color=&quot;#5A6C7D&quot; style=&quot;font-size:11px&quot;&gt;FastAPI · 시뮬레이션 배치&lt;/font&gt;" style="text;html=1;whiteSpace=wrap;align=center;verticalAlign=top;fillColor=#FFF4EC;strokeColor=none;fontSize=12;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="1">
           <mxGeometry x="295" y="1087" width="210" height="44" as="geometry" />
         </mxCell>
@@ -313,7 +322,7 @@
         <mxCell id="lgl1" style="html=1;strokeColor=#1A73E8;strokeWidth=2;endArrow=none;" edge="1" parent="1">
           <mxGeometry relative="1" as="geometry"><mxPoint x="60" y="1810" as="sourcePoint" /><mxPoint x="110" y="1810" as="targetPoint" /></mxGeometry>
         </mxCell>
-        <mxCell id="lg2" value="AI 배치 경로 (AI 서버 → NAT → IGW → 인터넷 → ALB → 내부 API, twinly_ai 적재)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=12;fontColor=#5A6C7D;" vertex="1" parent="1">
+        <mxCell id="lg2" value="AI 배치 경로 (AI 서버 → 내부 전용 ALB → API 서버 내부 API, twinly_ai 적재)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=12;fontColor=#5A6C7D;" vertex="1" parent="1">
           <mxGeometry x="120" y="1830" width="520" height="20" as="geometry" />
         </mxCell>
         <mxCell id="lgl2" style="html=1;strokeColor=#ED7100;strokeWidth=2;endArrow=none;" edge="1" parent="1">
