@@ -313,7 +313,7 @@
   };
 
 
-  const MONTHLY_PRICE = 5500;
+  const MONTHLY_PRICE = 3900;
   const kindCard = (label, count) => `<article class="card kpi">
       <div class="kpi-label">${label}</div>
       <div class="kpi-value num">${num(count.total)}<small>명</small></div>
