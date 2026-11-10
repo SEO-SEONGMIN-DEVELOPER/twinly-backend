@@ -7,7 +7,7 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 
 public record MeProfileRequest(
-        @NotBlank @Size(max = 50) String affiliation,
+        @Size(max = 50) String affiliation,
         @NotNull @Size(max = 50) List<@NotBlank @Size(max = 50) String> interests
 ) {
 }

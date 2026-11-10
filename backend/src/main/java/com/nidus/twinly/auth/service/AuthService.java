@@ -390,12 +390,13 @@ public class AuthService {
             organization = organizationCatalog.registerCompany(emailOrganization.domain(), organization).getName();
         }
 
+        String affiliation = organizationType == OrganizationType.COMPANY ? null : anonSession.getAffiliation();
         String affiliationNumber = organizationType == OrganizationType.COMPANY ? null : anonSession.getAffiliationNumber();
 
         String familyNameHash = blindIndexHasher.hash(anonSession.getFamilyName());
         String givenNameHash = blindIndexHasher.hash(anonSession.getGivenName());
         String organizationHash = blindIndexHasher.hash(organization);
-        String affiliationHash = blindIndexHasher.hash(anonSession.getAffiliation());
+        String affiliationHash = affiliation == null ? null : blindIndexHasher.hash(affiliation);
         String affiliationNumberHash = affiliationNumber == null ? null : blindIndexHasher.hash(affiliationNumber);
         String birthDateHash = blindIndexHasher.hash(identityVerification.getBirthDate());
 
@@ -406,7 +407,7 @@ public class AuthService {
                         anonSession.getGivenName(), givenNameHash,
                         identityVerification.getGender(),
                         organization, organizationHash,
-                        anonSession.getAffiliation(), affiliationHash,
+                        affiliation, affiliationHash,
                         affiliationNumber, affiliationNumberHash,
                         identityVerification.getBirthDate(), birthDateHash,
                         phoneNumber, phoneNumberHash,
@@ -578,8 +579,8 @@ public class AuthService {
                 || anonSession.getFamilyName() == null
                 || anonSession.getGivenName() == null
                 || organization == null
-                || anonSession.getAffiliation() == null
-                || (organizationType == OrganizationType.SCHOOL && anonSession.getAffiliationNumber() == null)) {
+                || (organizationType == OrganizationType.SCHOOL
+                    && (anonSession.getAffiliation() == null || anonSession.getAffiliationNumber() == null))) {
             throw new BusinessException(ErrorCode.PROFILE_NOT_COMPLETED);
         }
     }

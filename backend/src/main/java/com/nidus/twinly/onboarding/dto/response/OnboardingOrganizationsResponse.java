@@ -6,13 +6,15 @@ import java.util.List;
 
 public record OnboardingOrganizationsResponse(
         List<OnboardingOrganizationsItemResponse> organizations,
-        List<OnboardingStudentIdOrganizationsItemResponse> studentIdOrganizations
+        List<OnboardingStudentIdOrganizationsItemResponse> studentIdOrganizations,
+        boolean companySignupEnabled
 ) {
 
     public static OnboardingOrganizationsResponse from(OnboardingOrganizationsResult result) {
         return new OnboardingOrganizationsResponse(
                 result.organizations().stream().map(OnboardingOrganizationsItemResponse::from).toList(),
-                result.studentIdOrganizations().stream().map(OnboardingStudentIdOrganizationsItemResponse::from).toList()
+                result.studentIdOrganizations().stream().map(OnboardingStudentIdOrganizationsItemResponse::from).toList(),
+                result.companySignupEnabled()
         );
     }
 }

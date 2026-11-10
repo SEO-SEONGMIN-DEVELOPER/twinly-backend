@@ -4,6 +4,7 @@ import java.util.List;
 
 public record OnboardingOrganizationsResult(
         List<OnboardingOrganizationsItemResult> organizations,
-        List<OnboardingStudentIdOrganizationsItemResult> studentIdOrganizations
+        List<OnboardingStudentIdOrganizationsItemResult> studentIdOrganizations,
+        boolean companySignupEnabled
 ) {
 }

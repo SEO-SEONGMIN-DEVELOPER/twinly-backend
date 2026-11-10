@@ -1005,10 +1005,10 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("회원가입(직장인): 처음 보는 회사 도메인이면 입력한 회사명으로 회사가 등록되고, 같은 도메인 두 번째 가입자는 등록된 이름을 쓴다")
+    @DisplayName("회원가입(직장인): 처음 보는 회사 도메인이면 입력한 회사명으로 회사가 등록되고, 같은 도메인 두 번째 가입자는 등록된 이름을 쓰며, 둘 다 학과·학번 없이 가입된다")
     void signup_company_members_share_registered_company_end_to_end() throws Exception {
         appFeatureFlagStore.saveCompanySignupEnabled(true);
-        // given: 같은 회사 도메인으로 이메일 인증을 마친 두 익명 세션. 둘 다 학번 없이 다른 회사명을 입력했다
+        // given: 같은 회사 도메인으로 이메일 인증을 마친 두 익명 세션. 둘 다 학과·학번 없이 다른 회사명을 입력했다
         UUID firstToken = UUID.randomUUID();
         AnonSession first = companyAnonSession(firstToken, "company-first", "트윈리컴퍼니");
         anonSessionIdentityVerificationRepository.save(verifiedIdentity(first.getId(), "01077770001", "ci-company-first"));
@@ -1034,11 +1034,13 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
                         """, String.class, "twinly-company.co.kr"))
                 .containsExactly("트윈리컴퍼니");
 
-        // then: 두 사람 모두 직장인·같은 회사명·학번 없음으로 가입된다
+        // then: 두 사람 모두 직장인·같은 회사명·학과와 학번 없음으로 가입된다
         for (String phone : List.of("01077770001", "01077770002")) {
             User created = userRepository.findByPhoneNumberHash(blindIndexHasher.hash(phone)).orElseThrow();
             assertThat(created.getOrganizationType()).isEqualTo(OrganizationType.COMPANY);
             assertThat(created.getOrganization()).isEqualTo("트윈리컴퍼니");
+            assertThat(created.getAffiliation()).isNull();
+            assertThat(created.getAffiliationHash()).isNull();
             assertThat(created.getAffiliationNumber()).isNull();
             assertThat(created.getAffiliationNumberHash()).isNull();
         }
@@ -1093,7 +1095,6 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
         anonSession.changeFamilyName("홍");
         anonSession.changeGivenName("길동");
         anonSession.changeOrganization(companyName);
-        anonSession.changeAffiliation("경영학과");
         return anonSessionRepository.save(anonSession);
     }
 

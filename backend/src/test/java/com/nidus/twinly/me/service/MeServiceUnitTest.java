@@ -38,6 +38,7 @@ import com.nidus.twinly.common.tendency.TendencyOption;
 import com.nidus.twinly.common.tendency.TendencyQuestion;
 import com.nidus.twinly.common.web.BusinessException;
 import com.nidus.twinly.common.web.ErrorCode;
+import com.nidus.twinly.organization.domain.OrganizationType;
 import com.nidus.twinly.legal.entity.Agreement;
 import com.nidus.twinly.legal.entity.PolicyName;
 import com.nidus.twinly.legal.repository.PolicyRepository.PolicySummary;
@@ -567,6 +568,59 @@ class MeServiceUnitTest {
     }
 
     @Test
+    @DisplayName("학생이 학과를 비워 프로필을 수정하면 INVALID_REQUEST 예외가 발생하고 관심사도 바꾸지 않는다")
+    void profile_school_without_affiliation_throws() {
+        // given: 학생 유저
+        User user = user();
+        given(userRepository.findById(ME)).willReturn(Optional.of(user));
+
+        // when & then: 학과 null 이면 INVALID_REQUEST, 기존 학과와 관심사는 그대로
+        assertThatThrownBy(() -> meService.profile(ME, new MeProfileCommand(null, List.of("등산"))))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_REQUEST);
+        assertThat(user.getAffiliation()).isNotNull();
+        then(personaElementRepository).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("직장인은 학과를 비워 프로필을 수정해도 학과 없이 관심사만 바뀐다")
+    void profile_company_without_affiliation_updates_interests_only() {
+        // given: 학과 없이 가입한 직장인 유저
+        User user = user();
+        user.joinAsCompanyMember();
+        user.changeAffiliation(null, null);
+        given(userRepository.findById(ME)).willReturn(Optional.of(user));
+
+        // when: 학과 null + 관심사 1개로 수정
+        meService.profile(ME, new MeProfileCommand(null, List.of("러닝")));
+
+        // then: 학과는 계속 없고 관심사만 저장됨
+        assertThat(user.getAffiliation()).isNull();
+        assertThat(user.getAffiliationHash()).isNull();
+        then(blindIndexHasher).should(never()).hash(any());
+        then(personaElementRepository).should().deleteByUserIdAndDimension(ME, PersonaDimension.INTEREST);
+        then(personaElementRepository).should().save(any(PersonaElement.class));
+    }
+
+    @Test
+    @DisplayName("직장인이 학과 문자열을 보내도 학과는 저장하지 않는다")
+    void profile_company_ignores_affiliation() {
+        // given: 학과 없이 가입한 직장인 유저
+        User user = user();
+        user.joinAsCompanyMember();
+        user.changeAffiliation(null, null);
+        given(userRepository.findById(ME)).willReturn(Optional.of(user));
+
+        // when: 학과 문자열과 함께 수정
+        meService.profile(ME, new MeProfileCommand("경영학과", List.of("러닝")));
+
+        // then: 학과는 계속 없음
+        assertThat(user.getAffiliation()).isNull();
+        assertThat(user.getAffiliationHash()).isNull();
+    }
+
+    @Test
     @DisplayName("프로필 수정 시 기존 관심사를 모두 지우고 요청한 관심사를 순서대로 저장한다")
     void profile_replaces_interests() {
         // given: 유저 존재
@@ -1009,11 +1063,28 @@ class MeServiceUnitTest {
         // when: 내 상태 조회
         MeStatusResult result = meService.status(ME);
 
-        // then: 탈퇴 false + 신고 false + 빈 사유 목록
+        // then: 회원 구분 학생 + 탈퇴 false + 신고 false + 빈 사유 목록
+        assertThat(result.organizationType()).isEqualTo(OrganizationType.SCHOOL);
         assertThat(result.withdrawal().isDeleted()).isFalse();
         assertThat(result.withdrawal().recoverableUntil()).isNull();
         assertThat(result.report().isReported()).isFalse();
         assertThat(result.report().reasons()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("직장인의 내 상태 조회는 회원 구분 COMPANY 를 반환한다")
+    void status_company_member() {
+        // given: 직장인 유저
+        User user = user();
+        user.joinAsCompanyMember();
+        given(userRepository.findById(ME)).willReturn(Optional.of(user));
+        given(reportRepository.findAllByReportedUserIdAndStatus(ME, ReportStatus.RESOLVED)).willReturn(List.of());
+
+        // when: 내 상태 조회
+        MeStatusResult result = meService.status(ME);
+
+        // then: 회원 구분 COMPANY
+        assertThat(result.organizationType()).isEqualTo(OrganizationType.COMPANY);
     }
 
     @Test

@@ -119,6 +119,7 @@ import com.nidus.twinly.me.dto.result.MeCompleteTwinUpdateResult;
 import com.nidus.twinly.me.dto.result.MeTwinUpdateResult;
 import com.nidus.twinly.me.event.FeedbackSentEvent;
 import com.nidus.twinly.notification.domain.AppNotificationFeedType;
+import com.nidus.twinly.organization.domain.OrganizationType;
 import com.nidus.twinly.notification.domain.NotificationChannel;
 import com.nidus.twinly.notification.domain.NotificationType;
 import com.nidus.twinly.notification.entity.AppNotificationFeed;
@@ -311,9 +312,20 @@ public class MeService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
-        user.changeAffiliation(command.affiliation(), blindIndexHasher.hash(command.affiliation()));
+        if (user.getOrganizationType() == OrganizationType.SCHOOL) {
+            String affiliation = requireAffiliation(command.affiliation());
+            user.changeAffiliation(affiliation, blindIndexHasher.hash(affiliation));
+        }
 
         replaceInterests(userId, command.interests());
+    }
+
+    private String requireAffiliation(String affiliation) {
+        if (affiliation == null || affiliation.isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "학생은 학과를 비울 수 없습니다.");
+        }
+
+        return affiliation;
     }
 
     @Transactional
@@ -595,6 +607,7 @@ public class MeService {
                 .toList();
 
         return new MeStatusResult(
+                user.getOrganizationType(),
                 withdrawal,
                 new MeStatusReportResult(!reports.isEmpty(), reasons),
                 personaStatus(userId, user),
