@@ -68,6 +68,7 @@ import com.nidus.twinly.me.dto.result.MePushNotificationsSettingsResult;
 import com.nidus.twinly.me.dto.result.MeStatusPersonaResult;
 import com.nidus.twinly.me.dto.result.MeStatusReportResult;
 import com.nidus.twinly.me.dto.result.MeStatusResult;
+import com.nidus.twinly.organization.domain.OrganizationType;
 import com.nidus.twinly.me.dto.result.MeStatusSchoolVerificationResult;
 import com.nidus.twinly.me.dto.result.MeInfoResult;
 import com.nidus.twinly.me.dto.result.MeStatusWithdrawalResult;
@@ -706,11 +707,12 @@ class MeControllerUnitTest {
     // ---------------------------------------------------------------- 상태
 
     @Test
-    @DisplayName("내 상태 조회 시 탈퇴·신고·페르소나 입력·학교 인증 상태를 담은 JSON을 반환한다")
+    @DisplayName("내 상태 조회 시 회원 구분·탈퇴·신고·페르소나 입력·학교 인증 상태를 담은 JSON을 반환한다")
     void status_success() throws Exception {
         // given: 서비스가 탈퇴 신청·신고 처리·페르소나 입력·학생증 반려 상태를 반환
         given(meService.status(ME))
                 .willReturn(new MeStatusResult(
+                        OrganizationType.COMPANY,
                         new MeStatusWithdrawalResult(true, Instant.parse("2026-08-10T00:00:00Z")),
                         new MeStatusReportResult(true, List.of("SPAM", "HARASSMENT")),
                         new MeStatusPersonaResult(true, true, false, Instant.parse("2026-11-07T01:00:00Z")),
@@ -723,6 +725,7 @@ class MeControllerUnitTest {
 
         // then: 200 반환 + 탈퇴·신고·페르소나 입력 상태 JSON
         result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.organizationType").value("company"))
                 .andExpect(jsonPath("$.withdrawal.isDeleted").value(true))
                 .andExpect(jsonPath("$.withdrawal.recoverableUntil").value("2026-08-10T00:00:00Z"))
                 .andExpect(jsonPath("$.report.isReported").value(true))

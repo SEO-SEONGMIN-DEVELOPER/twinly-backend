@@ -5,6 +5,7 @@ import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.organization.domain.OrganizationType;
 import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.simulation.dto.result.SimulationPersonaResult;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -20,6 +21,7 @@ public record SimulationPersonaResponse(
         Gender gender,
         String organization,
         OrganizationType organizationType,
+        @Schema(nullable = true)
         String affiliation,
         LocalDate birthDate,
         Map<PersonaDimension, List<String>> personaElements,

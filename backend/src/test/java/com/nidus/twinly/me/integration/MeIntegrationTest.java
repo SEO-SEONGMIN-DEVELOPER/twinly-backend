@@ -17,6 +17,7 @@ import com.nidus.twinly.common.feedback.FeedbackType;
 import com.nidus.twinly.common.survey.SurveyOptionName;
 import com.nidus.twinly.common.persona.PersonaDimension;
 import com.nidus.twinly.common.photo.PhotoType;
+import com.nidus.twinly.common.domain.Gender;
 import com.nidus.twinly.common.web.ErrorCode;
 import com.nidus.twinly.legal.entity.Agreement;
 import com.nidus.twinly.legal.entity.Policy;
@@ -797,6 +798,64 @@ class MeIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("직장인 프로필: 수정 화면의 학과·학번은 null 이고, 학과 null 로 수정하면 관심사만 바뀌며, 상태 조회는 company 를 돌려준다")
+    void company_member_profile_without_affiliation_end_to_end() throws Exception {
+        // given: 학과·학번 없이 가입한 직장인 유저
+        User me = saveCompanyUserWithoutAffiliation();
+
+        // when & then: 프로필 수정 화면의 학과·학번은 null
+        mockMvc.perform(get("/api/v1/me/profile-edit-view")
+                        .header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.affiliation").value(nullValue()))
+                .andExpect(jsonPath("$.affiliationNumber").value(nullValue()));
+
+        // when: 학과 null 과 관심사로 프로필 수정
+        mockMvc.perform(patch("/api/v1/me/profile")
+                        .header("Authorization", bearer(me.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"affiliation": null, "interests": ["러닝", "사진"]}
+                                """))
+                .andExpect(status().isOk());
+
+        // then: 학과는 계속 없고 관심사만 교체된다
+        flushAndClear();
+        User reloaded = userRepository.findById(me.getId()).orElseThrow();
+        assertThat(reloaded.getAffiliation()).isNull();
+        assertThat(reloaded.getAffiliationHash()).isNull();
+        assertThat(personaElementRepository.findAllByUserIdAndDimensionOrderByIdAsc(me.getId(), PersonaDimension.INTEREST))
+                .extracting(PersonaElement::getExplanation)
+                .containsExactly("러닝", "사진");
+
+        // then: 상태 조회의 회원 구분은 company
+        mockMvc.perform(get("/api/v1/me/status")
+                        .header("Authorization", bearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.organizationType").value("company"));
+    }
+
+    @Test
+    @DisplayName("학생 프로필 수정: 학과를 null 로 보내면 400 INVALID_REQUEST 이고 학과는 그대로다")
+    void school_member_profile_patch_without_affiliation_returns_400() throws Exception {
+        // given: 학생 유저
+        User me = saveUser();
+
+        // when & then: 학과 null 로 수정하면 400
+        mockMvc.perform(patch("/api/v1/me/profile")
+                        .header("Authorization", bearer(me.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"affiliation": null, "interests": ["러닝"]}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(ErrorCode.INVALID_REQUEST.name()));
+
+        flushAndClear();
+        assertThat(userRepository.findById(me.getId()).orElseThrow().getAffiliation()).isEqualTo(me.getAffiliation());
+    }
+
+    @Test
     @DisplayName("약관 동의 철회: 선택 정책이면 동의 이력이 철회되어 조회에서 isGranted가 false가 된다")
     void revokeConsents_end_to_end() throws Exception {
         // given: 선택 정책에 이미 동의한 실제 유저
@@ -1172,6 +1231,23 @@ class MeIntegrationTest extends AbstractIntegrationTest {
     }
 
     /** 영속성 컨텍스트를 비워 실제 DB 상태를 다시 읽도록 한다. */
+    private User saveCompanyUserWithoutAffiliation() {
+        User user = User.create(
+                "company-nick",
+                "홍", "companyFamilyHash",
+                "길동", "companyGivenHash",
+                Gender.MALE,
+                "트윈리컴퍼니", "companyOrganizationHash",
+                null, null,
+                null, null,
+                "2000-01-01", "companyBirthHash",
+                "01099990000", "companyPhoneHash",
+                "worker@twinly-company.co.kr", "companyEmailHash", null, null,
+                null, null);
+        user.joinAsCompanyMember();
+        return userRepository.save(user);
+    }
+
     private void flushAndClear() {
         entityManager.flush();
         entityManager.clear();

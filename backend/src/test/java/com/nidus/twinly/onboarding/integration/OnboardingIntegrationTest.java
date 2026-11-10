@@ -241,7 +241,7 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("학교 목록: 인증 헤더 없이도 DB에 등록된 학교가 이름순으로 내려온다")
+    @DisplayName("학교 목록: 인증 헤더 없이도 DB에 등록된 학교가 이름순으로 내려오고 직장인 가입 스위치도 함께 내려온다")
     void organizations_end_to_end() throws Exception {
         // given: 가입 가능한 학교 2곳을 이름 역순으로 저장 (시드로 들어온 실제 학교들과 섞인다)
         saveOrganization("트윈리대학교", "twinly.ac.kr");
@@ -251,9 +251,10 @@ class OnboardingIntegrationTest extends AbstractIntegrationTest {
         // when: 인증 없이 학교 목록 조회
         String body = mockMvc.perform(get("/api/v1/onboarding/organizations"))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.companySignupEnabled").isBoolean())
                 .andReturn().getResponse().getContentAsString();
 
-        // then: 이름순으로 정렬되어 이름·도메인이 함께 내려온다
+        // then: 이름순으로 정렬되어 이름·도메인이 함께 내려온다 (스위치 값은 boolean)
         assertThat(JsonPath.<List<String>>read(body, "$.organizations[*].organizationName"))
                 .containsSubsequence("소마대학교", "트윈리대학교");
         assertThat(JsonPath.<List<List<String>>>read(body, "$.organizations[?(@.organizationName == '소마대학교')].domains"))

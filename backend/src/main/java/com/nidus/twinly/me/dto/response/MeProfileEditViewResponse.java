@@ -13,6 +13,7 @@ public record MeProfileEditViewResponse(
         String nickname,
         String familyName,
         String givenName,
+        @Schema(nullable = true)
         String affiliation,
         @Schema(nullable = true)
         String affiliationNumber,

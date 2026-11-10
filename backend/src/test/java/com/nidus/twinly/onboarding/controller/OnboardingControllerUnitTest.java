@@ -109,12 +109,13 @@ class OnboardingControllerUnitTest {
     }
 
     @Test
-    @DisplayName("학교 목록 조회는 익명 세션 없이도 200과 organizations·studentIdOrganizations 배열을 반환한다")
+    @DisplayName("학교 목록 조회는 익명 세션 없이도 200과 organizations·studentIdOrganizations 배열, 직장인 가입 스위치를 반환한다")
     void organizations_success() throws Exception {
         // given: 가입 가능한 학교 1곳, 학생증으로만 인증하는 학교는 없음
         given(onboardingService.organizations()).willReturn(new OnboardingOrganizationsResult(
                 List.of(new OnboardingOrganizationsItemResult("트윈리대학교", List.of("nidus.ac.kr"))),
-                List.of()));
+                List.of(),
+                true));
 
         // when: 인증 헤더 없이 학교 목록 API 호출 (이메일 입력 전 단계라 세션 유무와 무관)
         var result = mockMvc.perform(get("/api/v1/onboarding/organizations"));
@@ -124,7 +125,8 @@ class OnboardingControllerUnitTest {
                 .andExpect(jsonPath("$.organizations[0].organizationName").value("트윈리대학교"))
                 .andExpect(jsonPath("$.organizations[0].domains[0]").value("nidus.ac.kr"))
                 .andExpect(jsonPath("$.studentIdOrganizations").isArray())
-                .andExpect(jsonPath("$.studentIdOrganizations").isEmpty());
+                .andExpect(jsonPath("$.studentIdOrganizations").isEmpty())
+                .andExpect(jsonPath("$.companySignupEnabled").value(true));
     }
 
     @Test
